@@ -17,7 +17,9 @@ WORKDIR /sdk
 RUN echo "src-git base https://github.com/openwrt/openwrt.git;openwrt-24.10" > feeds.conf \
   && echo "src-git packages https://github.com/openwrt/packages.git;openwrt-24.10" >> feeds.conf \
   && ./scripts/feeds update base packages \
-  && ./scripts/feeds install ucode\
+  && ./scripts/feeds install ucode libmbedtls \
+  && echo 'CONFIG_PACKAGE_libmbedtls=y' >> .config \
   && echo "CONFIG_PACKAGE_ucode=y" >> .config \
   && make defconfig \
+  && make package/mbedtls/compile -j$(nproc) \
   && make package/ucode/compile -j$(nproc) 

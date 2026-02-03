@@ -1,10 +1,10 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=ucode-mod-mylib
+PKG_NAME:=luci-sso
 PKG_VERSION:=1.0.0
 PKG_RELEASE:=1
 
-PKG_MAINTAINER:=Your Name <you@example.com>
+PKG_MAINTAINER:=António Móra <m00qek@gmail.com>
 PKG_LICENSE:=MIT
 
 PKG_INSTALL:=1
@@ -15,15 +15,13 @@ include $(INCLUDE_DIR)/cmake.mk
 define Package/$(PKG_NAME)
   SECTION:=utils
   CATEGORY:=Utilities
-  TITLE:=My ucode library
-  # DEPENDS: Add only what your package actually uses
-  # Common options: +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math
-  # Keep this minimal to reduce image bloat
-  DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci
+  TITLE:=OIDC/OAuth2 SSO for LuCI
+  DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +libmbedtls
 endef
 
 define Package/$(PKG_NAME)/description
-  My ucode library
+  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal
+	dependencies.
 endef
 
 define Build/Prepare
