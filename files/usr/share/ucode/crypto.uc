@@ -20,8 +20,16 @@ function b64url_to_b64(str) {
     return b64;
 }
 
+function safe_json(str) {
+    try {
+        return json(str);
+    } catch (e) {
+        return null;
+    }
+}
+
 /**
- * Parses and validates an RS256 JWT.
+ * Parses and validates a JWT (RS256 or ES256).
  */
 export function verify_jwt(token, pubkey) {
     if (type(token) != "string") return null;
@@ -34,8 +42,8 @@ export function verify_jwt(token, pubkey) {
     let header_json = b64dec(header_b64);
     if (!header_json) return null;
     
-    let header = json(header_json);
-    if (!header || header.alg != "RS256") return null;
+    let header = safe_json(header_json);
+    if (!header || !header.alg) return null;
 
     // 2. Decode Signature
     let sig_b64 = b64url_to_b64(parts[2]);
@@ -44,16 +52,24 @@ export function verify_jwt(token, pubkey) {
 
     // 3. Verify Signature
     let signed_data = parts[0] + "." + parts[1];
-    if (!mbedtls.verify_rs256(signed_data, signature, pubkey)) {
-        return null;
+    let valid = false;
+
+    if (header.alg == "RS256") {
+        valid = mbedtls.verify_rs256(signed_data, signature, pubkey);
+    } else if (header.alg == "ES256") {
+        valid = mbedtls.verify_es256(signed_data, signature, pubkey);
+    } else {
+        return null; // Unsupported algorithm
     }
+
+    if (!valid) return null;
 
     // 4. Decode Payload
     let payload_b64 = b64url_to_b64(parts[1]);
     let payload_json = b64dec(payload_b64);
     if (!payload_json) return null;
 
-    let payload = json(payload_json);
+    let payload = safe_json(payload_json);
     if (!payload) return null;
 
     // 5. Basic OIDC Claims Validation
