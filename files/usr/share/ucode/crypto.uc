@@ -10,8 +10,6 @@ function b64url_to_b64(str) {
     // Validate Base64URL charset: [A-Za-z0-9_-]
     if (!match(str, /^[A-Za-z0-9_-]+$/)) return null;
     
-    // 1. Map characters
-    
     let b64 = replace(str, /-/g, '+');
     b64 = replace(b64, /_/g, '/');
     
@@ -40,17 +38,18 @@ export function b64url_decode(str) {
 };
 
 /**
+ * Encodes a raw string to Base64URL.
+ */
+export function b64url_encode(str) {
+    let b64 = b64enc(str);
+    b64 = replace(b64, /\+/g, '-');
+    b64 = replace(b64, /\//g, '_');
+    b64 = replace(b64, /=/g, '');
+    return b64;
+};
+
+/**
  * Parses and validates a JWT.
- * 
- * @param {string} token - The raw JWT string.
- * @param {string} pubkey - The Public Key in PEM format.
- * @param {object} options - Validation options:
- *   - alg: (string, required) Expected algorithm (e.g. "RS256", "ES256").
- *   - iss: (string, optional) Expected Issuer claim.
- *   - aud: (string, optional) Expected Audience claim.
- *   - skew: (int, optional) Clock skew tolerance in seconds (default: 300).
- * 
- * @returns {object} - { payload: object } on success, { error: string } on failure.
  */
 export function verify_jwt(token, pubkey, options) {
     if (type(token) != "string") return { error: "TOKEN_NOT_STRING" };
@@ -120,4 +119,49 @@ export function verify_jwt(token, pubkey, options) {
     }
 
     return { payload: payload };
+};
+
+/**
+ * Calculates SHA-256 hash (raw binary).
+ */
+export function sha256(input) {
+    return mbedtls.sha256(input);
+};
+
+/**
+ * Generates cryptographically secure random bytes.
+ */
+export function random(len) {
+    return mbedtls.random(len);
+};
+
+/**
+ * Generates a PKCE Code Verifier.
+ * 
+ * @param {int} len - Number of random bytes (default 32, results in 43 chars).
+ * @returns {string} - Base64URL encoded verifier.
+ */
+export function pkce_generate_verifier(len) {
+    let bytes = mbedtls.random(len || 32);
+    return b64url_encode(bytes);
+};
+
+/**
+ * Calculates a PKCE Code Challenge from a verifier using S256.
+ * 
+ * @param {string} verifier - The verifier string.
+ * @returns {string} - Base64URL encoded SHA-256 hash.
+ */
+export function pkce_calculate_challenge(verifier) {
+    let hash = mbedtls.sha256(verifier);
+    return b64url_encode(hash);
+};
+
+/**
+ * Generates a PKCE Verifier and Challenge pair.
+ */
+export function pkce_pair(len) {
+    let verifier = pkce_generate_verifier(len);
+    let challenge = pkce_calculate_challenge(verifier);
+    return { verifier, challenge };
 };

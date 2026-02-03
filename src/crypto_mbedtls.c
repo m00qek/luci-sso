@@ -10,17 +10,12 @@
 #include "mbedtls/error.h"
 #include "mbedtls/asn1write.h"
 #include "mbedtls/bignum.h"
+#include "mbedtls/entropy.h"
+#include "mbedtls/ctr_drbg.h"
 
 /**
  * Converts raw (r, s) signature to ASN.1 DER using mbedtls native writers.
  * Writes to the provided stack buffer (backward).
- * 
- * @param raw Input raw signature (64 bytes for P-256)
- * @param raw_len Input length
- * @param buf Output buffer
- * @param buf_len Size of output buffer
- * @param out_der_ptr Pointer to the start of the DER data in buf (output)
- * @param out_der_len Length of the DER data (output)
  */
 static int ecdsa_raw_to_der_robust(const unsigned char *raw, size_t raw_len, 
                                  unsigned char *buf, size_t buf_len,
@@ -91,7 +86,6 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
     size_t sig_len = ucv_string_length(v_sig);
     const char *key_pem = ucv_string_get(v_key);
 
-    // 1. Hash the message
     unsigned char hash[MBEDTLS_MD_MAX_SIZE];
     mbedtls_md_context_t md_ctx;
     mbedtls_md_init(&md_ctx);
@@ -101,7 +95,6 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
     mbedtls_md_finish(&md_ctx, hash);
     mbedtls_md_free(&md_ctx);
 
-    // 2. Parse public key
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
     int ret = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, strlen(key_pem) + 1);
@@ -110,7 +103,6 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
         return ucv_boolean_new(false);
     }
 
-    // 3. Verify signature
     ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, sig, sig_len);
     
     mbedtls_pk_free(&pk);
@@ -136,11 +128,9 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
     size_t raw_sig_len = ucv_string_length(v_sig);
     const char *key_pem = ucv_string_get(v_key);
 
-    // ES256 (P-256) signatures must be exactly 64 bytes (R=32, S=32).
     if (raw_sig_len != 64) return ucv_boolean_new(false);
 
-    // 1. Convert Raw Signature to ASN.1 DER (Stack Allocated)
-    unsigned char der_buf[128]; // Plenty for P-256 (max ~72 bytes)
+    unsigned char der_buf[128]; 
     unsigned char *der_sig = NULL;
     size_t der_sig_len = 0;
 
@@ -148,7 +138,6 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
         return ucv_boolean_new(false);
     }
 
-    // 2. Hash the message
     unsigned char hash[MBEDTLS_MD_MAX_SIZE];
     mbedtls_md_context_t md_ctx;
     mbedtls_md_init(&md_ctx);
@@ -158,7 +147,6 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
     mbedtls_md_finish(&md_ctx, hash);
     mbedtls_md_free(&md_ctx);
 
-    // 3. Parse public key
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
     int ret = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, strlen(key_pem) + 1);
@@ -167,8 +155,6 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
         return ucv_boolean_new(false);
     }
 
-    // 4. Verify signature
-    // Ensure the key is an EC key
     if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_ECDSA)) {
         mbedtls_pk_free(&pk);
         return ucv_boolean_new(false);
@@ -181,9 +167,75 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
     return ucv_boolean_new(ret == 0);
 }
 
+/**
+ * Calculates SHA-256 hash of input.
+ */
+static uc_value_t *uc_mbedtls_sha256(uc_vm_t *vm, size_t nargs) {
+    uc_value_t *arg = uc_fn_arg(0);
+    if (ucv_type(arg) != UC_STRING) return NULL;
+
+    const unsigned char *input = (const unsigned char *)ucv_string_get(arg);
+    size_t input_len = ucv_string_length(arg);
+    
+    unsigned char output[32];
+    
+    mbedtls_md_context_t md_ctx;
+    mbedtls_md_init(&md_ctx);
+    mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 0);
+    mbedtls_md_starts(&md_ctx);
+    mbedtls_md_update(&md_ctx, input, input_len);
+    mbedtls_md_finish(&md_ctx, output);
+    mbedtls_md_free(&md_ctx);
+
+    return ucv_string_new_length((const char *)output, 32);
+}
+
+/**
+ * Generates random bytes.
+ */
+static uc_value_t *uc_mbedtls_random(uc_vm_t *vm, size_t nargs) {
+    uc_value_t *arg = uc_fn_arg(0);
+    int len = (ucv_type(arg) == UC_INTEGER) ? ucv_int64_get(arg) : 32;
+    if (len <= 0 || len > 4096) return NULL;
+
+    unsigned char *buf = malloc(len);
+    if (!buf) return NULL;
+
+    mbedtls_entropy_context entropy;
+    mbedtls_ctr_drbg_context ctr_drbg;
+    const char *pers = "ucode_mbedtls";
+
+    mbedtls_entropy_init(&entropy);
+    mbedtls_ctr_drbg_init(&ctr_drbg);
+
+    int ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char *)pers, strlen(pers));
+    if (ret != 0) {
+        free(buf);
+        mbedtls_ctr_drbg_free(&ctr_drbg);
+        mbedtls_entropy_free(&entropy);
+        return NULL;
+    }
+
+    ret = mbedtls_ctr_drbg_random(&ctr_drbg, buf, len);
+    
+    mbedtls_ctr_drbg_free(&ctr_drbg);
+    mbedtls_entropy_free(&entropy);
+
+    if (ret != 0) {
+        free(buf);
+        return NULL;
+    }
+
+    uc_value_t *res = ucv_string_new_length((const char *)buf, len);
+    free(buf);
+    return res;
+}
+
 static const uc_function_list_t mbedtls_fns[] = {
     { "verify_rs256", uc_mbedtls_verify_rs256 },
     { "verify_es256", uc_mbedtls_verify_es256 },
+    { "sha256", uc_mbedtls_sha256 },
+    { "random", uc_mbedtls_random },
 };
 
 void uc_module_init(uc_vm_t *vm, uc_value_t *scope) {
