@@ -207,9 +207,9 @@ test('PKCE: Official Test Vector', () => {
 });
 
 test('PKCE: End-to-end flow', () => {
-    let verifier = crypto.pkce_generate_verifier(32);
-    assert(length(verifier) >= 43, "Verifier length should be at least 43 chars");
+    let verifier = crypto.pkce_generate_verifier();
+    assert(length(verifier) >= 57, "Default verifier length should be at least 57 chars (43 bytes entropy)");
     
     let challenge = crypto.pkce_calculate_challenge(verifier);
-    assert(length(challenge) == 43, "S256 Challenge should be 43 chars (32 bytes encoded)");
+    assert(length(challenge) == 43, "S256 Challenge should always be 43 chars (32 bytes hash encoded)");
 });

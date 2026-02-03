@@ -138,11 +138,11 @@ export function random(len) {
 /**
  * Generates a PKCE Code Verifier.
  * 
- * @param {int} len - Number of random bytes (default 32, results in 43 chars).
+ * @param {int} len - Number of random bytes (default 43, results in 57 chars).
  * @returns {string} - Base64URL encoded verifier.
  */
 export function pkce_generate_verifier(len) {
-    let bytes = mbedtls.random(len || 32);
+    let bytes = mbedtls.random(len || 43);
     return b64url_encode(bytes);
 };
 
