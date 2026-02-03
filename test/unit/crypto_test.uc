@@ -3,6 +3,22 @@ import * as crypto from 'crypto';
 import * as mbedtls from 'crypto_mbedtls';
 import * as fixtures from 'fixtures';
 
+// Helper to check success
+function assert_success(result, msg) {
+    if (result.error) {
+        die(`${msg || "Expected success"} - Error: ${result.error}`);
+    }
+    assert(result.payload, msg);
+}
+
+// Helper to check failure
+function assert_error(result, expected_err, msg) {
+    if (!result.error) {
+        die(`${msg || "Expected failure"} - Got success`);
+    }
+    assert_eq(result.error, expected_err, msg);
+}
+
 test('Base64URL: Character mapping', () => {
     assert_eq(crypto.b64url_decode("c3ViamVjdHM_X2lucHV0cw"), "subjects?_inputs", "Should map '-' and '_' correctly");
 });
@@ -21,46 +37,51 @@ test('Base64URL: Boundary cases', () => {
 });
 
 test('RS256: Low-level Primitive', () => {
-    let sig_bin = crypto.b64url_decode(fixtures.RS256.SIG_B64URL);
-    assert(mbedtls.verify_rs256(fixtures.RS256.MSG, sig_bin, fixtures.RS256.PUBKEY), "Low-level verify should work with binary sig");
+    let sig_bin = crypto.b64url_decode(fixtures.RS256_SIG_B64URL);
+    assert(mbedtls.verify_rs256(fixtures.RS256_MSG, sig_bin, fixtures.RS256_PUBKEY), "Low-level verify should work with binary sig");
 });
 
 test('RS256: Message Tampering', () => {
-    let sig_bin = crypto.b64url_decode(fixtures.RS256.SIG_B64URL);
-    assert(!mbedtls.verify_rs256(fixtures.RS256.MSG + "!", sig_bin, fixtures.RS256.PUBKEY), "Should fail if message is modified");
+    let sig_bin = crypto.b64url_decode(fixtures.RS256_SIG_B64URL);
+    assert(!mbedtls.verify_rs256(fixtures.RS256_MSG + "!", sig_bin, fixtures.RS256_PUBKEY), "Should fail if message is modified");
 });
 
 test('RS256: Key Integrity', () => {
-    let sig_bin = crypto.b64url_decode(fixtures.RS256.SIG_B64URL);
-    assert(!mbedtls.verify_rs256(fixtures.RS256.MSG, sig_bin, "not a pem key"), "Should fail with malformed PEM");
+    let sig_bin = crypto.b64url_decode(fixtures.RS256_SIG_B64URL);
+    assert(!mbedtls.verify_rs256(fixtures.RS256_MSG, sig_bin, "not a pem key"), "Should fail with malformed PEM");
 });
 
 test('RS256: Type Safety', () => {
-    assert(!mbedtls.verify_rs256(null, "sig", fixtures.RS256.PUBKEY), "Should handle null message");
-    assert(!mbedtls.verify_rs256(fixtures.RS256.MSG, null, fixtures.RS256.PUBKEY), "Should handle null signature");
-    assert(!mbedtls.verify_rs256(fixtures.RS256.MSG, "sig", null), "Should handle null key");
+    assert(!mbedtls.verify_rs256(null, "sig", fixtures.RS256_PUBKEY), "Should handle null message");
+    assert(!mbedtls.verify_rs256(fixtures.RS256_MSG, null, fixtures.RS256_PUBKEY), "Should handle null signature");
+    assert(!mbedtls.verify_rs256(fixtures.RS256_MSG, "sig", null), "Should handle null key");
 });
 
 test('High-level verify_jwt (RS256)', () => {
-    let payload = crypto.verify_jwt(fixtures.RS256.JWT_TOKEN, fixtures.RS256.JWT_PUBKEY);
-    assert(payload, "JWT should be verified successfully");
-    assert_eq(payload.sub, "1234567890", "Payload subject should match");
-    assert_eq(payload.name, "John Doe", "Payload name should match");
+    let result = crypto.verify_jwt(fixtures.RS256_JWT_TOKEN, fixtures.RS256_JWT_PUBKEY, { alg: "RS256" });
+    assert_success(result, "JWT should be verified successfully");
+    
+    assert_eq(result.payload.sub, "1234567890", "Payload subject should match");
+    assert_eq(result.payload.name, "John Doe", "Payload name should match");
 
-    assert(!crypto.verify_jwt(fixtures.RS256.JWT_TOKEN + "x", fixtures.RS256.JWT_PUBKEY), "Should fail with tampered JWT");
+    // Tampered (flip last char)
+    let token = fixtures.RS256_JWT_TOKEN;
+    let tampered = substr(token, 0, length(token)-1) + (substr(token, -1) == "A" ? "B" : "A");
+    let bad_result = crypto.verify_jwt(tampered, fixtures.RS256_JWT_PUBKEY, { alg: "RS256" });
+    assert_error(bad_result, "INVALID_SIGNATURE", "Should fail with tampered JWT");
 });
 
 test('ES256: Low-level Primitive', () => {
-    let sig_bin = crypto.b64url_decode(fixtures.ES256.SIG_HELLO_B64URL);
-    assert(mbedtls.verify_es256(fixtures.ES256.MSG, sig_bin, fixtures.ES256.PUBKEY), "Should verify valid ES256 signature");
+    let sig_bin = crypto.b64url_decode(fixtures.ES256_SIG_HELLO_B64URL);
+    assert(mbedtls.verify_es256(fixtures.ES256_MSG, sig_bin, fixtures.ES256_PUBKEY), "Should verify valid ES256 signature");
 });
 
 test('ES256: Tampering', () => {
-    let sig_bin = crypto.b64url_decode(fixtures.ES256.SIG_HELLO_B64URL);
-    assert(!mbedtls.verify_es256(fixtures.ES256.MSG + "!", sig_bin, fixtures.ES256.PUBKEY), "Should fail on message tampering");
+    let sig_bin = crypto.b64url_decode(fixtures.ES256_SIG_HELLO_B64URL);
+    assert(!mbedtls.verify_es256(fixtures.ES256_MSG + "!", sig_bin, fixtures.ES256_PUBKEY), "Should fail on message tampering");
     
     // Flip a bit in the signature
-    assert(!mbedtls.verify_es256(fixtures.ES256.MSG, "invalid_signature", fixtures.ES256.PUBKEY), "Should fail on signature tampering");
+    assert(!mbedtls.verify_es256(fixtures.ES256_MSG, "invalid_signature", fixtures.ES256_PUBKEY), "Should fail on signature tampering");
 });
 
 // =============================================================================
@@ -68,40 +89,86 @@ test('ES256: Tampering', () => {
 // =============================================================================
 
 test('Policy: Expired Token', () => {
-    let payload = crypto.verify_jwt(fixtures.POLICY.JWT_EXPIRED, fixtures.POLICY.PUBKEY);
-    assert_eq(payload, null, "Should reject expired token");
+    // Expired in 2017. Even with skew, it should fail.
+    let result = crypto.verify_jwt(fixtures.JWT_EXPIRED, fixtures.COVERAGE_PUBKEY, { alg: "RS256" });
+    assert_error(result, "TOKEN_EXPIRED", "Should reject expired token");
 });
 
 test('Policy: Future Token (nbf)', () => {
-    let payload = crypto.verify_jwt(fixtures.POLICY.JWT_FUTURE, fixtures.POLICY.PUBKEY);
-    assert_eq(payload, null, "Should reject token not yet valid (nbf)");
+    // Valid in 2100. Should fail.
+    let result = crypto.verify_jwt(fixtures.JWT_FUTURE, fixtures.COVERAGE_PUBKEY, { alg: "RS256" });
+    assert_error(result, "TOKEN_NOT_YET_VALID", "Should reject token not yet valid (nbf)");
 });
 
-test('High-level verify_jwt (ES256)', () => {
-    let payload = crypto.verify_jwt(fixtures.ES256.JWT_TOKEN, fixtures.ES256.PUBKEY);
-    assert(payload, "Should verify valid ES256 JWT");
-    assert_eq(payload.sub, "es256", "Subject should match");
-    assert_eq(payload.name, "ES256 User", "Name should match");
+test('Policy: Algorithm Enforcement', () => {
+    // Token is RS256. We ask for ES256.
+    let result = crypto.verify_jwt(fixtures.RS256_JWT_TOKEN, fixtures.RS256_JWT_PUBKEY, { alg: "ES256" });
+    assert_error(result, "ALGORITHM_MISMATCH", "Should reject if alg does not match option");
 });
 
-test('Algorithm Mismatch (HS256)', () => {
+test('Policy: Algorithm Mismatch (HS256)', () => {
     // Header: {"alg":"HS256","typ":"JWT"}
     let header = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"; 
     let payload = "eyJzdWIiOiIxMjMifQ"; // {"sub":"123"}
     let sig = "signature_ignored";
     let jwt = header + "." + payload + "." + sig;
     
-    // Pass RS256 key (irrelevant as alg check should fail first)
-    assert_eq(crypto.verify_jwt(jwt, fixtures.RS256.PUBKEY), null, "Should reject unsupported algorithm HS256");
+    // We expect RS256. Token is HS256.
+    let result = crypto.verify_jwt(jwt, fixtures.RS256_JWT_PUBKEY, { alg: "RS256" });
+    assert_error(result, "ALGORITHM_MISMATCH", "Should reject mismatch");
+});
+
+test('Policy: Issuer and Audience', () => {
+    // Correct Iss/Aud
+    let res1 = crypto.verify_jwt(fixtures.JWT_WITH_CLAIMS, fixtures.CLAIMS_PUBKEY, { 
+        alg: "RS256",
+        iss: "my-auth-server",
+        aud: "my-app"
+    });
+    assert_success(res1, "Should pass with correct iss and aud");
+
+    // Wrong Issuer
+    let res2 = crypto.verify_jwt(fixtures.JWT_WITH_CLAIMS, fixtures.CLAIMS_PUBKEY, { 
+        alg: "RS256",
+        iss: "other-server",
+        aud: "my-app"
+    });
+    assert_error(res2, "ISSUER_MISMATCH", "Should reject wrong issuer");
+
+    // Wrong Audience
+    let res3 = crypto.verify_jwt(fixtures.JWT_WITH_CLAIMS, fixtures.CLAIMS_PUBKEY, { 
+        alg: "RS256",
+        iss: "my-auth-server",
+        aud: "other-app"
+    });
+    assert_error(res3, "AUDIENCE_MISMATCH", "Should reject wrong audience");
+    
+    // Missing options (defaults ignore check)
+    let res4 = crypto.verify_jwt(fixtures.JWT_WITH_CLAIMS, fixtures.CLAIMS_PUBKEY, { 
+        alg: "RS256"
+    });
+    assert_success(res4, "Should ignore iss/aud if not specified in options");
+});
+
+test('Policy: Missing Options', () => {
+    let res1 = crypto.verify_jwt(fixtures.RS256_JWT_TOKEN, fixtures.RS256_JWT_PUBKEY);
+    assert_error(res1, "MISSING_ALGORITHM_OPTION", "Should fail if options missing");
+    
+    let res2 = crypto.verify_jwt(fixtures.RS256_JWT_TOKEN, fixtures.RS256_JWT_PUBKEY, {});
+    assert_error(res2, "MISSING_ALGORITHM_OPTION", "Should fail if alg missing");
+});
+
+test('High-level verify_jwt (ES256)', () => {
+    let result = crypto.verify_jwt(fixtures.ES256_JWT_TOKEN, fixtures.ES256_PUBKEY, { alg: "ES256" });
+    assert_success(result, "Should verify valid ES256 JWT");
+    assert_eq(result.payload.sub, "es256", "Subject should match");
 });
 
 test('Malformed JWTs', () => {
-    assert_eq(crypto.verify_jwt("header.payload", fixtures.RS256.PUBKEY), null, "Should reject truncated JWT");
-    assert_eq(crypto.verify_jwt("garbage", fixtures.RS256.PUBKEY), null, "Should reject garbage string");
-    assert_eq(crypto.verify_jwt(null, fixtures.RS256.PUBKEY), null, "Should handle null input safely");
+    assert_error(crypto.verify_jwt("header.payload", fixtures.RS256_PUBKEY, {alg:"RS256"}), "MALFORMED_JWT");
+    assert_error(crypto.verify_jwt("garbage", fixtures.RS256_PUBKEY, {alg:"RS256"}), "MALFORMED_JWT");
+    assert_error(crypto.verify_jwt(null, fixtures.RS256_PUBKEY, {alg:"RS256"}), "TOKEN_NOT_STRING");
     
-    // Invalid JSON in header
-    // "not_json" base64url encoded -> "bm90X2pzb24"
     let bad_json_jwt = "bm90X2pzb24.eyJzdWIiOiIxMjMifQ.sig";
-    assert_eq(crypto.verify_jwt(bad_json_jwt, fixtures.RS256.PUBKEY), null, "Should reject invalid JSON header");
+    assert_error(crypto.verify_jwt(bad_json_jwt, fixtures.RS256_PUBKEY, {alg:"RS256"}), "INVALID_HEADER_JSON");
 });

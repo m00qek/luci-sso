@@ -136,6 +136,7 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
     size_t raw_sig_len = ucv_string_length(v_sig);
     const char *key_pem = ucv_string_get(v_key);
 
+    // ES256 (P-256) signatures must be exactly 64 bytes (R=32, S=32).
     if (raw_sig_len != 64) return ucv_boolean_new(false);
 
     // 1. Convert Raw Signature to ASN.1 DER (Stack Allocated)
