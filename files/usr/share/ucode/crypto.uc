@@ -8,10 +8,9 @@ function b64url_to_b64(str) {
     if (length(str) == 0) return "";
     
     // Validate Base64URL charset: [A-Za-z0-9_-]
-    // Simple check: if we see char outside this range?
-    // Regex is expensive. We'll rely on b64dec failing or producing garbage,
-    // but the review suggested explicit validation.
-    // For now, let's stick to the core logic.
+    if (!match(str, /^[A-Za-z0-9_-]+$/)) return null;
+    
+    // 1. Map characters
     
     let b64 = replace(str, /-/g, '+');
     b64 = replace(b64, /_/g, '/');

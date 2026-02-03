@@ -32,7 +32,9 @@ test('Base64URL: Padding variations', () => {
 
 test('Base64URL: Boundary cases', () => {
     assert_eq(crypto.b64url_decode(""), "", "Should handle empty string");
-    assert_eq(crypto.b64url_decode(" "), null, "Should return null for invalid characters");
+    assert_eq(crypto.b64url_decode(" "), null, "Should return null for invalid characters (space)");
+    assert_eq(crypto.b64url_decode("YQ@"), null, "Should return null for invalid characters (@)");
+    assert_eq(crypto.b64url_decode("Y"), null, "Should return null for invalid length");
     assert_eq(crypto.b64url_decode(123), null, "Should return null for non-string types");
 });
 
@@ -98,6 +100,28 @@ test('Policy: Future Token (nbf)', () => {
     // Valid in 2100. Should fail.
     let result = crypto.verify_jwt(fixtures.JWT_FUTURE, fixtures.COVERAGE_PUBKEY, { alg: "RS256" });
     assert_error(result, "TOKEN_NOT_YET_VALID", "Should reject token not yet valid (nbf)");
+});
+
+test('Policy: Clock Skew Configuration', () => {
+    let original_time = global.time;
+    // JWT_EXPIRED exp is 1500000000
+    // We simulate time being 1500000100 (100 seconds "late")
+    global.time = function() { return 1500000100; };
+
+    try {
+        // Default skew is 300s. 100s late is within window. Should PASS.
+        let res1 = crypto.verify_jwt(fixtures.JWT_EXPIRED, fixtures.COVERAGE_PUBKEY, { alg: "RS256" });
+        assert_success(res1, "Should pass expired token within default skew window");
+
+        // Custom skew 50s. 100s late is OUTSIDE window. Should FAIL.
+        let res2 = crypto.verify_jwt(fixtures.JWT_EXPIRED, fixtures.COVERAGE_PUBKEY, { alg: "RS256", skew: 50 });
+        assert_error(res2, "TOKEN_EXPIRED", "Should reject expired token outside custom skew window");
+        
+        global.time = original_time;
+    } catch (e) {
+        global.time = original_time;
+        die("Test failed with exception: " + e);
+    }
 });
 
 test('Policy: Algorithm Enforcement', () => {

@@ -92,7 +92,7 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
     const char *key_pem = ucv_string_get(v_key);
 
     // 1. Hash the message
-    unsigned char hash[32];
+    unsigned char hash[MBEDTLS_MD_MAX_SIZE];
     mbedtls_md_context_t md_ctx;
     mbedtls_md_init(&md_ctx);
     mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 0);
@@ -149,7 +149,7 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
     }
 
     // 2. Hash the message
-    unsigned char hash[32];
+    unsigned char hash[MBEDTLS_MD_MAX_SIZE];
     mbedtls_md_context_t md_ctx;
     mbedtls_md_init(&md_ctx);
     mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 0);
