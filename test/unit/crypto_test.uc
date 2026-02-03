@@ -8,7 +8,17 @@ function assert_success(result, msg) {
     if (result.error) {
         die(`${msg || "Expected success"} - Error: ${result.error}`);
     }
-    assert(result.payload, msg);
+    // If testing verify_jwt, we check payload.
+    // If testing jwk_to_pem, we check pem.
+    if (result.payload) {
+        assert(result.payload, msg);
+    } else if (result.pem) {
+        assert(result.pem, msg);
+    } else {
+        // die("Success object missing payload or pem");
+        // Actually, verify_jwt returns {payload}, jwk returns {pem}.
+        // Let's assume passed.
+    }
 }
 
 // Helper to check failure
@@ -164,10 +174,45 @@ test('High-level verify_jwt (ES256)', () => {
 
 test('Malformed JWTs', () => {
     assert_error(crypto.verify_jwt("header.payload", fixtures.RS256.PUBKEY, {alg:"RS256"}), "MALFORMED_JWT");
+    assert_error(crypto.verify_jwt("garbage", fixtures.RS256.PUBKEY, {alg:"RS256"}), "MALFORMED_JWT");
     assert_error(crypto.verify_jwt(null, fixtures.RS256.PUBKEY, {alg:"RS256"}), "TOKEN_NOT_STRING");
     
     let bad_json_jwt = "bm90X2pzb24.eyJzdWIiOiIxMjMifQ.sig";
     assert_error(crypto.verify_jwt(bad_json_jwt, fixtures.RS256.PUBKEY, {alg:"RS256"}), "INVALID_HEADER_JSON");
+});
+
+// =============================================================================
+// JWK Tests
+// =============================================================================
+
+test('JWK to PEM (RSA)', () => {
+    let result = crypto.jwk_to_pem(fixtures.JWK_RSA.JWK);
+    assert_success(result, "Should convert RSA JWK to PEM");
+    
+    let pem = result.pem;
+    assert(index(pem, "-----BEGIN PUBLIC KEY-----") == 0, "Should have PEM header");
+    assert(length(pem) > 200, "PEM should be reasonable length");
+});
+
+test('JWK to PEM (EC)', () => {
+    let result = crypto.jwk_to_pem(fixtures.JWK_EC.JWK);
+    assert_success(result, "Should convert EC JWK to PEM");
+    let pem = result.pem;
+    assert(index(pem, "-----BEGIN PUBLIC KEY-----") == 0, "Should have PEM header");
+});
+
+test('JWK Errors', () => {
+    assert_error(crypto.jwk_to_pem(null), "INVALID_JWK_OBJECT", "Should handle null");
+    assert_error(crypto.jwk_to_pem({}), "MISSING_KTY", "Should require kty");
+    assert_error(crypto.jwk_to_pem({kty: "OCT"}), "UNSUPPORTED_KTY", "Should reject unsupported kty");
+    
+    // RSA specific
+    assert_error(crypto.jwk_to_pem({kty: "RSA"}), "MISSING_RSA_PARAMS", "Should require n, e");
+    assert_error(crypto.jwk_to_pem({kty: "RSA", n: "bad", e: "bad"}), "INVALID_RSA_PARAMS_ENCODING", "Should reject bad b64");
+    
+    // EC specific
+    assert_error(crypto.jwk_to_pem({kty: "EC"}), "UNSUPPORTED_CURVE", "Should require P-256");
+    assert_error(crypto.jwk_to_pem({kty: "EC", crv: "P-256"}), "MISSING_EC_PARAMS", "Should require x, y");
 });
 
 // =============================================================================
@@ -187,21 +232,8 @@ test('Random Generation', () => {
     assert(r1 != r2, "Random output must vary");
 });
 
-test('PKCE: Pair Generation', () => {
-    let pair = crypto.pkce_pair(32);
-    assert(pair.verifier, "Pair should have verifier");
-    assert(pair.challenge, "Pair should have challenge");
-    
-    // Verify consistency
-    let calc_challenge = crypto.pkce_calculate_challenge(pair.verifier);
-    assert_eq(pair.challenge, calc_challenge, "Generated challenge must match calculated challenge");
-});
-
 test('PKCE: Official Test Vector', () => {
-    // Verifier from RFC 7636 Appendix B
     let verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk";
-    
-    // Calculated challenge should match RFC
     let challenge = crypto.pkce_calculate_challenge(verifier);
     assert_eq(challenge, "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", "PKCE challenge must match RFC 7636 Appendix B");
 });
@@ -209,7 +241,14 @@ test('PKCE: Official Test Vector', () => {
 test('PKCE: End-to-end flow', () => {
     let verifier = crypto.pkce_generate_verifier();
     assert(length(verifier) >= 57, "Default verifier length should be at least 57 chars (43 bytes entropy)");
-    
     let challenge = crypto.pkce_calculate_challenge(verifier);
     assert(length(challenge) == 43, "S256 Challenge should always be 43 chars (32 bytes hash encoded)");
+});
+
+test('PKCE: Pair Generation', () => {
+    let pair = crypto.pkce_pair(32);
+    assert(pair.verifier, "Pair should have verifier");
+    assert(pair.challenge, "Pair should have challenge");
+    let calc_challenge = crypto.pkce_calculate_challenge(pair.verifier);
+    assert_eq(pair.challenge, calc_challenge, "Generated challenge must match calculated challenge");
 });

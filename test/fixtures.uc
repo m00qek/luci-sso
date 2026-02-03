@@ -1,9 +1,8 @@
 // =============================================================================
 // RS256 Test Data
 // =============================================================================
-export let RS256 = {
-    PUBKEY: "-----BEGIN PUBLIC KEY-----
-" +
+export const RS256 = {
+    PUBKEY: "-----BEGIN PUBLIC KEY-----\n" +
         "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqk1WZcjtRvPjwcN3WMk2\n" +
         "CRGeP5oCjIPNNuo87E0BFT3UdbNsLx44B+yGosB/FhwY/hKV8bXAopmA46wirqd/\n" +
         "azZH4sjsWTQs1uhtRI6GxR5xnoIFV4gRrMkqGkRLMTCeUajsxGw/jMlEzmyDwW+t\n" +
@@ -17,8 +16,7 @@ export let RS256 = {
 
     SIG_B64URL: "A4WLYP1G7SK3zpg7Ni_le_B0LzUUu1uLbFu1HXAApX3hkUiQLl1c7PWqMe408RqK-MqBiTB3mqJ9fXY1Z937kamwY5ycD1gMhyhfa9CgqrLA6jTZojcCanKqu13GWhZCNB5QiGu8O_sY-CUew-F32yef6rrx896BkfiB7Tyovg_jhsXEPyGX_Yf3CCPfGcMcRf-2pFIX1pnulUPgxVVIbidAuJ1SHxNI7UA3xTJq9phR5B_pnbNay1aVp50ewnKQoGFJj9EabFBVMkeRUCON29ZSt9YgDd1-0swWrZWEI3g3J25fbuVQS5IrxvLOZcjRE5zuc9m8RB4zY4PrbLQwQA",
 
-    JWT_PUBKEY: "-----BEGIN PUBLIC KEY-----
-" +
+    JWT_PUBKEY: "-----BEGIN PUBLIC KEY-----\n" +
         "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAq0g5x3uxj4F9zmlMbadq\n" +
         "N8rJpdebwZL2iMNFmaBCBLRX3neuHobGuMh16Wgt5NiW8+rD/2du7uA76nmUzoUB\n" +
         "t3nF5LMtngFGJXFRpy6srKne5Ch9g4RZZrQA5VvE/Rviv3XQ7YbXZe55pRcvNjcx\n" +
@@ -35,9 +33,8 @@ export let RS256 = {
 // =============================================================================
 // ES256 Test Data
 // =============================================================================
-export let ES256 = {
-    PUBKEY: "-----BEGIN PUBLIC KEY-----
-" +
+export const ES256 = {
+    PUBKEY: "-----BEGIN PUBLIC KEY-----\n" +
         "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEnaYU+sbeE7uZ/zGoRVfCurxTkjUZ\n" +
         "W7wCr58/eqxxmj9X6OmCcIr9i8bzbS3zZwCGbt72gMfXW/hjUwA2VhrTBA==\n" +
         "-----END PUBLIC KEY-----",
@@ -51,11 +48,44 @@ export let ES256 = {
 
 
 // =============================================================================
+// JWK Test Data
+// =============================================================================
+export const JWK_RSA = {
+    JWK: {
+        kty: "RSA",
+        n: "lU_1vlyvlV6z5xIYTHUo5JbeYLQ2p2zT_3XOjwCjDvgFTsPx7gkRyJfYN_PZkVQt2QaOFUjy-zHshs8kCSwvmXHAsqT9ux75VdZj9YnGcyCEE0hfvYrHFX1GdyZkKUqasr4_1VEJHfjpgUuiOZdQLDjRvsRTfxhQoZJFgyvsKPWDf1RlIavA-f-euc7ZHx89SebTW3r3TM0q95ybnqleA4bgzz4D6pu2ViC7kNVDnT3_7Y5zDYkhL2XVp_uSxCTfJjJG5I8TcEXw0fuvLN_a6L4SH6iItTN0iJvk88j1l0ztnv984WBuOlV0JkWhI_iIW_wRBISWEF9AVQA6KGmfCw",
+        e: "AQAB"
+    },
+    PEM: "-----BEGIN PUBLIC KEY-----\n" +
+        "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlU/1vlyvlV6z5xIYTHUo\n" +
+        "5JbeYLQ2p2zT/3XOjwCjDvgFTsPx7gkRyJfYN/PZkVQt2QaOFUjy+zHshs8kCSwv\n" +
+        "mXHAsqT9ux75VdZj9YnGcyCEE0hfvYrHFX1GdyZkKUqasr4/1VEJHfjpgUuiOZdQ\n" +
+        "LDjRvsRTfxhQoZJFgyvsKPWDf1RlIavA-f-euc7ZHx89SebTW3r3TM0q95ybnqle\n" +
+        "A4bgzz4D6pu2ViC7kNVDnT3/7Y5zDYkhL2XVp/uSxCTfJjJG5I8TcEXw0fuvLN/a\n" +
+        "6L4SH6iItTN0iJvk88j1l0ztnv984WBuOlV0JkWhI/iIW/wRBISWEF9AVQA6KGmf\n" +
+        "CwIDAQAB\n" +
+        "-----END PUBLIC KEY-----"
+};
+
+export const JWK_EC = {
+    JWK: {
+        kty: "EC",
+        crv: "P-256",
+        x: "Ny5S-oQLm1WmiioE2MNWAAJIl8GSLumXSC4S1NctnFA",
+        y: "KOjzSs1nHrCSKkgt8qP9wfK7aUZmhHGyHtv7FauN8jw"
+    },
+    PEM: "-----BEGIN PUBLIC KEY-----\n" +
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAENy5S+oQLm1WmiioE2MNWAAJIl8GS\n" +
+        "LumXSC4S1NctnFAo6PNKzWcesJIqSC3yo/3B8rtpRmaEcbIe2/sVq43yPA==\n" +
+        "-----END PUBLIC KEY-----"
+};
+
+
+// =============================================================================
 // Coverage / Policy Test Data
 // =============================================================================
-export let POLICY = {
-    PUBKEY: "-----BEGIN PUBLIC KEY-----
-" +
+export const POLICY = {
+    PUBKEY: "-----BEGIN PUBLIC KEY-----\n" +
         "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAzHsmm0TIiDujMnz6HVQc\n" +
         "5B87SGsbKsIQxcCy4XBxNnYka96AjXUC4YzP4rBqefCpgCZIoJN3GSzzrhhd2V/s\n" +
         "BgOdcMGY7gWspWt2kTYJ3OqLz9ex2LcQI5ZAf9ggU0BF3DVALIVCl7+Ac52+diC6\n" +
@@ -69,16 +99,15 @@ export let POLICY = {
 
     JWT_FUTURE: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJmdXR1cmUiLCJuYmYiOjQxMDI0NDQ4MDB9.vcrwMfCmPUuMlvc-IqVwslSlMao8M_dDc77Vi68fJ1ANlua9SJPJYcoI6h_f39KlBkgHVXzF-z57RFREKUKpsXbnjKTTCu2aeZDWPn6fEGHV0MGno5QHtdIzdeQg0W9z6KkIZFGrVAblWaMeyot4IkXhF-BGwJhtGPNHrg77H184u3MLvam1r32bQuKkL3MFhRaEPnmOqIDSpZLLhobBk_w16ZpyvsRJLlYFqmVV6DtjOdUGZeFS3gi_QnNpZJWxucI-vn3oLzCTB1TfrjK1_O21t7yyji69d699IlunpoXvXiBopF1SJLtV_Qfk0vpwGpAGuYccX8Iy4eZgJgsWOQ",
 
-    CLAIMS_PUBKEY: "-----BEGIN PUBLIC KEY-----
-" +
-        "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA5GOVLdP4p4FvHK/9fQAO\n" +
-        "wY9v3WmuSib2Mqs6Yur1Wc0xo+PX2Po+nCkgCylHdlTVM7eCHxoQU2A6a4Mo2RJ+\n" +
-        "DPW8dkmbvtWoaa9OBGnuylb7AcAxTUSHqtJLaV+uG4UEFBCxslnHRE6Ny+vQ4OGd\n" +
-        "Qpytfti1rvqyRtPmzOm+qlziuCxoHjxA4BD41W71IWlWjQOibY3JFtKOW7Jg5UiQ\n" +
-        "5AWfEW1q12MiI86aVPYvhwKeE19e5Nn1olGDljAJAUNBxUifrPeS8gy2XB9hpj+2\n" +
-        "zl3j8aIu/qUcUYsiyK+YXhyRp7LHHEo/Jv4nVNSuJYiz4N6vBZA65PgfLiIfeBv9\n" +
-        "HQIDAQAB\n" +
+    CLAIMS_PUBKEY: "-----BEGIN PUBLIC KEY-----\n" +
+        "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1/847ZcOtu0RIzG86jNO\n" +
+        "ITdRykmnqInNIGibqWfQC3BirUFUipBH0JbghVkfvsEas5O8fyCaa6JS3QyvEALD\n" +
+        "K6AlNXqutiT6eoR8Jj4Nss3q6yzw5GAl0BEK5IEpn+wxr2+EEwckgPWe/+mCf1iR\n" +
+        "3ZlXb0jIBkBUOiVVEkInMyZmxRz1jCAf6fOuDkVuoxYrJGaIYoJTYnuY7qvw8/Ow\n" +
+        "magq/sdmtMT0WcFHvZCNqad6SF2YVT3nOiXNBizGlVODo5wKtHRFOkiqP4oWXLr8\n" +
+        "G3Pptzt1+5oxvXSWkYAKAQ/sUqrbIYcIWV2dIcAGgdCbHMsBoQKCErbZu+T8zbtm\n" +
+        "WwIDAQAB\n" +
         "-----END PUBLIC KEY-----",
 
-    JWT_WITH_CLAIMS: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJteS1hdXRoLXNlcnZlciIsImF1ZCI6Im15LWFwcCJ9.NTGANs4kmqZP_kvN_6NF9XIWw2GnlnmNNtn4V5hNa7rcJdigyLTNBXCIGM16UfUQ-9r86kGBsmbAQ4pVV-mf8iI0CLP_jjh93I149zspPjAQBH5d8lO-iCGPRQ7nSB5gw3JOBINmg25WRpKCnwsEE4cumpUonlm3MpZRDt9kd8FY3H7oA4zQEUmPEhx4tAUyAbyxBEcs_XwRmXt58w5s3DIz8KkGJuRi2mNl5LG1f-mlNiY80Rc_dCdq_wttQcjbbG01bEhHZH7KxrMfbpC3xPIfvW0-WJPNBYnufpI7swjvn9-BydlAVbgnnifmUuf3hAnlKDI40xqczlNEaqY9Xg"
+    JWT_WITH_CLAIMS: "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjMiLCJuYW1lIjoiSm9obiBEb2UiLCJpc3MiOiJteS1hdXRoLXNlcnZlciIsImF1ZCI6Im15LWFwcCJ9.V55ce08pJ8UbLY6kOQ235o8hAE2pZDmJbZtJEbblckF06Bzntlw0e90OO7gZ7q4yAMA4Rhci78Or_StEf9Ig1pPMfybV33dtRLS9GVQrMJo5d0xDl1l_TfOtrKDG8KFHfqa24t-mJ9TD11a_t7j2Y4gux8d9eJX-kIH3c-btj1FHDYDnj9P8ltqbDHk9upboqoPAjWwzw7mUxgagNip5r_NxVlZwrvfm3f2fENXoiqahyQ9gy0_dap6fSVRZxJZISRYnHHjXEEgaRCCRS12dTkvyDNOipctP9T84PZA8JOne9z7VQj8Dx1wR4PkLDXoTZMi65VzKcI5VPPioNfxGCg"
 };

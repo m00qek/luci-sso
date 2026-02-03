@@ -137,9 +137,6 @@ export function random(len) {
 
 /**
  * Generates a PKCE Code Verifier.
- * 
- * @param {int} len - Number of random bytes (default 43, results in 57 chars).
- * @returns {string} - Base64URL encoded verifier.
  */
 export function pkce_generate_verifier(len) {
     let bytes = mbedtls.random(len || 43);
@@ -148,9 +145,6 @@ export function pkce_generate_verifier(len) {
 
 /**
  * Calculates a PKCE Code Challenge from a verifier using S256.
- * 
- * @param {string} verifier - The verifier string.
- * @returns {string} - Base64URL encoded SHA-256 hash.
  */
 export function pkce_calculate_challenge(verifier) {
     let hash = mbedtls.sha256(verifier);
@@ -164,4 +158,37 @@ export function pkce_pair(len) {
     let verifier = pkce_generate_verifier(len);
     let challenge = pkce_calculate_challenge(verifier);
     return { verifier, challenge };
+};
+
+/**
+ * Converts a JWK object to a PEM string.
+ */
+export function jwk_to_pem(jwk) {
+    if (!jwk || type(jwk) != "object") return { error: "INVALID_JWK_OBJECT" };
+    if (!jwk.kty) return { error: "MISSING_KTY" };
+
+    if (jwk.kty == "RSA") {
+        if (!jwk.n || !jwk.e) return { error: "MISSING_RSA_PARAMS" };
+        let n_bin = b64url_decode(jwk.n);
+        let e_bin = b64url_decode(jwk.e);
+        if (!n_bin || !e_bin) return { error: "INVALID_RSA_PARAMS_ENCODING" };
+        
+        let pem = mbedtls.jwk_rsa_to_pem(n_bin, e_bin);
+        if (!pem) return { error: "PEM_CONVERSION_FAILED" };
+        return { pem: pem };
+        
+    } else if (jwk.kty == "EC") {
+        if (jwk.crv != "P-256") return { error: "UNSUPPORTED_CURVE" };
+        if (!jwk.x || !jwk.y) return { error: "MISSING_EC_PARAMS" };
+        
+        let x_bin = b64url_decode(jwk.x);
+        let y_bin = b64url_decode(jwk.y);
+        if (!x_bin || !y_bin) return { error: "INVALID_EC_PARAMS_ENCODING" };
+        
+        let pem = mbedtls.jwk_es256_to_pem(x_bin, y_bin);
+        if (!pem) return { error: "PEM_CONVERSION_FAILED" };
+        return { pem: pem };
+    }
+    
+    return { error: "UNSUPPORTED_KTY" };
 };
