@@ -29,6 +29,41 @@ test('Session: Create and verify', () => {
 	assert_eq(v_result.session.name, "Test User");
 });
 
+test('Session: Clock Skew (Expired but in grace period)', () => {
+	let io = create_mock_io();
+	let res = session.create(io, { sub: "123" });
+	let token = res.session;
+	
+	// Advance time to 1s past expiration (3600 + 1)
+	io._now += 3601;
+	
+	// Default skew is 60s, so it should still be valid
+	let result = session.verify(io, token);
+	assert(!result.error, "Should be valid within 60s skew");
+	
+	// Advance past skew (61s past expiration)
+	io._now += 60;
+	result = session.verify(io, token);
+	assert_eq(result.error, "SESSION_EXPIRED");
+});
+
+test('Session: Clock Skew (Future token within grace period)', () => {
+	let io = create_mock_io();
+	let res = session.create(io, { sub: "123" });
+	let token = res.session;
+	
+	// Move clock BACKWARDS 30s
+	io._now -= 30;
+	
+	let result = session.verify(io, token);
+	assert(!result.error, "Should allow 30s future drift within 60s skew");
+	
+	// Move clock back past skew (61s total)
+	io._now -= 31;
+	result = session.verify(io, token);
+	assert_eq(result.error, "SESSION_NOT_YET_VALID");
+});
+
 test('State: Create and verify', () => {
 	let io = create_mock_io();
 	
@@ -44,7 +79,7 @@ test('State: Create and verify', () => {
 	assert_eq(result.payload.nonce, handshake.nonce);
 });
 
-test('State: Clock Skew', () => {
+test('State: Clock Skew (Expired but in grace period)', () => {
 	let io = create_mock_io();
 	let handshake = session.create_state(io);
 	let token = handshake.token;
@@ -58,6 +93,19 @@ test('State: Clock Skew', () => {
 	io._now += 30;
 	result = session.verify_state(io, token);
 	assert_eq(result.error, "HANDSHAKE_EXPIRED");
+});
+
+test('State: Clock Skew (Future token)', () => {
+	let io = create_mock_io();
+	let handshake = session.create_state(io);
+	
+	io._now -= 10;
+	let result = session.verify_state(io, handshake.token);
+	assert(!result.error, "Should allow 10s future drift");
+	
+	io._now -= 21; // 31s total
+	result = session.verify_state(io, handshake.token);
+	assert_eq(result.error, "HANDSHAKE_NOT_YET_VALID");
 });
 
 test('Session: Reject invalid user data', () => {
