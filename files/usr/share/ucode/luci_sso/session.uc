@@ -19,22 +19,23 @@ function validate_io(io) {
 /**
  * Internal helper to get/generate the router secret key.
  * @private
+ * @param {object} io - I/O provider
+ * @returns {object} - Result Object {ok, data/error}
  */
 function get_secret_key(io) {
 	let key = null;
 	try {
 		key = io.read_file(SECRET_KEY_PATH);
 	} catch (e) {
-		// We don't die here because it might be a transient FS error
 		return { ok: false, error: "KEY_READ_ERROR" };
 	}
 
-	if (!key) {
+	if (!key || length(key) == 0) {
 		key = crypto.random(32);
 		try {
 			io.write_file(SECRET_KEY_PATH, key);
 		} catch (e) {
-			// Non-fatal for current session, but will lose persistence on reboot
+			// Non-fatal for current process
 		}
 	}
 	return { ok: true, data: key };
@@ -42,6 +43,9 @@ function get_secret_key(io) {
 
 /**
  * Creates a signed state token and all required OIDC params for redirect.
+ * 
+ * @param {object} io - I/O provider
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function create_state(io) {
 	validate_io(io);
@@ -79,6 +83,10 @@ export function create_state(io) {
 
 /**
  * Verifies a state token.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} token - Signed state token
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function verify_state(io, token) {
 	validate_io(io);
@@ -107,6 +115,10 @@ export function verify_state(io, token) {
 
 /**
  * Creates a signed session token.
+ * 
+ * @param {object} io - I/O provider
+ * @param {object} user_data - User claims from ID token
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function create(io, user_data) {
 	validate_io(io);
@@ -132,6 +144,10 @@ export function create(io, user_data) {
 
 /**
  * Verifies a session token and returns the session object.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} token - Signed session token
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function verify(io, token) {
 	validate_io(io);

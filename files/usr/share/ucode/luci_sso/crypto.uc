@@ -4,7 +4,10 @@ const MAX_TOKEN_SIZE = 16384; // 16 KB
 
 /**
  * Converts Base64URL to Standard Base64 and adds padding.
+ * 
  * @private
+ * @param {string} str - Base64URL string
+ * @returns {string} - Standard Base64 string or null
  */
 function b64url_to_b64(str) {
 	if (type(str) != "string") return null;
@@ -26,7 +29,10 @@ function b64url_to_b64(str) {
 
 /**
  * Decodes JSON safely.
+ * 
  * @private
+ * @param {string} str - JSON string
+ * @returns {object} - Parsed object or null
  */
 function safe_json(str) {
 	try {
@@ -37,7 +43,30 @@ function safe_json(str) {
 }
 
 /**
+ * Constant-time string comparison to prevent timing attacks.
+ * 
+ * @private
+ * @param {string} a - First string
+ * @param {string} b - Second string
+ * @returns {boolean} - True if equal
+ */
+function constant_time_eq(a, b) {
+	if (type(a) != "string" || type(b) != "string") return false;
+	let len_a = length(a);
+	if (len_a != length(b)) return false;
+
+	let res = 0;
+	for (let i = 0; i < len_a; i++) {
+		res |= (ord(a, i) ^ ord(b, i));
+	}
+	return (res == 0);
+}
+
+/**
  * Decodes a Base64URL string to a raw string.
+ * 
+ * @param {string} str - Base64URL string
+ * @returns {string} - Raw binary string or null
  */
 export function b64url_decode(str) {
 	if (type(str) != "string") die("CONTRACT_VIOLATION: b64url_decode expects string");
@@ -47,6 +76,9 @@ export function b64url_decode(str) {
 
 /**
  * Encodes a raw string to Base64URL.
+ * 
+ * @param {string} str - Raw binary string
+ * @returns {string} - Base64URL string
  */
 export function b64url_encode(str) {
 	if (type(str) != "string") die("CONTRACT_VIOLATION: b64url_encode expects string");
@@ -59,6 +91,10 @@ export function b64url_encode(str) {
 
 /**
  * Signs a payload using HMAC-SHA256 and returns a JWS (Compact Serialization).
+ * 
+ * @param {object} payload - Data to sign
+ * @param {string} secret - Binary secret key
+ * @returns {string} - Compact JWS string
  */
 export function sign_jws(payload, secret) {
 	if (type(payload) != "object") die("CONTRACT_VIOLATION: sign_jws expects object payload");
@@ -76,23 +112,11 @@ export function sign_jws(payload, secret) {
 };
 
 /**
- * Constant-time string comparison to prevent timing attacks.
- * @private
- */
-function constant_time_eq(a, b) {
-	if (type(a) != "string" || type(b) != "string") return false;
-	let len_a = length(a);
-	if (len_a != length(b)) return false;
-
-	let res = 0;
-	for (let i = 0; i < len_a; i++) {
-		res |= (ord(a, i) ^ ord(b, i));
-	}
-	return (res == 0);
-};
-
-/**
  * Verifies a JWS (HMAC-SHA256) and returns the parsed payload if valid.
+ * 
+ * @param {string} token - Compact JWS string
+ * @param {string} secret - Binary secret key
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function verify_jws(token, secret) {
 	if (type(token) != "string") die("CONTRACT_VIOLATION: verify_jws expects string token");
@@ -132,6 +156,11 @@ export function verify_jws(token, secret) {
 
 /**
  * Parses and validates an OIDC JWT (Public Key: RS256/ES256).
+ * 
+ * @param {string} token - JWT string
+ * @param {string} pubkey - PEM public key
+ * @param {object} options - Validation options {alg, iss, aud, skew}
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function verify_jwt(token, pubkey, options) {
 	if (type(token) != "string") die("CONTRACT_VIOLATION: verify_jwt expects string token");
@@ -209,6 +238,9 @@ export function verify_jwt(token, pubkey, options) {
 
 /**
  * Generates cryptographically secure random bytes.
+ * 
+ * @param {number} [len=32] - Number of bytes to generate
+ * @returns {string} - Random binary string
  */
 export function random(len) {
 	if (type(len) != "int" && len != null) die("CONTRACT_VIOLATION: random expects integer length");
@@ -217,6 +249,9 @@ export function random(len) {
 
 /**
  * Calculates SHA256 hash.
+ * 
+ * @param {string} str - Data to hash
+ * @returns {string} - 32-byte binary hash string
  */
 export function sha256(str) {
 	if (type(str) != "string") die("CONTRACT_VIOLATION: sha256 expects string input");
@@ -225,6 +260,9 @@ export function sha256(str) {
 
 /**
  * Generates a PKCE Code Verifier.
+ * 
+ * @param {number} [len=43] - Length of verifier
+ * @returns {string} - Base64URL encoded verifier
  */
 export function pkce_generate_verifier(len) {
 	let bytes = random(len || 43);
@@ -233,6 +271,9 @@ export function pkce_generate_verifier(len) {
 
 /**
  * Calculates a PKCE Code Challenge from a verifier using S256.
+ * 
+ * @param {string} verifier - PKCE verifier string
+ * @returns {string} - Base64URL encoded challenge
  */
 export function pkce_calculate_challenge(verifier) {
 	let hash = sha256(verifier);
@@ -241,6 +282,9 @@ export function pkce_calculate_challenge(verifier) {
 
 /**
  * Generates a PKCE Verifier and Challenge pair.
+ * 
+ * @param {number} [len] - Optional verifier length
+ * @returns {object} - {verifier, challenge}
  */
 export function pkce_pair(len) {
 	let verifier = pkce_generate_verifier(len);
@@ -250,6 +294,9 @@ export function pkce_pair(len) {
 
 /**
  * Converts a JWK object to a PEM string.
+ * 
+ * @param {object} jwk - JWK object
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function jwk_to_pem(jwk) {
 	if (!jwk || type(jwk) != "object") die("CONTRACT_VIOLATION: jwk_to_pem expects object jwk");

@@ -4,12 +4,20 @@ import * as crypto from 'luci_sso.crypto';
 
 // --- Internal Helpers ---
 
+/**
+ * Validates the IO object.
+ * @private
+ */
 function validate_io(io) {
 	if (type(io) != "object" || type(io.http_get) != "function" || type(io.time) != "function") {
 		die("CONTRACT_VIOLATION: Invalid IO provider");
 	}
 }
 
+/**
+ * Decodes JSON safely.
+ * @private
+ */
 function safe_json_parse(data) {
 	let raw = data;
 	if (type(data) == "object" && type(data.read) == "function") {
@@ -27,6 +35,7 @@ function safe_json_parse(data) {
 
 /**
  * Generates a unique cache path for an issuer to avoid collisions.
+ * @private
  */
 function get_cache_path(issuer) {
 	// Simple hash-like string from issuer
@@ -38,6 +47,11 @@ function get_cache_path(issuer) {
 
 /**
  * Fetches and caches OIDC discovery document.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} issuer - IdP issuer URL
+ * @param {object} [options] - Cache and TTL options
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function discover(io, issuer, options) {
 	validate_io(io);
@@ -99,6 +113,10 @@ export function discover(io, issuer, options) {
 
 /**
  * Fetches JWK Set from IdP.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} jwks_uri - URI to JWKS endpoint
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function fetch_jwks(io, jwks_uri) {
 	validate_io(io);
@@ -123,6 +141,10 @@ export function fetch_jwks(io, jwks_uri) {
 
 /**
  * Finds the correct JWK by key ID (kid).
+ * 
+ * @param {array} keys - Array of JWK objects
+ * @param {string} [kid] - Key ID to look for
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function find_jwk(keys, kid) {
 	if (type(keys) != "array") die("CONTRACT_VIOLATION: keys must be an array");
@@ -141,6 +163,12 @@ export function find_jwk(keys, kid) {
 
 /**
  * Generates the authorization URL.
+ * 
+ * @param {object} io - I/O provider
+ * @param {object} config - UCI configuration
+ * @param {object} discovery - OIDC discovery document
+ * @param {object} params - Handshake parameters {state, nonce, challenge}
+ * @returns {string} - Full authorization URL
  */
 export function get_auth_url(io, config, discovery, params) {
 	if (type(config) != "object" || type(discovery) != "object" || type(params) != "object") {
@@ -172,6 +200,13 @@ export function get_auth_url(io, config, discovery, params) {
 
 /**
  * Exchanges authorization code for tokens.
+ * 
+ * @param {object} io - I/O provider
+ * @param {object} config - UCI configuration
+ * @param {object} discovery - OIDC discovery document
+ * @param {string} code - Authorization code from IdP
+ * @param {string} verifier - PKCE code verifier
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function exchange_code(io, config, discovery, code, verifier) {
 	validate_io(io);
@@ -213,6 +248,13 @@ export function exchange_code(io, config, discovery, code, verifier) {
 
 /**
  * Verifies ID Token and matches nonce.
+ * 
+ * @param {object} io - I/O provider
+ * @param {object} tokens - Token response from exchange_code
+ * @param {array} keys - JWK Set
+ * @param {object} config - UCI configuration
+ * @param {object} handshake - Original handshake data
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function verify_id_token(io, tokens, keys, config, handshake) {
 	if (!tokens.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };

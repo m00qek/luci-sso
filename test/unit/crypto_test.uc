@@ -20,24 +20,24 @@ function assert_error(result, expected_err, msg) {
 	assert_eq(result.error, expected_err, msg);
 }
 
-test('Base64URL: Character mapping', () => {
+test('Crypto: Base64URL - Character mapping', () => {
 	assert_eq(crypto.b64url_decode("c3ViamVjdHM_X2lucHV0cw"), "subjects?_inputs", "Should map '-' and '_' correctly");
 });
 
-test('Base64URL: Padding variations', () => {
+test('Crypto: Base64URL - Padding variations', () => {
 	assert_eq(crypto.b64url_decode("YQ"), "a", "Should handle 2-byte missing padding");
 	assert_eq(crypto.b64url_decode("YWI"), "ab", "Should handle 1-byte missing padding");
 	assert_eq(crypto.b64url_decode("YWJj"), "abc", "Should handle no missing padding");
 	assert_eq(crypto.b64url_decode("YWJjZA"), "abcd", "Should handle multiple blocks");
 });
 
-test('High-level verify_jwt (RS256)', () => {
+test('Crypto: JWT - Verify RS256 signature', () => {
 	let result = crypto.verify_jwt(fixtures.RS256.JWT_TOKEN, fixtures.RS256.JWT_PUBKEY, { alg: "RS256" });
 	assert_success(result, "JWT should be verified successfully");
 	assert_eq(result.data.sub, "1234567890");
 });
 
-test('JWS: Create and verify (HMAC-SHA256)', () => {
+test('Crypto: JWS - Create and verify HMAC-SHA256', () => {
 	let secret = "my-secret-key";
 	let data = { user: "admin", role: "superuser" };
 	
@@ -63,35 +63,35 @@ test('JWS: Create and verify (HMAC-SHA256)', () => {
 	let bad_header = crypto.b64url_encode(sprintf("%J", { alg: "none" }));
 	let bad_alg_token = bad_header + "." + parts[1] + "." + parts[2];
 	let bad_alg_result = crypto.verify_jws(bad_alg_token, secret);
-	assert_error(bad_alg_result, "UNSUPPORTED_ALGORITHM");
+	assert_error(bad_alg_result, "UNSUPPORTED_ALGORITHM", "Should reject alg: none");
 });
 
-test('Random Generation wrapper', () => {
+test('Crypto: Random - Length and uniqueness', () => {
 	let r1 = crypto.random(32);
 	let r2 = crypto.random(32);
-	assert_eq(length(r1), 32);
-	assert(r1 != r2);
+	assert_eq(length(r1), 32, "Should be 32 bytes");
+	assert(r1 != r2, "Subsequent calls should be unique");
 });
 
-test('PKCE: Pair Generation', () => {
+test('Crypto: PKCE - Pair generation and calculation', () => {
 	let pair = crypto.pkce_pair(32);
-	assert(pair.verifier);
-	assert(pair.challenge);
+	assert(pair.verifier, "Should have verifier");
+	assert(pair.challenge, "Should have challenge");
 	let calc_challenge = crypto.pkce_calculate_challenge(pair.verifier);
-	assert_eq(pair.challenge, calc_challenge);
+	assert_eq(pair.challenge, calc_challenge, "Calculated challenge should match");
 });
 
-test('JWK to PEM (RSA)', () => {
+test('Crypto: JWK - Convert RSA to PEM', () => {
 	let result = crypto.jwk_to_pem(fixtures.JWK_RSA.JWK);
 	assert_success(result, "Should convert RSA JWK to PEM");
-	assert(index(result.data, "-----BEGIN PUBLIC KEY-----") == 0);
+	assert(index(result.data, "-----BEGIN PUBLIC KEY-----") == 0, "Should start with PEM header");
 });
 
-test('Contract: verify_jws die on bad types', () => {
+test('Crypto: Contract - Reject invalid verify_jws types', () => {
 	try {
 		crypto.verify_jws(123, "secret");
-		assert(false, "Should have died");
+		assert(false, "Should have died on bad token type");
 	} catch (e) {
-		assert(index(e, "CONTRACT_VIOLATION") >= 0);
+		assert(index(e, "CONTRACT_VIOLATION") >= 0, "Should throw contract violation");
 	}
 });

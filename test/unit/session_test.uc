@@ -15,7 +15,7 @@ function fail_read() {
 	throw("Permission Denied");
 }
 
-test('Session: Create and verify', () => {
+test('Session: Token - Create and verify successfully', () => {
 	let io = create_mock_io();
 	let user = { sub: "123", name: "Test User" };
 	
@@ -25,11 +25,11 @@ test('Session: Create and verify', () => {
 	
 	let v_result = session.verify(io, token);
 	assert(v_result.ok, `Should verify successfully, got: ${v_result.error}`);
-	assert_eq(v_result.data.user, "123");
-	assert_eq(v_result.data.name, "Test User");
+	assert_eq(v_result.data.user, "123", "User sub should be correct");
+	assert_eq(v_result.data.name, "Test User", "User name should be correct");
 });
 
-test('Session: Clock Skew (Expired but in grace period)', () => {
+test('Session: Expiration - Handle clock skew within grace period', () => {
 	let io = create_mock_io();
 	let res = session.create(io, { sub: "123" });
 	let token = res.data;
@@ -44,24 +44,24 @@ test('Session: Clock Skew (Expired but in grace period)', () => {
 	// Advance past skew (61s past expiration)
 	io._now += 60;
 	result = session.verify(io, token);
-	assert_eq(result.error, "SESSION_EXPIRED");
+	assert_eq(result.error, "SESSION_EXPIRED", "Should reject after skew boundary");
 });
 
-test('State: Create and verify', () => {
+test('Session: State - Create and verify for handshake', () => {
 	let io = create_mock_io();
 	
 	let res = session.create_state(io);
-	assert(res.ok);
+	assert(res.ok, "Should create state");
 	let handshake = res.data;
 	assert(handshake.token, "Should return signed token");
 	assert(handshake.state, "Should return raw state");
 	
 	let result = session.verify_state(io, handshake.token);
 	assert(result.ok, `Should verify state, got: ${result.error}`);
-	assert_eq(result.data.state, handshake.state);
+	assert_eq(result.data.state, handshake.state, "States should match");
 });
 
-test('Session: Reject invalid user data', () => {
+test('Session: Validation - Reject invalid user data', () => {
 	let io = create_mock_io();
 	
 	// Missing sub and email
@@ -69,10 +69,31 @@ test('Session: Reject invalid user data', () => {
 	assert_eq(res.error, "INVALID_USER_DATA", "Should return error if no identifier present");
 });
 
-test('Session: Handle FS errors during secret retrieval', () => {
+test('Session: Persistence - Handle FS errors during secret retrieval', () => {
 	let io = create_mock_io();
 	io.read_file = fail_read;
 	
 	let res = session.create(io, { sub: "123" });
-	assert_eq(res.error, "KEY_READ_ERROR");
+	assert_eq(res.error, "KEY_READ_ERROR", "Should return error if FS fails");
+});
+
+test('Session: Persistence - Regenerate key if file is empty', () => {
+	let io = create_mock_io();
+	io._files["/etc/luci-sso/secret.key"] = ""; // Empty file
+	
+	let res = session.create(io, { sub: "123" });
+	assert(res.ok, "Should regenerate key if file is empty");
+	assert(length(io._files["/etc/luci-sso/secret.key"]) == 32, "Should have written new 32-byte key");
+});
+
+test('Session: Persistence - Consistent behavior with garbage key', () => {
+	let io = create_mock_io();
+	let garbage = "\x00\xff\x00\xaa";
+	io._files["/etc/luci-sso/secret.key"] = garbage;
+	
+	let res = session.create(io, { sub: "123" });
+	assert(res.ok, "Should accept any non-empty key");
+	
+	let verify_res = session.verify(io, res.data);
+	assert(verify_res.ok, "Should be able to verify with the same garbage key");
 });

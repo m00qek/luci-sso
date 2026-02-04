@@ -2,7 +2,7 @@ import { test, assert, assert_eq, assert_throws } from 'testing';
 import * as crypto from 'luci_sso.crypto';
 import * as fixtures from 'fixtures';
 
-test('Fuzz: Base64URL Roundtrip', () => {
+test('Crypto: Fuzz - Base64URL roundtrip consistency', () => {
 	let cases = [
 		"",
 		"f",
@@ -25,7 +25,7 @@ test('Fuzz: Base64URL Roundtrip', () => {
 	}
 });
 
-test('Fuzz: Base64URL Edge Cases', () => {
+test('Crypto: Fuzz - Base64URL edge case handling', () => {
 	// Invalid characters
 	assert_eq(crypto.b64url_decode("YQ+B"), null, "Should reject standard B64 '+'");
 	assert_eq(crypto.b64url_decode("YQ/B"), null, "Should reject standard B64 '/' ");
@@ -38,7 +38,7 @@ test('Fuzz: Base64URL Edge Cases', () => {
 	assert_throws(() => crypto.b64url_decode({}));
 });
 
-test('Fuzz: Large Input', () => {
+test('Crypto: Fuzz - Large input stability', () => {
 	let large = "";
 	for (let i = 0; i < 1000; i++) {
 		large += "LargeDataPayload";
@@ -48,7 +48,7 @@ test('Fuzz: Large Input', () => {
 	assert_eq(large, decoded, "Should handle large payloads");
 });
 
-test('Fuzz: Malformed structures', () => {
+test('Crypto: Fuzz - Malformed JWS/JWT structures', () => {
 	let secret = "secret";
 	let cases = [
 		"",
@@ -61,7 +61,6 @@ test('Fuzz: Malformed structures', () => {
 	];
 
 	for (let i, token in cases) {
-		// Should return error object, not crash
 		let res1 = crypto.verify_jws(token, secret);
 		assert(!res1.ok && res1.error, `JWS verify should fail for: ${token}`);
 
@@ -70,7 +69,7 @@ test('Fuzz: Malformed structures', () => {
 	}
 });
 
-test('Fuzz: JSON Deep Nesting (JSON Bomb)', () => {
+test('Crypto: Fuzz - JSON deep nesting (JSON Bomb)', () => {
 	let depth = 20;
 	let bomb = { a: 1 };
 	for (let i = 0; i < depth; i++) {
@@ -89,22 +88,21 @@ test('Fuzz: JSON Deep Nesting (JSON Bomb)', () => {
 	for (let i = 0; i < depth; i++) {
 		current = current.inner;
 	}
-	assert_eq(current.a, 1);
+	assert_eq(current.a, 1, "Deeply nested data should be intact");
 });
 
-test('Fuzz: Binary Garbage', () => {
+test('Crypto: Fuzz - Random binary garbage handling', () => {
 	let secret = "secret";
-	// Pass 1KB of random binary data as a token
 	let garbage = crypto.random(1024);
 	
 	let res1 = crypto.verify_jws(garbage, secret);
-	assert(!res1.ok);
+	assert(!res1.ok, "JWS verify should reject random binary garbage");
 
 	let res2 = crypto.verify_jwt(garbage, "key", { alg: "RS256" });
-	assert(!res2.ok);
+	assert(!res2.ok, "JWT verify should reject random binary garbage");
 });
 
-test('Fuzz: Bit Flipping in Signatures', () => {
+test('Crypto: Fuzz - Bit flipping in signatures', () => {
 	let secret = "secret";
 	let token = crypto.sign_jws({foo: "bar"}, secret);
 	let parts = split(token, ".");
@@ -122,39 +120,35 @@ test('Fuzz: Bit Flipping in Signatures', () => {
 	let tampered_token = parts[0] + "." + parts[1] + "." + crypto.b64url_encode(tampered_sig);
 	
 	let result = crypto.verify_jws(tampered_token, secret);
-	assert_eq(result.error, "INVALID_SIGNATURE");
+	assert_eq(result.error, "INVALID_SIGNATURE", "Should reject signature with flipped bits");
 });
 
-test('Fuzz: JWS Header Injection', () => {
+test('Crypto: Fuzz - JWS header injection resistance', () => {
 	let secret = "secret";
 	let payload = { foo: "bar" };
-	let header = { alg: "HS256", typ: "JWT", critical: ["exp"], exp: 123456 }; // Adding non-standard fields
+	let header = { alg: "HS256", typ: "JWT", critical: ["exp"], exp: 123456 }; 
 	
 	let b64_header = crypto.b64url_encode(sprintf("%J", header));
 	let b64_payload = crypto.b64url_encode(sprintf("%J", payload));
 	let signed_data = b64_header + "." + b64_payload;
 	
-	// Use require to get native if needed, but sign_jws should be used if possible
-	// Actually we want to test that verify_jws accepts the token
 	let import_native = require('luci_sso.native');
 	let signature = import_native.hmac_sha256(secret, signed_data);
 	let token = signed_data + "." + crypto.b64url_encode(signature);
 
-	// Library should verify successfully but ignore the extra header fields
 	let result = crypto.verify_jws(token, secret);
-	assert(result.ok, `Should ignore extra header fields, got: ${result.error}`);
-	assert_eq(result.data.foo, "bar");
+	assert(result.ok, "Should verify despite extra header fields");
+	assert_eq(result.data.foo, "bar", "Payload should be correctly returned");
 });
 
-test('Fuzz: Token Size Limit (16 KB)', () => {
+test('Crypto: Fuzz - Token size limit enforcement', () => {
 	let secret = "secret";
-	// Create a token slightly larger than 16 KB
 	let massive = "";
 	for (let i = 0; i < 1640; i++) massive += "1234567890";
 	
 	let result = crypto.verify_jws(massive, secret);
-	assert_eq(result.error, "TOKEN_TOO_LARGE");
+	assert_eq(result.error, "TOKEN_TOO_LARGE", "Should reject JWS larger than 16KB");
 
 	let result_jwt = crypto.verify_jwt(massive, "key", { alg: "RS256" });
-	assert_eq(result_jwt.error, "TOKEN_TOO_LARGE");
+	assert_eq(result_jwt.error, "TOKEN_TOO_LARGE", "Should reject JWT larger than 16KB");
 });
