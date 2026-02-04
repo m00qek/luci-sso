@@ -101,6 +101,8 @@ test('Auth URL: Correct parameters', () => {
 	assert(!auth.error);
 	assert(index(auth.url, "client_id=my-client") != -1, "URL should contain client_id");
 	assert(index(auth.url, "response_type=code") != -1, "URL should contain response_type");
+	assert(index(auth.url, "nonce=" + auth.nonce) != -1, "URL should contain nonce");
 	assert(auth.state, "Should generate a state");
+	assert(auth.nonce, "Should generate a nonce");
 	assert(auth.code_verifier, "Should generate a PKCE verifier");
 });

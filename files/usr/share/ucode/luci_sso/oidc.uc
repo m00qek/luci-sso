@@ -157,6 +157,7 @@ export function find_jwk(keys, kid) {
 export function get_auth_url(io, config, discovery) {
 	let pkce = crypto.pkce_pair();
 	let state = crypto.b64url_encode(crypto.random(16));
+	let nonce = crypto.b64url_encode(crypto.random(16));
 
 	let params = {
 		response_type: "code",
@@ -164,6 +165,7 @@ export function get_auth_url(io, config, discovery) {
 		redirect_uri: config.redirect_uri,
 		scope: config.scope,
 		state: state,
+		nonce: nonce,
 		code_challenge: pkce.challenge,
 		code_challenge_method: "S256"
 	};
@@ -179,6 +181,7 @@ export function get_auth_url(io, config, discovery) {
 	return {
 		url: url,
 		state: state,
+		nonce: nonce,
 		code_verifier: pkce.verifier
 	};
 };

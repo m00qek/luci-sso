@@ -4,22 +4,53 @@ import * as fs from 'fs';
 import * as uclient from 'uclient';
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
+import * as session from 'luci_sso.session';
 
 // 1. Composition Root: Define the IO implementation for this environment
 const io = {
 	time: time,
-	read_file: fs.readfile,
-	write_file: fs.writefile,
+	read_file: (path) => fs.readfile(path),
+	write_file: (path, data) => fs.writefile(path, data),
 	http_get: (url) => {
 		let conn = uclient.connect(url);
-		if (!conn) return null;
+		if (!conn) return { error: "CONNECT_FAILED" };
 		let res = conn.request("GET");
+		conn.disconnect();
 		return res;
-	}
+	},
+	urlencode: uclient.urlencode,
+	getenv: getenv
 };
 
+function die(msg, status) {
+	print(`Status: ${status || 500}\n`);
+	print(`Content-Type: text/plain\n\n`);
+	print(`${msg}\n`);
+	exit(1);
+}
+
 // 2. Load Config
+const cursor = uci.cursor();
+const config = cursor.get_all("luci-sso", "default");
+if (!config) die("Configuration 'default' not found in /etc/config/luci-sso", 500);
+
+const global_cfg = cursor.get_all("luci-sso", "globally");
+if (!global_cfg || global_cfg.enabled !== '1') {
+	die("SSO is disabled", 403);
+}
+
 // 3. OIDC Discovery
+const discovery = oidc.discover(io, config.issuer_url);
+if (discovery.error) die(`OIDC Discovery failed: ${discovery.error}`, 500);
+
 // 4. Generate Auth URL
+const auth = oidc.get_auth_url(io, config, discovery.config);
+
 // 5. Persistence (Store signed state/verifier in a JWS for the callback)
+const token = session.create_state(io, auth.state, auth.code_verifier, auth.nonce);
+
 // 6. Redirect
+print("Status: 302 Found\n");
+print(`Location: ${auth.url}\n`);
+print(`Set-Cookie: luci_sso_state=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300\n`);
+print("\n");

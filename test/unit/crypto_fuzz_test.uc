@@ -124,3 +124,35 @@ test('Fuzz: Bit Flipping in Signatures', () => {
 	let result = crypto.verify_jws(tampered_token, secret);
 	assert_eq(result.error, "INVALID_SIGNATURE");
 });
+
+test('Fuzz: JWS Header Injection', () => {
+	let secret = "secret";
+	let payload = { foo: "bar" };
+	let header = { alg: "HS256", typ: "JWT", critical: ["exp"], exp: 123456 }; // Adding non-standard fields
+	
+	let b64_header = crypto.b64url_encode(sprintf("%J", header));
+	let b64_payload = crypto.b64url_encode(sprintf("%J", payload));
+	let signed_data = b64_header + "." + b64_payload;
+	
+	let import_native = require('luci_sso.native');
+	let signature = import_native.hmac_sha256(secret, signed_data);
+	let token = signed_data + "." + crypto.b64url_encode(signature);
+
+	// Library should verify successfully but ignore the extra header fields
+	let result = crypto.verify_jws(token, secret);
+	assert(!result.error, `Should ignore extra header fields, got: ${result.error}`);
+	assert_eq(result.payload.foo, "bar");
+});
+
+test('Fuzz: Token Size Limit (16 KB)', () => {
+	let secret = "secret";
+	// Create a token slightly larger than 16 KB
+	let massive = "";
+	for (let i = 0; i < 1640; i++) massive += "1234567890";
+	
+	let result = crypto.verify_jws(massive, secret);
+	assert_eq(result.error, "TOKEN_TOO_LARGE");
+
+	let result_jwt = crypto.verify_jwt(massive, "key", { alg: "RS256" });
+	assert_eq(result_jwt.error, "TOKEN_TOO_LARGE");
+});

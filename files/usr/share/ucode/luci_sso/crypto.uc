@@ -1,5 +1,7 @@
 import * as native from 'luci_sso.native';
 
+const MAX_TOKEN_SIZE = 16384; // 16 KB
+
 /**
  * Converts Base64URL to Standard Base64 and adds padding.
  */
@@ -85,6 +87,7 @@ function constant_time_eq(a, b) {
  */
 export function verify_jws(token, secret) {
 	if (type(token) != "string") return { error: "TOKEN_NOT_STRING" };
+	if (length(token) > MAX_TOKEN_SIZE) return { error: "TOKEN_TOO_LARGE" };
 	
 	let parts = split(token, ".");
 	if (length(parts) != 3) return { error: "MALFORMED_JWS" };
@@ -121,6 +124,7 @@ export function verify_jws(token, secret) {
  */
 export function verify_jwt(token, pubkey, options) {
 	if (type(token) != "string") return { error: "TOKEN_NOT_STRING" };
+	if (length(token) > MAX_TOKEN_SIZE) return { error: "TOKEN_TOO_LARGE" };
 	if (!options || !options.alg) return { error: "MISSING_ALGORITHM_OPTION" };
 
 	let parts = split(token, ".");
