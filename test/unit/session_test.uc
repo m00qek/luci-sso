@@ -19,18 +19,20 @@ test('Session: Create and verify', () => {
 	let io = create_mock_io();
 	let user = { sub: "123", name: "Test User" };
 	
-	let token = session.create(io, user);
-	assert(token, "Should create a token");
+	let result = session.create(io, user);
+	assert(result.session, "Should create a token in .session property");
+	let token = result.session;
 	
-	let result = session.verify(io, token);
-	assert(!result.error, `Should verify successfully, got: ${result.error}`);
-	assert_eq(result.session.user, "123");
-	assert_eq(result.session.name, "Test User");
+	let v_result = session.verify(io, token);
+	assert(!v_result.error, `Should verify successfully, got: ${v_result.error}`);
+	assert_eq(v_result.session.user, "123");
+	assert_eq(v_result.session.name, "Test User");
 });
 
 test('Session: Clock Skew (Expired but in grace period)', () => {
 	let io = create_mock_io();
-	let token = session.create(io, { sub: "123" });
+	let res = session.create(io, { sub: "123" });
+	let token = res.session;
 	
 	// Advance time to 1s past expiration (3600 + 1)
 	io._now += 3601;
@@ -47,7 +49,8 @@ test('Session: Clock Skew (Expired but in grace period)', () => {
 
 test('Session: Clock Skew (Future token within grace period)', () => {
 	let io = create_mock_io();
-	let token = session.create(io, { sub: "123" });
+	let res = session.create(io, { sub: "123" });
+	let token = res.session;
 	
 	// Move clock BACKWARDS 30s
 	io._now -= 30;
@@ -67,8 +70,9 @@ test('State: Create and verify', () => {
 	let verifier = "pkce-verifier";
 	let nonce = "random-nonce";
 	
-	let token = session.create_state(io, state, verifier, nonce);
-	assert(token, "Should create a state token");
+	let res = session.create_state(io, state, verifier, nonce);
+	assert(res.state, "Should create a state token in .state property");
+	let token = res.state;
 	
 	let result = session.verify_state(io, token);
 	assert(!result.error, `Should verify state, got: ${result.error}`);
@@ -79,7 +83,8 @@ test('State: Create and verify', () => {
 
 test('State: Clock Skew', () => {
 	let io = create_mock_io();
-	let token = session.create_state(io, "s", "v", "n");
+	let res = session.create_state(io, "s", "v", "n");
+	let token = res.state;
 	
 	// 1. Just expired (301s)
 	io._now += 301;
@@ -96,17 +101,19 @@ test('Session: Reject invalid user data', () => {
 	let io = create_mock_io();
 	
 	// Missing sub and email
-	assert_eq(session.create(io, { name: "Ghost" }), null, "Should return null if no identifier present");
-	assert_eq(session.create(io, {}), null, "Should return null for empty object");
-	assert_eq(session.create(io, null), null, "Should return null for null input");
+	let res = session.create(io, { name: "Ghost" });
+	assert_eq(res.error, "INVALID_USER_DATA", "Should return error if no identifier present");
+	
+	assert_eq(session.create(io, {}).error, "INVALID_USER_DATA");
+	assert_eq(session.create(io, null).error, "INVALID_USER_DATA");
 });
 
 test('Session: Handle FS errors during secret retrieval', () => {
 	let io = create_mock_io();
 	io.read_file = fail_read;
 	
-	let token = session.create(io, { sub: "123" });
-	assert_eq(token, null, "Should return null if secret cannot be read due to error");
+	let res = session.create(io, { sub: "123" });
+	assert_eq(res.error, "SECRET_KEY_ERROR", "Should return SECRET_KEY_ERROR if secret cannot be read");
 	
 	let result = session.verify(io, "some.token.here");
 	assert_eq(result.error, "INTERNAL_ERROR", "Should return INTERNAL_ERROR on verify if FS fails");

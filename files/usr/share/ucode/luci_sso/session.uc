@@ -14,8 +14,7 @@ function get_secret_key(io) {
 	try {
 		key = io.read_file(SECRET_KEY_PATH);
 	} catch (e) {
-		// If read fails (e.g. permission denied), we shouldn't continue
-		return null;
+		return { error: "KEY_READ_ERROR" };
 	}
 
 	if (!key) {
@@ -23,22 +22,21 @@ function get_secret_key(io) {
 		try {
 			io.write_file(SECRET_KEY_PATH, key);
 		} catch (e) {
-			// If we can't save the key, we can't ensure persistence
-			// but we return the key for the current process
+			// Non-fatal, but we'll lose persistence
 		}
 	}
-	return key;
+	return { key: key };
 };
 
 /**
  * Creates a signed state token for the OIDC redirect.
  */
 export function create_state(io, state, code_verifier, nonce) {
-	let secret = get_secret_key(io);
-	if (!secret) return null;
+	let res = get_secret_key(io);
+	if (res.error) return { error: "SECRET_KEY_ERROR", details: res.error };
+	let secret = res.key;
 
 	let now = io.time();
-	
 	let payload = {
 		state: state,
 		code_verifier: code_verifier,
@@ -47,18 +45,19 @@ export function create_state(io, state, code_verifier, nonce) {
 		exp: now + HANDSHAKE_DURATION
 	};
 	
-	return crypto.sign_jws(payload, secret);
+	let token = crypto.sign_jws(payload, secret);
+	return token ? { state: token } : { error: "SIGNING_FAILED" };
 };
 
 /**
  * Verifies a state token.
  */
 export function verify_state(io, token) {
-	let secret = get_secret_key(io);
-	if (!secret) return { error: "INTERNAL_ERROR", details: "Could not retrieve secret key" };
+	let res = get_secret_key(io);
+	if (res.error) return { error: "INTERNAL_ERROR", details: res.error };
+	let secret = res.key;
 
 	let result = crypto.verify_jws(token, secret);
-	
 	if (result.error) return result;
 	
 	let payload = result.payload;
@@ -82,14 +81,14 @@ export function verify_state(io, token) {
  */
 export function create(io, user_data) {
 	if (!user_data || (type(user_data.sub) != "string" && type(user_data.email) != "string")) {
-		return null;
+		return { error: "INVALID_USER_DATA" };
 	}
 
-	let secret = get_secret_key(io);
-	if (!secret) return null;
+	let res = get_secret_key(io);
+	if (res.error) return { error: "SECRET_KEY_ERROR", details: res.error };
+	let secret = res.key;
 
 	let now = io.time();
-	
 	let payload = {
 		user: user_data.email || user_data.sub,
 		name: user_data.name,
@@ -97,7 +96,8 @@ export function create(io, user_data) {
 		exp: now + SESSION_DURATION
 	};
 	
-	return crypto.sign_jws(payload, secret);
+	let token = crypto.sign_jws(payload, secret);
+	return token ? { session: token } : { error: "SIGNING_FAILED" };
 };
 
 /**
@@ -106,11 +106,11 @@ export function create(io, user_data) {
 export function verify(io, token) {
 	if (!token) return { error: "NO_SESSION" };
 	
-	let secret = get_secret_key(io);
-	if (!secret) return { error: "INTERNAL_ERROR", details: "Could not retrieve secret key" };
+	let res = get_secret_key(io);
+	if (res.error) return { error: "INTERNAL_ERROR", details: res.error };
+	let secret = res.key;
 
 	let result = crypto.verify_jws(token, secret);
-	
 	if (result.error) return { error: "INVALID_SESSION", details: result.error };
 	
 	let session = result.payload;

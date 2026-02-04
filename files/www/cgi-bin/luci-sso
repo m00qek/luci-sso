@@ -47,7 +47,9 @@ if (discovery.error) die(`OIDC Discovery failed: ${discovery.error}`, 500);
 const auth = oidc.get_auth_url(io, config, discovery.config);
 
 // 5. Persistence (Store signed state/verifier in a JWS for the callback)
-const token = session.create_state(io, auth.state, auth.code_verifier, auth.nonce);
+const res = session.create_state(io, auth.state, auth.code_verifier, auth.nonce);
+if (res.error) die(`Failed to create state token: ${res.error}`, 500);
+const token = res.state;
 
 // 6. Redirect
 print("Status: 302 Found\n");
