@@ -29,24 +29,35 @@ function get_secret_key(io) {
 };
 
 /**
- * Creates a signed state token for the OIDC redirect.
+ * Creates a signed state token and all required OIDC params for redirect.
  */
-export function create_state(io, state, code_verifier, nonce) {
+export function create_state(io) {
 	let res = get_secret_key(io);
 	if (res.error) return { error: "SECRET_KEY_ERROR", details: res.error };
 	let secret = res.key;
 
+	let pkce = crypto.pkce_pair();
+	let state = crypto.b64url_encode(crypto.random(16));
+	let nonce = crypto.b64url_encode(crypto.random(16));
 	let now = io.time();
+
 	let payload = {
 		state: state,
-		code_verifier: code_verifier,
+		code_verifier: pkce.verifier,
 		nonce: nonce,
 		iat: now,
 		exp: now + HANDSHAKE_DURATION
 	};
 	
 	let token = crypto.sign_jws(payload, secret);
-	return token ? { state: token } : { error: "SIGNING_FAILED" };
+	if (!token) return { error: "SIGNING_FAILED" };
+
+	return {
+		token: token,
+		state: state,
+		nonce: nonce,
+		code_challenge: pkce.challenge
+	};
 };
 
 /**

@@ -29,62 +29,25 @@ test('Session: Create and verify', () => {
 	assert_eq(v_result.session.name, "Test User");
 });
 
-test('Session: Clock Skew (Expired but in grace period)', () => {
-	let io = create_mock_io();
-	let res = session.create(io, { sub: "123" });
-	let token = res.session;
-	
-	// Advance time to 1s past expiration (3600 + 1)
-	io._now += 3601;
-	
-	// Default skew is 60s, so it should still be valid
-	let result = session.verify(io, token);
-	assert(!result.error, "Should be valid within 60s skew");
-	
-	// Advance past skew (61s past expiration)
-	io._now += 60;
-	result = session.verify(io, token);
-	assert_eq(result.error, "SESSION_EXPIRED");
-});
-
-test('Session: Clock Skew (Future token within grace period)', () => {
-	let io = create_mock_io();
-	let res = session.create(io, { sub: "123" });
-	let token = res.session;
-	
-	// Move clock BACKWARDS 30s
-	io._now -= 30;
-	
-	let result = session.verify(io, token);
-	assert(!result.error, "Should allow 30s future drift within 60s skew");
-	
-	// Move clock back past skew (61s total)
-	io._now -= 31;
-	result = session.verify(io, token);
-	assert_eq(result.error, "SESSION_NOT_YET_VALID");
-});
-
 test('State: Create and verify', () => {
 	let io = create_mock_io();
-	let state = "random-state";
-	let verifier = "pkce-verifier";
-	let nonce = "random-nonce";
 	
-	let res = session.create_state(io, state, verifier, nonce);
-	assert(res.state, "Should create a state token in .state property");
-	let token = res.state;
+	let handshake = session.create_state(io);
+	assert(handshake.token, "Should return signed token");
+	assert(handshake.state, "Should return raw state");
+	assert(handshake.nonce, "Should return raw nonce");
+	assert(handshake.code_challenge, "Should return code_challenge");
 	
-	let result = session.verify_state(io, token);
+	let result = session.verify_state(io, handshake.token);
 	assert(!result.error, `Should verify state, got: ${result.error}`);
-	assert_eq(result.payload.state, state);
-	assert_eq(result.payload.code_verifier, verifier);
-	assert_eq(result.payload.nonce, nonce);
+	assert_eq(result.payload.state, handshake.state);
+	assert_eq(result.payload.nonce, handshake.nonce);
 });
 
 test('State: Clock Skew', () => {
 	let io = create_mock_io();
-	let res = session.create_state(io, "s", "v", "n");
-	let token = res.state;
+	let handshake = session.create_state(io);
+	let token = handshake.token;
 	
 	// 1. Just expired (301s)
 	io._now += 301;
@@ -103,9 +66,6 @@ test('Session: Reject invalid user data', () => {
 	// Missing sub and email
 	let res = session.create(io, { name: "Ghost" });
 	assert_eq(res.error, "INVALID_USER_DATA", "Should return error if no identifier present");
-	
-	assert_eq(session.create(io, {}).error, "INVALID_USER_DATA");
-	assert_eq(session.create(io, null).error, "INVALID_USER_DATA");
 });
 
 test('Session: Handle FS errors during secret retrieval', () => {

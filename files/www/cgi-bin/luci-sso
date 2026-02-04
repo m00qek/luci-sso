@@ -43,16 +43,15 @@ if (!global_cfg || global_cfg.enabled !== '1') {
 const discovery = oidc.discover(io, config.issuer_url);
 if (discovery.error) die(`OIDC Discovery failed: ${discovery.error}`, 500);
 
-// 4. Generate Auth URL
-const auth = oidc.get_auth_url(io, config, discovery.config);
+// 4. Persistence & Parameter Generation
+const handshake = session.create_state(io);
+if (handshake.error) die(`Failed to create handshake: ${handshake.error}`, 500);
 
-// 5. Persistence (Store signed state/verifier in a JWS for the callback)
-const res = session.create_state(io, auth.state, auth.code_verifier, auth.nonce);
-if (res.error) die(`Failed to create state token: ${res.error}`, 500);
-const token = res.state;
+// 5. Generate Auth URL
+const url = oidc.get_auth_url(io, config, discovery.config, handshake);
 
 // 6. Redirect
 print("Status: 302 Found\n");
-print(`Location: ${auth.url}\n`);
-print(`Set-Cookie: luci_sso_state=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300\n`);
+print(`Location: ${url}\n`);
+print(`Set-Cookie: luci_sso_state=${handshake.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300\n`);
 print("\n");
