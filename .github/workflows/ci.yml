@@ -46,7 +46,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        crypto_lib: [mbedtls, wolfssl]
+        crypto_lib: [mbedtls]
     permissions:
       contents: read
       packages: write
@@ -106,7 +106,7 @@ jobs:
     needs: [check-changes, build-images]
     strategy:
       matrix:
-        crypto_lib: [mbedtls, wolfssl]
+        crypto_lib: [mbedtls]
     # Run if check-changes succeeded AND (build-images succeeded OR was skipped)
     if: |
       always() &&
@@ -191,3 +191,4 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
