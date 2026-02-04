@@ -1,6 +1,6 @@
 import { test, assert, assert_eq } from 'testing';
-import * as crypto from 'crypto';
-import * as mbedtls from 'crypto_mbedtls';
+import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import * as fixtures from 'fixtures';
 
 // Helper to check success
@@ -50,23 +50,23 @@ test('Base64URL: Boundary cases', () => {
 
 test('RS256: Low-level Primitive', () => {
     let sig_bin = crypto.b64url_decode(fixtures.RS256.SIG_B64URL);
-    assert(mbedtls.verify_rs256(fixtures.RS256.MSG, sig_bin, fixtures.RS256.PUBKEY), "Low-level verify should work with binary sig");
+    assert(native.verify_rs256(fixtures.RS256.MSG, sig_bin, fixtures.RS256.PUBKEY), "Low-level verify should work with binary sig");
 });
 
 test('RS256: Message Tampering', () => {
     let sig_bin = crypto.b64url_decode(fixtures.RS256.SIG_B64URL);
-    assert(!mbedtls.verify_rs256(fixtures.RS256.MSG + "!", sig_bin, fixtures.RS256.PUBKEY), "Should fail if message is modified");
+    assert(!native.verify_rs256(fixtures.RS256.MSG + "!", sig_bin, fixtures.RS256.PUBKEY), "Should fail if message is modified");
 });
 
 test('RS256: Key Integrity', () => {
     let sig_bin = crypto.b64url_decode(fixtures.RS256.SIG_B64URL);
-    assert(!mbedtls.verify_rs256(fixtures.RS256.MSG, sig_bin, "not a pem key"), "Should fail with malformed PEM");
+    assert(!native.verify_rs256(fixtures.RS256.MSG, sig_bin, "not a pem key"), "Should fail with malformed PEM");
 });
 
 test('RS256: Type Safety', () => {
-    assert(!mbedtls.verify_rs256(null, "sig", fixtures.RS256.PUBKEY), "Should handle null message");
-    assert(!mbedtls.verify_rs256(fixtures.RS256.MSG, null, fixtures.RS256.PUBKEY), "Should handle null signature");
-    assert(!mbedtls.verify_rs256(fixtures.RS256.MSG, "sig", null), "Should handle null key");
+    assert(!native.verify_rs256(null, "sig", fixtures.RS256.PUBKEY), "Should handle null message");
+    assert(!native.verify_rs256(fixtures.RS256.MSG, null, fixtures.RS256.PUBKEY), "Should handle null signature");
+    assert(!native.verify_rs256(fixtures.RS256.MSG, "sig", null), "Should handle null key");
 });
 
 test('High-level verify_jwt (RS256)', () => {
@@ -85,14 +85,14 @@ test('High-level verify_jwt (RS256)', () => {
 
 test('ES256: Low-level Primitive', () => {
     let sig_bin = crypto.b64url_decode(fixtures.ES256.SIG_HELLO_B64URL);
-    assert(mbedtls.verify_es256(fixtures.ES256.MSG, sig_bin, fixtures.ES256.PUBKEY), "Should verify valid ES256 signature");
+    assert(native.verify_es256(fixtures.ES256.MSG, sig_bin, fixtures.ES256.PUBKEY), "Should verify valid ES256 signature");
 });
 
 test('ES256: Tampering', () => {
     let sig_bin = crypto.b64url_decode(fixtures.ES256.SIG_HELLO_B64URL);
-    assert(!mbedtls.verify_es256(fixtures.ES256.MSG + "!", sig_bin, fixtures.ES256.PUBKEY), "Should fail on message tampering");
+    assert(!native.verify_es256(fixtures.ES256.MSG + "!", sig_bin, fixtures.ES256.PUBKEY), "Should fail on message tampering");
     
-    assert(!mbedtls.verify_es256(fixtures.ES256.MSG, "invalid_signature", fixtures.ES256.PUBKEY), "Should fail on signature tampering");
+    assert(!native.verify_es256(fixtures.ES256.MSG, "invalid_signature", fixtures.ES256.PUBKEY), "Should fail on signature tampering");
 });
 
 // =============================================================================

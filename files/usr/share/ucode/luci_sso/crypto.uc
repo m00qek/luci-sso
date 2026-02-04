@@ -1,4 +1,4 @@
-import * as mbedtls from 'crypto_mbedtls';
+import * as native from 'luci_sso.native';
 
 /**
  * Converts Base64URL to Standard Base64 and adds padding.
@@ -81,9 +81,9 @@ export function verify_jwt(token, pubkey, options) {
     let valid = false;
 
     if (options.alg == "RS256") {
-        valid = mbedtls.verify_rs256(signed_data, signature, pubkey);
+        valid = native.verify_rs256(signed_data, signature, pubkey);
     } else if (options.alg == "ES256") {
-        valid = mbedtls.verify_es256(signed_data, signature, pubkey);
+        valid = native.verify_es256(signed_data, signature, pubkey);
     } else {
         return { error: "UNSUPPORTED_ALGORITHM" };
     }
@@ -125,21 +125,21 @@ export function verify_jwt(token, pubkey, options) {
  * Calculates SHA-256 hash (raw binary).
  */
 export function sha256(input) {
-    return mbedtls.sha256(input);
+    return native.sha256(input);
 };
 
 /**
  * Generates cryptographically secure random bytes.
  */
 export function random(len) {
-    return mbedtls.random(len);
+    return native.random(len);
 };
 
 /**
  * Generates a PKCE Code Verifier.
  */
 export function pkce_generate_verifier(len) {
-    let bytes = mbedtls.random(len || 43);
+    let bytes = native.random(len || 43);
     return b64url_encode(bytes);
 };
 
@@ -147,7 +147,7 @@ export function pkce_generate_verifier(len) {
  * Calculates a PKCE Code Challenge from a verifier using S256.
  */
 export function pkce_calculate_challenge(verifier) {
-    let hash = mbedtls.sha256(verifier);
+    let hash = native.sha256(verifier);
     return b64url_encode(hash);
 };
 
@@ -173,7 +173,7 @@ export function jwk_to_pem(jwk) {
         let e_bin = b64url_decode(jwk.e);
         if (!n_bin || !e_bin) return { error: "INVALID_RSA_PARAMS_ENCODING" };
         
-        let pem = mbedtls.jwk_rsa_to_pem(n_bin, e_bin);
+        let pem = native.jwk_rsa_to_pem(n_bin, e_bin);
         if (!pem) return { error: "PEM_CONVERSION_FAILED" };
         return { pem: pem };
         
@@ -185,7 +185,7 @@ export function jwk_to_pem(jwk) {
         let y_bin = b64url_decode(jwk.y);
         if (!x_bin || !y_bin) return { error: "INVALID_EC_PARAMS_ENCODING" };
         
-        let pem = mbedtls.jwk_es256_to_pem(x_bin, y_bin);
+        let pem = native.jwk_es256_to_pem(x_bin, y_bin);
         if (!pem) return { error: "PEM_CONVERSION_FAILED" };
         return { pem: pem };
     }

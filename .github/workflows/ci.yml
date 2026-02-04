@@ -44,6 +44,9 @@ jobs:
     needs: check-changes
     if: needs.check-changes.outputs.build_env == 'true' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        crypto_lib: [mbedtls, wolfssl]
     permissions:
       contents: read
       packages: write
@@ -66,7 +69,8 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Builder
+      - name: Build and push Builder (Only once)
+        if: matrix.crypto_lib == 'mbedtls'
         uses: docker/build-push-action@v5
         with:
           context: .
@@ -88,8 +92,8 @@ jobs:
           file: Dockerfile.dev
           push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}/tester:latest
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}/tester:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }}
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}/tester-${{ matrix.crypto_lib }}:latest
+            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}/tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }}
           build-args: |
             SDK_ARCH=${{ env.SDK_ARCH }}
             SDK_VERSION=${{ env.SDK_VERSION }}
@@ -100,6 +104,9 @@ jobs:
   test:
     name: Run Unit Tests
     needs: [check-changes, build-images]
+    strategy:
+      matrix:
+        crypto_lib: [mbedtls, wolfssl]
     # Run if check-changes succeeded AND (build-images succeeded OR was skipped)
     if: |
       always() &&
@@ -132,16 +139,16 @@ jobs:
           IMAGE_BASE="$REGISTRY/$REPO_OWNER/$REPO_NAME"
 
           docker pull $IMAGE_BASE/builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || docker pull $IMAGE_BASE/builder:latest || true
-          docker pull $IMAGE_BASE/tester:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || docker pull $IMAGE_BASE/tester:latest || true
+          docker pull $IMAGE_BASE/tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || docker pull $IMAGE_BASE/tester-${{ matrix.crypto_lib }}:latest || true
 
           docker tag $IMAGE_BASE/builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} ${{ env.PKG_NAME }}-builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || \
           docker tag $IMAGE_BASE/builder:latest ${{ env.PKG_NAME }}-builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || true
 
-          docker tag $IMAGE_BASE/tester:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} ${{ env.PKG_NAME }}-tester:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || \
-          docker tag $IMAGE_BASE/tester:latest ${{ env.PKG_NAME }}-tester:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || true
+          docker tag $IMAGE_BASE/tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} ${{ env.PKG_NAME }}-tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || \
+          docker tag $IMAGE_BASE/tester-${{ matrix.crypto_lib }}:latest ${{ env.PKG_NAME }}-tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || true
 
       - name: Run tests
-        run: make -f dev.mk test VERBOSE=1
+        run: make -f dev.mk test CRYPTO_LIB=${{ matrix.crypto_lib }} VERBOSE=1
 
   release:
     name: Build & Release IPK

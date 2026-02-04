@@ -1,12 +1,16 @@
 # Extract metadata from Makefile
 PKG_NAME := $(shell grep '^PKG_NAME:=' Makefile | cut -d= -f2)
-PKG_DEPENDS := $(shell grep '^\s*DEPENDS:=' Makefile | cut -d= -f2 | tr -d '+')
+PKG_DEPENDS := $(shell grep 'DEPENDS:=' Makefile | cut -d= -f2 | tr -d '+' | tr '\n' ' ' | sed 's/$(PKG_NAME)[^ ]*//g')
 
 # Development Environment Configuration
 SDK_VERSION := 24.10.5
 SDK_ARCH := x86-64
+CRYPTO_LIBS := mbedtls wolfssl
+CRYPTO_LIB ?= mbedtls
+
 BUILDER_IMAGE := $(PKG_NAME)-builder:$(SDK_ARCH)-$(SDK_VERSION)
-RUNNER_IMAGE := $(PKG_NAME)-tester:$(SDK_ARCH)-$(SDK_VERSION)
+RUNNER_IMAGE_BASE := $(PKG_NAME)-tester
+RUNNER_IMAGE := $(RUNNER_IMAGE_BASE)-$(CRYPTO_LIB):$(SDK_ARCH)-$(SDK_VERSION)
 
 WORK_DIR := $(shell pwd)
 
@@ -15,17 +19,19 @@ WORK_DIR := $(shell pwd)
 all: test
 
 prepare:
-	echo "Building development container for $(SDK_ARCH)-$(SDK_VERSION)..."
-	docker build -t $(RUNNER_IMAGE) \
-		--build-arg SDK_ARCH=$(SDK_ARCH) \
-		--build-arg SDK_VERSION=$(SDK_VERSION) \
-		--build-arg PKG_DEPENDS="$(sort $(PKG_DEPENDS))" \
-		-f Dockerfile.dev .
 	echo "Building packaging container for $(SDK_ARCH)-$(SDK_VERSION)..."
 	docker build -t $(BUILDER_IMAGE) \
 		--build-arg SDK_ARCH=$(SDK_ARCH) \
 		--build-arg SDK_VERSION=$(SDK_VERSION) \
 		-f Dockerfile .
+	for lib in $(CRYPTO_LIBS); do \
+		echo "Building development container for $(SDK_ARCH)-$(SDK_VERSION) with $$lib..."; \
+		docker build -t $(RUNNER_IMAGE_BASE)-$$lib:$(SDK_ARCH)-$(SDK_VERSION) \
+			--build-arg SDK_ARCH=$(SDK_ARCH) \
+			--build-arg SDK_VERSION=$(SDK_VERSION) \
+			--build-arg PKG_DEPENDS="$(sort $(PKG_DEPENDS))" \
+			-f Dockerfile.dev . || exit 1; \
+	done
 	$(MAKE) -f dev.mk sync-headers
 
 sync-headers:
@@ -40,29 +46,25 @@ test: compile-native
 		-v "$(WORK_DIR):/app" \
 		-e VERBOSE=$(VERBOSE) \
 		$(RUNNER_IMAGE) \
-		ucode -L /app/bin/lib -L /app/files/usr/share/ucode -L /app/test test/runner.uc
+		ucode -L /app/bin/lib/$(CRYPTO_LIB) -L /app/files/usr/share/ucode -L /app/test test/runner.uc
 
 SOURCES := $(wildcard src/*.c)
 
 # Sentinel file to track build status
 bin/lib/.built: $(SOURCES) src/CMakeLists.txt
 	@echo "Source changed, compiling C extension(s) in SDK..."
-	@mkdir -p bin/lib
-	@chmod 777 bin/lib
-	@if docker run --rm \
+	@mkdir -p bin/lib/$(CRYPTO_LIB)/luci_sso
+	@chmod -R 777 bin/lib
+	@docker run --rm \
 		-v "$(WORK_DIR):/sdk/package/$(PKG_NAME)" \
 		-v "$(WORK_DIR)/bin/lib:/artifacts" \
 		$(BUILDER_IMAGE) \
-		sh -c "make package/$(PKG_NAME)/compile V=s >/dev/null && \
-		       for f in package/$(PKG_NAME)/src/*.c; do \
-		           [ -f \"\$$f\" ] || continue; \
-		           name=\$$(basename \$$f .c); \
-		           find build_dir -path \"*/usr/lib/ucode/\$$name.so\" -exec cp {} /artifacts/ \;; \
-		       done"; then \
-		touch bin/lib/.built; \
-	else \
-		echo "Build failed!"; exit 1; \
-	fi
+		sh -c "make package/$(PKG_NAME)/compile V=s && \
+		       echo 'Build finished, copying artifacts...' && \
+		       mkdir -p /artifacts/$(CRYPTO_LIB)/luci_sso && \
+		       cp -v build_dir/target-*/$(PKG_NAME)-1.0.0/.pkgdir/$(PKG_NAME)-crypto-$(CRYPTO_LIB)/usr/lib/ucode/luci_sso/native.so /artifacts/$(CRYPTO_LIB)/luci_sso/native.so && \
+		       ls -l /artifacts/$(CRYPTO_LIB)/luci_sso/native.so"
+	@touch bin/lib/.built
 
 compile-native: bin/lib/.built
 

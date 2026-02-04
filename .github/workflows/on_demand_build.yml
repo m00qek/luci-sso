@@ -47,10 +47,10 @@ jobs:
           IMAGE_BASE="$REGISTRY/$REPO_OWNER/$REPO_NAME"
 
           docker pull $IMAGE_BASE/builder:latest || true
-          docker pull $IMAGE_BASE/tester:latest || true
+          docker pull $IMAGE_BASE/tester-mbedtls:latest || true
 
           docker tag $IMAGE_BASE/builder:latest ${{ env.PKG_NAME }}-builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || true
-          docker tag $IMAGE_BASE/tester:latest ${{ env.PKG_NAME }}-tester:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || true
+          docker tag $IMAGE_BASE/tester-mbedtls:latest ${{ env.PKG_NAME }}-tester-mbedtls:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || true
 
       - name: Post Starting Comment
         uses: actions/github-script@v7
