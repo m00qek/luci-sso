@@ -4,21 +4,34 @@ import * as crypto from 'luci_sso.crypto';
 
 // --- Internal Helpers ---
 
+function validate_io(io) {
+	if (type(io) != "object" || type(io.http_get) != "function" || type(io.time) != "function") {
+		die("CONTRACT_VIOLATION: Invalid IO provider");
+	}
+}
+
 function safe_json_parse(data) {
 	let raw = data;
 	if (type(data) == "object" && type(data.read) == "function") {
 		raw = data.read();
 	}
 	
-	if (type(raw) != "string") {
-		return { error: "INVALID_INPUT_TYPE" };
-	}
+	if (type(raw) != "string") return null;
 
 	try {
 		return json(raw);
 	} catch (e) {
-		return { error: "INVALID_JSON" };
+		return null;
 	}
+}
+
+/**
+ * Generates a unique cache path for an issuer to avoid collisions.
+ */
+function get_cache_path(issuer) {
+	// Simple hash-like string from issuer
+	let h = crypto.b64url_encode(crypto.sha256(issuer));
+	return `/tmp/oidc-discovery-${substr(h, 0, 8)}.json`;
 }
 
 // --- Public API ---
@@ -27,10 +40,11 @@ function safe_json_parse(data) {
  * Fetches and caches OIDC discovery document.
  */
 export function discover(io, issuer, options) {
-	if (type(issuer) != "string") return { error: "INVALID_ISSUER" };
+	validate_io(io);
+	if (type(issuer) != "string") die("CONTRACT_VIOLATION: issuer must be a string");
 
 	options = options || {};
-	let cache_path = options.cache_path || "/tmp/oidc-discovery.json";
+	let cache_path = options.cache_path || get_cache_path(issuer);
 	let ttl = options.ttl || 3600;
 	
 	// 1. Check cache
@@ -38,10 +52,10 @@ export function discover(io, issuer, options) {
 		let content = io.read_file(cache_path);
 		if (content) {
 			let cached = safe_json_parse(content);
-			if (!cached.error && cached.issuer == issuer) {
+			if (cached && cached.issuer == issuer) {
 				let now = io.time();
 				if (cached.cached_at && (now - cached.cached_at) <= ttl) {
-					return { config: cached };
+					return { ok: true, data: cached };
 				}
 			}
 		}
@@ -55,20 +69,20 @@ export function discover(io, issuer, options) {
 	discovery_url += ".well-known/openid-configuration";
 	
 	let response = io.http_get(discovery_url);
-	if (!response || response.error) return { error: "NETWORK_ERROR" };
+	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
 	
 	if (response.status != 200) {
-		return { error: "DISCOVERY_FAILED", details: response.status };
+		return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
 	}
 	
 	let config = safe_json_parse(response.body);
-	if (config.error) return config;
+	if (!config) return { ok: false, error: "INVALID_JSON" };
 
 	// 3. Strict validation of required fields
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {
 		if (type(config[field]) != "string" || length(config[field]) == 0) {
-			return { error: "MISSING_REQUIRED_FIELD", details: field };
+			return { ok: false, error: "MISSING_REQUIRED_FIELD", details: field };
 		}
 	}
 	
@@ -80,57 +94,64 @@ export function discover(io, issuer, options) {
 		// Ignore cache write failures
 	}
 	
-	return { config: config };
+	return { ok: true, data: config };
 };
 
 /**
  * Fetches JWK Set from IdP.
  */
 export function fetch_jwks(io, jwks_uri) {
+	validate_io(io);
+	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
+
 	let response = io.http_get(jwks_uri);
-	if (!response || response.error) return { error: "NETWORK_ERROR" };
+	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
 	
 	if (response.status != 200) {
-		return { error: "JWKS_FETCH_FAILED", details: response.status };
+		return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
 	}
 	
 	let jwks = safe_json_parse(response.body);
-	if (jwks.error) return jwks;
+	if (!jwks) return { ok: false, error: "INVALID_JSON" };
 
 	if (type(jwks.keys) != "array") {
-		return { error: "INVALID_JWKS_FORMAT" };
+		return { ok: false, error: "INVALID_JWKS_FORMAT" };
 	}
 	
-	return { keys: jwks.keys };
+	return { ok: true, data: jwks.keys };
 };
 
 /**
  * Finds the correct JWK by key ID (kid).
  */
 export function find_jwk(keys, kid) {
-	if (type(keys) != "array") return { error: "INVALID_KEYS_INPUT" };
+	if (type(keys) != "array") die("CONTRACT_VIOLATION: keys must be an array");
 
 	if (!kid) {
-		if (length(keys) > 0) return { jwk: keys[0] };
-		return { error: "NO_KEYS_AVAILABLE" };
+		if (length(keys) > 0) return { ok: true, data: keys[0] };
+		return { ok: false, error: "NO_KEYS_AVAILABLE" };
 	}
 	
 	for (let i, key in keys) {
-		if (key.kid == kid) return { jwk: key };
+		if (key.kid == kid) return { ok: true, data: key };
 	}
 	
-	return { error: "KEY_NOT_FOUND", details: kid };
+	return { ok: false, error: "KEY_NOT_FOUND", details: kid };
 };
 
 /**
  * Generates the authorization URL.
  */
 export function get_auth_url(io, config, discovery, params) {
+	if (type(config) != "object" || type(discovery) != "object" || type(params) != "object") {
+		die("CONTRACT_VIOLATION: get_auth_url expects objects");
+	}
+
 	let query = {
 		response_type: "code",
 		client_id: config.client_id,
 		redirect_uri: config.redirect_uri,
-		scope: config.scope,
+		scope: config.scope || "openid profile email",
 		state: params.state,
 		nonce: params.nonce,
 		code_challenge: params.code_challenge,
@@ -147,4 +168,79 @@ export function get_auth_url(io, config, discovery, params) {
 	}
 
 	return url;
+};
+
+/**
+ * Exchanges authorization code for tokens.
+ */
+export function exchange_code(io, config, discovery, code, verifier) {
+	validate_io(io);
+	if (type(io.http_post) != "function") die("CONTRACT_VIOLATION: IO must support http_post");
+	
+	let body = {
+		grant_type: "authorization_code",
+		client_id: config.client_id,
+		client_secret: config.client_secret,
+		redirect_uri: config.redirect_uri,
+		code: code,
+		code_verifier: verifier
+	};
+
+	// Form-encode body
+	let encoded_body = "";
+	let sep = "";
+	for (let k, v in body) {
+		if (v == null) continue;
+		encoded_body += `${sep}${k}=${uclient.urlencode(v)}`;
+		sep = "&";
+	}
+
+	let response = io.http_post(discovery.token_endpoint, {
+		headers: { "Content-Type": "application/x-www-form-urlencoded" },
+		body: encoded_body
+	});
+
+	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
+	if (response.status != 200) {
+		return { ok: false, error: "TOKEN_EXCHANGE_FAILED", details: response.status, body: response.body };
+	}
+
+	let tokens = safe_json_parse(response.body);
+	if (!tokens) return { ok: false, error: "INVALID_JSON" };
+
+	return { ok: true, data: tokens };
+};
+
+/**
+ * Verifies ID Token and matches nonce.
+ */
+export function verify_id_token(io, tokens, keys, config, handshake) {
+	if (!tokens.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
+
+	// 1. Get Key
+	let parts = split(tokens.id_token, ".");
+	let header = safe_json_parse(crypto.b64url_decode(parts[0]));
+	if (!header) return { ok: false, error: "INVALID_JWT_HEADER" };
+
+	let jwk_res = find_jwk(keys, header.kid);
+	if (!jwk_res.ok) return jwk_res;
+
+	let pem_res = crypto.jwk_to_pem(jwk_res.data);
+	if (!pem_res.ok) return pem_res;
+
+	// 2. Verify Sig and Claims
+	let result = crypto.verify_jwt(tokens.id_token, pem_res.data, {
+		alg: header.alg,
+		iss: config.issuer_url,
+		aud: config.client_id
+	});
+
+	if (!result.ok) return result;
+
+	// 3. Nonce Check
+	if (handshake.nonce && result.data.nonce != handshake.nonce) {
+		return { ok: false, error: "NONCE_MISMATCH" };
+	}
+
+	return result;
 };

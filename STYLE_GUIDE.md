@@ -173,83 +173,48 @@ import * as native from 'luci_sso.native';
 
 ## Error Handling
 
+### Contract Bugs vs. Runtime Realities
+
+We distinguish between errors caused by the programmer (Contract Bugs) and errors caused by the environment or user (Runtime Realities).
+
+#### 1. Contract Bugs (Programming Errors)
+**Action: Use `die()`**
+If a function is called with the wrong types or in an invalid state, this is a bug in the calling code. The system should "fail fast" to prevent undefined behavior.
+
+```javascript
+export function sign_jws(payload, secret) {
+	if (type(payload) != "object") die("CONTRACT_VIOLATION: payload must be an object");
+	if (type(secret) != "string") die("CONTRACT_VIOLATION: secret must be a string");
+	// ...
+};
+```
+
+#### 2. Runtime Realities (Expected Failures)
+**Action: Use Result Objects or Exceptions**
+If an operation fails due to external factors (expired token, network down, invalid signature), this is a valid state that the application might want to handle.
+
+- **Exceptions:** Use for "stop the world" failures where the caller likely can't recover easily (e.g., malformed discovery response).
+- **Result Objects:** Use for common business logic branches (e.g., token expired vs. invalid signature).
+
+```javascript
+// Result Object Pattern
+export function verify_session(io, token) {
+	// ... logic ...
+	if (expired) return { ok: false, error: "EXPIRED" };
+	if (bad_sig) return { ok: false, error: "INVALID_SIGNATURE" };
+	
+	return { ok: true, data: payload };
+}
+```
+
 ### Exception vs. Result Object Decision Tree
 
 ```
-Is the error EXPECTED in normal operation?
-├─ YES → Is fine-grained handling needed?
-│  ├─ YES → Return { error: "CODE" }
-│  └─ NO  → Throw exception
-└─ NO (programming error) → Throw exception
-```
-
-### Exceptions (Preferred)
-
-Use `die()` for:
-- ✅ Network failures (IdP down, timeout)
-- ✅ Validation failures (invalid JWT, expired token)
-- ✅ Programming errors (wrong argument type)
-- ✅ Crypto failures (signature verification failed)
-
-**Format:** `"ERROR_CODE: Human readable message"`
-
-```javascript
-export function verify_jwt(token, pubkey, options) {
-	if (type(token) != "string") {
-		die("INVALID_ARGUMENT: token must be a string");
-	}
-	
-	if (!signature_valid) {
-		die("INVALID_SIGNATURE: JWT signature verification failed");
-	}
-	
-	if (payload.exp < time()) {
-		die("TOKEN_EXPIRED: exp=" + payload.exp + " < now=" + time());
-	}
-	
-	return payload;  // Clean return on success
-};
-```
-
-**Why exceptions?**
-- ✅ ucode has native `try/catch` support
-- ✅ Automatic error propagation through call stack
-- ✅ Cleaner code (no `if (error) return error` boilerplate)
-- ✅ Idiomatic for the language
-
----
-
-### Result Objects (Selective)
-
-Use `{ error: "CODE", details?: ... }` for:
-- ✅ High-level operations with multiple error types requiring different actions
-- ✅ Public API boundaries (functions called from LuCI)
-
-```javascript
-export function verify_session(io, token) {
-	if (!token) return { error: "NO_SESSION" };
-	
-	try {
-		let payload = crypto.verify_jws(token, secret);
-		
-		if (payload.exp < io.time()) {
-			return { error: "SESSION_EXPIRED" };
-		}
-		
-		return { session: payload };
-	} catch (e) {
-		return { error: "INVALID_SESSION", details: e };
-	}
-};
-
-// Caller can distinguish error types
-let result = verify_session(io, cookie);
-if (result.error == "SESSION_EXPIRED") {
-	return redirect("/login");
-} else if (result.error == "INVALID_SESSION") {
-	return show_error("Tampered session");
-}
-// Use result.session
+Is the failure a programming error (wrong types, null pointer)?
+├─ YES → Use die() (Fail Fast)
+└─ NO  → Is it a common logic branch (e.g. Expired)?
+   ├─ YES → Return Result Object { ok: false, error: "CODE" }
+   └─ NO  → Throw/Die with "CODE: message"
 ```
 
 ---

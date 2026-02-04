@@ -7,14 +7,26 @@ const HANDSHAKE_DURATION = 300;
 const HANDSHAKE_SKEW = 30;
 
 /**
+ * Validates the IO object.
+ * @private
+ */
+function validate_io(io) {
+	if (type(io) != "object" || type(io.read_file) != "function" || type(io.write_file) != "function" || type(io.time) != "function") {
+		die("CONTRACT_VIOLATION: Invalid IO provider");
+	}
+}
+
+/**
  * Internal helper to get/generate the router secret key.
+ * @private
  */
 function get_secret_key(io) {
 	let key = null;
 	try {
 		key = io.read_file(SECRET_KEY_PATH);
 	} catch (e) {
-		return { error: "KEY_READ_ERROR" };
+		// We don't die here because it might be a transient FS error
+		return { ok: false, error: "KEY_READ_ERROR" };
 	}
 
 	if (!key) {
@@ -22,19 +34,21 @@ function get_secret_key(io) {
 		try {
 			io.write_file(SECRET_KEY_PATH, key);
 		} catch (e) {
-			// Non-fatal, but we'll lose persistence
+			// Non-fatal for current session, but will lose persistence on reboot
 		}
 	}
-	return { key: key };
-};
+	return { ok: true, data: key };
+}
 
 /**
  * Creates a signed state token and all required OIDC params for redirect.
  */
 export function create_state(io) {
+	validate_io(io);
+
 	let res = get_secret_key(io);
-	if (res.error) return { error: "SECRET_KEY_ERROR", details: res.error };
-	let secret = res.key;
+	if (!res.ok) return res;
+	let secret = res.data;
 
 	let pkce = crypto.pkce_pair();
 	let state = crypto.b64url_encode(crypto.random(16));
@@ -50,13 +64,16 @@ export function create_state(io) {
 	};
 	
 	let token = crypto.sign_jws(payload, secret);
-	if (!token) return { error: "SIGNING_FAILED" };
+	if (!token) return { ok: false, error: "SIGNING_FAILED" };
 
 	return {
-		token: token,
-		state: state,
-		nonce: nonce,
-		code_challenge: pkce.challenge
+		ok: true,
+		data: {
+			token: token,
+			state: state,
+			nonce: nonce,
+			code_challenge: pkce.challenge
+		}
 	};
 };
 
@@ -64,40 +81,42 @@ export function create_state(io) {
  * Verifies a state token.
  */
 export function verify_state(io, token) {
+	validate_io(io);
+	if (type(token) != "string") die("CONTRACT_VIOLATION: verify_state expects string token");
+
 	let res = get_secret_key(io);
-	if (res.error) return { error: "INTERNAL_ERROR", details: res.error };
-	let secret = res.key;
+	if (!res.ok) return res;
+	let secret = res.data;
 
 	let result = crypto.verify_jws(token, secret);
-	if (result.error) return result;
+	if (!result.ok) return result;
 	
-	let payload = result.payload;
+	let payload = result.data;
 	let now = io.time();
 
 	if (payload.exp && payload.exp < (now - HANDSHAKE_SKEW)) {
-		return { error: "HANDSHAKE_EXPIRED" };
+		return { ok: false, error: "HANDSHAKE_EXPIRED" };
 	}
 
 	if (payload.iat && payload.iat > (now + HANDSHAKE_SKEW)) {
-		return { error: "HANDSHAKE_NOT_YET_VALID" };
+		return { ok: false, error: "HANDSHAKE_NOT_YET_VALID" };
 	}
 	
-	return { payload: payload };
+	return { ok: true, data: payload };
 };
 
 /**
  * Creates a signed session token.
- * @param {object} io - IO provider { read_file, write_file, time }
- * @param {object} user_data - User information from ID Token
  */
 export function create(io, user_data) {
+	validate_io(io);
 	if (!user_data || (type(user_data.sub) != "string" && type(user_data.email) != "string")) {
-		return { error: "INVALID_USER_DATA" };
+		return { ok: false, error: "INVALID_USER_DATA" };
 	}
 
 	let res = get_secret_key(io);
-	if (res.error) return { error: "SECRET_KEY_ERROR", details: res.error };
-	let secret = res.key;
+	if (!res.ok) return res;
+	let secret = res.data;
 
 	let now = io.time();
 	let payload = {
@@ -108,32 +127,34 @@ export function create(io, user_data) {
 	};
 	
 	let token = crypto.sign_jws(payload, secret);
-	return token ? { session: token } : { error: "SIGNING_FAILED" };
+	return token ? { ok: true, data: token } : { ok: false, error: "SIGNING_FAILED" };
 };
 
 /**
  * Verifies a session token and returns the session object.
  */
 export function verify(io, token) {
-	if (!token) return { error: "NO_SESSION" };
+	validate_io(io);
+	if (!token) return { ok: false, error: "NO_SESSION" };
+	if (type(token) != "string") die("CONTRACT_VIOLATION: verify expects string token");
 	
 	let res = get_secret_key(io);
-	if (res.error) return { error: "INTERNAL_ERROR", details: res.error };
-	let secret = res.key;
+	if (!res.ok) return res;
+	let secret = res.data;
 
 	let result = crypto.verify_jws(token, secret);
-	if (result.error) return { error: "INVALID_SESSION", details: result.error };
+	if (!result.ok) return { ok: false, error: "INVALID_SESSION", details: result.error };
 	
-	let session = result.payload;
+	let session = result.data;
 	let now = io.time();
 	
 	if (session.exp && session.exp < (now - SESSION_SKEW)) {
-		return { error: "SESSION_EXPIRED" };
+		return { ok: false, error: "SESSION_EXPIRED" };
 	}
 
 	if (session.iat && session.iat > (now + SESSION_SKEW)) {
-		return { error: "SESSION_NOT_YET_VALID" };
+		return { ok: false, error: "SESSION_NOT_YET_VALID" };
 	}
 	
-	return { session: session };
+	return { ok: true, data: session };
 };

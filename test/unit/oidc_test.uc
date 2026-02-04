@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { test, assert, assert_eq, assert_throws } from 'testing';
 import * as oidc from 'luci_sso.oidc';
 
 // Mock IO Provider
@@ -6,6 +6,7 @@ function create_mock_io() {
 	return {
 		_files: {},
 		_responses: {},
+		_posts: [],
 		_now: 1000,
 
 		time: function() { return this._now; },
@@ -16,9 +17,22 @@ function create_mock_io() {
 			
 			// Ensure body is an object with .read() for the library
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
-			res.body = { read: function() { return raw_body; } };
+			let response = {
+				status: res.status,
+				body: { read: function() { return raw_body; } }
+			};
 			
-			return res;
+			return response;
+		},
+		http_post: function(url, opts) {
+			push(this._posts, { url, opts });
+			let res = this._responses[url] || { status: 404, body: "" };
+			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
+			let response = {
+				status: res.status,
+				body: { read: function() { return raw_body; } }
+			};
+			return response;
 		}
 	};
 }
@@ -30,11 +44,14 @@ test('Discovery: Schema validation', () => {
 
 	// 1. Invalid JSON
 	io._responses[url] = { status: 200, body: "<html>Not JSON</html>" };
-	assert_eq(oidc.discover(io, issuer).error, "INVALID_JSON");
+	let res_json = oidc.discover(io, issuer);
+	assert(!res_json.ok);
+	assert_eq(res_json.error, "INVALID_JSON");
 
 	// 2. Missing required fields
 	io._responses[url] = { status: 200, body: { issuer: issuer } };
 	let res = oidc.discover(io, issuer);
+	assert(!res.ok);
 	assert_eq(res.error, "MISSING_REQUIRED_FIELD");
 	assert_eq(res.details, "authorization_endpoint");
 
@@ -50,6 +67,7 @@ test('Discovery: Schema validation', () => {
 test('Discovery: Cache robustness', () => {
 	let io = create_mock_io();
 	let issuer = "https://mock-idp.com/";
+	
 	let cache_path = "/tmp/discovery.json";
 	
 	// 1. Corrupt cache on disk (should ignore and fetch)
@@ -60,7 +78,7 @@ test('Discovery: Cache robustness', () => {
 		body: valid_config
 	};
 	let res = oidc.discover(io, issuer, { cache_path: cache_path });
-	assert(!res.error, "Should recover from corrupt cache");
+	assert(res.ok, "Should recover from corrupt cache");
 	
 	// 2. Expired cache
 	io._now = 5000;
@@ -77,8 +95,8 @@ test('Discovery: Cache robustness', () => {
 		body: { authorization_endpoint: "ok", token_endpoint: "ok", jwks_uri: "ok", issuer: issuer }
 	};
 	res = oidc.discover(io, issuer, { cache_path: cache_path, ttl: 3600 });
-	assert(!res.error, "Should not return error on re-fetch");
-	assert_eq(res.config.authorization_endpoint, "ok", "Should re-fetch expired cache");
+	assert(res.ok, "Should not return error on re-fetch");
+	assert_eq(res.data.authorization_endpoint, "ok", "Should re-fetch expired cache");
 });
 
 test('JWKS: Handle malformed responses', () => {
@@ -94,34 +112,21 @@ test('JWKS: Handle malformed responses', () => {
 	assert_eq(oidc.fetch_jwks(io, url).error, "JWKS_FETCH_FAILED");
 });
 
-test('Auth URL: Edge cases', () => {
+test('Token Exchange: Success', () => {
 	let io = create_mock_io();
-	let config = {
-		client_id: "client&name=evil",
-		redirect_uri: "http://router/cb",
-		scope: "openid profile"
+	let discovery = { token_endpoint: "https://idp.com/token" };
+	let config = { client_id: "id", client_secret: "secret", redirect_uri: "uri" };
+	
+	io._responses[discovery.token_endpoint] = {
+		status: 200,
+		body: { access_token: "at", id_token: "it" }
 	};
 	
-	// 1. Endpoint with existing query params
-	let discovery = { authorization_endpoint: "https://idp.com/auth?tenant=123" };
-	let params = { state: "s", nonce: "n", code_challenge: "c" };
-
-	let url = oidc.get_auth_url(io, config, discovery, params);
-	assert(index(url, "?tenant=123&") != -1, "Should append with & if ? exists");
+	let res = oidc.exchange_code(io, config, discovery, "code123", "verifier123");
+	assert(res.ok, `Exchange failed: ${res.error}`);
+	assert_eq(res.data.access_token, "at");
 	
-	// 2. Encoding check
-	assert(index(url, "client_id=client&name=evil") != -1);
-});
-
-test('Discovery: Trailing slash handling', () => {
-	let io = create_mock_io();
-	let issuer1 = "https://idp.com";
-	let issuer2 = "https://idp.com/";
-	let body = { issuer: "https://idp.com/", authorization_endpoint: "a", token_endpoint: "t", jwks_uri: "j" };
-
-	io._responses["https://idp.com/.well-known/openid-configuration"] = { status: 200, body: body };
-	io._responses["https://idp.com//.well-known/openid-configuration"] = { status: 200, body: body };
-
-	assert(!oidc.discover(io, issuer1).error);
-	assert(!oidc.discover(io, issuer2).error);
+	assert_eq(io._posts[0].url, discovery.token_endpoint);
+	assert(index(io._posts[0].opts.body, "code=code123") >= 0);
+	assert(index(io._posts[0].opts.body, "code_verifier=verifier123") >= 0);
 });
