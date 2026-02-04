@@ -16,7 +16,7 @@ define Package/$(PKG_NAME)
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=OIDC/OAuth2 SSO for LuCI
-  DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +$(PKG_NAME)-crypto
+  DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +luci-sso-crypto
 endef
 
 define Package/$(PKG_NAME)/description
@@ -29,7 +29,7 @@ define Package/$(PKG_NAME)-crypto-mbedtls
   CATEGORY:=Utilities
   TITLE:=MbedTLS backend for $(PKG_NAME)
   DEPENDS:=+libucode +libmbedtls
-  PROVIDES:=$(PKG_NAME)-crypto
+  PROVIDES:=luci-sso-crypto
 endef
 
 define Package/$(PKG_NAME)-crypto-wolfssl
@@ -37,7 +37,7 @@ define Package/$(PKG_NAME)-crypto-wolfssl
   CATEGORY:=Utilities
   TITLE:=WolfSSL backend for $(PKG_NAME)
   DEPENDS:=+libucode +libwolfssl
-  PROVIDES:=$(PKG_NAME)-crypto
+  PROVIDES:=luci-sso-crypto
 endef
 
 define Build/Prepare
@@ -47,7 +47,12 @@ endef
 
 define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/share/ucode/luci_sso
-	$(CP) ./files/usr/share/ucode/luci_sso/crypto.uc $(1)/usr/share/ucode/luci_sso/
+	$(CP) ./files/usr/share/ucode/luci_sso/*.uc $(1)/usr/share/ucode/luci_sso/
+	$(INSTALL_DIR) $(1)/etc/config
+	$(CP) ./files/etc/config/luci-sso $(1)/etc/config/luci-sso
+	$(INSTALL_DIR) $(1)/etc/luci-sso
+	$(INSTALL_DIR) $(1)/www/cgi-bin
+	$(INSTALL_BIN) ./files/www/cgi-bin/luci-sso $(1)/www/cgi-bin/luci-sso
 endef
 
 define Package/$(PKG_NAME)-crypto-mbedtls/install

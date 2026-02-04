@@ -1,0 +1,10 @@
+
+config sso 'globally'
+	option enabled '0'
+
+config provider 'default'
+	option issuer_url ''
+	option client_id ''
+	option client_secret ''
+	option scope 'openid profile email'
+	option redirect_uri 'https://router.lan/cgi-bin/luci-sso/callback'

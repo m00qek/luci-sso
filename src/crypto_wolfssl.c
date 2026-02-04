@@ -29,10 +29,15 @@ static uc_value_t *uc_wolfssl_jwk_es256_to_pem(uc_vm_t *vm, size_t nargs) {
     return NULL;
 }
 
+static uc_value_t *uc_wolfssl_hmac_sha256(uc_vm_t *vm, size_t nargs) {
+    return NULL;
+}
+
 static const uc_function_list_t wolfssl_fns[] = {
     { "verify_rs256", uc_wolfssl_verify_rs256 },
     { "verify_es256", uc_wolfssl_verify_es256 },
     { "sha256", uc_wolfssl_sha256 },
+    { "hmac_sha256", uc_wolfssl_hmac_sha256 },
     { "random", uc_wolfssl_random },
     { "jwk_rsa_to_pem", uc_wolfssl_jwk_rsa_to_pem },
     { "jwk_es256_to_pem", uc_wolfssl_jwk_es256_to_pem },

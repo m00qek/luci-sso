@@ -299,10 +299,32 @@ static uc_value_t *uc_mbedtls_jwk_es256_to_pem(uc_vm_t *vm, size_t nargs) {
     return ucv_string_new((const char *)buf);
 }
 
+static uc_value_t *uc_mbedtls_hmac_sha256(uc_vm_t *vm, size_t nargs) {
+    uc_value_t *v_key = uc_fn_arg(0);
+    uc_value_t *v_msg = uc_fn_arg(1);
+
+    if (ucv_type(v_key) != UC_STRING || ucv_type(v_msg) != UC_STRING) {
+        return NULL;
+    }
+
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    unsigned char mac[MBEDTLS_MD_MAX_SIZE];
+    
+    int ret = mbedtls_md_hmac(md_info, 
+        (const unsigned char *)ucv_string_get(v_key), ucv_string_length(v_key),
+        (const unsigned char *)ucv_string_get(v_msg), ucv_string_length(v_msg),
+        mac);
+
+    if (ret != 0) return NULL;
+
+    return ucv_string_new_length((const char *)mac, mbedtls_md_get_size(md_info));
+}
+
 static const uc_function_list_t mbedtls_fns[] = {
     { "verify_rs256", uc_mbedtls_verify_rs256 },
     { "verify_es256", uc_mbedtls_verify_es256 },
     { "sha256", uc_mbedtls_sha256 },
+    { "hmac_sha256", uc_mbedtls_hmac_sha256 },
     { "random", uc_mbedtls_random },
     { "jwk_rsa_to_pem", uc_mbedtls_jwk_rsa_to_pem },
     { "jwk_es256_to_pem", uc_mbedtls_jwk_es256_to_pem },

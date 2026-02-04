@@ -46,7 +46,7 @@ test: compile-native
 		-v "$(WORK_DIR):/app" \
 		-e VERBOSE=$(VERBOSE) \
 		$(RUNNER_IMAGE) \
-		ucode -L /app/bin/lib/$(CRYPTO_LIB) -L /app/files/usr/share/ucode -L /app/test test/runner.uc
+		ucode -L /app/test/mocks -L /app/bin/lib/$(CRYPTO_LIB) -L /app/files/usr/share/ucode -L /app/test test/runner.uc
 
 SOURCES := $(wildcard src/*.c)
 
