@@ -57,12 +57,12 @@ endef
 
 define Package/$(PKG_NAME)-crypto-mbedtls/install
 	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/crypto_mbedtls.so $(1)/usr/lib/ucode/luci_sso/native.so
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_mbedtls.so $(1)/usr/lib/ucode/luci_sso/native.so
 endef
 
 define Package/$(PKG_NAME)-crypto-wolfssl/install
 	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/crypto_wolfssl.so $(1)/usr/lib/ucode/luci_sso/native.so
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_wolfssl.so $(1)/usr/lib/ucode/luci_sso/native.so
 endef
 
 $(eval $(call BuildPackage,$(PKG_NAME)))

@@ -5,22 +5,11 @@ import * as uclient from 'uclient';
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 
-function die_http(status, msg) {
-	print(`Status: ${status}\r\n`);
-	print(`Content-Type: text/plain\r\n\r\n`);
-	print(msg);
-	exit(1);
-}
-
-// TODO: Load this from a persistent file like /etc/luci-sso.key
-const ROUTER_SECRET = "placeholder-secret-key";
-
 // 1. Composition Root: Define the IO implementation for this environment
 const io = {
 	time: time,
 	read_file: fs.readfile,
 	write_file: fs.writefile,
-	urlencode: uclient.urlencode,
 	http_get: (url) => {
 		let conn = uclient.connect(url);
 		if (!conn) return null;
@@ -30,49 +19,7 @@ const io = {
 };
 
 // 2. Load Config
-let cursor = uci.cursor();
-let config = cursor.get_all("luci-sso", "default");
-let global_cfg = cursor.get_all("luci-sso", "globally");
-
-if (!global_cfg || global_cfg.enabled != '1') {
-	die_http(403, "SSO is disabled");
-}
-
-if (!config || !config.issuer_url || !config.client_id) {
-	die_http(500, "SSO configuration is incomplete");
-}
-
 // 3. OIDC Discovery
-let disc_result = oidc.discover(io, config.issuer_url);
-if (disc_result.error) {
-	die_http(500, `OIDC Discovery Error: ${disc_result.error}`);
-}
-let discovery = disc_result.config;
-
 // 4. Generate Auth URL
-let auth = oidc.get_auth_url(io, config, discovery);
-if (auth.error) {
-	die_http(500, `Auth URL Error: ${auth.error}`);
-}
-
 // 5. Persistence (Store signed state/verifier in a JWS for the callback)
-
-let cookie_val = {
-
-	state: auth.state,
-
-	code_verifier: auth.code_verifier
-
-};
-
-let signed_jws = crypto.sign_jws(cookie_val, ROUTER_SECRET);
-
-
-
 // 6. Redirect
-
-print(`Status: 302 Found\r\n`);
-
-print(`Set-Cookie: luci_sso_state=${signed_jws}; Path=/; HttpOnly; SameSite=Lax\r\n`);
-
-print(`Location: ${auth.url}\r\n\r\n`);

@@ -244,7 +244,7 @@ static uc_value_t *uc_mbedtls_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
  * Converts ES256 (P-256) x, y to PEM string.
  * Arguments: (x_bin, y_bin)
  */
-static uc_value_t *uc_mbedtls_jwk_es256_to_pem(uc_vm_t *vm, size_t nargs) {
+static uc_value_t *uc_mbedtls_jwk_ec_p256_to_pem(uc_vm_t *vm, size_t nargs) {
     uc_value_t *v_x = uc_fn_arg(0);
     uc_value_t *v_y = uc_fn_arg(1);
 
@@ -327,7 +327,7 @@ static const uc_function_list_t mbedtls_fns[] = {
     { "hmac_sha256", uc_mbedtls_hmac_sha256 },
     { "random", uc_mbedtls_random },
     { "jwk_rsa_to_pem", uc_mbedtls_jwk_rsa_to_pem },
-    { "jwk_es256_to_pem", uc_mbedtls_jwk_es256_to_pem },
+    { "jwk_ec_p256_to_pem", uc_mbedtls_jwk_ec_p256_to_pem },
 };
 
 void uc_module_init(uc_vm_t *vm, uc_value_t *scope) {

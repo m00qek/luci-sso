@@ -22,13 +22,13 @@ foreach(SRC ${SOURCES})
     
     target_link_libraries(${LIBNAME} ${UCODE_LIB})
 
-    if(${LIBNAME} STREQUAL "crypto_mbedtls")
+    if(${LIBNAME} STREQUAL "native_mbedtls")
         target_link_libraries(${LIBNAME} 
             ${MBEDTLS_LIB}
             ${MBEDX509_LIB}
             ${MBEDCRYPTO_LIB}
         )
-    elseif(${LIBNAME} STREQUAL "crypto_wolfssl")
+    elseif(${LIBNAME} STREQUAL "native_wolfssl")
         target_link_libraries(${LIBNAME} ${WOLFSSL_LIB})
     endif()
     

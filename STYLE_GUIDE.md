@@ -153,8 +153,8 @@ let result = replace(s, p, r);  // ❌ String manipulation
 **Crypto backends are swappable** (mbedtls, wolfssl).
 
 All backend-specific code goes in:
-- `src/crypto_mbedtls.c`
-- `src/crypto_wolfssl.c`
+- `src/native_mbedtls.c`
+- `src/native_wolfssl.c`
 
 Wrapper layer exposes uniform API:
 - `files/usr/share/ucode/luci_sso/crypto.uc` imports `luci_sso.native`
@@ -163,7 +163,7 @@ Wrapper layer exposes uniform API:
 
 ```javascript
 // ❌ INCORRECT
-import * as mbedtls from 'crypto_mbedtls';
+import * as mbedtls from 'native_mbedtls';
 
 // ✅ CORRECT
 import * as native from 'luci_sso.native';
@@ -651,8 +651,8 @@ luci-sso/
 │   ├── utils.uc       # Pure utilities (urlencode, etc.)
 │   └── io.uc          # I/O abstraction (create_io helper)
 ├── src/
-│   ├── crypto_mbedtls.c   # mbedtls backend
-│   └── crypto_wolfssl.c   # wolfssl backend
+│   ├── native_mbedtls.c   # mbedtls backend
+│   └── native_wolfssl.c   # wolfssl backend
 ├── test/
 │   ├── unit/
 │   │   ├── crypto_test.uc

@@ -246,7 +246,7 @@ export function jwk_to_pem(jwk) {
 		let y_bin = b64url_decode(jwk.y);
 		if (!x_bin || !y_bin) return { error: "INVALID_EC_PARAMS_ENCODING" };
 		
-		let pem = native.jwk_es256_to_pem(x_bin, y_bin);
+		let pem = native.jwk_ec_p256_to_pem(x_bin, y_bin);
 		if (!pem) return { error: "PEM_CONVERSION_FAILED" };
 		return { pem: pem };
 	}
