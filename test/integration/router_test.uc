@@ -14,6 +14,7 @@ function create_mock_io() {
 		time: function() { return this._now; },
 		read_file: function(path) { return this._files[path]; },
 		write_file: function(path, data) { this._files[path] = data; return true; },
+		rename: function(old, new) { this._files[new] = this._files[old]; delete this._files[old]; return true; },
 		http_get: function(url) { 
 			let res = this._responses[url] || { status: 404, body: "" };
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);

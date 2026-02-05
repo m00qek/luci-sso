@@ -11,31 +11,48 @@ const HANDSHAKE_SKEW = 30;
  * @private
  */
 function validate_io(io) {
-	if (type(io) != "object" || type(io.read_file) != "function" || type(io.write_file) != "function" || type(io.time) != "function") {
-		die("CONTRACT_VIOLATION: Invalid IO provider");
+	if (type(io) != "object" || 
+		type(io.read_file) != "function" || 
+		type(io.write_file) != "function" || 
+		type(io.time) != "function" ||
+		type(io.rename) != "function") {
+		die("CONTRACT_VIOLATION: Invalid IO provider (missing rename support)");
 	}
 }
 
 /**
  * Internal helper to get/generate the router secret key.
+ * Uses atomic rename and re-read pattern to prevent race conditions.
  * @private
- * @param {object} io - I/O provider
- * @returns {object} - Result Object {ok, data/error}
  */
 function get_secret_key(io) {
 	let key = null;
 	try {
 		key = io.read_file(SECRET_KEY_PATH);
 	} catch (e) {
-		return { ok: false, error: "KEY_READ_ERROR" };
+		// File missing or unreadable
 	}
 
 	if (!key || length(key) == 0) {
-		key = crypto.random(32);
+		// 1. Generate new key
+		let new_key = crypto.random(32);
+		let tmp_path = SECRET_KEY_PATH + ".tmp";
+		
 		try {
-			io.write_file(SECRET_KEY_PATH, key);
+			// 2. Atomic Write Attempt: Write to .tmp, then Rename
+			io.write_file(tmp_path, new_key);
+			io.rename(tmp_path, SECRET_KEY_PATH);
 		} catch (e) {
-			// Non-fatal for current process
+			// Failures here mean another process likely won or FS is read-only
+		}
+
+		// 3. CRITICAL: Re-read from disk to ensure all concurrent processes 
+		// synchronize on the same "winner" key.
+		try {
+			key = io.read_file(SECRET_KEY_PATH);
+		} catch (e) {
+			// If re-read fails (e.g. read-only FS), use the local key as fallback
+			key = new_key;
 		}
 	}
 	return { ok: true, data: key };

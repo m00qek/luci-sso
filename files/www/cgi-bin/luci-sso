@@ -42,6 +42,7 @@ const io = {
 	time: time,
 	read_file: (path) => fs.readfile(path),
 	write_file: (path, data) => fs.writefile(path, data),
+	rename: (old, new) => fs.rename(old, new),
 	http_get: (url) => {
 		let conn = uclient.connect(url);
 		if (!conn) return { error: "CONNECT_FAILED" };
