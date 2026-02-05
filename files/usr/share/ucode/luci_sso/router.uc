@@ -54,6 +54,10 @@ function validate_callback_request(io, request) {
 	let query = parse_params(request.query_string);
 	let cookies = parse_cookies(request.http_cookie);
 
+	if (query.error) {
+		return { ok: false, error: `Identity Provider error: ${query.error}`, status: 400 };
+	}
+
 	if (!query.code) {
 		return { ok: false, error: "Missing authorization code", status: 400 };
 	}

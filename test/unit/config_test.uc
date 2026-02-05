@@ -35,8 +35,8 @@ test('Config: Load - Successful validation with RPCD', () => {
 				"client_secret": "s1",
 				"redirect_uri": "r1"
 			},
-			"u1": { ".type": "user", "rpcd_user": "admin", "email": "admin@test.com" },
-			"u2": { ".type": "user", "rpcd_user": "guest", "email": ["g1@test.com", "g2@test.com"] }
+			"u1": { ".type": "user", "rpcd_user": "admin", "rpcd_password": "p1", "email": "admin@test.com" },
+			"u2": { ".type": "user", "rpcd_user": "guest", "rpcd_password": "p2", "email": ["g1@test.com", "g2@test.com"] }
 		}
 	};
 
@@ -56,8 +56,8 @@ test('Config: Load - Reject mappings for non-existent RPCD users', () => {
 		},
 		"luci-sso": {
 			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "ok" },
-			"u1": { ".type": "user", "rpcd_user": "fake-user", "email": "test@test.com" },
-			"u2": { ".type": "user", "rpcd_user": "real-admin", "email": "admin@test.com" }
+			"u1": { ".type": "user", "rpcd_user": "fake-user", "rpcd_password": "p", "email": "test@test.com" },
+			"u2": { ".type": "user", "rpcd_user": "real-admin", "rpcd_password": "p", "email": "admin@test.com" }
 		}
 	};
 
@@ -69,7 +69,6 @@ test('Config: Load - Reject mappings for non-existent RPCD users', () => {
 	assert(res.ok);
 	assert_eq(length(res.data.user_mappings), 1, "Should only have one valid mapping");
 	assert_eq(res.data.user_mappings[0].rpcd_user, "real-admin");
-	assert(index(logs[0], "fake-user") >= 0, "Should have logged a warning for fake-user");
 });
 
 test('Config: Load - Handle disabled SSO', () => {

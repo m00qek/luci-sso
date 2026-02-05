@@ -39,7 +39,12 @@ export function load(cursor, io) {
 		let rpcd_user = s.rpcd_user;
 		let emails = (type(s.email) == "array") ? s.email : (s.email ? [ s.email ] : []);
 
-		if (!rpcd_user || length(emails) == 0) return;
+		if (!rpcd_user || !s.rpcd_password || length(emails) == 0) {
+			if (io && io.log && rpcd_user) {
+				io.log("warn", `Ignoring mapping for '${rpcd_user}': missing password or email list`);
+			}
+			return;
+		}
 
 		// Validation: Does this user exist in rpcd?
 		if (!valid_rpcd_users[rpcd_user]) {
