@@ -1,3 +1,4 @@
+
 config oidc 'default'
 	option enabled '0'
 	option issuer_url 'https://accounts.google.com'
@@ -6,11 +7,14 @@ config oidc 'default'
 	option redirect_uri 'https://router.lan/cgi-bin/luci-sso/callback'
 
 # Map specific emails to local RPCD users
+# Note: The rpcd_password must match the password set in /etc/config/rpcd
 config user
 	option rpcd_user 'admin'
+	option rpcd_password 'admin'
 	list email 'admin@example.com'
 	list email 'owner@corp.lan'
 
 config user
 	option rpcd_user 'viewer'
+	option rpcd_password 'viewer'
 	list email 'guest@example.com'

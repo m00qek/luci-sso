@@ -51,6 +51,7 @@ export function load(cursor, io) {
 
 		push(user_mappings, {
 			rpcd_user: rpcd_user,
+			rpcd_password: s.rpcd_password,
 			emails: emails
 		});
 	});

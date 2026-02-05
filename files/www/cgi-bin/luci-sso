@@ -2,6 +2,7 @@
 import * as uci from 'uci';
 import * as fs from 'fs';
 import * as uclient from 'uclient';
+import * as ubus from 'ubus';
 import * as lucihttp from 'lucihttp';
 import * as router from 'luci_sso.router';
 import * as config_loader from 'luci_sso.config';
@@ -31,6 +32,8 @@ function safe_getenv(key) {
 }
 
 // 2. Imperative Shell: Define the real I/O provider
+let _ubus_conn = null;
+
 const io = {
 	time: time,
 	read_file: (path) => fs.readfile(path),
@@ -55,7 +58,18 @@ const io = {
 	},
 	urlencode: lucihttp.urlencode,
 	getenv: safe_getenv,
-	log: (level, msg) => { warn(`[luci-sso] [${level}] ${msg}\n`); }
+	log: (level, msg) => { warn(`[luci-sso] [${level}] ${msg}\n`); },
+	
+	/**
+	 * Makes a UBUS call.
+	 */
+	ubus_call: (obj, method, args) => {
+		if (!_ubus_conn) {
+			_ubus_conn = ubus.connect();
+			if (!_ubus_conn) return null;
+		}
+		return _ubus_conn.call(obj, method, args);
+	}
 };
 
 // 3. Global Error Helper

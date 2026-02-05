@@ -1,6 +1,7 @@
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
+import * as ubus from 'luci_sso.ubus';
 import { parse_params, parse_cookies } from 'luci_sso.utils';
 
 /**
@@ -20,7 +21,7 @@ function response(status, headers, body) {
  * @private
  */
 function error_response(io, msg, status) {
-	if (io.log) io.log("error", `${status || 500}: ${msg}`);
+	if (io && io.log) io.log("error", `${status || 500}: ${msg}`);
 	return response(status || 500, ["Content-Type: text/plain"], msg);
 }
 
@@ -80,7 +81,6 @@ function validate_callback_request(io, request) {
  * @private
  */
 function complete_oauth_flow(io, config, code, handshake) {
-	// 1. Discovery
 	let issuer = handshake.issuer_url || config.issuer_url;
 	let disc_res = oidc.discover(io, issuer);
 	if (!disc_res.ok) {
@@ -88,14 +88,12 @@ function complete_oauth_flow(io, config, code, handshake) {
 	}
 	let discovery = disc_res.data;
 
-	// 2. Exchange
 	let exchange_res = oidc.exchange_code(io, config, discovery, code, handshake.code_verifier);
 	if (!exchange_res.ok) {
 		return { ok: false, error: `Token exchange failed: ${exchange_res.error}`, status: 500 };
 	}
 	let tokens = exchange_res.data;
 
-	// 3. Verify ID Token
 	let jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri);
 	if (!jwks_res.ok) {
 		return { ok: false, error: `Failed to fetch IdP keys: ${jwks_res.error}`, status: 500 };
@@ -110,20 +108,35 @@ function complete_oauth_flow(io, config, code, handshake) {
 }
 
 /**
+ * Searches the user mapping whitelist for a matching email.
+ * @private
+ */
+function find_user_mapping(io, config, email) {
+	if (!config.user_mappings || !email) return null;
+	for (let mapping in config.user_mappings) {
+		for (let allowed in mapping.emails) {
+			if (allowed == email) return mapping;
+		}
+	}
+	return null;
+}
+
+/**
  * Creates the final application session and response.
  * @private
  */
-function create_session_response(io, user_data) {
-	let session_res = session.create(io, user_data);
-	if (!session_res.ok) {
-		return { ok: false, error: "Failed to create application session", status: 500 };
+function create_session_response(io, mapping, oidc_email) {
+	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, oidc_email);
+	if (!ubus_res.ok) {
+		return { ok: false, error: "System login failed (UBUS)", status: 500 };
 	}
 
 	return {
 		ok: true,
 		data: response(302, [
 			"Location: /cgi-bin/luci/",
-			`Set-Cookie: luci_sso_session=${session_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+			`Set-Cookie: sysauth_https=${ubus_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+			`Set-Cookie: sysauth=${ubus_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
 			"Set-Cookie: luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 		])
 	};
@@ -134,19 +147,21 @@ function create_session_response(io, user_data) {
  * @private
  */
 function handle_callback(io, config, request) {
-	// 1. Validate request and handshake
 	let val_res = validate_callback_request(io, request);
 	if (!val_res.ok) return error_response(io, val_res.error, val_res.status);
 	let code = val_res.data.code;
 	let handshake = val_res.data.handshake;
 
-	// 2. Perform protocol exchange
 	let oauth_res = complete_oauth_flow(io, config, code, handshake);
 	if (!oauth_res.ok) return error_response(io, oauth_res.error, oauth_res.status);
 	let user_data = oauth_res.data;
 
-	// 3. Create session
-	let final_res = create_session_response(io, user_data);
+	let mapping = find_user_mapping(io, config, user_data.email);
+	if (!mapping) {
+		return error_response(io, `User ${user_data.email} is not authorized on this device`, 403);
+	}
+
+	let final_res = create_session_response(io, mapping, user_data.email);
 	if (!final_res.ok) return error_response(io, final_res.error, final_res.status);
 
 	return final_res.data;
@@ -159,7 +174,8 @@ function handle_callback(io, config, request) {
 function handle_logout() {
 	return response(302, [
 		"Location: /",
-		"Set-Cookie: luci_sso_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
+		"Set-Cookie: sysauth_https=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+		"Set-Cookie: sysauth=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
 	]);
 }
 
@@ -176,7 +192,6 @@ export function handle(io, config, request) {
 		die("CONTRACT_VIOLATION: router.handle expects (io, config, request)");
 	}
 
-	// Strict Path Filtering
 	let path = request.path || "/";
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);

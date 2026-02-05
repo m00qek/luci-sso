@@ -280,12 +280,36 @@ export function verify_id_token(io, tokens, keys, config, handshake) {
 
 	let result = crypto.verify_jwt(tokens.id_token, pem_res.data, validation_opts);
 
-	if (!result.ok) return result;
+		if (!result.ok) return result;
 
-	// 3. Nonce Check
-	if (handshake.nonce && result.data.nonce != handshake.nonce) {
-		return { ok: false, error: "NONCE_MISMATCH" };
-	}
+	
 
-	return result;
-};
+		// 3. Nonce Check
+
+		if (handshake.nonce && result.data.nonce != handshake.nonce) {
+
+			return { ok: false, error: "NONCE_MISMATCH" };
+
+		}
+
+	
+
+		let payload = result.data;
+
+		let user_data = {
+
+			sub: payload.sub,
+
+			email: payload.email || payload.sub,
+
+			name: payload.name
+
+		};
+
+	
+
+		return { ok: true, data: user_data };
+
+	};
+
+	
