@@ -1,5 +1,4 @@
-import { assert, assert_eq } from 'testing';
-import { when, and, then } from 'specification';
+import { assert, assert_eq, when, and, then } from 'testing';
 import * as router from 'luci_sso.router';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';

@@ -51,6 +51,9 @@ export function assert_throws(fn, msg) {
     if (!threw) die(`${ASSERT_PREFIX}${msg || "Expected function to throw exception"}`);
 };
 
+/**
+ * Registers a standard test or a group header.
+ */
 export function test(name, fn, type, depth) {
     push(global.testing_state.tests, { 
 		name, 
@@ -60,9 +63,39 @@ export function test(name, fn, type, depth) {
 	});
 };
 
+/**
+ * Resets the test queue.
+ */
 export function clear_tests() {
 	global.testing_state.tests = [];
 };
+
+// --- Specification DSL (merged from specification.uc) ---
+
+/**
+ * Defines a major action or trigger in the specification.
+ */
+export function when(desc, fn) {
+	test("When " + desc, null, "header", 0);
+	fn();
+};
+
+/**
+ * Defines a specific condition or context.
+ */
+export function and(desc, fn) {
+	test("and " + desc, null, "header", 1);
+	fn();
+};
+
+/**
+ * Defines an assertion that must hold true.
+ */
+export function then(desc, fn) {
+	test("then " + desc, fn, "test", 2);
+};
+
+// --- Runner Engine ---
 
 /**
  * Colors the keywords in a specification string.
@@ -108,6 +141,8 @@ export function run_all(suite_name) {
         print(`\n${color(C_BOLD + C_CYAN, "● Suite: " + suite_name)}\n\n`);
     }
 
+	let in_specification = false;
+
     for (let i = 0; i < length(tests); ) {
 		let t = tests[i];
 
@@ -130,7 +165,6 @@ export function run_all(suite_name) {
 						passed++;
 					}
 				} else {
-					// Skip remaining items in the when block
 					push(spec_results, { item: child, result: { ok: true, type: "skipped" } });
 				}
 				j++;
@@ -146,8 +180,7 @@ export function run_all(suite_name) {
 					if (r.result.type == "header") {
 						print(`${indent}${color(C_BOLD, colorize_spec(r.item.name))}\n`);
 					} else if (r.result.type == "skipped") {
-						// Don't print skipped tests to keep it clean, or print in gray
-						// print(`${indent}${color("\u001b[90m", "[SKIP]")} ${colorize_spec(r.item.name)}\n`);
+						// Optionally print skipped steps
 					} else {
 						let s = r.result.ok ? color(C_GREEN, "[PASS]") : color(C_RED, "[FAIL]");
 						print(`${indent}${s} ${colorize_spec(r.item.name)}\n`);
@@ -184,6 +217,10 @@ export function run_all(suite_name) {
 			}
 		}
 		i++;
+		
+		if (verbose && (i < length(tests)) && tests[i].depth == 0) {
+			print("\n");
+		}
     }
 
     if (!verbose) print("\n");
