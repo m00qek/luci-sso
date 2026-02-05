@@ -16,3 +16,4 @@ RUN mkdir -p /var/lock && \
 # Set the working directory to /app
 WORKDIR /app
 CMD ["/bin/sh"]
+
