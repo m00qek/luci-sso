@@ -32,20 +32,28 @@ test('Crypto: Fuzz - Base64URL edge case handling', () => {
 	assert_eq(crypto.b64url_decode("YQ== "), null, "Should reject padding '=' ");
 	assert_eq(crypto.b64url_decode("YQ@B"), null, "Should reject invalid chars '@'");
 	
-	// Non-string inputs (should throw CONTRACT_VIOLATION)
+	// Non-string inputs
 	assert_throws(() => crypto.b64url_decode(null));
 	assert_throws(() => crypto.b64url_decode(123));
 	assert_throws(() => crypto.b64url_decode({}));
 });
 
-test('Crypto: Fuzz - Large input stability', () => {
+test('Crypto: Fuzz - Large input stability (exactly 16KB)', () => {
 	let large = "";
-	for (let i = 0; i < 1000; i++) {
-		large += "LargeDataPayload";
+	// 1024 * 16 = 16384 bytes
+	for (let i = 0; i < 1024; i++) {
+		large += "1234567890123456";
 	}
 	let encoded = crypto.b64url_encode(large);
 	let decoded = crypto.b64url_decode(encoded);
-	assert_eq(large, decoded, "Should handle large payloads");
+	assert(decoded != null, "Should successfully decode 16KB input");
+	assert_eq(length(decoded), 16384, "Length should match");
+	
+	// Boundary: Create a string that encodes to > 32768 bytes (MAX_UTILS_SIZE)
+	let too_large_raw = "";
+	for (let i = 0; i < 2100; i++) too_large_raw += "1234567890123456";
+	let too_large_encoded = crypto.b64url_encode(too_large_raw);
+	assert_eq(crypto.b64url_decode(too_large_encoded), null, "Should return null for >32KB");
 });
 
 test('Crypto: Fuzz - Malformed JWS/JWT structures', () => {

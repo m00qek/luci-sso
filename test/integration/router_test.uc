@@ -48,29 +48,45 @@ RS256_JWK.n = replace(RS256_JWK.n, /\//g, '_');
 
 when("initiating the OIDC login flow", () => {
 	let io = create_mock_io();
-	io._responses["https://idp.com/.well-known/openid-configuration"] = {
-		status: 200,
-		body: { 
-			issuer: "https://idp.com", 
-			authorization_endpoint: "https://idp.com/auth",
-			token_endpoint: "https://idp.com/token",
-			jwks_uri: "https://idp.com/jwks"
-		}
-	};
+	
+	and("the Identity Provider returns a massive response that exceeds memory limits", () => {
+		io._responses["https://idp.com/.well-known/openid-configuration"] = {
+			error: "RESPONSE_TOO_LARGE"
+		};
 
-	let res = router.handle(io, MOCK_CONFIG, { path: "/" });
+		let res = router.handle(io, MOCK_CONFIG, { path: "/" });
 
-	then("it should return a 302 redirect to the Identity Provider", () => {
-		assert_eq(res.status, 302);
-		assert(index(res.headers[0], "Location: https://idp.com/auth") == 0);
+		then("it should fail discovery and return a 500 Internal Error", () => {
+			assert_eq(res.status, 500);
+			assert(index(res.body, "OIDC Discovery failed") >= 0);
+		});
 	});
 
-	then("it should include a S256 PKCE challenge in the URL", () => {
-		assert(index(res.headers[0], "code_challenge_method=S256") >= 0);
-	});
+	and("the Identity Provider is discoverable and healthy", () => {
+		io._responses["https://idp.com/.well-known/openid-configuration"] = {
+			status: 200,
+			body: { 
+				issuer: "https://idp.com", 
+				authorization_endpoint: "https://idp.com/auth",
+				token_endpoint: "https://idp.com/token",
+				jwks_uri: "https://idp.com/jwks"
+			}
+		};
 
-	then("it should set a signed state cookie to protect the handshake", () => {
-		assert(index(res.headers[1], "Set-Cookie: luci_sso_state=") == 0);
+		let res = router.handle(io, MOCK_CONFIG, { path: "/" });
+
+		then("it should return a 302 redirect to the Identity Provider", () => {
+			assert_eq(res.status, 302);
+			assert(index(res.headers[0], "Location: https://idp.com/auth") == 0);
+		});
+
+		then("it should include a S256 PKCE challenge in the URL", () => {
+			assert(index(res.headers[0], "code_challenge_method=S256") >= 0);
+		});
+
+		then("it should set a signed state cookie to protect the handshake", () => {
+			assert(index(res.headers[1], "Set-Cookie: luci_sso_state=") == 0);
+		});
 	});
 });
 

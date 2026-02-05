@@ -5,7 +5,39 @@ import * as uclient from 'uclient';
 import * as lucihttp from 'lucihttp';
 import * as router from 'luci_sso.router';
 
-// 1. Imperative Shell: Define the real I/O provider
+// 1. Constants & Configuration
+const MAX_RESPONSE_SIZE = 65536; // 64 KB
+const MAX_ENV_SIZE = 16384;      // 16 KB
+
+/**
+ * Safely reads a response body up to a hard limit.
+ * @private
+ */
+function safe_read_body(res) {
+	if (!res || !res.body || type(res.body.read) != "function") return res;
+
+	// Attempt to read one byte more than the limit
+	let data = res.body.read(MAX_RESPONSE_SIZE + 1);
+	
+	if (length(data) > MAX_RESPONSE_SIZE) {
+		return { error: "RESPONSE_TOO_LARGE" };
+	}
+
+	res.body = data;
+	return res;
+}
+
+/**
+ * Safely retrieves an environment variable with length enforcement.
+ * @private
+ */
+function safe_getenv(key) {
+	let val = getenv(key);
+	if (val && length(val) > MAX_ENV_SIZE) return null;
+	return val;
+}
+
+// 2. Imperative Shell: Define the real I/O provider
 const io = {
 	time: time,
 	read_file: (path) => fs.readfile(path),
@@ -13,7 +45,7 @@ const io = {
 	http_get: (url) => {
 		let conn = uclient.connect(url);
 		if (!conn) return { error: "CONNECT_FAILED" };
-		let res = conn.request("GET");
+		let res = safe_read_body(conn.request("GET"));
 		conn.disconnect();
 		return res;
 	},
@@ -23,15 +55,15 @@ const io = {
 		if (opts.headers) {
 			for (let k, v in opts.headers) conn.header(k, v);
 		}
-		let res = conn.request("POST", opts.body);
+		let res = safe_read_body(conn.request("POST", opts.body));
 		conn.disconnect();
 		return res;
 	},
 	urlencode: lucihttp.urlencode,
-	getenv: getenv
+	getenv: safe_getenv
 };
 
-// 2. Global Error Helper (CGI-style)
+// 3. Global Error Helper
 function cgi_die(msg, status) {
 	print(`Status: ${status || 500}\n`);
 	print(`Content-Type: text/plain\n\n`);
@@ -39,7 +71,7 @@ function cgi_die(msg, status) {
 	exit(1);
 }
 
-// 3. Load Configuration
+// 4. Load Configuration
 const cursor = uci.cursor();
 const config = cursor.get_all("luci-sso", "default");
 if (!config) cgi_die("Configuration 'default' not found in /etc/config/luci-sso", 500);
@@ -49,17 +81,17 @@ if (!global_cfg || global_cfg.enabled !== '1') {
 	cgi_die("SSO is disabled", 403);
 }
 
-// 4. Build Request Object
+// 5. Build Request Object
 const request = {
 	path: io.getenv("PATH_INFO") || "/",
 	query_string: io.getenv("QUERY_STRING"),
 	http_cookie: io.getenv("HTTP_COOKIE")
 };
 
-// 5. Functional Core: Delegate to Router
+// 6. Functional Core: Delegate to Router
 const res = router.handle(io, config, request);
 
-// 6. Imperative Shell: Output Result
+// 7. Output Result
 print(`Status: ${res.status}\n`);
 for (let header in res.headers) {
 	print(`${header}\n`);

@@ -31,6 +31,15 @@ test('Crypto: Base64URL - Padding variations', () => {
 	assert_eq(crypto.b64url_decode("YWJjZA"), "abcd", "Should handle multiple blocks");
 });
 
+test('Crypto: Base64URL - Enforce size limit', () => {
+	let too_large = "";
+	// 32KB + 1 byte
+	for (let i = 0; i < 3277; i++) too_large += "1234567890";
+	
+	let res = crypto.b64url_decode(too_large);
+	assert_eq(res, null, "Should return null if input exceeds 32KB limit");
+});
+
 test('Crypto: JWT - Verify RS256 signature', () => {
 	let result = crypto.verify_jwt(fixtures.RS256.JWT_TOKEN, fixtures.RS256.JWT_PUBKEY, { alg: "RS256" });
 	assert_success(result, "JWT should be verified successfully");

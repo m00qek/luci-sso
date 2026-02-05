@@ -8,7 +8,8 @@ const unit_files = [
 	"unit.crypto_test",
 	"unit.oidc_test",
 	"unit.security_test",
-	"unit.session_test"
+	"unit.session_test",
+	"unit.utils_test"
 ];
 
 for (let mod in unit_files) {

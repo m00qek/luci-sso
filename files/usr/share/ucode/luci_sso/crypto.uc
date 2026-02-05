@@ -1,13 +1,52 @@
 import * as native from 'luci_sso.native';
 
 const MAX_TOKEN_SIZE = 16384; // 16 KB
+const MAX_UTILS_SIZE = 32768; // 32 KB
+
+// --- Base64URL Internal Helpers ---
 
 /**
- * Converts Base64URL to Standard Base64 and adds padding.
- * 
+ * Maps standard Base64 characters to URL-safe ones.
  * @private
- * @param {string} str - Base64URL string
- * @returns {string} - Standard Base64 string or null
+ */
+function _map_to_url_safe(str) {
+	let res = replace(str, /\+/g, '-');
+	return replace(res, /\//g, '_');
+}
+
+/**
+ * Maps URL-safe characters back to standard Base64.
+ * @private
+ */
+function _map_from_url_safe(str) {
+	let res = replace(str, /-/g, '+');
+	return replace(res, /_/g, '/');
+}
+
+/**
+ * Adds padding characters to a Base64 string if needed.
+ * @private
+ */
+function _add_padding(str) {
+	let pad = (4 - (length(str) % 4)) % 4;
+	for (let i = 0; i < pad; i++) {
+		str += '=';
+	}
+	return str;
+}
+
+/**
+ * Removes all padding characters from a Base64 string.
+ * @private
+ */
+function _strip_padding(str) {
+	return replace(str, /=/g, '');
+}
+
+/**
+ * Converts Base64URL to Standard Base64 with padding.
+ * Internal helper for decoding operations.
+ * @private
  */
 function b64url_to_b64(str) {
 	if (type(str) != "string") return null;
@@ -16,23 +55,14 @@ function b64url_to_b64(str) {
 	// Validate Base64URL charset: [A-Za-z0-9_-]
 	if (!match(str, /^[A-Za-z0-9_-]+$/)) return null;
 	
-	let b64 = replace(str, /-/g, '+');
-	b64 = replace(b64, /_/g, '/');
-	
-	let pad = (4 - (length(b64) % 4)) % 4;
-	for (let i = 0; i < pad; i++) {
-		b64 += '=';
-	}
-	
-	return b64;
+	return _add_padding(_map_from_url_safe(str));
 }
+
+// --- JSON Helpers ---
 
 /**
  * Decodes JSON safely.
- * 
  * @private
- * @param {string} str - JSON string
- * @returns {object} - Parsed object or null
  */
 function safe_json(str) {
 	try {
@@ -42,13 +72,11 @@ function safe_json(str) {
 	}
 }
 
+// --- String Comparison ---
+
 /**
  * Constant-time string comparison to prevent timing attacks.
- * 
  * @private
- * @param {string} a - First string
- * @param {string} b - Second string
- * @returns {boolean} - True if equal
  */
 function constant_time_eq(a, b) {
 	if (type(a) != "string" || type(b) != "string") return false;
@@ -62,14 +90,20 @@ function constant_time_eq(a, b) {
 	return (res == 0);
 }
 
+// --- Public API ---
+
 /**
  * Decodes a Base64URL string to a raw string.
+ * Enforces a strict size limit to prevent OOM.
  * 
  * @param {string} str - Base64URL string
  * @returns {string} - Raw binary string or null
  */
 export function b64url_decode(str) {
 	if (type(str) != "string") die("CONTRACT_VIOLATION: b64url_decode expects string");
+	
+	if (length(str) > MAX_UTILS_SIZE) return null;
+
 	let b64 = b64url_to_b64(str);
 	return (b64 != null) ? b64dec(b64) : null;
 };
@@ -82,11 +116,9 @@ export function b64url_decode(str) {
  */
 export function b64url_encode(str) {
 	if (type(str) != "string") die("CONTRACT_VIOLATION: b64url_encode expects string");
+	
 	let b64 = b64enc(str);
-	b64 = replace(b64, /\+/g, '-');
-	b64 = replace(b64, /\//g, '_');
-	b64 = replace(b64, /=/g, '');
-	return b64;
+	return _strip_padding(_map_to_url_safe(b64));
 };
 
 /**
@@ -124,7 +156,7 @@ export function verify_jws(token, secret) {
 
 	if (length(token) > MAX_TOKEN_SIZE) return { ok: false, error: "TOKEN_TOO_LARGE" };
 	
-	let parts = split(token, ".");
+	let parts = split(token, ".", 4);
 	if (length(parts) != 3) return { ok: false, error: "MALFORMED_JWS" };
 
 	// 1. Decode and Validate Header
@@ -170,12 +202,11 @@ export function verify_jwt(token, pubkey, options) {
 	if (length(token) > MAX_TOKEN_SIZE) return { ok: false, error: "TOKEN_TOO_LARGE" };
 	if (!options.alg) return { ok: false, error: "MISSING_ALGORITHM_OPTION" };
 
-	let parts = split(token, ".");
+	let parts = split(token, ".", 4);
 	if (length(parts) != 3) return { ok: false, error: "MALFORMED_JWT" };
 
 	// 1. Decode Header
-	let header_b64 = b64url_to_b64(parts[0]);
-	let header_json = (header_b64 != null) ? b64dec(header_b64) : null;
+	let header_json = b64url_decode(parts[0]);
 	if (!header_json) return { ok: false, error: "INVALID_HEADER_ENCODING" };
 	
 	let header = safe_json(header_json);
@@ -187,8 +218,7 @@ export function verify_jwt(token, pubkey, options) {
 	}
 
 	// 3. Decode Signature
-	let sig_b64 = b64url_to_b64(parts[2]);
-	let signature = (sig_b64 != null) ? b64dec(sig_b64) : null;
+	let signature = b64url_decode(parts[2]);
 	if (!signature) return { ok: false, error: "INVALID_SIGNATURE_ENCODING" };
 
 	// 4. Verify Signature
@@ -206,8 +236,7 @@ export function verify_jwt(token, pubkey, options) {
 	if (!valid) return { ok: false, error: "INVALID_SIGNATURE" };
 
 	// 5. Decode Payload
-	let payload_b64 = b64url_to_b64(parts[1]);
-	let payload_json = (payload_b64 != null) ? b64dec(payload_b64) : null;
+	let payload_json = b64url_decode(parts[1]);
 	if (!payload_json) return { ok: false, error: "INVALID_PAYLOAD_ENCODING" };
 
 	let payload = safe_json(payload_json);
