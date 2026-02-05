@@ -1,21 +1,28 @@
-import { run_all } from 'testing';
+import { run_all, clear_tests } from 'testing';
+import * as fs from 'fs';
 
-const test_files = [
+// 1. Run Unit Tests first
+const unit_files = [
 	"unit.crypto_fuzz_test",
 	"unit.crypto_native_test",
 	"unit.crypto_test",
 	"unit.oidc_test",
 	"unit.security_test",
-	"unit.session_test",
+	"unit.session_test"
+];
+
+for (let mod in unit_files) {
+	require(mod);
+}
+run_all("Unit Tests");
+
+// 2. Clear state and Run Integration Tests (Behavioral Specifications)
+clear_tests();
+const integration_files = [
 	"integration.router_test"
 ];
 
-for (let mod in test_files) {
-	try {
-		require(mod);
-	} catch (e) {
-		die(`Failed to load test module '${mod}': ${e}\n`);
-	}
+for (let mod in integration_files) {
+	require(mod);
 }
-
-run_all();
+run_all("Integration Tests");

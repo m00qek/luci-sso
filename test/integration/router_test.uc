@@ -1,4 +1,5 @@
-import { test, assert, assert_eq } from 'testing';
+import { assert, assert_eq } from 'testing';
+import { when, and, then } from 'specification';
 import * as router from 'luci_sso.router';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
@@ -6,13 +7,11 @@ import * as fixtures from 'fixtures';
 
 const TEST_SECRET = "integration-test-secret-32-bytes!!!";
 
-// Mock IO Provider for Router Integration
 function create_mock_io() {
 	return {
 		_responses: {},
 		_now: 1516239022 + 10,
 		_files: { "/etc/luci-sso/secret.key": TEST_SECRET },
-
 		time: function() { return this._now; },
 		read_file: function(path) { return this._files[path]; },
 		write_file: function(path, data) { this._files[path] = data; return true; },
@@ -31,7 +30,7 @@ function create_mock_io() {
 
 const MOCK_CONFIG = {
 	issuer_url: "https://idp.com",
-	client_id: "client123",
+	client_id: null,
 	client_secret: "secret123",
 	redirect_uri: "http://router/callback"
 };
@@ -44,7 +43,11 @@ const RS256_JWK = {
 RS256_JWK.n = replace(RS256_JWK.n, /\+/g, '-');
 RS256_JWK.n = replace(RS256_JWK.n, /\//g, '_');
 
-test('Router: Login - Successful redirect initiation', () => {
+// =============================================================================
+// Specifications
+// =============================================================================
+
+when("initiating the OIDC login flow", () => {
 	let io = create_mock_io();
 	io._responses["https://idp.com/.well-known/openid-configuration"] = {
 		status: 200,
@@ -56,99 +59,116 @@ test('Router: Login - Successful redirect initiation', () => {
 		}
 	};
 
-	let req = { path: "/" };
-	let res = router.handle(io, MOCK_CONFIG, req);
+	let res = router.handle(io, MOCK_CONFIG, { path: "/" });
 
-	assert_eq(res.status, 302, "Should return 302");
-	assert(index(res.headers[0], "Location: https://idp.com/auth") == 0, "Should redirect to IdP");
+	then("it should return a 302 redirect to the Identity Provider", () => {
+		assert_eq(res.status, 302);
+		assert(index(res.headers[0], "Location: https://idp.com/auth") == 0);
+	});
+
+	then("it should include a S256 PKCE challenge in the URL", () => {
+		assert(index(res.headers[0], "code_challenge_method=S256") >= 0);
+	});
+
+	then("it should set a signed state cookie to protect the handshake", () => {
+		assert(index(res.headers[1], "Set-Cookie: luci_sso_state=") == 0);
+	});
 });
 
-test('Router: Callback - Full success flow', () => {
-	let io = create_mock_io();
+when("processing the OIDC callback", () => {
 	
-	let state = crypto.b64url_encode(crypto.random(16));
-	let payload = {
-		state: state,
-		code_verifier: "verifier123",
-		nonce: null,
-		iat: io.time(),
-		exp: io.time() + 300
-	};
-	let state_token = crypto.sign_jws(payload, TEST_SECRET);
+	and("the state and code are valid", () => {
+		let io = create_mock_io();
+		let state = crypto.b64url_encode(crypto.random(16));
+		let payload = {
+			state: state,
+			code_verifier: "verifier123",
+			nonce: null,
+			iat: io.time(),
+			exp: io.time() + 300
+		};
+		let state_token = crypto.sign_jws(payload, TEST_SECRET);
 
-	io._responses["https://idp.com/.well-known/openid-configuration"] = {
-		status: 200,
-		body: { 
-			issuer: "https://idp.com", 
-			authorization_endpoint: "https://idp.com/auth",
-			token_endpoint: "https://idp.com/token",
-			jwks_uri: "https://idp.com/jwks"
-		}
-	};
-	io._responses["https://idp.com/token"] = {
-		status: 200,
-		body: { access_token: "at", id_token: fixtures.RS256.JWT_TOKEN }
-	};
-	io._responses["https://idp.com/jwks"] = {
-		status: 200,
-		body: { keys: [ RS256_JWK ] }
-	};
+		io._responses["https://idp.com/.well-known/openid-configuration"] = {
+			status: 200,
+			body: { 
+				issuer: "https://idp.com", 
+				authorization_endpoint: "https://idp.com/auth",
+				token_endpoint: "https://idp.com/token", 
+				jwks_uri: "https://idp.com/jwks" 
+			}
+		};
+		io._responses["https://idp.com/token"] = {
+			status: 200,
+			body: { access_token: "at", id_token: fixtures.RS256.JWT_TOKEN }
+		};
+		io._responses["https://idp.com/jwks"] = {
+			status: 200,
+			body: { keys: [ RS256_JWK ] }
+		};
 
-	let req = {
-		path: "/callback",
-		query_string: `code=code123&state=${state}`,
-		http_cookie: `luci_sso_state=${state_token}`
-	};
-	
-	let res = router.handle(io, { ...MOCK_CONFIG, skip_claims: true }, req);
+		let req = {
+			path: "/callback",
+			query_string: `code=code123&state=${state}`,
+			http_cookie: `luci_sso_state=${state_token}`
+		};
+		
+		let res = router.handle(io, { ...MOCK_CONFIG, skip_claims: true }, req);
 
-	assert_eq(res.status, 302, "Should redirect on success");
-	assert_eq(res.headers[0], "Location: /cgi-bin/luci/", "Should go to LuCI dashboard");
+		then("it should redirect to the dashboard", () => {
+			assert_eq(res.status, 302);
+			assert_eq(res.headers[0], "Location: /cgi-bin/luci/");
+		});
+
+		then("it should issue a secure application session cookie", () => {
+			assert(index(res.headers[1], "Set-Cookie: luci_sso_session=") == 0);
+		});
+
+		then("it should clear the temporary handshake state", () => {
+			assert(index(res.headers[2], "luci_sso_state=; HttpOnly") >= 0);
+		});
+	});
+
+	and("the state parameter does not match the signed handshake", () => {
+		let io = create_mock_io();
+		let handshake = session.create_state(io).data;
+		let req = {
+			path: "/callback",
+			query_string: `code=code123&state=ATTACKER_STATE`,
+			http_cookie: `luci_sso_state=${handshake.token}`
+		};
+		
+		let res = router.handle(io, MOCK_CONFIG, req);
+
+		then("it should reject the request with a 403 Forbidden", () => {
+			assert_eq(res.status, 403);
+		});
+
+		then("it should explain the CSRF protection error", () => {
+			assert(index(res.body, "CSRF protection") >= 0);
+		});
+	});
 });
 
-test('Router: Callback - Reject CSRF (state mismatch)', () => {
+when("a user requests to logout", () => {
 	let io = create_mock_io();
-	let handshake = session.create_state(io).data;
+	let res = router.handle(io, MOCK_CONFIG, { path: "/logout" });
 
-	let req = {
-		path: "/callback",
-		query_string: `code=code123&state=ATTACKER_STATE`,
-		http_cookie: `luci_sso_state=${handshake.token}`
-	};
-	
-	let res = router.handle(io, MOCK_CONFIG, req);
+	then("it should clear the session cookie", () => {
+		assert(index(res.headers[1], "luci_sso_session=;") >= 0);
+		assert(index(res.headers[1], "Max-Age=0") >= 0);
+	});
 
-	assert_eq(res.status, 403, "Should return 403 Forbidden");
+	then("it should redirect back to the landing page", () => {
+		assert_eq(res.headers[0], "Location: /");
+	});
 });
 
-test('Router: Global - Handle 404 for unknown paths', () => {
-
+when("accessing an unhandled system path", () => {
 	let io = create_mock_io();
+	let res = router.handle(io, MOCK_CONFIG, { path: "/unknown/path" });
 
-	let res = router.handle(io, MOCK_CONFIG, { path: "/unknown" });
-
-	assert_eq(res.status, 404);
-
-});
-
-
-
-test('Router: Logout - Clear session cookie', () => {
-
-	let io = create_mock_io();
-
-	let req = { path: "/logout" };
-
-	let res = router.handle(io, MOCK_CONFIG, req);
-
-
-
-	assert_eq(res.status, 302, "Should return 302");
-
-	assert_eq(res.headers[0], "Location: /", "Should redirect to landing page");
-
-	assert(index(res.headers[1], "luci_sso_session=; HttpOnly") >= 0, "Should clear session cookie");
-
-	assert(index(res.headers[1], "Max-Age=0") >= 0, "Should have Max-Age=0");
-
+	then("it should return a 404 Not Found error", () => {
+		assert_eq(res.status, 404);
+	});
 });
