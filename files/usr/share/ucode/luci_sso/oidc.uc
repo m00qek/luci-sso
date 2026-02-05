@@ -271,11 +271,12 @@ export function verify_id_token(io, tokens, keys, config, handshake) {
 	if (!pem_res.ok) return pem_res;
 
 	// 2. Verify Sig and Claims
-	let validation_opts = { alg: header.alg };
-	if (!config.skip_claims) {
-		if (config.issuer_url) { validation_opts.iss = config.issuer_url; }
-		if (config.client_id) { validation_opts.aud = config.client_id; }
-	}
+	let validation_opts = { 
+		alg: header.alg,
+		now: io.time()
+	};
+	if (config.issuer_url) { validation_opts.iss = config.issuer_url; }
+	if (config.client_id) { validation_opts.aud = config.client_id; }
 
 	let result = crypto.verify_jwt(tokens.id_token, pem_res.data, validation_opts);
 

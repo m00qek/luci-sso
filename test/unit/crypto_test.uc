@@ -41,7 +41,10 @@ test('Crypto: Base64URL - Enforce size limit', () => {
 });
 
 test('Crypto: JWT - Verify RS256 signature', () => {
-	let result = crypto.verify_jwt(fixtures.RS256.JWT_TOKEN, fixtures.RS256.JWT_PUBKEY, { alg: "RS256" });
+	let result = crypto.verify_jwt(fixtures.RS256.JWT_TOKEN, fixtures.RS256.JWT_PUBKEY, { 
+		alg: "RS256",
+		now: 1516239022 + 10
+	});
 	assert_success(result, "JWT should be verified successfully");
 	assert_eq(result.data.sub, "1234567890");
 });

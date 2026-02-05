@@ -72,7 +72,7 @@ test('Crypto: Fuzz - Malformed JWS/JWT structures', () => {
 		let res1 = crypto.verify_jws(token, secret);
 		assert(!res1.ok && res1.error, `JWS verify should fail for: ${token}`);
 
-		let res2 = crypto.verify_jwt(token, "pubkey", { alg: "RS256" });
+		let res2 = crypto.verify_jwt(token, "pubkey", { alg: "RS256", now: 1000 });
 		assert(!res2.ok && res2.error, `JWT verify should fail for: ${token}`);
 	}
 });
@@ -106,7 +106,7 @@ test('Crypto: Fuzz - Random binary garbage handling', () => {
 	let res1 = crypto.verify_jws(garbage, secret);
 	assert(!res1.ok, "JWS verify should reject random binary garbage");
 
-	let res2 = crypto.verify_jwt(garbage, "key", { alg: "RS256" });
+	let res2 = crypto.verify_jwt(garbage, "key", { alg: "RS256", now: 1000 });
 	assert(!res2.ok, "JWT verify should reject random binary garbage");
 });
 
@@ -157,6 +157,6 @@ test('Crypto: Fuzz - Token size limit enforcement', () => {
 	let result = crypto.verify_jws(massive, secret);
 	assert_eq(result.error, "TOKEN_TOO_LARGE", "Should reject JWS larger than 16KB");
 
-	let result_jwt = crypto.verify_jwt(massive, "key", { alg: "RS256" });
+	let result_jwt = crypto.verify_jwt(massive, "key", { alg: "RS256", now: 1000 });
 	assert_eq(result_jwt.error, "TOKEN_TOO_LARGE", "Should reject JWT larger than 16KB");
 });

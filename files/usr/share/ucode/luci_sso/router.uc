@@ -1,7 +1,7 @@
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
-import { parse_params } from 'luci_sso.utils';
+import { parse_params, parse_cookies } from 'luci_sso.utils';
 
 /**
  * Creates a response object.
@@ -16,10 +16,11 @@ function response(status, headers, body) {
 }
 
 /**
- * Creates an error response.
+ * Creates an error response and logs it.
  * @private
  */
-function error_response(msg, status) {
+function error_response(io, msg, status) {
+	if (io.log) io.log("error", `${status || 500}: ${msg}`);
 	return response(status || 500, ["Content-Type: text/plain"], msg);
 }
 
@@ -29,11 +30,12 @@ function error_response(msg, status) {
  */
 function handle_login(io, config) {
 	let disc_res = oidc.discover(io, config.issuer_url);
-	if (!disc_res.ok) return error_response(`OIDC Discovery failed: ${disc_res.error}`, 500);
+	if (!disc_res.ok) return error_response(io, `OIDC Discovery failed: ${disc_res.error}`, 500);
 
 	let handshake_res = session.create_state(io);
-	if (!handshake_res.ok) return error_response(`Failed to create handshake: ${handshake_res.error}`, 500);
+	if (!handshake_res.ok) return error_response(io, `Failed to create handshake: ${handshake_res.error}`, 500);
 	let handshake = handshake_res.data;
+	handshake.issuer_url = config.issuer_url;
 
 	let url = oidc.get_auth_url(io, config, disc_res.data, handshake);
 
@@ -44,53 +46,110 @@ function handle_login(io, config) {
 }
 
 /**
- * Handles the OIDC callback.
+ * Validates the raw callback request and extracts query/handshake.
+ * @private
+ */
+function validate_callback_request(io, request) {
+	let query = parse_params(request.query_string);
+	let cookies = parse_cookies(request.http_cookie);
+
+	if (!query.code) {
+		return { ok: false, error: "Missing authorization code", status: 400 };
+	}
+
+	let state_token = cookies.luci_sso_state;
+	if (!state_token) {
+		return { ok: false, error: "Missing handshake cookie (session timeout?)", status: 401 };
+	}
+
+	let handshake_res = session.verify_state(io, state_token);
+	if (!handshake_res.ok) {
+		return { ok: false, error: `Invalid handshake: ${handshake_res.error}`, status: 401 };
+	}
+
+	let handshake = handshake_res.data;
+	if (query.state != handshake.state) {
+		return { ok: false, error: "State mismatch (CSRF protection)", status: 403 };
+	}
+
+	return { ok: true, data: { code: query.code, handshake: handshake } };
+}
+
+/**
+ * Executes the full OIDC exchange and verification flow.
+ * @private
+ */
+function complete_oauth_flow(io, config, code, handshake) {
+	// 1. Discovery
+	let issuer = handshake.issuer_url || config.issuer_url;
+	let disc_res = oidc.discover(io, issuer);
+	if (!disc_res.ok) {
+		return { ok: false, error: `OIDC Discovery failed: ${disc_res.error}`, status: 500 };
+	}
+	let discovery = disc_res.data;
+
+	// 2. Exchange
+	let exchange_res = oidc.exchange_code(io, config, discovery, code, handshake.code_verifier);
+	if (!exchange_res.ok) {
+		return { ok: false, error: `Token exchange failed: ${exchange_res.error}`, status: 500 };
+	}
+	let tokens = exchange_res.data;
+
+	// 3. Verify ID Token
+	let jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri);
+	if (!jwks_res.ok) {
+		return { ok: false, error: `Failed to fetch IdP keys: ${jwks_res.error}`, status: 500 };
+	}
+
+	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake);
+	if (!verify_res.ok) {
+		return { ok: false, error: `ID Token verification failed: ${verify_res.error}`, status: 401 };
+	}
+
+	return { ok: true, data: verify_res.data };
+}
+
+/**
+ * Creates the final application session and response.
+ * @private
+ */
+function create_session_response(io, user_data) {
+	let session_res = session.create(io, user_data);
+	if (!session_res.ok) {
+		return { ok: false, error: "Failed to create application session", status: 500 };
+	}
+
+	return {
+		ok: true,
+		data: response(302, [
+			"Location: /cgi-bin/luci/",
+			`Set-Cookie: luci_sso_session=${session_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+			"Set-Cookie: luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
+		])
+	};
+}
+
+/**
+ * Handles the OIDC callback path.
  * @private
  */
 function handle_callback(io, config, request) {
-	let query = parse_params(request.query_string);
-	let cookies = parse_params(request.http_cookie, ";");
+	// 1. Validate request and handshake
+	let val_res = validate_callback_request(io, request);
+	if (!val_res.ok) return error_response(io, val_res.error, val_res.status);
+	let code = val_res.data.code;
+	let handshake = val_res.data.handshake;
 
-	if (!query.code) return error_response("Missing authorization code", 400);
+	// 2. Perform protocol exchange
+	let oauth_res = complete_oauth_flow(io, config, code, handshake);
+	if (!oauth_res.ok) return error_response(io, oauth_res.error, oauth_res.status);
+	let user_data = oauth_res.data;
 
-	// 1. Verify Handshake State Cookie
-	let state_token = cookies.luci_sso_state;
-	if (!state_token) return error_response("Missing handshake cookie (session timeout?)", 401);
+	// 3. Create session
+	let final_res = create_session_response(io, user_data);
+	if (!final_res.ok) return error_response(io, final_res.error, final_res.status);
 
-	let handshake_res = session.verify_state(io, state_token);
-	if (!handshake_res.ok) return error_response(`Invalid handshake: ${handshake_res.error}`, 401);
-	let handshake = handshake_res.data;
-
-	// 2. Validate binding
-	if (query.state != handshake.state) return error_response("State mismatch (CSRF protection)", 403);
-
-	// 3. Discovery
-	let disc_res = oidc.discover(io, config.issuer_url);
-	if (!disc_res.ok) return error_response(`OIDC Discovery failed: ${disc_res.error}`, 500);
-	let discovery = disc_res.data;
-
-	// 4. Exchange
-	let exchange_res = oidc.exchange_code(io, config, discovery, query.code, handshake.code_verifier);
-	if (!exchange_res.ok) return error_response(`Token exchange failed: ${exchange_res.error}`, 500);
-	let tokens = exchange_res.data;
-
-	// 5. Verify ID Token
-	let jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri);
-	if (!jwks_res.ok) return error_response(`Failed to fetch IdP keys: ${jwks_res.error}`, 500);
-
-	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake);
-	if (!verify_res.ok) return error_response(`ID Token verification failed: ${verify_res.error}`, 401);
-	let user_data = verify_res.data;
-
-	// 6. Session
-	let session_res = session.create(io, user_data);
-	if (!session_res.ok) return error_response("Failed to create application session", 500);
-
-	return response(302, [
-		"Location: /cgi-bin/luci/",
-		`Set-Cookie: luci_sso_session=${session_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
-		"Set-Cookie: luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
-	]);
+	return final_res.data;
 }
 
 /**
@@ -130,5 +189,5 @@ export function handle(io, config, request) {
 		return handle_logout();
 	}
 
-	return error_response("Not Found", 404);
+	return error_response(io, "Not Found", 404);
 };

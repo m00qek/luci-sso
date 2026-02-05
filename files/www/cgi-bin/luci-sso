@@ -60,11 +60,19 @@ const io = {
 		return res;
 	},
 	urlencode: lucihttp.urlencode,
-	getenv: safe_getenv
+	getenv: safe_getenv,
+	
+	/**
+	 * Logs a message to stderr (captured by system logs).
+	 */
+	log: (level, msg) => {
+		warn(`[luci-sso] [${level}] ${msg}\n`);
+	}
 };
 
 // 3. Global Error Helper
 function cgi_die(msg, status) {
+	io.log("crit", msg);
 	print(`Status: ${status || 500}\n`);
 	print(`Content-Type: text/plain\n\n`);
 	print(`${msg}\n`);

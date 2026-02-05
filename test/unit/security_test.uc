@@ -9,7 +9,10 @@ test('Security: JWT - Reject alg: none attack', () => {
 	let token = bad_header + "." + payload + "."; // No signature
 
 	// Should be rejected because options.alg is required and must match
-	let result = crypto.verify_jwt(token, "some-key", { alg: "RS256" });
+	let result = crypto.verify_jwt(token, "some-key", { 
+		alg: "RS256",
+		now: 1516239022
+	});
 	assert_eq(result.error, "ALGORITHM_MISMATCH", "Should reject alg: none mismatch");
 });
 
@@ -26,7 +29,10 @@ test('Security: JWT - Reject stripped signature', () => {
 	let parts = split(fixtures.RS256.JWT_TOKEN, ".");
 	let stripped = parts[0] + "." + parts[1] + ".";
 	
-	let result = crypto.verify_jwt(stripped, fixtures.RS256.JWT_PUBKEY, { alg: "RS256" });
+	let result = crypto.verify_jwt(stripped, fixtures.RS256.JWT_PUBKEY, { 
+		alg: "RS256",
+		now: 1516239022
+	});
 	assert_eq(result.error, "INVALID_SIGNATURE_ENCODING", "Should reject stripped signature");
 });
 

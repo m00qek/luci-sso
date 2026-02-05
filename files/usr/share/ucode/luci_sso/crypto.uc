@@ -198,6 +198,7 @@ export function verify_jwt(token, pubkey, options) {
 	if (type(token) != "string") die("CONTRACT_VIOLATION: verify_jwt expects string token");
 	if (type(pubkey) != "string") die("CONTRACT_VIOLATION: verify_jwt expects string pubkey");
 	if (type(options) != "object") die("CONTRACT_VIOLATION: verify_jwt expects object options");
+	if (type(options.now) != "int") die("CONTRACT_VIOLATION: verify_jwt expects mandatory integer options.now");
 
 	if (length(token) > MAX_TOKEN_SIZE) return { ok: false, error: "TOKEN_TOO_LARGE" };
 	if (!options.alg) return { ok: false, error: "MISSING_ALGORITHM_OPTION" };
@@ -244,7 +245,7 @@ export function verify_jwt(token, pubkey, options) {
 
 	// 6. Claims Validation
 	let skew = options.skew || 300; // Default 5 minutes
-	let now = time();
+	let now = options.now;
 
 	if (payload.exp && payload.exp < (now - skew)) {
 		return { ok: false, error: "TOKEN_EXPIRED" };
