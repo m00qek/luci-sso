@@ -1,6 +1,7 @@
 import * as math from 'math';
 
 global.testing_state = global.testing_state || { tests: [], results: [] };
+global._spec_depth = global._spec_depth || 0;
 
 const ASSERT_PREFIX = "__ASSERT__:";
 const C_RESET = "\u001b[0m", 
@@ -68,38 +69,33 @@ export function test(name, fn, type, depth) {
  */
 export function clear_tests() {
 	global.testing_state.tests = [];
+	global._spec_depth = 0;
 };
 
-// --- Specification DSL (merged from specification.uc) ---
+// --- Specification DSL ---
 
-/**
- * Defines a major action or trigger in the specification.
- */
 export function when(desc, fn) {
 	test("When " + desc, null, "header", 0);
+	let prev = global._spec_depth;
+	global._spec_depth = 1;
 	fn();
+	global._spec_depth = prev;
 };
 
-/**
- * Defines a specific condition or context.
- */
 export function and(desc, fn) {
 	test("and " + desc, null, "header", 1);
+	let prev = global._spec_depth;
+	global._spec_depth = 2;
 	fn();
+	global._spec_depth = prev;
 };
 
-/**
- * Defines an assertion that must hold true.
- */
 export function then(desc, fn) {
-	test("then " + desc, fn, "test", 2);
+	test("then " + desc, fn, "test", global._spec_depth);
 };
 
 // --- Runner Engine ---
 
-/**
- * Colors the keywords in a specification string.
- */
 function colorize_spec(str) {
 	let res = str;
 	res = replace(res, /^When /, color(C_CYAN, "When "));
@@ -108,9 +104,6 @@ function colorize_spec(str) {
 	return res;
 }
 
-/**
- * Executes a single test item and returns a result object.
- */
 function run_item(t) {
 	if (!t.fn) return { ok: true, type: "header" };
 	try {
@@ -141,12 +134,9 @@ export function run_all(suite_name) {
         print(`\n${color(C_BOLD + C_CYAN, "● Suite: " + suite_name)}\n\n`);
     }
 
-	let in_specification = false;
-
     for (let i = 0; i < length(tests); ) {
 		let t = tests[i];
 
-		// Case 1: Start of a specification (When block)
 		if (t.type == "header" && t.depth == 0 && index(t.name, "When ") == 0) {
 			let spec_results = [];
 			let all_ok = true;
@@ -174,16 +164,18 @@ export function run_all(suite_name) {
 				let status = all_ok ? color(C_GREEN, "[PASS]") : color(C_RED, "[FAIL]");
 				print(`${status} ${color(C_BOLD, colorize_spec(t.name))}\n`);
 				for (let r in spec_results) {
-					let indent = "";
+					let indent = "       "; // Align with '[PASS] '
 					for (let k = 0; k < r.item.depth; k++) indent += "  ";
 					
 					if (r.result.type == "header") {
 						print(`${indent}${color(C_BOLD, colorize_spec(r.item.name))}\n`);
 					} else if (r.result.type == "skipped") {
-						// Optionally print skipped steps
+						// Keep output clean
 					} else {
-						let s = r.result.ok ? color(C_GREEN, "[PASS]") : color(C_RED, "[FAIL]");
-						print(`${indent}${s} ${colorize_spec(r.item.name)}\n`);
+						let s = r.result.ok ? "" : color(C_RED, "[FAIL] ");
+						let line_indent = r.result.ok ? indent : substr(indent, 0, length(indent) - 7);
+						
+						print(`${line_indent}${s}${colorize_spec(r.item.name)}\n`);
 						if (!r.result.ok) {
 							let msg = r.result.failure || r.result.error;
 							print(`${indent}       ${replace(msg, /\n/g, "\n" + indent + "       ")}\n\n`);
@@ -198,7 +190,6 @@ export function run_all(suite_name) {
 			continue;
 		}
 
-		// Case 2: Standard Unit Test
 		let res = run_item(t);
 		if (res.ok) {
 			passed++;
