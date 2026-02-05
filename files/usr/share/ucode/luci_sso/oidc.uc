@@ -1,5 +1,5 @@
-import * as fs from 'fs';
 import * as uclient from 'uclient';
+import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
 
 // --- Internal Helpers ---
@@ -191,7 +191,7 @@ export function get_auth_url(io, config, discovery, params) {
 
 	for (let k, v in query) {
 		if (v == null) continue;
-		url += `${sep}${k}=${uclient.urlencode(v)}`;
+		url += `${sep}${k}=${lucihttp.urlencode(v)}`;
 		sep = '&';
 	}
 
@@ -226,7 +226,7 @@ export function exchange_code(io, config, discovery, code, verifier) {
 	let sep = "";
 	for (let k, v in body) {
 		if (v == null) continue;
-		encoded_body += `${sep}${k}=${uclient.urlencode(v)}`;
+		encoded_body += `${sep}${k}=${lucihttp.urlencode(v)}`;
 		sep = "&";
 	}
 
@@ -271,11 +271,13 @@ export function verify_id_token(io, tokens, keys, config, handshake) {
 	if (!pem_res.ok) return pem_res;
 
 	// 2. Verify Sig and Claims
-	let result = crypto.verify_jwt(tokens.id_token, pem_res.data, {
-		alg: header.alg,
-		iss: config.issuer_url,
-		aud: config.client_id
-	});
+	let validation_opts = { alg: header.alg };
+	if (!config.skip_claims) {
+		if (config.issuer_url) { validation_opts.iss = config.issuer_url; }
+		if (config.client_id) { validation_opts.aud = config.client_id; }
+	}
+
+	let result = crypto.verify_jwt(tokens.id_token, pem_res.data, validation_opts);
 
 	if (!result.ok) return result;
 

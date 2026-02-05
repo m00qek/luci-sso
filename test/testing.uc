@@ -106,7 +106,6 @@ export function run_all() {
                 }
             } else {
                 errors++;
-                // Preserve stack trace if available or use raw error string
                 let error_msg = (type(e) == "object" && e.stack) ? e.stack : err_str;
                 push(errors_list, { name: t.name, error: error_msg });
                 if (verbose) {

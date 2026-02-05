@@ -2,11 +2,10 @@
 import * as uci from 'uci';
 import * as fs from 'fs';
 import * as uclient from 'uclient';
-import * as crypto from 'luci_sso.crypto';
-import * as oidc from 'luci_sso.oidc';
-import * as session from 'luci_sso.session';
+import * as lucihttp from 'lucihttp';
+import * as router from 'luci_sso.router';
 
-// 1. Composition Root: Define the IO implementation for this environment
+// 1. Imperative Shell: Define the real I/O provider
 const io = {
 	time: time,
 	read_file: (path) => fs.readfile(path),
@@ -18,40 +17,52 @@ const io = {
 		conn.disconnect();
 		return res;
 	},
-	urlencode: uclient.urlencode,
+	http_post: (url, opts) => {
+		let conn = uclient.connect(url);
+		if (!conn) return { error: "CONNECT_FAILED" };
+		if (opts.headers) {
+			for (let k, v in opts.headers) conn.header(k, v);
+		}
+		let res = conn.request("POST", opts.body);
+		conn.disconnect();
+		return res;
+	},
+	urlencode: lucihttp.urlencode,
 	getenv: getenv
 };
 
-function die(msg, status) {
+// 2. Global Error Helper (CGI-style)
+function cgi_die(msg, status) {
 	print(`Status: ${status || 500}\n`);
 	print(`Content-Type: text/plain\n\n`);
 	print(`${msg}\n`);
 	exit(1);
 }
 
-// 2. Load Config
+// 3. Load Configuration
 const cursor = uci.cursor();
 const config = cursor.get_all("luci-sso", "default");
-if (!config) die("Configuration 'default' not found in /etc/config/luci-sso", 500);
+if (!config) cgi_die("Configuration 'default' not found in /etc/config/luci-sso", 500);
 
 const global_cfg = cursor.get_all("luci-sso", "globally");
 if (!global_cfg || global_cfg.enabled !== '1') {
-	die("SSO is disabled", 403);
+	cgi_die("SSO is disabled", 403);
 }
 
-// 3. OIDC Discovery
-const discovery = oidc.discover(io, config.issuer_url);
-if (discovery.error) die(`OIDC Discovery failed: ${discovery.error}`, 500);
+// 4. Build Request Object
+const request = {
+	path: io.getenv("PATH_INFO") || "/",
+	query_string: io.getenv("QUERY_STRING"),
+	http_cookie: io.getenv("HTTP_COOKIE")
+};
 
-// 4. Persistence & Parameter Generation
-const handshake = session.create_state(io);
-if (handshake.error) die(`Failed to create handshake: ${handshake.error}`, 500);
+// 5. Functional Core: Delegate to Router
+const res = router.handle(io, config, request);
 
-// 5. Generate Auth URL
-const url = oidc.get_auth_url(io, config, discovery.config, handshake);
-
-// 6. Redirect
-print("Status: 302 Found\n");
-print(`Location: ${url}\n`);
-print(`Set-Cookie: luci_sso_state=${handshake.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300\n`);
+// 6. Imperative Shell: Output Result
+print(`Status: ${res.status}\n`);
+for (let header in res.headers) {
+	print(`${header}\n`);
+}
 print("\n");
+print(res.body);
