@@ -1,10 +1,16 @@
-
-config sso 'globally'
+config oidc 'default'
 	option enabled '0'
-
-config provider 'default'
-	option issuer_url ''
+	option issuer_url 'https://accounts.google.com'
 	option client_id ''
 	option client_secret ''
-	option scope 'openid profile email'
 	option redirect_uri 'https://router.lan/cgi-bin/luci-sso/callback'
+
+# Map specific emails to local RPCD users
+config user
+	option rpcd_user 'admin'
+	list email 'admin@example.com'
+	list email 'owner@corp.lan'
+
+config user
+	option rpcd_user 'viewer'
+	list email 'guest@example.com'

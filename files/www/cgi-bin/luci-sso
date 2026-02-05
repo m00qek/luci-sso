@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as uclient from 'uclient';
 import * as lucihttp from 'lucihttp';
 import * as router from 'luci_sso.router';
+import * as config_loader from 'luci_sso.config';
 
 // 1. Constants & Configuration
 const MAX_RESPONSE_SIZE = 65536; // 64 KB
@@ -11,25 +12,17 @@ const MAX_ENV_SIZE = 16384;      // 16 KB
 
 /**
  * Safely reads a response body up to a hard limit.
- * @private
  */
 function safe_read_body(res) {
 	if (!res || !res.body || type(res.body.read) != "function") return res;
-
-	// Attempt to read one byte more than the limit
 	let data = res.body.read(MAX_RESPONSE_SIZE + 1);
-	
-	if (length(data) > MAX_RESPONSE_SIZE) {
-		return { error: "RESPONSE_TOO_LARGE" };
-	}
-
+	if (length(data) > MAX_RESPONSE_SIZE) return { error: "RESPONSE_TOO_LARGE" };
 	res.body = data;
 	return res;
 }
 
 /**
  * Safely retrieves an environment variable with length enforcement.
- * @private
  */
 function safe_getenv(key) {
 	let val = getenv(key);
@@ -62,13 +55,7 @@ const io = {
 	},
 	urlencode: lucihttp.urlencode,
 	getenv: safe_getenv,
-	
-	/**
-	 * Logs a message to stderr (captured by system logs).
-	 */
-	log: (level, msg) => {
-		warn(`[luci-sso] [${level}] ${msg}\n`);
-	}
+	log: (level, msg) => { warn(`[luci-sso] [${level}] ${msg}\n`); }
 };
 
 // 3. Global Error Helper
@@ -80,15 +67,17 @@ function cgi_die(msg, status) {
 	exit(1);
 }
 
-// 4. Load Configuration
+// 4. Load Configuration (UCI)
 const cursor = uci.cursor();
-const config = cursor.get_all("luci-sso", "default");
-if (!config) cgi_die("Configuration 'default' not found in /etc/config/luci-sso", 500);
+const conf_res = config_loader.load(cursor, io);
 
-const global_cfg = cursor.get_all("luci-sso", "globally");
-if (!global_cfg || global_cfg.enabled !== '1') {
-	cgi_die("SSO is disabled", 403);
+if (!conf_res.ok) {
+	if (conf_res.error === "DISABLED") {
+		cgi_die("SSO is disabled", 403);
+	}
+	cgi_die(`Configuration Error: ${conf_res.error} ${conf_res.details || ""}`, 500);
 }
+const config = conf_res.data;
 
 // 5. Build Request Object
 const request = {
