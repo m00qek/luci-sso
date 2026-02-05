@@ -7,30 +7,24 @@ find_library(MBEDX509_LIB mbedx509)
 find_library(MBEDCRYPTO_LIB mbedcrypto)
 find_library(WOLFSSL_LIB wolfssl)
 
-# Automatically find all .c files in this directory
-file(GLOB SOURCES CONFIGURE_DEPENDS "*.c")
-message(STATUS "Found sources: ${SOURCES}")
+# 1. mbedTLS Target
+if(MBEDTLS_LIB AND MBEDX509_LIB AND MBEDCRYPTO_LIB)
+    message(STATUS "mbedTLS found, adding native_mbedtls target")
+    add_library(native_mbedtls SHARED native_mbedtls.c)
+    set_target_properties(native_mbedtls PROPERTIES PREFIX "")
+    target_link_libraries(native_mbedtls ${UCODE_LIB} ${MBEDTLS_LIB} ${MBEDX509_LIB} ${MBEDCRYPTO_LIB})
+    install(TARGETS native_mbedtls DESTINATION lib/ucode)
+else()
+    message(WARNING "mbedTLS not found, skipping native_mbedtls")
+endif()
 
-foreach(SRC ${SOURCES})
-    get_filename_component(LIBNAME ${SRC} NAME_WE)
-    
-    # Create a shared library for each .c file
-    add_library(${LIBNAME} SHARED ${SRC})
-    
-    # Remove the "lib" prefix
-    set_target_properties(${LIBNAME} PROPERTIES PREFIX "")
-    
-    target_link_libraries(${LIBNAME} ${UCODE_LIB})
-
-    if(${LIBNAME} STREQUAL "native_mbedtls")
-        target_link_libraries(${LIBNAME} 
-            ${MBEDTLS_LIB}
-            ${MBEDX509_LIB}
-            ${MBEDCRYPTO_LIB}
-        )
-    elseif(${LIBNAME} STREQUAL "native_wolfssl")
-        target_link_libraries(${LIBNAME} ${WOLFSSL_LIB})
-    endif()
-    
-    install(TARGETS ${LIBNAME} DESTINATION lib/ucode)
-endforeach()
+# 2. wolfSSL Target
+if(WOLFSSL_LIB)
+    message(STATUS "wolfSSL found, adding native_wolfssl target")
+    add_library(native_wolfssl SHARED native_wolfssl.c)
+    set_target_properties(native_wolfssl PROPERTIES PREFIX "")
+    target_link_libraries(native_wolfssl ${UCODE_LIB} ${WOLFSSL_LIB})
+    install(TARGETS native_wolfssl DESTINATION lib/ucode)
+else()
+    message(WARNING "wolfSSL not found, skipping native_wolfssl")
+endif()
