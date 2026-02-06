@@ -14,16 +14,29 @@ RUNNER_IMAGE := $(RUNNER_IMAGE_BASE)-$(CRYPTO_LIB):$(SDK_ARCH)-$(SDK_VERSION)
 
 WORK_DIR := $(shell pwd)
 
-.PHONY: all prepare test watch-tests package clean
+.PHONY: all prepare prepare-builder prepare-runner test watch-tests package clean
 
 all: test
 
-prepare:
+luci:
+	@echo "Starting LuCI (User: root, Pass: admin)"
+	@docker run --rm -it \
+		-p 8080:80 \
+		-p 8443:443 \
+		-v "$(WORK_DIR):/app" \
+		$(RUNNER_IMAGE)
+
+prepare: prepare-builder prepare-runner
+
+prepare-builder:
 	echo "Building packaging container for $(SDK_ARCH)-$(SDK_VERSION)..."
 	docker build -t $(BUILDER_IMAGE) \
 		--build-arg SDK_ARCH=$(SDK_ARCH) \
 		--build-arg SDK_VERSION=$(SDK_VERSION) \
 		-f Dockerfile .
+	$(MAKE) -f dev.mk sync-headers
+
+prepare-runner:
 	for lib in $(CRYPTO_LIBS); do \
 		echo "Building development container for $(SDK_ARCH)-$(SDK_VERSION) with $$lib..."; \
 		docker build -t $(RUNNER_IMAGE_BASE)-$$lib:$(SDK_ARCH)-$(SDK_VERSION) \
@@ -32,7 +45,6 @@ prepare:
 			--build-arg PKG_DEPENDS="$(sort $(PKG_DEPENDS))" \
 			-f Dockerfile.dev . || exit 1; \
 	done
-	$(MAKE) -f dev.mk sync-headers
 
 sync-headers:
 	@echo "Syncing headers from $(BUILDER_IMAGE)..."

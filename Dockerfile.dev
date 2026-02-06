@@ -4,16 +4,89 @@ FROM ghcr.io/openwrt/rootfs:${SDK_ARCH}-${SDK_VERSION}
 
 ARG PKG_DEPENDS
 
-# 1. Update package lists
-# 2. Install dependencies from project.mk
-# 3. Install inotifywait for the watcher
+# 1. Install LuCI, ucode, and system services
 RUN mkdir -p /var/lock && \
   opkg update && \
   opkg install \
   $(echo $PKG_DEPENDS) \
-  ucode-mod-math
+  ucode-mod-math \
+  luci-light \
+  luci-mod-admin-full \
+  rpcd \
+  uhttpd \
+  luci-ssl \
+  openssl-util
+
+# 2. Set default system credentials (root:admin)
+RUN printf "admin\nadmin\n" | passwd root
+
+# 3. Create necessary system directories
+RUN mkdir -p /etc/config \
+  /usr/libexec/rpcd \
+  /var/run/ubus \
+  /var/lock \
+  /var/state \
+  /tmp/sessions \
+  /tmp/luci-modulecache
+
+# 4. Simulate hardware environment (board.json)
+RUN printf '{\
+  "model":{"id":"generic","name":"OpenWrt Container"},\
+  "board":{},\
+  "release":{"distribution":"OpenWrt","version":"24.10.5"}\
+  }' > /etc/board.json
+
+# 5. Create rpcd plugins to provide 'system' and 'board' ubus objects
+# This prevents LuCI from crashing due to missing hardware info
+RUN printf "#!/bin/sh\n\
+  case \"\$1\" in\n\
+  list) echo '{\"info\":{},\"board\":{}}' ;;\n\
+  call) echo '{\"model\":\"Docker\",\"release\":{\"distribution\":\"OpenWrt\",\"version\":\"24.10.5\"}}' ;;\nesac\n" \
+  > /usr/libexec/rpcd/system && \
+  printf "#!/bin/sh\n\
+  case \"\$1\" in\n\
+  list) echo '{\"info\":{}}' ;;\n  call) echo '{\"model\":{\"name\":\"OpenWrt Container\"}}' ;;\nesac\n" \
+  > /usr/libexec/rpcd/board && \
+  chmod +x /usr/libexec/rpcd/system /usr/libexec/rpcd/board
+
+# 6. Create the service orchestration script
+RUN printf '#!/bin/sh\n\
+  # Ensure runtime directories exist\n\
+  mkdir -p /var/run/ubus /var/lock /var/state /tmp/sessions /tmp/luci-modulecache\n\
+  \n\
+  # Generate SSL certificate in DER format for uhttpd if missing\n\
+  if [ ! -f /etc/uhttpd.crt ]; then\n\
+  openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/uhttpd.key.pem -out /etc/uhttpd.crt.pem -subj "/CN=localhost"\n\
+  openssl x509 -in /etc/uhttpd.crt.pem -outform DER -out /etc/uhttpd.crt\n\
+  openssl rsa -in /etc/uhttpd.key.pem -outform DER -out /etc/uhttpd.key\n\
+  fi\n\
+  \n\
+  # Start logd to enable logread\n\
+  /sbin/logd -S 16 & \n\
+  \n\
+  # Start the ubus message bus\n\
+  ubusd & \n\
+  sleep 1\n\
+  \n\
+  # Start rpcd (provides system data to LuCI)\n\
+  rpcd & \n\
+  sleep 1\n\
+  \n\
+  # Trigger LuCI cache refresh\n\
+  /usr/bin/luci-reload 2>/dev/null || true\n\
+  \n\
+  echo "Services started."\n\
+  echo "HTTP:  http://localhost:8080/cgi-bin/luci"\n\
+  echo "HTTPS: https://localhost:8443/cgi-bin/luci"\n\
+  \n\
+  # Run uhttpd in the background and follow logs\n\
+  uhttpd -f -p 80 -s 443 -C /etc/uhttpd.crt -K /etc/uhttpd.key -h /www -x /cgi-bin &\n\
+  exec logread -f\n' \
+  > /usr/bin/start-services && \
+  chmod +x /usr/bin/start-services
 
 # Set the working directory to /app
 WORKDIR /app
-CMD ["/bin/sh"]
 
+# Run LuCI services by default
+CMD ["/usr/bin/start-services"]
