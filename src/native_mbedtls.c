@@ -219,6 +219,13 @@ static uc_value_t *uc_mbedtls_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
     }
 
     mbedtls_rsa_context *rsa = mbedtls_pk_rsa(pk);
+    
+    // Security: Explicitly reject insecure exponents (0 and 1)
+    if (e_len == 1 && (e[0] == 0 || e[0] == 1)) {
+        mbedtls_pk_free(&pk);
+        return NULL;
+    }
+
     // mbedtls_rsa_import_raw is available in mbedtls 2.x/3.x
     // It imports N, P, Q, D, E. We only have N, E.
     if (mbedtls_rsa_import_raw(rsa, n, n_len, NULL, 0, NULL, 0, NULL, 0, e, e_len) != 0) {

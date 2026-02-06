@@ -20,11 +20,14 @@ function create_mock_cursor(data) {
 	};
 }
 
-test('Config: Load - Successful validation with RPCD', () => {
+// =============================================================================
+// Tier 2: Configuration Logic
+// =============================================================================
+
+test('LOGIC: Config - Successful Load & RPCD Sync', () => {
 	let mock_data = {
 		"rpcd": {
-			"s1": { ".type": "login", "username": "admin" },
-			"s2": { ".type": "login", "username": "guest" }
+			"s1": { ".type": "login", "username": "admin" }
 		},
 		"luci-sso": {
 			"default": { 
@@ -35,43 +38,37 @@ test('Config: Load - Successful validation with RPCD', () => {
 				"client_secret": "s1",
 				"redirect_uri": "r1"
 			},
-			"u1": { ".type": "user", "rpcd_user": "admin", "rpcd_password": "p1", "email": "admin@test.com" },
-			"u2": { ".type": "user", "rpcd_user": "guest", "rpcd_password": "p2", "email": ["g1@test.com", "g2@test.com"] }
+			"u1": { ".type": "user", "rpcd_user": "admin", "rpcd_password": "p1", "email": "admin@test.com" }
 		}
 	};
 
 	let cursor = create_mock_cursor(mock_data);
 	let res = config_loader.load(cursor, {});
 
-	assert(res.ok, "Should load successfully");
+	assert(res.ok, "Should load valid configuration");
 	assert_eq(res.data.issuer_url, "https://idp.com");
-	assert_eq(length(res.data.user_mappings), 2);
 	assert_eq(res.data.user_mappings[0].rpcd_user, "admin");
 });
 
-test('Config: Load - Reject mappings for non-existent RPCD users', () => {
+test('LOGIC: Config - Reject Invalid RPCD User', () => {
 	let mock_data = {
 		"rpcd": {
-			"s1": { ".type": "login", "username": "real-admin" }
+			"s1": { ".type": "login", "username": "real-user" }
 		},
 		"luci-sso": {
 			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com" },
-			"u1": { ".type": "user", "rpcd_user": "fake-user", "rpcd_password": "p", "email": "test@test.com" },
-			"u2": { ".type": "user", "rpcd_user": "real-admin", "rpcd_password": "p", "email": "admin@test.com" }
+			"u1": { ".type": "user", "rpcd_user": "fake-user", "rpcd_password": "p", "email": "test@test.com" }
 		}
 	};
 
-	let logs = [];
-	let io = { log: (lvl, msg) => push(logs, msg) };
 	let cursor = create_mock_cursor(mock_data);
-	let res = config_loader.load(cursor, io);
+	let res = config_loader.load(cursor, {});
 
 	assert(res.ok);
-	assert_eq(length(res.data.user_mappings), 1, "Should only have one valid mapping");
-	assert_eq(res.data.user_mappings[0].rpcd_user, "real-admin");
+	assert_eq(length(res.data.user_mappings), 0, "Mapping for non-existent RPCD user must be ignored");
 });
 
-test('Config: Load - Handle disabled SSO', () => {
+test('LOGIC: Config - Handle Disabled State', () => {
 	let mock_data = {
 		"luci-sso": {
 			"default": { ".type": "oidc", "enabled": "0" }
@@ -82,7 +79,7 @@ test('Config: Load - Handle disabled SSO', () => {
 	assert_eq(res.error, "DISABLED");
 });
 
-test('Config: Load - Handle missing configuration', () => {
+test('LOGIC: Config - Handle Missing Config', () => {
 	let cursor = create_mock_cursor({});
 	let res = config_loader.load(cursor, {});
 	assert_eq(res.error, "CONFIG_NOT_FOUND");

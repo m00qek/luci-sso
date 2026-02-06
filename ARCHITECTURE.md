@@ -39,7 +39,16 @@ To achieve "Gold Standard" security, the project enforces an exclusively HTTPS-b
 
 ---
 
-## 4. UI Integration Strategy
+## 4. Environment Resilience
+
+### HTTP Implementation: Native `uclient` with `uloop`
+The project utilizes the native `uclient` ucode module integrated with the `uloop` event loop.
+*   **Decision:** We implement a synchronous-looking wrapper in `https.uc` that leverages `uloop` to handle asynchronous HTTP events.
+*   **Why:** This approach is more performant, provides better control over SSL context initialization, and eliminates the overhead of spawning shell processes. By using the OpenWrt SDK for builds, we ensure ABI compatibility for the native module across target architectures.
+
+---
+
+## 5. UI Integration Strategy
 
 ### Modern LuCI Hook (JavaScript)
 Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not use server-side Lua templates.
@@ -49,16 +58,7 @@ Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not
 
 ---
 
-## 4. Environment Resilience
-
-### HTTP Implementation: The `uclient-fetch` Wrapper
-Due to ABI and library mismatch issues in some OpenWrt rootfs environments (specifically within Docker), the native `uclient` ucode module can be unstable.
-*   **Decision:** The CGI entry point uses a robust wrapper around the `uclient-fetch` binary.
-*   **Why:** Standalone binaries are immune to the symbol-relocation errors that often plague ucode plugins in development environments. This ensures the SSO service remains functional across a wider range of OpenWrt snapshots.
-
----
-
-## 5. Session & CSRF Handling
+## 6. Session & CSRF Handling
 
 ### UBUS Integration
 Upon a successful OIDC handshake, the service:
@@ -72,7 +72,7 @@ By creating a valid UBUS session and setting the `sysauth` cookies, modern LuCI 
 
 ---
 
-## 6. Testing Tiers
+## 7. Testing Tiers
 
 | Tier | Scope | Goal |
 | :--- | :--- | :--- |

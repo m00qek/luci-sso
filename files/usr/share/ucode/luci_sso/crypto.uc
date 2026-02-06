@@ -206,23 +206,25 @@ export function verify_jwt(token, pubkey, options) {
 	let parts = split(token, ".", 4);
 	if (length(parts) != 3) return { ok: false, error: "MALFORMED_JWT" };
 
-	// 1. Decode Header
+	// 1. Decode and Validate Header
 	let header_json = b64url_decode(parts[0]);
 	if (!header_json) return { ok: false, error: "INVALID_HEADER_ENCODING" };
-	
 	let header = safe_json(header_json);
 	if (!header || !header.alg) return { ok: false, error: "INVALID_HEADER_JSON" };
 
-	// 2. Algorithm Enforcement
+	// 2. Decode and Validate Payload Encoding (Fail Fast)
+	let payload_json = b64url_decode(parts[1]);
+	if (!payload_json) return { ok: false, error: "INVALID_PAYLOAD_ENCODING" };
+
+	// 3. Algorithm Enforcement
 	if (header.alg != options.alg) {
 		return { ok: false, error: "ALGORITHM_MISMATCH", details: `Expected ${options.alg}, got ${header.alg}` };
 	}
 
-	// 3. Decode Signature
+	// 4. Decode and Verify Signature
 	let signature = b64url_decode(parts[2]);
 	if (!signature) return { ok: false, error: "INVALID_SIGNATURE_ENCODING" };
 
-	// 4. Verify Signature
 	let signed_data = parts[0] + "." + parts[1];
 	let valid = false;
 
@@ -240,10 +242,7 @@ export function verify_jwt(token, pubkey, options) {
 
 	if (!valid) return { ok: false, error: "INVALID_SIGNATURE" };
 
-	// 5. Decode Payload
-	let payload_json = b64url_decode(parts[1]);
-	if (!payload_json) return { ok: false, error: "INVALID_PAYLOAD_ENCODING" };
-
+	// 5. Decode Payload JSON
 	let payload = safe_json(payload_json);
 	if (!payload) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
 
@@ -257,6 +256,10 @@ export function verify_jwt(token, pubkey, options) {
 	
 	if (payload.nbf && payload.nbf > (now + skew)) {
 		return { ok: false, error: "TOKEN_NOT_YET_VALID" };
+	}
+
+	if (payload.iat && payload.iat > (now + skew)) {
+		return { ok: false, error: "TOKEN_ISSUED_IN_FUTURE" };
 	}
 
 	if (options.iss && payload.iss != options.iss) {
@@ -357,6 +360,11 @@ export function jwk_to_pem(jwk) {
 		let pem = native.jwk_ec_p256_to_pem(x_bin, y_bin);
 		if (!pem) return { ok: false, error: "PEM_CONVERSION_FAILED" };
 		return { ok: true, data: pem };
+	} else if (jwk.kty == "oct") {
+		if (!jwk.k) return { ok: false, error: "MISSING_OCT_PARAM" };
+		let k_bin = b64url_decode(jwk.k);
+		if (!k_bin) return { ok: false, error: "INVALID_OCT_PARAM_ENCODING" };
+		return { ok: true, data: k_bin };
 	}
 	
 	return { ok: false, error: "UNSUPPORTED_KTY" };

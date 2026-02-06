@@ -36,7 +36,7 @@ function deep_equal(a, b) {
 
 export function assert_eq(actual, expected, msg) {
     if (!deep_equal(actual, expected)) {
-        die(`${ASSERT_PREFIX}${msg || "Equality failed"}\n      ${color(C_RED, "Expected:")} ${expected}\n      ${color(C_RED, "Actual:  ")} ${actual}`);
+        die(`${ASSERT_PREFIX}${msg || "Equality failed"}\n      ${color(C_RED, "Expected:")} ${sprintf("%J", expected)}\n      ${color(C_RED, "Actual:  ")} ${sprintf("%J", actual)}`);
     }
 };
 

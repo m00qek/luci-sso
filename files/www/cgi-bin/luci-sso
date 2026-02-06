@@ -6,7 +6,7 @@ import * as ubus from 'ubus';
 import * as lucihttp from 'lucihttp';
 import * as router from 'luci_sso.router';
 import * as config_loader from 'luci_sso.config';
-import * as https from 'luci_sso.https';
+import * as secure_http from 'luci_sso.secure_http';
 
 // 1. Constants & Configuration
 const MAX_ENV_SIZE = 16384;      // 16 KB
@@ -32,7 +32,7 @@ const io = {
 	log: function(level, msg) { warn(`[luci-sso] [${level}] ${msg}\n`); },
 
 	http_get: function(url) {
-		let res = https.request('GET', url, { timeout: 10000 });
+		let res = secure_http.request('GET', url, { timeout: 10000 });
         if (res.error) {
             this.log("error", `HTTPS GET failed for ${url}: ${res.error}`);
             return { error: "NETWORK_ERROR" };
@@ -41,7 +41,7 @@ const io = {
 	},
 
 	http_post: function(url, opts) {
-		let res = https.request('POST', url, { 
+		let res = secure_http.request('POST', url, { 
             timeout: 10000, 
             headers: opts?.headers || {},
             post_data: opts?.body 
@@ -106,4 +106,4 @@ try {
     fs.stdout.write("Status: 500 Internal Server Error\nContent-Type: text/plain\n\nRouter Crash\n");
 }
 
-sleep(0.1);
+fs.stdout.flush();

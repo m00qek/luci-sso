@@ -94,7 +94,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 
 	// Backchannel Override: The Router must talk to the IdP via the internal network,
 	// even if the Discovery document (meant for the browser) uses the public URL.
-	if (config.internal_issuer_url != config.issuer_url) {
+	if (config.issuer_url && config.internal_issuer_url != config.issuer_url) {
 		discovery.token_endpoint = replace(discovery.token_endpoint, config.issuer_url, config.internal_issuer_url);
 		discovery.jwks_uri = replace(discovery.jwks_uri, config.issuer_url, config.internal_issuer_url);
 	}
