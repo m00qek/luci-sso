@@ -1,27 +1,37 @@
 #!/bin/sh
 
-# Patch LuCI to include our SSO login script
-# Targeting modern LuCI (OpenWrt 24.10+) which uses .ut templates
+# LuCI SSO - Semantic UI Integration
+# Targeting LuCI 24.10+ (ucode templates)
 
-# 1. Patch the base header template for the bootstrap theme
-HEADER_UT="/usr/share/ucode/luci/template/themes/bootstrap/header.ut"
-
-if [ -f "$HEADER_UT" ]; then
-    if ! grep -q "luci-sso-login.js" "$HEADER_UT"; then
-        # Insert our script tag before the closing </head>
-        sed -i '/<\/head>/i \                <script src="{{ resource }}/luci-sso-login.js"></script>' "$HEADER_UT"
+# 1. CLEANUP: Remove any legacy patches from header.ut
+CLEAN_HEADER() {
+    FILE="$1"
+    if [ -f "$FILE" ]; then
+        sed -i '/luci-sso-login.js/d' "$FILE"
     fi
-fi
+}
 
-# 2. Fallback for the generic header template
-GENERIC_HEADER_UT="/usr/share/ucode/luci/template/header.ut"
-if [ -f "$GENERIC_HEADER_UT" ]; then
-    if ! grep -q "luci-sso-login.js" "$GENERIC_HEADER_UT"; then
-        sed -i '/<\/head>/i \                <script src="{{ resource }}/luci-sso-login.js"></script>' "$GENERIC_HEADER_UT"
-    fi
-fi
+CLEAN_HEADER "/usr/share/ucode/luci/template/themes/bootstrap/header.ut"
+CLEAN_HEADER "/usr/share/ucode/luci/template/header.ut"
 
-# Clear LuCI caches
+# 2. SEMANTIC PATCH: Inject into sysauth.ut
+PATCH_SYSAUTH() {
+    FILE="$1"
+    [ -f "$FILE" ] || return 0
+    
+    # Remove old patches
+    sed -i '/luci-sso-login.js/d' "$FILE"
+    
+    # NEW STRATEGY: Use ABSOLUTE PATH to ensure loading
+    sed -i "/{% include('header'.* %}/a \
+<script src=\"/luci-static/resources/luci-sso-login.js\"></script>" "$FILE"
+}
+
+# Apply to global and bootstrap-specific templates
+PATCH_SYSAUTH "/usr/share/ucode/luci/template/sysauth.ut"
+PATCH_SYSAUTH "/usr/share/ucode/luci/template/themes/bootstrap/sysauth.ut"
+
+# 3. Nuclear Cache Clear
 rm -rf /tmp/luci-modulecache/* 2>/dev/null
 rm -rf /tmp/luci-indexcache 2>/dev/null
 

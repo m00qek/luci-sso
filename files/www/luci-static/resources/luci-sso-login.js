@@ -3,110 +3,106 @@
 (function() {
     console.log("LuCI SSO: Hook loaded");
 
-    var injectionAttempts = 0;
-    var maxAttempts = 20;
+    // Use a unique ID to prevent double injection
+    var BTN_ID = 'luci-sso-login-btn';
+    var SEP_ID = 'luci-sso-separator';
 
     function injectSsoButton() {
-        // Find the visible login button
-        var loginBtn = null;
-        var buttons = document.querySelectorAll('button.cbi-button-positive, button.btn.login, .modal button');
+        // 1. Check if we already have a visible button
+        if (document.getElementById(BTN_ID)) {
+            return true;
+        }
+
+        // 2. Find the Primary Action Button
+        // We look for the "Log in" button produced by LuCI.js (not the hidden static one)
+        var primaryBtn = null;
         
-        for (var i = 0; i < buttons.length; i++) {
-            var b = buttons[i];
-            // Check if it's a "Log in" button
-            if (b.textContent.match(/Log in|Anmelden|Connexion|Entrar|Iniciar/i) || b.classList.contains('cbi-button-positive')) {
-                // Ensure it's visible or inside a modal
-                if (b.offsetWidth > 0 || b.offsetHeight > 0 || b.closest('.modal')) {
-                    loginBtn = b;
+        // Target: The positive button in the login form or modal
+        var candidates = document.querySelectorAll('.cbi-button-positive, .btn.login, button.important');
+        for (var i = 0; i < candidates.length; i++) {
+            var c = candidates[i];
+            // Ignore the hidden static form
+            if (c.offsetParent !== null || c.closest('.modal')) {
+                // Heuristic: Must be a submit-like button
+                if (c.textContent.match(/Log in|Anmelden|Login|Sign in/i) || c.classList.contains('cbi-button-apply')) {
+                    primaryBtn = c;
                     break;
                 }
             }
         }
 
-        if (!loginBtn) {
-            return false;
-        }
+        if (!primaryBtn) return false;
 
-        // Check if we already injected
-        if (document.getElementById('luci-sso-login-btn')) {
-            return true;
-        }
+        console.log("LuCI SSO: Found active login button, injecting...");
 
-        console.log("LuCI SSO: Found login button, injecting...");
-
-        // Create a separator
+        // 3. Create UI
+        var container = primaryBtn.parentNode;
+        
         var separator = document.createElement('div');
-        separator.id = 'luci-sso-separator';
+        separator.id = SEP_ID;
         separator.style.textAlign = 'center';
-        separator.style.margin = '10px 0';
+        separator.style.margin = '2px 0';
         separator.style.color = '#666';
         separator.style.fontSize = '0.9em';
         separator.textContent = '— or —';
 
-        // Create the SSO button
         var ssoBtn = document.createElement('button');
-        ssoBtn.id = 'luci-sso-login-btn';
-        
-        // Use identical classes as the original button
-        ssoBtn.className = loginBtn.className;
-        
+        ssoBtn.id = BTN_ID;
         ssoBtn.type = 'button';
+        ssoBtn.className = primaryBtn.className; 
         ssoBtn.style.width = '100%';
-        ssoBtn.style.marginTop = '0px'; 
+        ssoBtn.style.marginTop = '5px'; 
         
-        // Apply blue gradient and border-color matching the success-color pattern
-        // Success-medium: #4caf50 (Green) -> Blue equivalent: #337ab7
-        // Success-low: #81c784 (Green) -> Blue equivalent: #5bc0de
-        // Success-high: #388e3c (Green) -> Blue equivalent: #2e6da4
-        
-        ssoBtn.style.setProperty('background', 'linear-gradient(#337ab7, #5bc0de)', 'important');
+        // High-Contrast Blue Professional Style
+        ssoBtn.style.setProperty('background', 'linear-gradient(#337ab7, #2e6da4)', 'important');
         ssoBtn.style.setProperty('border-color', '#2e6da4', 'important');
         ssoBtn.style.setProperty('color', '#ffffff', 'important');
-        
+        ssoBtn.style.setProperty('text-shadow', 'none', 'important');
         ssoBtn.textContent = 'Login with SSO';
 
-        ssoBtn.onclick = function() {
+        ssoBtn.onclick = function(e) {
+            e.preventDefault();
             ssoBtn.disabled = true;
             ssoBtn.textContent = 'Redirecting...';
             window.location.href = '/cgi-bin/luci-sso';
         };
 
-        // Insert after the original login button
-        loginBtn.parentNode.insertBefore(separator, loginBtn.nextSibling);
-        separator.parentNode.insertBefore(ssoBtn, separator.nextSibling);
+        // 4. Inject
+        // Usually buttons are in a .cbi-page-actions or similar div
+        container.appendChild(separator);
+        container.appendChild(ssoBtn);
         
         return true;
     }
 
     function init() {
-        if (!document.body) {
-            setTimeout(init, 50);
-            return;
-        }
+        // Initial check
+        injectSsoButton();
 
-        console.log("LuCI SSO: Initializing observer");
-
-        // Use MutationObserver to catch LuCI's dynamic modal rendering
-        var observer = new MutationObserver(function(mutations) {
+        // Heavy-duty observer to handle LuCI.js dynamic rendering
+        var observer = new MutationObserver(function() {
             injectSsoButton();
         });
 
-        observer.observe(document.body, { childList: true, subtree: true });
+        observer.observe(document.body, { 
+            childList: true, 
+            subtree: true,
+            attributes: false
+        });
 
-        // Polling fallback
-        var pollInterval = setInterval(function() {
-            if (injectSsoButton() || ++injectionAttempts > maxAttempts) {
-                clearInterval(pollInterval);
+        // Polling as ultimate fallback
+        var attempts = 0;
+        var interval = setInterval(function() {
+            if (injectSsoButton() || ++attempts > 30) {
+                // We don't clear interval, because LuCI might re-render 
+                // if the user enters a wrong password.
             }
         }, 500);
-
-        // Immediate check
-        injectSsoButton();
     }
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        init();
-    } else {
+    if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
     }
 })();
