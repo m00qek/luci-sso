@@ -34,12 +34,43 @@ function safe_json_parse(data) {
 }
 
 /**
- * Generates a unique cache path for an issuer to avoid collisions.
+ * Generates a unique cache path for an identifier (issuer or JWKS URI).
  * @private
  */
-function get_cache_path(issuer) {
-	let h = crypto.b64url_encode(crypto.sha256(issuer));
-	return `/tmp/oidc-discovery-${substr(h, 0, 8)}.json`;
+function get_cache_path(id, prefix) {
+	let h = crypto.b64url_encode(crypto.sha256(id));
+	return `/tmp/oidc-${prefix}-${substr(h, 0, 8)}.json`;
+}
+
+/**
+ * Reads and validates a cached object.
+ * @private
+ */
+function _read_cache(io, path, ttl) {
+	try {
+		let content = io.read_file(path);
+		if (!content) return null;
+
+		let data = safe_json_parse(content);
+		if (!data || !data.cached_at) return null;
+
+		if ((io.time() - data.cached_at) > ttl) return null;
+
+		return data;
+	} catch (e) {
+		return null;
+	}
+}
+
+/**
+ * Writes data to cache with a timestamp.
+ * @private
+ */
+function _write_cache(io, path, data) {
+	try {
+		data.cached_at = io.time();
+		io.write_file(path, sprintf("%J", data));
+	} catch (e) {}
 }
 
 // --- Public API ---
@@ -52,21 +83,13 @@ export function discover(io, issuer, options) {
 	if (type(issuer) != "string") die("CONTRACT_VIOLATION: issuer must be a string");
 
 	options = options || {};
-	let cache_path = options.cache_path || get_cache_path(issuer);
+	let cache_path = options.cache_path || get_cache_path(issuer, "discovery");
 	let ttl = options.ttl || 3600;
 	
-	try {
-		let content = io.read_file(cache_path);
-		if (content) {
-			let cached = safe_json_parse(content);
-			if (cached && cached.issuer == issuer) {
-				let now = io.time();
-				if (cached.cached_at && (now - cached.cached_at) <= ttl) {
-					return { ok: true, data: cached };
-				}
-			}
-		}
-	} catch (e) {}
+	let cached = _read_cache(io, cache_path, ttl);
+	if (cached && cached.issuer == issuer) {
+		return { ok: true, data: cached };
+	}
 	
 	let discovery_url = issuer;
 	if (substr(discovery_url, -1) != '/') discovery_url += '/';
@@ -86,18 +109,26 @@ export function discover(io, issuer, options) {
 		}
 	}
 	
-	config.cached_at = io.time();
-	try { io.write_file(cache_path, sprintf("%J", config)); } catch (e) {}
+	_write_cache(io, cache_path, config);
 	
 	return { ok: true, data: config };
 };
 
 /**
- * Fetches JWK Set from IdP.
+ * Fetches JWK Set from IdP with caching.
  */
-export function fetch_jwks(io, jwks_uri) {
+export function fetch_jwks(io, jwks_uri, options) {
 	validate_io(io);
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
+
+	options = options || {};
+	let cache_path = options.cache_path || get_cache_path(jwks_uri, "jwks");
+	let ttl = options.ttl || 86400; // 24 hours default
+	
+	let cached = _read_cache(io, cache_path, ttl);
+	if (cached && type(cached.keys) == "array") {
+		return { ok: true, data: cached.keys };
+	}
 
 	let response = io.http_get(jwks_uri);
 	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
@@ -106,6 +137,8 @@ export function fetch_jwks(io, jwks_uri) {
 	let jwks = safe_json_parse(response.body);
 	if (!jwks || type(jwks.keys) != "array") return { ok: false, error: "INVALID_JWKS_FORMAT" };
 	
+	_write_cache(io, cache_path, jwks);
+
 	return { ok: true, data: jwks.keys };
 };
 

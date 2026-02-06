@@ -20,16 +20,28 @@ test('LOGIC: Discovery - Successful Fetch & Schema', () => {
     assert_eq(res.data.issuer, f.MOCK_DISCOVERY.issuer);
 });
 
-test('LOGIC: Discovery - Cache Robustness', () => {
-    let io = h.create_mock_io();
+test('LOGIC: Discovery - Cache Robustness & TTL', () => {
+    let io = h.create_mock_io(1000);
     let issuer = "https://trusted.idp";
     let cache_path = "/tmp/oidc-cache-test.json";
-    io._responses[issuer + "/.well-known/openid-configuration"] = { status: 200, body: f.MOCK_DISCOVERY };
-    oidc.discover(io, issuer, { cache_path: cache_path });
+    let url = issuer + "/.well-known/openid-configuration";
+    
+    io._responses[url] = { status: 200, body: f.MOCK_DISCOVERY };
+    oidc.discover(io, issuer, { cache_path: cache_path, ttl: 100 });
     assert(io._files[cache_path]);
+    
+    // Cache Hit
+    io._now = 1050;
     io._responses = {}; 
-    let res = oidc.discover(io, issuer, { cache_path: cache_path });
+    let res = oidc.discover(io, issuer, { cache_path: cache_path, ttl: 100 });
+    assert(res.ok, "Should hit cache");
+    
+    // Cache Expiry
+    io._now = 1200;
+    io._responses[url] = { status: 200, body: { ...f.MOCK_DISCOVERY, version: "new" } };
+    res = oidc.discover(io, issuer, { cache_path: cache_path, ttl: 100 });
     assert(res.ok);
+    assert_eq(res.data.version, "new", "Should refresh after TTL expiry");
 });
 
 test('LOGIC: Token - Successful Exchange', () => {
@@ -98,6 +110,47 @@ test('LOGIC: Mandatory Subject Claim', () => {
     let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
     let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY);
     assert_eq(res.error, "MISSING_SUB_CLAIM");
+});
+
+test('LOGIC: JWKS - Successful Fetch, Cache & TTL', () => {
+	let io = h.create_mock_io(1000);
+	let jwks_uri = "https://trusted.idp/jwks";
+	let cache_path = "/tmp/jwks-cache-test.json";
+	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
+	
+	io._responses[jwks_uri] = { status: 200, body: mock_jwks };
+	
+	let res = oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path, ttl: 3600 });
+	assert(res.ok);
+	assert_eq(res.data[0].kid, "k1");
+	
+	// Cache Hit
+	io._now = 2000;
+	io._responses = {};
+	res = oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path, ttl: 3600 });
+	assert(res.ok, "Should hit cache");
+	
+	// Cache Expiry
+	io._now = 5000;
+	io._responses[jwks_uri] = { status: 200, body: { keys: [ { kid: "k2" } ] } };
+	res = oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path, ttl: 3600 });
+	assert(res.ok);
+	assert_eq(res.data[0].kid, "k2", "Should refresh after TTL expiry");
+});
+
+test('TORTURE: JWKS - Handle Corrupted Cache', () => {
+	let io = h.create_mock_io();
+	let jwks_uri = "https://trusted.idp/jwks";
+	let cache_path = "/tmp/jwks-corrupt.json";
+	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
+	
+	// Write garbage to cache
+	io._files[cache_path] = "{ invalid json !!! }";
+	io._responses[jwks_uri] = { status: 200, body: mock_jwks };
+	
+	let res = oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path });
+	assert(res.ok, "Should fall back to network if cache is corrupted");
+	assert_eq(res.data[0].kid, "k1");
 });
 
 test('LOGIC: Split-Horizon - URL Mangle Robustness', () => {
