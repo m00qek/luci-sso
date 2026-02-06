@@ -1,6 +1,7 @@
 import { assert, assert_eq, when, and, then } from 'testing';
 import * as router from 'luci_sso.router';
 import * as crypto from 'luci_sso.crypto';
+import * as session from 'luci_sso.session';
 import * as f from 'integration.fixtures';
 
 const TEST_SECRET = "integration-test-secret-32-bytes!!!";
@@ -19,6 +20,28 @@ function create_mock_io() {
         io._files[newpath] = io._files[old];
         delete io._files[old];
         return true;
+    };
+    io.remove = function(path) {
+        delete io._files[path];
+        return true;
+    };
+    io.mkdir = function(path, mode) {
+        return true;
+    };
+    io.lsdir = function(path) {
+        let results = [];
+        let prefix = path;
+        if (substr(prefix, -1) != "/") prefix += "/";
+        for (let f in io._files) {
+            if (index(f, prefix) == 0) {
+                push(results, substr(f, length(prefix)));
+            }
+        }
+        return results;
+    };
+    io.stat = function(path) {
+        if (io._files[path] == null) return null;
+        return { mtime: io._now };
     };
     
     io.http_get = function(url) { 
@@ -100,20 +123,20 @@ when("processing the OIDC callback", () => {
 	
 	and("a valid user returns from the IdP with an honest token", () => {
 		let io = create_mock_io();
-		let state = crypto.b64url_encode(crypto.random(16));
-		let nonce = crypto.b64url_encode(crypto.random(16));
 		
-		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time());
-		let id_payload = json(crypto.b64url_decode(split(id_token, ".")[1]));
-		
-		let payload = { state: state, code_verifier: "v", nonce: id_payload.nonce, iat: io.time(), exp: io.time() + 300 };
-		let state_token = crypto.sign_jws(payload, TEST_SECRET);
+		// Initiate handshake using real session logic
+		let state_res = session.create_state(io);
+		assert(state_res.ok);
+		let handshake = state_res.data;
+		let state_token = handshake.token;
 
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
+		
 		mock_discovery(io, "https://idp.com");
 		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
 		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
 		
-		let req = { path: "/callback", query_string: `code=c&state=${state}`, http_cookie: `luci_sso_state=${state_token}` };
+		let req = { path: "/callback", query_string: `code=c&state=${handshake.state}`, http_cookie: `luci_sso_state=${state_token}` };
 		let res = router.handle(io, MOCK_CONFIG, req);
 
 		then("it should verify all claims, create a LuCI session, and redirect to the dashboard", () => {
@@ -125,19 +148,18 @@ when("processing the OIDC callback", () => {
 
     and("the user is authenticated at the IdP but NOT found in our local whitelist", () => {
         let io = create_mock_io();
-		let state = crypto.b64url_encode(crypto.random(16));
 		
-		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "unknown-user", io.time());
-		let id_payload = json(crypto.b64url_decode(split(id_token, ".")[1]));
+		let state_res = session.create_state(io);
+		assert(state_res.ok);
+		let handshake = state_res.data;
 
-		let payload = { state: state, code_verifier: "v", nonce: id_payload.nonce, iat: io.time(), exp: io.time() + 300 };
-		let state_token = crypto.sign_jws(payload, TEST_SECRET);
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "unknown-user", io.time(), handshake.nonce);
 
 		mock_discovery(io, "https://idp.com");
 		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
 		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
 		
-		let req = { path: "/callback", query_string: `code=c&state=${state}`, http_cookie: `luci_sso_state=${state_token}` };
+		let req = { path: "/callback", query_string: `code=c&state=${handshake.state}`, http_cookie: `luci_sso_state=${handshake.token}` };
         
         // Use config with NO mappings
 		let bad_config = { ...MOCK_CONFIG, user_mappings: [] };
@@ -150,11 +172,10 @@ when("processing the OIDC callback", () => {
 
     and("an attacker attempts a CSRF attack by forging the state parameter", () => {
         let io = create_mock_io();
-		let state = "honest-state";
-		let payload = { state: state, code_verifier: "v", nonce: null, iat: io.time(), exp: io.time() + 300 };
-		let state_token = crypto.sign_jws(payload, TEST_SECRET);
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
 
-		let req = { path: "/callback", query_string: "code=c&state=evil-state", http_cookie: `luci_sso_state=${state_token}` };
+		let req = { path: "/callback", query_string: "code=c&state=evil-state", http_cookie: `luci_sso_state=${handshake.token}` };
 		let res = router.handle(io, MOCK_CONFIG, req);
 
         then("it should detect the state mismatch and return a 403 Forbidden", () => {
@@ -177,14 +198,13 @@ when("processing the OIDC callback", () => {
 
     and("the network connection to the Identity Provider fails during backchannel exchange", () => {
         let io = create_mock_io();
-		let state = crypto.b64url_encode(crypto.random(16));
-		let payload = { state: state, code_verifier: "v", nonce: "n", iat: io.time(), exp: io.time() + 300 };
-		let state_token = crypto.sign_jws(payload, TEST_SECRET);
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
 
 		mock_discovery(io, "https://idp.com");
 		io._responses["https://idp.com/token"] = { error: "CONNECT_TIMEOUT" };
 		
-		let req = { path: "/callback", query_string: `code=c&state=${state}`, http_cookie: `luci_sso_state=${state_token}` };
+		let req = { path: "/callback", query_string: `code=c&state=${handshake.state}`, http_cookie: `luci_sso_state=${handshake.token}` };
 		let res = router.handle(io, MOCK_CONFIG, req);
 
         then("it should fail safely with a 500 Internal Error", () => {

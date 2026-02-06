@@ -39,7 +39,7 @@ function safe_json_parse(data) {
  */
 function get_cache_path(id, prefix) {
 	let h = crypto.b64url_encode(crypto.sha256(id));
-	return `/tmp/oidc-${prefix}-${substr(h, 0, 8)}.json`;
+	return `/var/run/luci-sso/oidc-${prefix}-${substr(h, 0, 32)}.json`;
 }
 
 /**

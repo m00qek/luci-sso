@@ -28,6 +28,10 @@ const io = {
 	read_file: function(path) { return fs.readfile(path); },
 	write_file: function(path, data) { return fs.writefile(path, data); },
 	rename: function(old, new) { return fs.rename(old, new); },
+	remove: function(path) { return fs.unlink(path); },
+	mkdir: function(path, mode) { return fs.mkdir(path, mode); },
+	lsdir: function(path) { return fs.lsdir(path); },
+	stat: function(path) { return fs.stat(path); },
 	
 	log: function(level, msg) { warn(`[luci-sso] [${level}] ${msg}\n`); },
 

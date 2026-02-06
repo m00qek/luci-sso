@@ -23,7 +23,7 @@ test('LOGIC: Discovery - Successful Fetch & Schema', () => {
 test('LOGIC: Discovery - Cache Robustness & TTL', () => {
     let io = h.create_mock_io(1000);
     let issuer = "https://trusted.idp";
-    let cache_path = "/tmp/oidc-cache-test.json";
+    let cache_path = "/var/run/luci-sso/oidc-cache-test.json";
     let url = issuer + "/.well-known/openid-configuration";
     
     io._responses[url] = { status: 200, body: f.MOCK_DISCOVERY };
@@ -115,7 +115,7 @@ test('LOGIC: Mandatory Subject Claim', () => {
 test('LOGIC: JWKS - Successful Fetch, Cache & TTL', () => {
 	let io = h.create_mock_io(1000);
 	let jwks_uri = "https://trusted.idp/jwks";
-	let cache_path = "/tmp/jwks-cache-test.json";
+	let cache_path = "/var/run/luci-sso/jwks-cache-test.json";
 	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
 	
 	io._responses[jwks_uri] = { status: 200, body: mock_jwks };
@@ -141,7 +141,7 @@ test('LOGIC: JWKS - Successful Fetch, Cache & TTL', () => {
 test('TORTURE: JWKS - Handle Corrupted Cache', () => {
 	let io = h.create_mock_io();
 	let jwks_uri = "https://trusted.idp/jwks";
-	let cache_path = "/tmp/jwks-corrupt.json";
+	let cache_path = "/var/run/luci-sso/jwks-corrupt.json";
 	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
 	
 	// Write garbage to cache

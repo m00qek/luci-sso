@@ -38,6 +38,32 @@ export function create_mock_io(now) {
         delete io._files[old];
         return true;
     };
+
+    io.remove = function(path) {
+        delete io._files[path];
+        return true;
+    };
+
+    io.mkdir = function(path, mode) {
+        return true;
+    };
+
+    io.lsdir = function(path) {
+        let results = [];
+        let prefix = path;
+        if (substr(prefix, -1) != "/") prefix += "/";
+        for (let f in io._files) {
+            if (index(f, prefix) == 0) {
+                push(results, substr(f, length(prefix)));
+            }
+        }
+        return results;
+    };
+
+    io.stat = function(path) {
+        if (io._files[path] == null) return null;
+        return { mtime: io._now }; // Simpler: use io._now as mtime
+    };
     
     io.http_get = function(url) {
         let res = io._responses[url] || { status: 404, body: "" };

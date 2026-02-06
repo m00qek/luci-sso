@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# LuCI SSO - System Setup
+# Create secure directory for OIDC discovery and JWKS caching.
+
+CACHE_DIR="/var/run/luci-sso"
+
+mkdir -p "$CACHE_DIR"
+chown root:root "$CACHE_DIR"
+chmod 0700 "$CACHE_DIR"
+
+exit 0
