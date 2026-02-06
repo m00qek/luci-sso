@@ -1,0 +1,68 @@
+services:
+  luci:
+    build:
+      context: ..
+      dockerfile: devenv/runner/Dockerfile
+      args:
+        SDK_ARCH: x86-64
+        SDK_VERSION: ${SDK_VERSION:-24.10.5}
+        PKG_DEPENDS: "${PKG_DEPENDS}"
+    ports:
+      - "8443:443"
+    environment:
+      - CRYPTO_LIB=${CRYPTO_LIB:-mbedtls}
+      - SDK_VERSION=${SDK_VERSION:-24.10.5}
+    stop_grace_period: 3s
+    volumes:
+      - ../files/usr/share/ucode/luci_sso:/usr/share/ucode/luci_sso:ro
+      - ../files/www/cgi-bin/luci-sso:/www/cgi-bin/luci-sso:ro
+      - ../files/www/luci-static/resources/luci-sso-login.js:/www/luci-static/resources/luci-sso-login.js:ro
+      - ../files/etc/uci-defaults/99-luci-sso-ui:/etc/uci-defaults/99-luci-sso-ui:ro
+      - ./idp/config/luci-sso:/etc/config/luci-sso:ro
+      - ../bin/lib/${CRYPTO_LIB:-mbedtls}/luci_sso/native.so:/usr/lib/ucode/luci_sso/native.so:ro
+      - ./.pki:/etc/ssl/certs:ro
+    depends_on:
+      pki-gen:
+        condition: service_completed_successfully
+    networks:
+      - sso-net
+
+  idp:
+    build:
+      context: ./idp
+    environment:
+      - PUBLIC_ISSUER=https://localhost:5556
+    stop_grace_period: 3s
+    volumes:
+      - ./.pki:/etc/luci-sso/certs:ro
+    depends_on:
+      pki-gen:
+        condition: service_completed_successfully
+    networks:
+      - sso-net
+    ports:
+      - "5556:5556"
+
+  # Unified PKI Generator using NIST P-256 (ECC)
+  pki-gen:
+    image: alpine:latest
+    volumes:
+      - ./.pki:/out
+    command: >
+      sh -c "if [ -f /out/rootCA.crt ]; then exit 0; fi; 
+      apk add --no-cache -q openssl && 
+      openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 -out /out/rootCA.key >/dev/null 2>&1 && 
+      openssl req -x509 -new -nodes -key /out/rootCA.key -sha256 -days 1024 -out /out/rootCA.crt -subj '/CN=LuCI SSO Dev CA' >/dev/null 2>&1 && 
+      openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 -out /out/idp.key >/dev/null 2>&1 && 
+      openssl req -new -key /out/idp.key -out /out/idp.csr -subj '/CN=idp' >/dev/null 2>&1 && 
+      printf 'subjectAltName = DNS:idp, DNS:localhost' > /out/idp.ext && 
+      openssl x509 -req -in /out/idp.csr -CA /out/rootCA.crt -CAkey /out/rootCA.key -CAcreateserial -out /out/idp.crt -days 500 -sha256 -extfile /out/idp.ext >/dev/null 2>&1 && 
+      openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:prime256v1 -out /out/luci.key >/dev/null 2>&1 && 
+      openssl req -new -key /out/luci.key -out /out/luci.csr -subj '/CN=localhost' >/dev/null 2>&1 && 
+      printf 'subjectAltName = DNS:localhost' > /out/luci.ext && 
+      openssl x509 -req -in /out/luci.csr -CA /out/rootCA.crt -CAkey /out/rootCA.key -CAcreateserial -out /out/luci.crt -days 500 -sha256 -extfile /out/luci.ext >/dev/null 2>&1 && 
+      chmod 644 /out/rootCA.crt /out/rootCA.key /out/idp.crt /out/idp.key /out/luci.crt /out/luci.key"
+
+networks:
+  sso-net:
+    driver: bridge

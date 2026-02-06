@@ -1,0 +1,13 @@
+config oidc 'default'
+	option enabled '1'
+	option issuer_url 'https://localhost:5556'
+	option internal_issuer_url 'https://idp:5556'
+	option client_id 'luci-router'
+	option client_secret 'secret-key-123'
+	option redirect_uri 'https://localhost:8443/cgi-bin/luci-sso/callback'
+	option scope 'openid profile email'
+
+config user
+	list email 'admin@example.com'
+	option rpcd_user 'root'
+	option rpcd_password 'admin'

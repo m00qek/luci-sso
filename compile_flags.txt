@@ -1,4 +1,7 @@
--I.include
--I.include/ucode
+-Idevenv/.include
+-Idevenv/.include/ucode
+-Idevenv/.include/json-c
 -Wall
 -Wextra
+-Werror
+-std=gnu99
