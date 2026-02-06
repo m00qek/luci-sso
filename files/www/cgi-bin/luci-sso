@@ -1,73 +1,68 @@
 #!/usr/bin/ucode
 import * as uci from 'uci';
 import * as fs from 'fs';
+import * as uclient from 'uclient';
 import * as ubus from 'ubus';
 import * as lucihttp from 'lucihttp';
 import * as router from 'luci_sso.router';
 import * as config_loader from 'luci_sso.config';
+import * as https from 'luci_sso.https';
+
+// 1. Constants & Configuration
+const MAX_ENV_SIZE = 16384;      // 16 KB
 
 /**
- * HTTP helper using uclient-fetch binary.
+ * Safely retrieves an environment variable with length enforcement.
  */
-function fetch_http(method, url, opts, io) {
-	let out_path = '/tmp/uclient.out';
-	let err_path = '/tmp/uclient.err';
-	let cmd = ['uclient-fetch', '-O', out_path, '--timeout=10'];
-	
-	if (opts?.headers) {
-		for (let k, v in opts.headers) {
-			push(cmd, `--header=${k}: ${v}`);
-		}
-	}
-
-	if (method === 'POST' && opts?.body) {
-		push(cmd, `--post-data=${opts.body}`);
-	}
-
-	// SSL Trust for Development
-	if (io?.idp_cert && index(url, 'https://') == 0) {
-		push(cmd, `--ca-certificate=${io.idp_cert}`);
-	}
-
-	push(cmd, url);
-
-	let full_cmd = join(' ', map(cmd, (c) => `"${replace(c, /"/g, '\\"')}"`)) + ` 2>${err_path}`;
-	let res = system(full_cmd);
-
-	let body = fs.readfile(out_path);
-	let err = fs.readfile(err_path);
-	fs.unlink(out_path);
-	fs.unlink(err_path);
-
-	if (res !== 0) {
-		io.log("error", "HTTP FETCH FAILED: " + err);
-		return { error: "FETCH_FAILED", details: err };
-	}
-
-	return {
-		status: 200,
-		body: trim(body || "")
-	};
+function safe_getenv(key) {
+	let val = getenv(key);
+	if (val && length(val) > MAX_ENV_SIZE) return null;
+	return val;
 }
+
+// 2. Imperative Shell: Define the real I/O provider
+let _ubus_conn = null;
 
 const io = {
 	time: time,
-	read_file: (path) => fs.readfile(path),
-	write_file: (path, data) => fs.writefile(path, data),
-	rename: (old, new) => fs.rename(old, new),
-	log: (level, msg) => { warn(`[luci-sso] [${level}] ${msg}\n`); },
-	http_get: function(url) { return fetch_http('GET', url, null, this); },
-	http_post: function(url, opts) { return fetch_http('POST', url, opts, this); },
-	urlencode: lucihttp.urlencode,
-	getenv: getenv,
-	ubus_call: (obj, method, args) => {
-		let conn = ubus.connect();
-		if (!conn) return null;
-		let res = conn.call(obj, method, args);
-		return res;
+	read_file: function(path) { return fs.readfile(path); },
+	write_file: function(path, data) { return fs.writefile(path, data); },
+	rename: function(old, new) { return fs.rename(old, new); },
+	
+	log: function(level, msg) { warn(`[luci-sso] [${level}] ${msg}\n`); },
+
+	http_get: function(url) {
+		let res = https.request('GET', url, { timeout: 10000 });
+        if (res.error) {
+            this.log("error", `HTTPS GET failed for ${url}: ${res.error}`);
+            return { error: "NETWORK_ERROR" };
+        }
+        return { status: res.status, body: res.body };
 	},
-	// Dev Cert Path (Trust the common Root CA)
-	idp_cert: "/etc/luci-sso/certs/rootCA.crt"
+
+	http_post: function(url, opts) {
+		let res = https.request('POST', url, { 
+            timeout: 10000, 
+            headers: opts?.headers || {},
+            post_data: opts?.body 
+        });
+        if (res.error) {
+            this.log("error", `HTTPS POST failed for ${url}: ${res.error}`);
+            return { error: "NETWORK_ERROR" };
+        }
+        return { status: res.status, body: res.body };
+	},
+
+	urlencode: lucihttp.urlencode,
+	getenv: safe_getenv,
+	
+	ubus_call: function(obj, method, args) {
+		if (!_ubus_conn) {
+			_ubus_conn = ubus.connect();
+			if (!_ubus_conn) return null;
+		}
+		return _ubus_conn.call(obj, method, args);
+	}
 };
 
 const cursor = uci.cursor();
@@ -85,6 +80,7 @@ try {
     }
 
     const res = router.handle(io, config.data, request);
+    let output = "";
 
     if (res.status == 302) {
         let loc = "";
@@ -92,20 +88,22 @@ try {
             if (index(h, "Location:") == 0) loc = trim(substr(h, 10));
         }
         
-        fs.stdout.write("Status: 302 Found\n");
-        for (let i, h in res.headers) fs.stdout.write(h + "\n");
-        fs.stdout.write("Content-Type: text/html\n\n");
-        fs.stdout.write('<html><head><script>window.location.href="' + loc + '";</script></head>');
-        fs.stdout.write('<body><p>Redirecting to <a href="' + loc + '">' + loc + '</a>...</p></body></html>\n');
+        output += "Status: 302 Found\n";
+        for (let i, h in res.headers) output += h + "\n";
+        output += "Content-Type: text/html\n\n";
+        output += '<html><head><script>window.location.href="' + loc + '";</script></head>';
+        output += '<body><p>Redirecting to <a href="' + loc + '">' + loc + '</a>...</p></body></html>\n';
     } else {
-        if (res.status != 200) fs.stdout.write("Status: " + res.status + "\n");
-        for (let i, h in res.headers) fs.stdout.write(h + "\n");
-        fs.stdout.write("\n");
-        fs.stdout.write(res.body || "");
+        if (res.status != 200) output += "Status: " + res.status + "\n";
+        for (let i, h in res.headers) output += h + "\n";
+        output += "\n";
+        output += (res.body || "");
     }
+
+    fs.stdout.write(output);
 } catch (e) {
-    warn("[luci-sso] Router crash: " + e + "\n");
-    fs.stdout.write("Status: 500 Internal Server Error\nContent-Type: text/plain\n\nError: " + e + "\n");
+    warn("[luci-sso] Router crash: " + e + "\n" + e.stacktrace + "\n");
+    fs.stdout.write("Status: 500 Internal Server Error\nContent-Type: text/plain\n\nRouter Crash\n");
 }
 
 sleep(0.1);

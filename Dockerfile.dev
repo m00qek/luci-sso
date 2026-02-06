@@ -5,18 +5,22 @@ FROM ghcr.io/openwrt/rootfs:${SDK_ARCH}-${SDK_VERSION}
 ARG PKG_DEPENDS
 
 # 1. Install LuCI, ucode, and system services
+# CRITICAL: We force-reinstall ucode and libucode to ensure the binary 
+# supports dynamic symbol export, fixing the uclient module failure.
 RUN mkdir -p /var/lock && \
   opkg update && \
-  opkg install \
+  opkg install --force-reinstall \
+  ucode \
+  libucode20230711 \
   $(echo $PKG_DEPENDS) \
   ucode-mod-math \
+  ucode-mod-uloop \
   luci-light \
   luci-mod-admin-full \
   rpcd \
   uhttpd \
   luci-ssl \
-  openssl-util && \
-  opkg upgrade libucode ucode ucode-mod-fs ucode-mod-ubus ucode-mod-uci ucode-mod-uclient
+  openssl-util
 
 # 2. Set default system credentials (root:admin)
 RUN printf "admin\nadmin\n" | passwd root
@@ -54,6 +58,13 @@ RUN printf "#!/bin/sh\n\
 RUN printf '#!/bin/sh\n\
   # Ensure runtime directories exist\n\
   mkdir -p /var/run/ubus /var/lock /var/state /tmp/sessions /tmp/luci-modulecache /etc/luci-sso/certs\n\
+  chmod 700 /etc/luci-sso\n\
+  \n\
+  # Map "idp" to internal IP if reachable\n\
+  IDP_IP=$(getent hosts idp | awk "{print \$1}")\n\
+  if [ -n "$IDP_IP" ]; then\n\
+    echo "$IDP_IP idp.local" >> /etc/hosts\n\
+  fi\n\
   \n\
   # Auto-install project files from /app/files if present\n\
   if [ -d /app/files ]; then\n\

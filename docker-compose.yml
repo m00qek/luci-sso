@@ -8,15 +8,15 @@ services:
       args:
         SDK_ARCH: x86-64
         SDK_VERSION: 24.10.5
-        PKG_DEPENDS: "liblucihttp-ucode libmbedtls libucode libwolfssl ucode ucode-mod-fs ucode-mod-math ucode-mod-ubus ucode-mod-uci ucode-mod-uclient"
+        PKG_DEPENDS: "liblucihttp-ucode libmbedtls libucode libwolfssl ucode ucode-mod-fs ucode-mod-math ucode-mod-uloop ucode-mod-ubus ucode-mod-uci ucode-mod-uclient"
     ports:
-      - "8080:80"
       - "8443:443"
     environment:
       - CRYPTO_LIB=${CRYPTO_LIB:-mbedtls}
     volumes:
       - .:/app
-      - certs:/etc/luci-sso/certs:ro
+      # Mount the Dev CA into the SYSTEM trust store location
+      - certs:/etc/ssl/certs:ro
     depends_on:
       pki-gen:
         condition: service_completed_successfully
@@ -55,8 +55,7 @@ services:
       openssl req -new -key /out/luci.key -out /out/luci.csr -subj '/CN=localhost' &&
       printf 'subjectAltName = DNS:localhost' > /out/luci.ext &&
       openssl x509 -req -in /out/luci.csr -CA /out/rootCA.crt -CAkey /out/rootCA.key -CAcreateserial -out /out/luci.crt -days 500 -sha256 -extfile /out/luci.ext &&
-      chmod 644 /out/rootCA.crt /out/idp.crt /out/luci.crt &&
-      chmod 644 /out/rootCA.key /out/idp.key /out/luci.key &&
+      chmod 644 /out/*.crt /out/*.key &&
       ls -la /out/"
 
 volumes:
