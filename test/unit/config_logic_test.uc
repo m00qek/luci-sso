@@ -84,3 +84,14 @@ test('LOGIC: Config - Handle Missing Config', () => {
 	let res = config_loader.load(cursor, {});
 	assert_eq(res.error, "CONFIG_NOT_FOUND");
 });
+
+test('LOGIC: Config - Reject Missing Issuer URL', () => {
+	let mock_data = {
+		"luci-sso": {
+			"default": { ".type": "oidc", "enabled": "1" }
+		}
+	};
+	let cursor = create_mock_cursor(mock_data);
+	let res = config_loader.load(cursor, {});
+	assert_eq(res.error, "MISSING_ISSUER_URL");
+});

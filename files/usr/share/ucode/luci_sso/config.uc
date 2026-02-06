@@ -34,7 +34,11 @@ export function load(cursor, io) {
 	}
 
 	// 2.1 HTTPS Enforcement
-	let issuer = oidc_cfg.issuer_url || "";
+	let issuer = oidc_cfg.issuer_url;
+	if (!issuer) {
+		return { ok: false, error: "MISSING_ISSUER_URL" };
+	}
+
 	let is_localhost = (index(issuer, "://localhost") > 0 || index(issuer, "://127.0.0.1") > 0);
 	if (substr(issuer, 0, 8) !== "https://" && !is_localhost) {
 		return { ok: false, error: "INSECURE_ISSUER", details: "issuer_url must use HTTPS" };

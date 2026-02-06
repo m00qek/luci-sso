@@ -262,11 +262,11 @@ export function verify_jwt(token, pubkey, options) {
 		return { ok: false, error: "TOKEN_ISSUED_IN_FUTURE" };
 	}
 
-	if (options.iss && payload.iss != options.iss) {
+	if (options.iss && payload.iss !== options.iss) {
 		return { ok: false, error: "ISSUER_MISMATCH" };
 	}
 
-	if (options.aud && payload.aud != options.aud) {
+	if (options.aud && payload.aud !== options.aud) {
 		return { ok: false, error: "AUDIENCE_MISMATCH" };
 	}
 

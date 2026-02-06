@@ -36,7 +36,6 @@ function handle_login(io, config) {
 	let handshake_res = session.create_state(io);
 	if (!handshake_res.ok) return error_response(io, `Failed to create handshake: ${handshake_res.error}`, 500);
 	let handshake = handshake_res.data;
-	handshake.issuer_url = config.issuer_url;
 
 	let url = oidc.get_auth_url(io, config, disc_res.data, handshake);
 
@@ -85,8 +84,7 @@ function validate_callback_request(io, request) {
  * @private
  */
 function complete_oauth_flow(io, config, code, handshake) {
-	let issuer = handshake.issuer_url || config.internal_issuer_url;
-	let disc_res = oidc.discover(io, issuer);
+	let disc_res = oidc.discover(io, config.internal_issuer_url);
 	if (!disc_res.ok) {
 		return { ok: false, error: `OIDC Discovery failed: ${disc_res.error}`, status: 500 };
 	}
@@ -94,7 +92,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 
 	// Backchannel Override: The Router must talk to the IdP via the internal network,
 	// even if the Discovery document (meant for the browser) uses the public URL.
-	if (config.issuer_url && config.internal_issuer_url != config.issuer_url) {
+	if (config.internal_issuer_url != config.issuer_url) {
 		discovery.token_endpoint = replace(discovery.token_endpoint, config.issuer_url, config.internal_issuer_url);
 		discovery.jwks_uri = replace(discovery.jwks_uri, config.issuer_url, config.internal_issuer_url);
 	}

@@ -1,7 +1,7 @@
 import { assert, assert_eq, when, and, then } from 'testing';
 import * as router from 'luci_sso.router';
 import * as crypto from 'luci_sso.crypto';
-import * as f from 'unit.tier1_fixtures';
+import * as f from 'integration.fixtures';
 
 const TEST_SECRET = "integration-test-secret-32-bytes!!!";
 
@@ -47,9 +47,9 @@ function create_mock_io() {
 }
 
 const MOCK_CONFIG = {
-	issuer_url: null,
+	issuer_url: "https://idp.com",
     internal_issuer_url: "https://idp.com",
-	client_id: null,
+	client_id: "luci-app",
 	client_secret: "secret123",
 	redirect_uri: "http://router/callback",
 	alg: "RS256",
@@ -59,17 +59,11 @@ const MOCK_CONFIG = {
 	]
 };
 
-const RS256_JWK = {
-	kty: "RSA",
-	n: "q0g5x3uxj4F9zmlMbadqN8rJpdebwZL2iMNFmaBCBLRX3neuHobGuMh16Wgt5NiW8-rD_2du7uA76nmUzoUBt3nF5LMtngFGJXFRpy6srKne5Ch9g4RZZrQA5VvE_Rviv3XQ7YbXZe55pRcvNjcxwSIKTGfAw4p1jUu1ty4sg0jVJsPAnp6EOIq7euWpqIRkyxT94VR_QQO9mLcjjuO7ta_ahC8pbGOOIOk7AtCd_KV56tk1Tid5iaYV8RIhXSDeef9q7-L9DY6pK1Mx2Yu8SdPkhgj5kswoqnQWwViDUZAw59eos6Hrbhdh4aFg9mUQm-qCNLXxScFg-X7xcW91pQ",
-	e: "AQAB"
-};
-
 function mock_discovery(io, issuer) {
 	io._responses[issuer + "/.well-known/openid-configuration"] = {
 		status: 200,
 		body: { 
-			issuer: null, 
+			issuer: issuer, 
 			authorization_endpoint: issuer + "/auth",
 			token_endpoint: issuer + "/token",
 			jwks_uri: issuer + "/jwks"
@@ -107,12 +101,17 @@ when("processing the OIDC callback", () => {
 	and("a valid user returns from the IdP with an honest token", () => {
 		let io = create_mock_io();
 		let state = crypto.b64url_encode(crypto.random(16));
-		let payload = { state: state, code_verifier: "v", nonce: null, issuer_url: "https://idp.com", iat: io.time(), exp: io.time() + 300 };
+		let nonce = crypto.b64url_encode(crypto.random(16));
+		
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time());
+		let id_payload = json(crypto.b64url_decode(split(id_token, ".")[1]));
+		
+		let payload = { state: state, code_verifier: "v", nonce: id_payload.nonce, iat: io.time(), exp: io.time() + 300 };
 		let state_token = crypto.sign_jws(payload, TEST_SECRET);
 
 		mock_discovery(io, "https://idp.com");
-		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: f.PLUMBING_RSA.token } };
-		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ RS256_JWK ] } };
+		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
+		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
 		
 		let req = { path: "/callback", query_string: `code=c&state=${state}`, http_cookie: `luci_sso_state=${state_token}` };
 		let res = router.handle(io, MOCK_CONFIG, req);
@@ -127,12 +126,16 @@ when("processing the OIDC callback", () => {
     and("the user is authenticated at the IdP but NOT found in our local whitelist", () => {
         let io = create_mock_io();
 		let state = crypto.b64url_encode(crypto.random(16));
-		let payload = { state: state, code_verifier: "v", nonce: null, issuer_url: "https://idp.com", iat: io.time(), exp: io.time() + 300 };
+		
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "unknown-user", io.time());
+		let id_payload = json(crypto.b64url_decode(split(id_token, ".")[1]));
+
+		let payload = { state: state, code_verifier: "v", nonce: id_payload.nonce, iat: io.time(), exp: io.time() + 300 };
 		let state_token = crypto.sign_jws(payload, TEST_SECRET);
 
 		mock_discovery(io, "https://idp.com");
-		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: f.PLUMBING_RSA.token } };
-		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ RS256_JWK ] } };
+		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
+		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
 		
 		let req = { path: "/callback", query_string: `code=c&state=${state}`, http_cookie: `luci_sso_state=${state_token}` };
         
@@ -148,7 +151,7 @@ when("processing the OIDC callback", () => {
     and("an attacker attempts a CSRF attack by forging the state parameter", () => {
         let io = create_mock_io();
 		let state = "honest-state";
-		let payload = { state: state, code_verifier: "v", nonce: null, issuer_url: "https://idp.com", iat: io.time(), exp: io.time() + 300 };
+		let payload = { state: state, code_verifier: "v", nonce: null, iat: io.time(), exp: io.time() + 300 };
 		let state_token = crypto.sign_jws(payload, TEST_SECRET);
 
 		let req = { path: "/callback", query_string: "code=c&state=evil-state", http_cookie: `luci_sso_state=${state_token}` };
@@ -175,7 +178,7 @@ when("processing the OIDC callback", () => {
     and("the network connection to the Identity Provider fails during backchannel exchange", () => {
         let io = create_mock_io();
 		let state = crypto.b64url_encode(crypto.random(16));
-		let payload = { state: state, code_verifier: "v", nonce: null, issuer_url: "https://idp.com", iat: io.time(), exp: io.time() + 300 };
+		let payload = { state: state, code_verifier: "v", nonce: "n", iat: io.time(), exp: io.time() + 300 };
 		let state_token = crypto.sign_jws(payload, TEST_SECRET);
 
 		mock_discovery(io, "https://idp.com");

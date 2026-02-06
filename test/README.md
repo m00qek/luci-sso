@@ -13,6 +13,9 @@ We use a tiered approach to:
 2.  **Ensure Mathematical Honesty:** Prove the C-backend matches OpenSSL results bit-for-bit.
 3.  **Adversarial Defense:** Proactively test "Paranoid" scenarios like signature malleability, key confusion, and future-dated tokens.
 
+### **Mandatory Isolation Rule**
+**FIXTURE ISOLATION**: Each tier MUST define its own fixtures or use its own generation helpers. **CROSS-TIER FIXTURE IMPORTS ARE FORBIDDEN.** This ensures that a change in one tier's data requirements does not cause cascading failures in unrelated tiers.
+
 ---
 
 ## **The Tiers**
