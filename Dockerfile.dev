@@ -15,13 +15,15 @@ RUN mkdir -p /var/lock && \
   rpcd \
   uhttpd \
   luci-ssl \
-  openssl-util
+  openssl-util && \
+  opkg upgrade libucode ucode ucode-mod-fs ucode-mod-ubus ucode-mod-uci ucode-mod-uclient
 
 # 2. Set default system credentials (root:admin)
 RUN printf "admin\nadmin\n" | passwd root
 
 # 3. Create necessary system directories
 RUN mkdir -p /etc/config \
+  /etc/luci-sso/certs \
   /usr/libexec/rpcd \
   /var/run/ubus \
   /var/lock \
@@ -37,7 +39,6 @@ RUN printf '{\
   }' > /etc/board.json
 
 # 5. Create rpcd plugins to provide 'system' and 'board' ubus objects
-# This prevents LuCI from crashing due to missing hardware info
 RUN printf "#!/bin/sh\n\
   case \"\$1\" in\n\
   list) echo '{\"info\":{},\"board\":{}}' ;;\n\
@@ -52,36 +53,60 @@ RUN printf "#!/bin/sh\n\
 # 6. Create the service orchestration script
 RUN printf '#!/bin/sh\n\
   # Ensure runtime directories exist\n\
-  mkdir -p /var/run/ubus /var/lock /var/state /tmp/sessions /tmp/luci-modulecache\n\
+  mkdir -p /var/run/ubus /var/lock /var/state /tmp/sessions /tmp/luci-modulecache /etc/luci-sso/certs\n\
   \n\
-  # Generate SSL certificate in DER format for uhttpd if missing\n\
-  if [ ! -f /etc/uhttpd.crt ]; then\n\
-  openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/uhttpd.key.pem -out /etc/uhttpd.crt.pem -subj "/CN=localhost"\n\
-  openssl x509 -in /etc/uhttpd.crt.pem -outform DER -out /etc/uhttpd.crt\n\
-  openssl rsa -in /etc/uhttpd.key.pem -outform DER -out /etc/uhttpd.key\n\
+  # Auto-install project files from /app/files if present\n\
+  if [ -d /app/files ]; then\n\
+    echo "Installing project files to system root..."\n\
+    cp -r /app/files/* / 2>/dev/null\n\
+    chmod +x /www/cgi-bin/luci-sso 2>/dev/null\n\
+    chmod +x /etc/uci-defaults/* 2>/dev/null\n\
   fi\n\
   \n\
-  # Start logd to enable logread\n\
-  /sbin/logd -S 16 & \n\
+  # Auto-install native crypto backend if CRYPTO_LIB is set\n\
+  if [ -n "$CRYPTO_LIB" ] && [ -d "/app/bin/lib/$CRYPTO_LIB" ]; then\n\
+    echo "Installing native crypto backend ($CRYPTO_LIB)..."\n\
+    mkdir -p /usr/lib/ucode\n\
+    cp -r /app/bin/lib/$CRYPTO_LIB/* /usr/lib/ucode/ 2>/dev/null\n\
+  fi\n\
   \n\
-  # Start the ubus message bus\n\
+  # Setup SSL for uhttpd (Prefer PKI-generated certs if available)\n\
+  if [ -f /etc/luci-sso/certs/luci.crt ]; then\n\
+    echo "Using PKI-generated certificates for LuCI..."\n\
+    cp /etc/luci-sso/certs/luci.crt /etc/uhttpd.crt\n\
+    cp /etc/luci-sso/certs/luci.key /etc/uhttpd.key\n\
+  elif [ ! -f /etc/uhttpd.crt ]; then\n\
+    echo "Generating temporary self-signed certificate for LuCI..."\n\
+    openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout /etc/uhttpd.key.pem -out /etc/uhttpd.crt.pem -subj "/CN=localhost"\n\
+    openssl x509 -in /etc/uhttpd.crt.pem -outform DER -out /etc/uhttpd.crt\n\
+    openssl rsa -in /etc/uhttpd.key.pem -outform DER -out /etc/uhttpd.key\n\
+  fi\n\
+  \n\
+  # Start services\n\
+  /sbin/logd -S 16 & \n\
   ubusd & \n\
   sleep 1\n\
   \n\
-  # Start rpcd (provides system data to LuCI)\n\
+  if [ -d /etc/uci-defaults ]; then\n\
+    for i in /etc/uci-defaults/*; do\n\
+      if [ -f "$i" ]; then\n\
+        echo "Running $i..."\n\
+        ( . "$i" ) && rm -f "$i"\n\
+      fi\n\
+    done\n\
+  fi\n\
+  \n\
   rpcd & \n\
   sleep 1\n\
-  \n\
-  # Trigger LuCI cache refresh\n\
   /usr/bin/luci-reload 2>/dev/null || true\n\
   \n\
   echo "Services started."\n\
   echo "HTTP:  http://localhost:8080/cgi-bin/luci"\n\
   echo "HTTPS: https://localhost:8443/cgi-bin/luci"\n\
   \n\
-  # Run uhttpd in the background and follow logs\n\
+  # Start uhttpd\n\
   uhttpd -f -p 80 -s 443 -C /etc/uhttpd.crt -K /etc/uhttpd.key -h /www -x /cgi-bin &\n\
-  exec logread -f\n' \
+  logread -f\n' \
   > /usr/bin/start-services && \
   chmod +x /usr/bin/start-services
 

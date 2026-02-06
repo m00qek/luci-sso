@@ -33,6 +33,13 @@ export function load(cursor, io) {
 		return { ok: false, error: "DISABLED" };
 	}
 
+	// 2.1 HTTPS Enforcement
+	let issuer = oidc_cfg.issuer_url || "";
+	let is_localhost = (index(issuer, "://localhost") > 0 || index(issuer, "://127.0.0.1") > 0);
+	if (substr(issuer, 0, 8) !== "https://" && !is_localhost) {
+		return { ok: false, error: "INSECURE_ISSUER", details: "issuer_url must use HTTPS" };
+	}
+
 	// 3. Load and Validate User Whitelists
 	let user_mappings = [];
 	cursor.foreach("luci-sso", "user", (s) => {
@@ -65,6 +72,7 @@ export function load(cursor, io) {
 		ok: true,
 		data: {
 			issuer_url: oidc_cfg.issuer_url,
+			internal_issuer_url: oidc_cfg.internal_issuer_url || oidc_cfg.issuer_url,
 			client_id: oidc_cfg.client_id,
 			client_secret: oidc_cfg.client_secret,
 			redirect_uri: oidc_cfg.redirect_uri,

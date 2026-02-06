@@ -1,112 +1,111 @@
 #!/usr/bin/ucode
 import * as uci from 'uci';
 import * as fs from 'fs';
-import * as uclient from 'uclient';
 import * as ubus from 'ubus';
 import * as lucihttp from 'lucihttp';
 import * as router from 'luci_sso.router';
 import * as config_loader from 'luci_sso.config';
 
-// 1. Constants & Configuration
-const MAX_RESPONSE_SIZE = 65536; // 64 KB
-const MAX_ENV_SIZE = 16384;      // 16 KB
-
 /**
- * Safely reads a response body up to a hard limit.
+ * HTTP helper using uclient-fetch binary.
  */
-function safe_read_body(res) {
-	if (!res || !res.body || type(res.body.read) != "function") return res;
-	let data = res.body.read(MAX_RESPONSE_SIZE + 1);
-	if (length(data) > MAX_RESPONSE_SIZE) return { error: "RESPONSE_TOO_LARGE" };
-	res.body = data;
-	return res;
-}
+function fetch_http(method, url, opts, io) {
+	let out_path = '/tmp/uclient.out';
+	let err_path = '/tmp/uclient.err';
+	let cmd = ['uclient-fetch', '-O', out_path, '--timeout=10'];
+	
+	if (opts?.headers) {
+		for (let k, v in opts.headers) {
+			push(cmd, `--header=${k}: ${v}`);
+		}
+	}
 
-/**
- * Safely retrieves an environment variable with length enforcement.
- */
-function safe_getenv(key) {
-	let val = getenv(key);
-	if (val && length(val) > MAX_ENV_SIZE) return null;
-	return val;
-}
+	if (method === 'POST' && opts?.body) {
+		push(cmd, `--post-data=${opts.body}`);
+	}
 
-// 2. Imperative Shell: Define the real I/O provider
-let _ubus_conn = null;
+	// SSL Trust for Development
+	if (io?.idp_cert && index(url, 'https://') == 0) {
+		push(cmd, `--ca-certificate=${io.idp_cert}`);
+	}
+
+	push(cmd, url);
+
+	let full_cmd = join(' ', map(cmd, (c) => `"${replace(c, /"/g, '\\"')}"`)) + ` 2>${err_path}`;
+	let res = system(full_cmd);
+
+	let body = fs.readfile(out_path);
+	let err = fs.readfile(err_path);
+	fs.unlink(out_path);
+	fs.unlink(err_path);
+
+	if (res !== 0) {
+		io.log("error", "HTTP FETCH FAILED: " + err);
+		return { error: "FETCH_FAILED", details: err };
+	}
+
+	return {
+		status: 200,
+		body: trim(body || "")
+	};
+}
 
 const io = {
 	time: time,
 	read_file: (path) => fs.readfile(path),
 	write_file: (path, data) => fs.writefile(path, data),
 	rename: (old, new) => fs.rename(old, new),
-	http_get: (url) => {
-		let conn = uclient.connect(url);
-		if (!conn) return { error: "CONNECT_FAILED" };
-		let res = safe_read_body(conn.request("GET"));
-		conn.disconnect();
-		return res;
-	},
-	http_post: (url, opts) => {
-		let conn = uclient.connect(url);
-		if (!conn) return { error: "CONNECT_FAILED" };
-		if (opts.headers) {
-			for (let k, v in opts.headers) conn.header(k, v);
-		}
-		let res = safe_read_body(conn.request("POST", opts.body));
-		conn.disconnect();
-		return res;
-	},
-	urlencode: lucihttp.urlencode,
-	getenv: safe_getenv,
 	log: (level, msg) => { warn(`[luci-sso] [${level}] ${msg}\n`); },
-	
-	/**
-	 * Makes a UBUS call.
-	 */
+	http_get: function(url) { return fetch_http('GET', url, null, this); },
+	http_post: function(url, opts) { return fetch_http('POST', url, opts, this); },
+	urlencode: lucihttp.urlencode,
+	getenv: getenv,
 	ubus_call: (obj, method, args) => {
-		if (!_ubus_conn) {
-			_ubus_conn = ubus.connect();
-			if (!_ubus_conn) return null;
-		}
-		return _ubus_conn.call(obj, method, args);
-	}
+		let conn = ubus.connect();
+		if (!conn) return null;
+		let res = conn.call(obj, method, args);
+		return res;
+	},
+	// Dev Cert Path (Trust the common Root CA)
+	idp_cert: "/etc/luci-sso/certs/rootCA.crt"
 };
 
-// 3. Global Error Helper
-function cgi_die(msg, status) {
-	io.log("crit", msg);
-	print(`Status: ${status || 500}\n`);
-	print(`Content-Type: text/plain\n\n`);
-	print(`${msg}\n`);
-	exit(1);
-}
-
-// 4. Load Configuration (UCI)
 const cursor = uci.cursor();
-const conf_res = config_loader.load(cursor, io);
+const config = config_loader.load(cursor, io);
 
-if (!conf_res.ok) {
-	if (conf_res.error === "DISABLED") {
-		cgi_die("SSO is disabled", 403);
-	}
-	cgi_die(`Configuration Error: ${conf_res.error} ${conf_res.details || ""}`, 500);
-}
-const config = conf_res.data;
-
-// 5. Build Request Object
 const request = {
-	path: io.getenv("PATH_INFO") || "/",
-	query_string: io.getenv("QUERY_STRING"),
-	http_cookie: io.getenv("HTTP_COOKIE")
+	path: getenv("PATH_INFO") || "/",
+	query_string: getenv("QUERY_STRING"),
+	http_cookie: getenv("HTTP_COOKIE")
 };
 
-// 6. Functional Core: Delegate to Router
-const res = router.handle(io, config, request);
+try {
+    if (!config.ok) {
+        die("Config Error: " + config.error + (config.details ? " (" + config.details + ")" : ""));
+    }
 
-// 7. Output Result
-print(`Status: ${res.status}\n`);
-for (let header in res.headers) {
-	print(`${header}\n`);
+    const res = router.handle(io, config.data, request);
+
+    if (res.status == 302) {
+        let loc = "";
+        for (let i, h in res.headers) {
+            if (index(h, "Location:") == 0) loc = trim(substr(h, 10));
+        }
+        
+        fs.stdout.write("Status: 302 Found\n");
+        for (let i, h in res.headers) fs.stdout.write(h + "\n");
+        fs.stdout.write("Content-Type: text/html\n\n");
+        fs.stdout.write('<html><head><script>window.location.href="' + loc + '";</script></head>');
+        fs.stdout.write('<body><p>Redirecting to <a href="' + loc + '">' + loc + '</a>...</p></body></html>\n');
+    } else {
+        if (res.status != 200) fs.stdout.write("Status: " + res.status + "\n");
+        for (let i, h in res.headers) fs.stdout.write(h + "\n");
+        fs.stdout.write("\n");
+        fs.stdout.write(res.body || "");
+    }
+} catch (e) {
+    warn("[luci-sso] Router crash: " + e + "\n");
+    fs.stdout.write("Status: 500 Internal Server Error\nContent-Type: text/plain\n\nError: " + e + "\n");
 }
-print("\n");
-print(res.body);
+
+sleep(0.1);

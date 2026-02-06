@@ -14,17 +14,16 @@ RUNNER_IMAGE := $(RUNNER_IMAGE_BASE)-$(CRYPTO_LIB):$(SDK_ARCH)-$(SDK_VERSION)
 
 WORK_DIR := $(shell pwd)
 
-.PHONY: all prepare prepare-builder prepare-runner test watch-tests package clean
+.PHONY: all prepare prepare-builder prepare-runner test watch-tests package clean luci compose
 
 all: test
 
-luci:
-	@echo "Starting LuCI (User: root, Pass: admin)"
-	@docker run --rm -it \
-		-p 8080:80 \
-		-p 8443:443 \
-		-v "$(WORK_DIR):/app" \
-		$(RUNNER_IMAGE)
+# Start full stack (LuCI + Mock IdP)
+compose: compile-native
+	@echo "Starting full stack with Mock IdP..."
+	CRYPTO_LIB=$(CRYPTO_LIB) docker-compose up --build
+
+luci: compose
 
 prepare: prepare-builder prepare-runner
 

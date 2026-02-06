@@ -51,10 +51,13 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/etc/config
 	$(CP) ./files/etc/config/luci-sso $(1)/etc/config/luci-sso
 	$(INSTALL_DIR) $(1)/etc/luci-sso
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/etc/uci-defaults/99-luci-sso-ui $(1)/etc/uci-defaults/99-luci-sso-ui
 	$(INSTALL_DIR) $(1)/www/cgi-bin
 	$(INSTALL_BIN) ./files/www/cgi-bin/luci-sso $(1)/www/cgi-bin/luci-sso
+	$(INSTALL_DIR) $(1)/www/luci-static/resources
+	$(CP) ./files/www/luci-static/resources/luci-sso-login.js $(1)/www/luci-static/resources/
 endef
-
 define Package/$(PKG_NAME)-crypto-mbedtls/install
 	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
 	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_mbedtls.so ] && \

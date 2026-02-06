@@ -1,0 +1,31 @@
+#!/bin/sh
+set -x
+
+# Patch LuCI to include our SSO login script
+# Targeting modern LuCI (OpenWrt 24.10+) which uses .ut templates
+
+# 1. Patch the base header template for the bootstrap theme
+HEADER_UT="/usr/share/ucode/luci/template/themes/bootstrap/header.ut"
+
+if [ -f "$HEADER_UT" ]; then
+    if ! grep -q "luci-sso-login.js" "$HEADER_UT"; then
+        echo "Patching LuCI 24.10 bootstrap header: $HEADER_UT"
+        # Insert our script tag before the closing </head>
+        sed -i '/<\/head>/i \                <script src="{{ resource }}/luci-sso-login.js"></script>' "$HEADER_UT"
+    fi
+fi
+
+# 2. Fallback for the generic header template
+GENERIC_HEADER_UT="/usr/share/ucode/luci/template/header.ut"
+if [ -f "$GENERIC_HEADER_UT" ]; then
+    if ! grep -q "luci-sso-login.js" "$GENERIC_HEADER_UT"; then
+        echo "Patching LuCI 24.10 generic header: $GENERIC_HEADER_UT"
+        sed -i '/<\/head>/i \                <script src="{{ resource }}/luci-sso-login.js"></script>' "$GENERIC_HEADER_UT"
+    fi
+fi
+
+# Clear LuCI caches
+rm -rf /tmp/luci-modulecache/* 2>/dev/null
+rm -rf /tmp/luci-indexcache 2>/dev/null
+
+exit 0

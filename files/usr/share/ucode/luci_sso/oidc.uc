@@ -188,7 +188,7 @@ export function exchange_code(io, config, discovery, code, verifier) {
 /**
  * Verifies ID Token and matches nonce.
  */
-export function verify_id_token(io, tokens, keys, config, handshake) {
+export function verify_id_token(io, tokens, keys, config, handshake, discovery) {
 	if (!tokens.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
 
 	let parts = split(tokens.id_token, ".");
@@ -201,7 +201,13 @@ export function verify_id_token(io, tokens, keys, config, handshake) {
 	let pem_res = crypto.jwk_to_pem(jwk_res.data);
 	if (!pem_res.ok) return pem_res;
 
-	// MANDATORY Claims Check: Always validate against config
+	// MANDATORY Claims Check: 
+	// The issuer in the token MUST match the discovery document, 
+	// AND the discovery document MUST match our configured expectation.
+	if (discovery.issuer != config.issuer_url) {
+		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", details: `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}` };
+	}
+
 	let validation_opts = { 
 		alg: header.alg,
 		now: io.time(),

@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  luci:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        SDK_ARCH: x86-64
+        SDK_VERSION: 24.10.5
+        PKG_DEPENDS: "liblucihttp-ucode libmbedtls libucode libwolfssl ucode ucode-mod-fs ucode-mod-math ucode-mod-ubus ucode-mod-uci ucode-mod-uclient"
+    ports:
+      - "8080:80"
+      - "8443:443"
+    environment:
+      - CRYPTO_LIB=${CRYPTO_LIB:-mbedtls}
+    volumes:
+      - .:/app
+      - certs:/etc/luci-sso/certs:ro
+    depends_on:
+      pki-gen:
+        condition: service_completed_successfully
+    networks:
+      - sso-net
+
+  idp:
+    build:
+      context: ./test/mock-idp
+    environment:
+      - PUBLIC_ISSUER=https://localhost:5556
+    volumes:
+      - certs:/etc/luci-sso/certs:ro
+    depends_on:
+      pki-gen:
+        condition: service_completed_successfully
+    networks:
+      - sso-net
+    ports:
+      - "5556:5556"
+
+  # Unified PKI Generator
+  pki-gen:
+    image: alpine:latest
+    volumes:
+      - certs:/out
+    command: >
+      sh -xc "apk add --no-cache openssl &&
+      openssl genrsa -out /out/rootCA.key 2048 &&
+      openssl req -x509 -new -nodes -key /out/rootCA.key -sha256 -days 1024 -out /out/rootCA.crt -subj '/CN=LuCI SSO Dev CA' &&
+      openssl genrsa -out /out/idp.key 2048 &&
+      openssl req -new -key /out/idp.key -out /out/idp.csr -subj '/CN=idp' &&
+      printf 'subjectAltName = DNS:idp, DNS:localhost' > /out/idp.ext &&
+      openssl x509 -req -in /out/idp.csr -CA /out/rootCA.crt -CAkey /out/rootCA.key -CAcreateserial -out /out/idp.crt -days 500 -sha256 -extfile /out/idp.ext &&
+      openssl genrsa -out /out/luci.key 2048 &&
+      openssl req -new -key /out/luci.key -out /out/luci.csr -subj '/CN=localhost' &&
+      printf 'subjectAltName = DNS:localhost' > /out/luci.ext &&
+      openssl x509 -req -in /out/luci.csr -CA /out/rootCA.crt -CAkey /out/rootCA.key -CAcreateserial -out /out/luci.crt -days 500 -sha256 -extfile /out/luci.ext &&
+      chmod 644 /out/rootCA.crt /out/idp.crt /out/luci.crt &&
+      chmod 644 /out/rootCA.key /out/idp.key /out/luci.key &&
+      ls -la /out/"
+
+volumes:
+  certs:
+
+networks:
+  sso-net:
+    driver: bridge

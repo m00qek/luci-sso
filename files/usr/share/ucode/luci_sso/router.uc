@@ -30,7 +30,7 @@ function error_response(io, msg, status) {
  * @private
  */
 function handle_login(io, config) {
-	let disc_res = oidc.discover(io, config.issuer_url);
+	let disc_res = oidc.discover(io, config.internal_issuer_url);
 	if (!disc_res.ok) return error_response(io, `OIDC Discovery failed: ${disc_res.error}`, 500);
 
 	let handshake_res = session.create_state(io);
@@ -85,12 +85,19 @@ function validate_callback_request(io, request) {
  * @private
  */
 function complete_oauth_flow(io, config, code, handshake) {
-	let issuer = handshake.issuer_url || config.issuer_url;
+	let issuer = handshake.issuer_url || config.internal_issuer_url;
 	let disc_res = oidc.discover(io, issuer);
 	if (!disc_res.ok) {
 		return { ok: false, error: `OIDC Discovery failed: ${disc_res.error}`, status: 500 };
 	}
 	let discovery = disc_res.data;
+
+	// Backchannel Override: The Router must talk to the IdP via the internal network,
+	// even if the Discovery document (meant for the browser) uses the public URL.
+	if (config.internal_issuer_url != config.issuer_url) {
+		discovery.token_endpoint = replace(discovery.token_endpoint, config.issuer_url, config.internal_issuer_url);
+		discovery.jwks_uri = replace(discovery.jwks_uri, config.issuer_url, config.internal_issuer_url);
+	}
 
 	let exchange_res = oidc.exchange_code(io, config, discovery, code, handshake.code_verifier);
 	if (!exchange_res.ok) {
@@ -103,7 +110,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 		return { ok: false, error: `Failed to fetch IdP keys: ${jwks_res.error}`, status: 500 };
 	}
 
-	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake);
+	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery);
 	if (!verify_res.ok) {
 		return { ok: false, error: `ID Token verification failed: ${verify_res.error}`, status: 401 };
 	}
