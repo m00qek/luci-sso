@@ -55,7 +55,7 @@ test('Config: Load - Reject mappings for non-existent RPCD users', () => {
 			"s1": { ".type": "login", "username": "real-admin" }
 		},
 		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "ok" },
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com" },
 			"u1": { ".type": "user", "rpcd_user": "fake-user", "rpcd_password": "p", "email": "test@test.com" },
 			"u2": { ".type": "user", "rpcd_user": "real-admin", "rpcd_password": "p", "email": "admin@test.com" }
 		}

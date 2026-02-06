@@ -43,6 +43,7 @@ function create_mock_io() {
  */
 const MOCK_CONFIG = {
 	issuer_url: "https://idp.com",
+    internal_issuer_url: "https://idp.com",
 	client_id: "my-app",
 	client_secret: "secret123",
 	redirect_uri: "http://router/callback",
@@ -150,7 +151,7 @@ when("processing the OIDC callback", () => {
 		
 		let req = { path: "/callback", query_string: `code=c&state=${state}`, http_cookie: `luci_sso_state=${state_token}` };
 		
-		let rogue_config = { ...MOCK_CONFIG, issuer_url: "https://trust-only-me.com" };
+		let rogue_config = { ...MOCK_CONFIG, issuer_url: "https://trust-only-me.com", internal_issuer_url: "https://idp.com" };
 		let res = router.handle(io, rogue_config, req);
 
 		then("it should detect the issuer mismatch and reject the login", () => {

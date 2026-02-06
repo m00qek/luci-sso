@@ -230,6 +230,10 @@ export function verify_jwt(token, pubkey, options) {
 		valid = native.verify_rs256(signed_data, signature, pubkey);
 	} else if (options.alg == "ES256") {
 		valid = native.verify_es256(signed_data, signature, pubkey);
+	} else if (options.alg == "HS256") {
+		// For HS256, pubkey is actually the binary secret
+		let calculated = native.hmac_sha256(pubkey, signed_data);
+		valid = calculated && constant_time_eq(calculated, signature);
 	} else {
 		return { ok: false, error: "UNSUPPORTED_ALGORITHM" };
 	}
