@@ -27,6 +27,7 @@ run_all("Plumbing (Tier 1)");
 clear_tests();
 const logic_files = [
 	"unit.oidc_logic_test",
+	"unit.oidc_security_test",
 	"unit.session_logic_test",
 	"unit.config_logic_test",
 	"unit.web_logic_test",

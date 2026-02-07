@@ -34,8 +34,9 @@ To achieve "Gold Standard" security, the project enforces an exclusively HTTPS-b
 
 ### Back-channel (Router ↔ IdP)
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS. Any configured `internal_issuer_url` must also use TLS.
+*   **Verification:** The logic explicitly passes `verify: true` to the I/O provider. The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
 *   **Reasoning:** The back-channel carries sensitive credentials (`client_secret`, `access_token`). Insecure transport is never acceptable in this role.
-*   **Trust Model:** The router will reject any connection where the IdP's certificate is not trusted by the system's CA store. This prevents Man-in-the-Middle (MitM) attacks during secret exchange.
+*   **Trust Model:** This prevents Man-in-the-Middle (MitM) attacks during secret exchange.
 
 ---
 

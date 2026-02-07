@@ -108,7 +108,7 @@ export function discover(io, issuer, options) {
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
 	fetch_url += ".well-known/openid-configuration";
 	
-	let response = io.http_get(fetch_url);
+	let response = io.http_get(fetch_url, { verify: true });
 	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
 	if (response.status != 200) return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
 	
@@ -156,7 +156,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 		}
 	}
 
-	let response = io.http_get(jwks_uri);
+	let response = io.http_get(jwks_uri, { verify: true });
 	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
 	if (response.status != 200) return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
 	
@@ -235,7 +235,8 @@ export function exchange_code(io, config, discovery, code, verifier) {
 
 	let response = io.http_post(discovery.token_endpoint, {
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
-		body: encoded_body
+		body: encoded_body,
+		verify: true // Explicitly request TLS certificate verification
 	});
 
 	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };

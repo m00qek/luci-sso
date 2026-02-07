@@ -101,7 +101,10 @@ function build_provider(state) {
 		http_get: trackable("http_get", (url) => {
 			// MANDATORY HTTPS: (Mirroring Production Blocker #6)
 			if (substr(url, 0, 8) !== "https://") return { error: "HTTPS_REQUIRED" };
-			let res = state.responses[url] || { status: 404, body: "" };
+			let res = state.responses[url];
+			if (!res) return { status: 404, body: { read: () => "" } };
+			if (res.error) return { error: res.error };
+
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
 			return { status: res.status, body: { read: () => raw_body } };
 		}),
@@ -109,7 +112,10 @@ function build_provider(state) {
 		http_post: trackable("http_post", (url, opts) => {
 			// MANDATORY HTTPS: (Mirroring Production Blocker #6)
 			if (substr(url, 0, 8) !== "https://") return { error: "HTTPS_REQUIRED" };
-			let res = state.responses[url] || { status: 404, body: "" };
+			let res = state.responses[url];
+			if (!res) return { status: 404, body: { read: () => "" } };
+			if (res.error) return { error: res.error };
+
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
 			return { status: res.status, body: { read: () => raw_body } };
 		}),
