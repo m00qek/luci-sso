@@ -95,12 +95,22 @@ test('LOGIC: Token - Handle IdP Errors (401/400)', () => {
 		assert_eq(res.error, "TOKEN_EXCHANGE_FAILED");
 	});
 
-	// 2. Bad Request (400)
+	// 2. Bad Request (400) - Generic
+	mocked.with_responses({
+		[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "something_else" } }
+	}, (io) => {
+		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "v");
+		assert(!res.ok);
+		assert_eq(res.error, "TOKEN_EXCHANGE_FAILED");
+	});
+
+	// 3. Bad Request (400) - Specific invalid_grant (Warning #10)
 	mocked.with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "invalid_grant" } }
 	}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "v");
 		assert(!res.ok);
+		assert_eq(res.error, "OIDC_INVALID_GRANT");
 	});
 });
 

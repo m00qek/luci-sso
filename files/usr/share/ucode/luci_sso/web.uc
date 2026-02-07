@@ -153,6 +153,7 @@ const ERROR_MAP = {
 	"STATE_SAVE_FAILED": "Internal server error: Could not initialize authentication.",
 	"OIDC_DISCOVERY_FAILED": "Could not connect to the Identity Provider.",
 	"TOKEN_EXCHANGE_FAILED": "Failed to exchange authorization code for tokens.",
+	"OIDC_INVALID_GRANT": "The authorization code is expired or has already been used. Please try logging in again.",
 	"ID_TOKEN_VERIFICATION_FAILED": "The identity token provided by the IdP is invalid.",
 	"USER_NOT_AUTHORIZED": "Your account is not authorized to access this device.",
 	"NETWORK_ERROR": "A network error occurred while communicating with the IdP.",

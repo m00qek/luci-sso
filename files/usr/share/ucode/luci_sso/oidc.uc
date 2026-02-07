@@ -240,7 +240,13 @@ export function exchange_code(io, config, discovery, code, verifier) {
 	});
 
 	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
-	if (response.status != 200) return { ok: false, error: "TOKEN_EXCHANGE_FAILED", details: response.status };
+	if (response.status != 200) {
+		let err_data = safe_json_parse(response.body);
+		if (err_data && err_data.error == "invalid_grant") {
+			return { ok: false, error: "OIDC_INVALID_GRANT" };
+		}
+		return { ok: false, error: "TOKEN_EXCHANGE_FAILED", details: response.status };
+	}
 
 	let tokens = safe_json_parse(response.body);
 	if (!tokens) return { ok: false, error: "INVALID_JSON" };
