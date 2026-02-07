@@ -11,7 +11,7 @@ function create_mock_io() {
     io._responses = {};
     io._now = 1516239022 + 10;
     io._files = { "/etc/luci-sso/secret.key": TEST_SECRET };
-    io._ubus_logins = [];
+    io._ubus_calls = [];
     
     io.time = function() { return io._now; };
     io.read_file = function(path) { return io._files[path]; };
@@ -59,8 +59,8 @@ function create_mock_io() {
     io.log = function() { };
     
     io.ubus_call = function(obj, method, args) {
+        push(io._ubus_calls, { obj, method, args });
         if (obj == "session" && method == "login") {
-            push(io._ubus_logins, args);
             return { ubus_rpc_session: `session-for-${args.username}` };
         }
         return {};
@@ -77,6 +77,7 @@ const MOCK_CONFIG = {
 	redirect_uri: "http://router/callback",
 	alg: "RS256",
 	now: 1516239022 + 10,
+	clock_tolerance: 300,
 	user_mappings: [
 		{ rpcd_user: "system_admin", rpcd_password: "p1", emails: ["1234567890"] }
 	]
@@ -142,7 +143,8 @@ when("processing the OIDC callback", () => {
 		then("it should verify all claims, create a LuCI session, and redirect to the dashboard", () => {
 			assert_eq(res.status, 302);
 			assert_eq(res.headers[0], "Location: /cgi-bin/luci/");
-			assert_eq(io._ubus_logins[0].username, "system_admin");
+			assert_eq(io._ubus_calls[0].method, "login");
+			assert_eq(io._ubus_calls[0].args.username, "system_admin");
 		});
 	});
 
@@ -248,7 +250,19 @@ when("processing the OIDC callback", () => {
 
 when("a user requests to logout", () => {
 	let io = create_mock_io();
-	let res = router.handle(io, MOCK_CONFIG, { path: "/logout" });
+	let res = router.handle(io, MOCK_CONFIG, { 
+		path: "/logout", 
+		http_cookie: "sysauth=session-12345" 
+	});
+
+	then("it should destroy the UBUS session on the server side", () => {
+		let call = null;
+		for (let c in io._ubus_calls) {
+			if (c.obj == "session" && c.method == "destroy") call = c;
+		}
+		assert(call, "ubus session:destroy should have been called");
+		assert_eq(call.args.ubus_rpc_session, "session-12345");
+	});
 
 	then("it should clear the LuCI session cookies", () => {
 		assert(index(res.headers[1], "sysauth_https=;") >= 0);

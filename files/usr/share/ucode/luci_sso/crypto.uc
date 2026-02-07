@@ -199,6 +199,7 @@ export function verify_jwt(token, pubkey, options) {
 	if (type(pubkey) != "string") die("CONTRACT_VIOLATION: verify_jwt expects string pubkey");
 	if (type(options) != "object") die("CONTRACT_VIOLATION: verify_jwt expects object options");
 	if (type(options.now) != "int") die("CONTRACT_VIOLATION: verify_jwt expects mandatory integer options.now");
+	if (type(options.clock_tolerance) != "int") die("CONTRACT_VIOLATION: verify_jwt expects mandatory integer options.clock_tolerance");
 
 	if (length(token) > MAX_TOKEN_SIZE) return { ok: false, error: "TOKEN_TOO_LARGE" };
 	if (!options.alg) return { ok: false, error: "MISSING_ALGORITHM_OPTION" };
@@ -247,18 +248,18 @@ export function verify_jwt(token, pubkey, options) {
 	if (!payload) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
 
 	// 6. Claims Validation
-	let skew = options.skew || 300; // Default 5 minutes
+	let clock_tolerance = options.clock_tolerance;
 	let now = options.now;
 
-	if (payload.exp && payload.exp < (now - skew)) {
+	if (payload.exp && payload.exp < (now - clock_tolerance)) {
 		return { ok: false, error: "TOKEN_EXPIRED" };
 	}
 	
-	if (payload.nbf && payload.nbf > (now + skew)) {
+	if (payload.nbf && payload.nbf > (now + clock_tolerance)) {
 		return { ok: false, error: "TOKEN_NOT_YET_VALID" };
 	}
 
-	if (payload.iat && payload.iat > (now + skew)) {
+	if (payload.iat && payload.iat > (now + clock_tolerance)) {
 		return { ok: false, error: "TOKEN_ISSUED_IN_FUTURE" };
 	}
 

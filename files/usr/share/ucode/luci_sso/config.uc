@@ -44,6 +44,11 @@ export function load(cursor, io) {
 		return { ok: false, error: "INSECURE_ISSUER", details: "issuer_url must use HTTPS" };
 	}
 
+	let clock_tolerance = int(oidc_cfg.clock_tolerance);
+	if (clock_tolerance == null) {
+		return { ok: false, error: "MISSING_CLOCK_TOLERANCE", details: "clock_tolerance option is mandatory" };
+	}
+
 	// 3. Load and Validate User Whitelists
 	let user_mappings = [];
 	cursor.foreach("luci-sso", "user", (s) => {
@@ -80,6 +85,7 @@ export function load(cursor, io) {
 			client_id: oidc_cfg.client_id,
 			client_secret: oidc_cfg.client_secret,
 			redirect_uri: oidc_cfg.redirect_uri,
+			clock_tolerance: clock_tolerance,
 			user_mappings: user_mappings
 		}
 	};

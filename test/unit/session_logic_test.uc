@@ -17,13 +17,14 @@ test('LOGIC: Session State - Create & Verify (Server-Side)', () => {
 	assert(match(handle, /^[A-Za-z0-9_-]+$/), "Handle should be safe Base64URL");
 	assert(io._files[`/var/run/luci-sso/handshake_${handle}.json`], "State should be saved to disk");
 
-	let verify_res = session.verify_state(io, handle);
+	let clock_tolerance = 30;
+	let verify_res = session.verify_state(io, handle, clock_tolerance);
 	assert(verify_res.ok, "Should verify state successfully");
 	assert_eq(verify_res.data.state, res.data.state, "States should match");
 	
 	// One-Time Use Verification
 	assert(!io._files[`/var/run/luci-sso/handshake_${handle}.json`], "State file should be deleted after use");
-	let second_attempt = session.verify_state(io, handle);
+	let second_attempt = session.verify_state(io, handle, clock_tolerance);
 	assert_eq(second_attempt.error, "STATE_NOT_FOUND", "Handshake should be single-use");
 });
 
@@ -32,7 +33,8 @@ test('TORTURE: Session - Corrupted State File', () => {
 	let handle = "malicious-handle";
 	io._files[`/var/run/luci-sso/handshake_${handle}.json`] = "{ invalid json !!! }";
 	
-	let res = session.verify_state(io, handle);
+	let clock_tolerance = 30;
+	let res = session.verify_state(io, handle, clock_tolerance);
 	assert_eq(res.error, "STATE_CORRUPTED");
 	assert(!io._files[`/var/run/luci-sso/handshake_${handle}.json`], "Corrupted file should be cleaned up");
 });
@@ -40,12 +42,13 @@ test('TORTURE: Session - Corrupted State File', () => {
 test('SECURITY: Session - Path Traversal Protection', () => {
 	let io = h.create_mock_io(1000);
 	
+	let clock_tolerance = 30;
 	// 1. Directory Traversal
-	let res = session.verify_state(io, "../../etc/shadow");
+	let res = session.verify_state(io, "../../etc/shadow", clock_tolerance);
 	assert_eq(res.error, "INVALID_HANDLE_FORMAT");
 
 	// 2. Illegal characters
-	res = session.verify_state(io, "handshake;rm -rf /");
+	res = session.verify_state(io, "handshake;rm -rf /", clock_tolerance);
 	assert_eq(res.error, "INVALID_HANDLE_FORMAT");
 });
 
@@ -73,27 +76,29 @@ test('LOGIC: Session - Handshake Reaper', () => {
 		return original_stat(path);
 	};
 
+	let clock_tolerance = 30;
 	// 3. Run Reaper
-	session.reap_stale_handshakes(io);
+	session.reap_stale_handshakes(io, clock_tolerance);
 
 	// 4. Verify
 	assert(!io._files[stale_path], "Stale handshake should be reaped");
 	assert_eq(length(io.lsdir("/var/run/luci-sso")), 1, "Fresh handshake should remain");
 });
 
-test('LOGIC: Session - Expiration & Clock Skew', () => {
+test('LOGIC: Session - Expiration & Clock Tolerance', () => {
 	let io = h.create_mock_io(1000);
+	let clock_tolerance = 30;
 	
-	// 1. Within Skew (Pass)
+	// 1. Within Tolerance (Pass)
 	let h1 = session.create_state(io).data;
 	io._now = 1000 + 300 + 5; // 5 seconds past expiration
-	assert(session.verify_state(io, h1.token).ok, "Should allow 5s skew");
+	assert(session.verify_state(io, h1.token, clock_tolerance).ok, "Should allow 5s tolerance");
 
-	// 2. Past Skew (Fail)
+	// 2. Past Tolerance (Fail)
 	io._now = 1000;
 	let h2 = session.create_state(io).data;
 	io._now = 1000 + 300 + 305; // 305 seconds past expiration
-	let res = session.verify_state(io, h2.token);
+	let res = session.verify_state(io, h2.token, clock_tolerance);
 	assert_eq(res.error, "HANDSHAKE_EXPIRED");
 });
 
@@ -106,7 +111,8 @@ test('LOGIC: Session Persistence - Atomic Sync (Race Condition)', () => {
 	let res = session.create(io, { sub: "user1" });
 	assert(res.ok);
 	
-	let verify_res = session.verify(io, res.data);
+	let clock_tolerance = 60;
+	let verify_res = session.verify(io, res.data, clock_tolerance);
 	assert(verify_res.ok, "Session must be verifiable using the secret on disk");
 });
 

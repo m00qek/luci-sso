@@ -1,4 +1,3 @@
-
 config oidc 'default'
 	option enabled '0'
 	option issuer_url 'https://accounts.google.com'
@@ -7,6 +6,7 @@ config oidc 'default'
 	option client_secret ''
 	option redirect_uri 'https://router.lan/cgi-bin/luci-sso/callback'
 	option scope 'openid profile email'
+	option clock_tolerance '300'
 
 config user
 	list email 'admin@example.com'

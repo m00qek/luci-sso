@@ -51,3 +51,18 @@ export function create_session(io, username, password, oidc_email) {
 
 	return { ok: true, data: sid };
 };
+
+/**
+ * Destroys a LuCI system session via UBUS.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} sid - UBUS session ID
+ * @returns {boolean} - True if call succeeded
+ */
+export function destroy_session(io, sid) {
+	if (type(io.ubus_call) != "function") return false;
+	if (!sid || type(sid) != "string") return false;
+
+	io.ubus_call("session", "destroy", { ubus_rpc_session: sid });
+	return true;
+};

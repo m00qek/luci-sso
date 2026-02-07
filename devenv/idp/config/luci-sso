@@ -6,6 +6,7 @@ config oidc 'default'
 	option client_secret 'secret-key-123'
 	option redirect_uri 'https://localhost:8443/cgi-bin/luci-sso/callback'
 	option scope 'openid profile email'
+	option clock_tolerance '300'
 
 config user
 	list email 'admin@example.com'

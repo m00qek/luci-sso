@@ -246,6 +246,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery) 
 	let validation_opts = { 
 		alg: header.alg,
 		now: io.time(),
+		clock_tolerance: config.clock_tolerance,
 		iss: config.issuer_url,
 		aud: config.client_id
 	};

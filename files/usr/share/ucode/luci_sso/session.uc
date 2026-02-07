@@ -2,9 +2,7 @@ import * as crypto from 'luci_sso.crypto';
 
 const SECRET_KEY_PATH = "/etc/luci-sso/secret.key";
 const SESSION_DURATION = 3600;
-const SESSION_SKEW = 60;
 const HANDSHAKE_DURATION = 300;
-const HANDSHAKE_SKEW = 30;
 const HANDSHAKE_DIR = "/var/run/luci-sso";
 
 /**
@@ -28,9 +26,12 @@ function validate_io(io) {
 /**
  * Removes handshake files older than the duration.
  * @param {object} io - I/O provider
+ * @param {number} clock_tolerance - Clock skew tolerance
  */
-export function reap_stale_handshakes(io) {
+export function reap_stale_handshakes(io, clock_tolerance) {
 	validate_io(io);
+	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: reap_stale_handshakes expects mandatory integer clock_tolerance");
+
 	let files = io.lsdir(HANDSHAKE_DIR);
 	if (!files) return;
 
@@ -39,8 +40,8 @@ export function reap_stale_handshakes(io) {
 		if (match(f, /^handshake_[A-Za-z0-9_-]+\.json$/)) {
 			let path = `${HANDSHAKE_DIR}/${f}`;
 			let st = io.stat(path);
-			// Use a slightly larger grace period than duration + skew
-			if (st && st.mtime && (now - st.mtime) > (HANDSHAKE_DURATION + HANDSHAKE_SKEW + 60)) {
+			// Use a slightly larger grace period than duration + tolerance
+			if (st && st.mtime && (now - st.mtime) > (HANDSHAKE_DURATION + clock_tolerance + 60)) {
 				try { io.remove(path); } catch (e) {}
 			}
 		}
@@ -156,11 +157,13 @@ export function create_state(io) {
  * 
  * @param {object} io - I/O provider
  * @param {string} handle - Opaque handshake handle
+ * @param {number} clock_tolerance - Clock skew tolerance
  * @returns {object} - Result Object {ok, data/error}
  */
-export function verify_state(io, handle) {
+export function verify_state(io, handle, clock_tolerance) {
 	validate_io(io);
 	if (type(handle) != "string") die("CONTRACT_VIOLATION: verify_state expects string handle");
+	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: verify_state expects mandatory integer clock_tolerance");
 
 	// Ensure the handle is a safe filename (Base64URL only)
 	if (!match(handle, /^[A-Za-z0-9_-]+$/)) {
@@ -186,12 +189,12 @@ export function verify_state(io, handle) {
 
 	let now = io.time();
 
-	if (data.exp && data.exp < (now - HANDSHAKE_SKEW)) {
+	if (data.exp && data.exp < (now - clock_tolerance)) {
 		try { io.remove(path); } catch (e) {}
 		return { ok: false, error: "HANDSHAKE_EXPIRED" };
 	}
 
-	if (data.iat && data.iat > (now + HANDSHAKE_SKEW)) {
+	if (data.iat && data.iat > (now + clock_tolerance)) {
 		return { ok: false, error: "HANDSHAKE_NOT_YET_VALID" };
 	}
 	
@@ -235,12 +238,14 @@ export function create(io, user_data) {
  * 
  * @param {object} io - I/O provider
  * @param {string} token - Signed session token
+ * @param {number} clock_tolerance - Clock skew tolerance
  * @returns {object} - Result Object {ok, data/error}
  */
-export function verify(io, token) {
+export function verify(io, token, clock_tolerance) {
 	validate_io(io);
 	if (!token) return { ok: false, error: "NO_SESSION" };
 	if (type(token) != "string") die("CONTRACT_VIOLATION: verify expects string token");
+	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: verify expects mandatory integer clock_tolerance");
 	
 	let res = get_secret_key(io);
 	if (!res.ok) return res;
@@ -252,11 +257,11 @@ export function verify(io, token) {
 	let session = result.data;
 	let now = io.time();
 	
-	if (session.exp && session.exp < (now - SESSION_SKEW)) {
+	if (session.exp && session.exp < (now - clock_tolerance)) {
 		return { ok: false, error: "SESSION_EXPIRED" };
 	}
 
-	if (session.iat && session.iat > (now + SESSION_SKEW)) {
+	if (session.iat && session.iat > (now + clock_tolerance)) {
 		return { ok: false, error: "SESSION_NOT_YET_VALID" };
 	}
 	

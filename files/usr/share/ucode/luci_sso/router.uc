@@ -49,7 +49,7 @@ function handle_login(io, config) {
  * Validates the raw callback request and extracts query/handshake.
  * @private
  */
-function validate_callback_request(io, request) {
+function validate_callback_request(io, config, request) {
 	let query = parse_params(request.query_string);
 	let cookies = parse_cookies(request.http_cookie);
 
@@ -66,7 +66,7 @@ function validate_callback_request(io, request) {
 		return { ok: false, error: "Missing handshake cookie (session timeout?)", status: 401 };
 	}
 
-	let handshake_res = session.verify_state(io, state_token);
+	let handshake_res = session.verify_state(io, state_token, config.clock_tolerance);
 	if (!handshake_res.ok) {
 		return { ok: false, error: `Invalid handshake: ${handshake_res.error}`, status: 401 };
 	}
@@ -168,7 +168,7 @@ function create_session_response(io, mapping, oidc_email) {
  * @private
  */
 function handle_callback(io, config, request) {
-	let val_res = validate_callback_request(io, request);
+	let val_res = validate_callback_request(io, config, request);
 	if (!val_res.ok) return error_response(io, val_res.error, val_res.status);
 	let code = val_res.data.code;
 	let handshake = val_res.data.handshake;
@@ -192,7 +192,14 @@ function handle_callback(io, config, request) {
  * Handles the logout request.
  * @private
  */
-function handle_logout() {
+function handle_logout(io, request) {
+	let cookies = parse_cookies(request.http_cookie);
+	let sid = cookies.sysauth_https || cookies.sysauth;
+
+	if (sid) {
+		ubus.destroy_session(io, sid);
+	}
+
 	return response(302, [
 		"Location: /",
 		"Set-Cookie: sysauth_https=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
@@ -213,6 +220,9 @@ export function handle(io, config, request) {
 		die("CONTRACT_VIOLATION: router.handle expects (io, config, request)");
 	}
 
+	// Periodic Cleanup: Stale handshakes
+	session.reap_stale_handshakes(io, config.clock_tolerance);
+
 	let path = request.path || "/";
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
@@ -222,7 +232,7 @@ export function handle(io, config, request) {
 	} else if (path == "/callback") {
 		return handle_callback(io, config, request);
 	} else if (path == "/logout") {
-		return handle_logout();
+		return handle_logout(io, request);
 	}
 
 	return error_response(io, "Not Found", 404);

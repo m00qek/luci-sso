@@ -20,21 +20,21 @@ test('PLUMBING: JWK Set Lookup', () => {
     assert_eq(res.error, "KEY_NOT_FOUND");
 });
 
-test('PLUMBING: Clock Skew Boundary Math', () => {
-    let secret = "skew-test-secret-1234567890123456";
-    let skew = 300;
+test('PLUMBING: Clock Tolerance Boundary Math', () => {
+    let secret = "tolerance-test-secret-1234567890123456";
+    let clock_tolerance = 300;
     let payload_ok = { exp: 1000 };
     let token_ok = crypto.sign_jws(payload_ok, secret);
     
-    assert(crypto.verify_jwt(token_ok, secret, { alg: "HS256", now: 1299, skew: skew }).ok);
+    assert(crypto.verify_jwt(token_ok, secret, { alg: "HS256", now: 1299, clock_tolerance: clock_tolerance }).ok);
     
-    let res = crypto.verify_jwt(token_ok, secret, { alg: "HS256", now: 1301, skew: skew });
+    let res = crypto.verify_jwt(token_ok, secret, { alg: "HS256", now: 1301, clock_tolerance: clock_tolerance });
     assert_eq(res.error, "TOKEN_EXPIRED");
 });
 
 test('PLUMBING: Invalid Algorithm in Header', () => {
     let key = "key";
-    let opts = { alg: "RS256", now: 123 };
+    let opts = { alg: "RS256", now: 123, clock_tolerance: 300 };
     let bad_alg = crypto.b64url_encode(sprintf("%J", { alg: "ROT13" }));
     assert_eq(crypto.verify_jwt(bad_alg + ".e30.s", key, opts).error, "ALGORITHM_MISMATCH");
 
@@ -64,7 +64,7 @@ test('PLUMBING: JWK to Secret (OCT/Symmetric)', () => {
 test('PLUMBING: Token Size Enforcement', () => {
     let too_big = "";
     for (let i = 0; i < 1700; i++) too_big += "1234567890"; 
-    assert_eq(crypto.verify_jwt(too_big, "key", { alg: "RS256", now: 123 }).error, "TOKEN_TOO_LARGE");
+    assert_eq(crypto.verify_jwt(too_big, "key", { alg: "RS256", now: 123, clock_tolerance: 300 }).error, "TOKEN_TOO_LARGE");
 });
 
 test('PLUMBING: PKCE Primitives', () => {
@@ -81,8 +81,8 @@ test('PLUMBING: PKCE Primitives', () => {
 // =============================================================================
 
 test('TORTURE: Plumbing - Illegal Type Injection', () => {
-    assert_throws(() => crypto.verify_jwt(123, "key", {}), "Should reject non-string token");
-    assert_throws(() => crypto.verify_jwt("a.b.c", 123, {}), "Should reject non-string key");
+    assert_throws(() => crypto.verify_jwt(123, "key", { now: 1, clock_tolerance: 1 }), "Should reject non-string token");
+    assert_throws(() => crypto.verify_jwt("a.b.c", 123, { now: 1, clock_tolerance: 1 }), "Should reject non-string key");
     assert_throws(() => crypto.verify_jwt("a.b.c", "key", "not-obj"), "Should reject non-object options");
 });
 

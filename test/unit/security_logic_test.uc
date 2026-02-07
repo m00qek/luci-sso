@@ -11,7 +11,7 @@ test('LOGIC: Security - Reject alg: none', () => {
 	let token = none_header + "." + payload + ".";
 
 	// 1. JWT High-level
-	let res = crypto.verify_jwt(token, "secret", { alg: "RS256", now: 123 });
+	let res = crypto.verify_jwt(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300 });
 	assert_eq(res.error, "ALGORITHM_MISMATCH");
 
 	// 2. JWS Primitive
@@ -24,7 +24,7 @@ test('LOGIC: Security - Reject Stripped Signature', () => {
     let payload = crypto.b64url_encode(sprintf("%J", { sub: "admin" }));
     let stripped = header + "." + payload + ".";
     
-    let res = crypto.verify_jwt(stripped, "secret", { alg: "HS256", now: 123 });
+    let res = crypto.verify_jwt(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300 });
     assert_eq(res.error, "INVALID_SIGNATURE_ENCODING");
 });
 

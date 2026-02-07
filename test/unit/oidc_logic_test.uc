@@ -59,7 +59,7 @@ test('LOGIC: Reject Expired ID Token', () => {
     let payload = { iss: f.MOCK_CONFIG.issuer_url, sub: "user1", exp: 1500 }; 
     let token = h.generate_id_token(payload, SECRET);
     let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
-    let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY);
+    let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
     assert_eq(res.error, "TOKEN_EXPIRED");
 });
 
@@ -68,7 +68,7 @@ test('LOGIC: Reject Future Issued Token (iat check)', () => {
     let payload = { iss: f.MOCK_CONFIG.issuer_url, sub: "user1", iat: 3000, exp: 4000 };
     let token = h.generate_id_token(payload, SECRET);
     let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
-    let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY);
+    let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
     assert_eq(res.error, "TOKEN_ISSUED_IN_FUTURE");
 });
 
@@ -77,7 +77,7 @@ test('LOGIC: Claim Type Confusion (String exp)', () => {
     let payload = { iss: f.MOCK_CONFIG.issuer_url, sub: "user1", exp: "1500" }; 
     let token = h.generate_id_token(payload, SECRET);
     let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
-    let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY);
+    let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
     assert_eq(res.error, "TOKEN_EXPIRED");
 });
 
@@ -86,7 +86,7 @@ test('LOGIC: Reject Audience Mismatch', () => {
     let payload = { iss: f.MOCK_CONFIG.issuer_url, sub: "user1", aud: "wrong-app", exp: 3000 };
     let token = h.generate_id_token(payload, SECRET);
     let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
-    let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY);
+    let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
     assert_eq(res.error, "AUDIENCE_MISMATCH");
 });
 
@@ -96,10 +96,10 @@ test('LOGIC: Enforce Nonce Matching', () => {
     let token = h.generate_id_token(payload, SECRET);
     let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
     let handshake = { nonce: "expected-nonce" };
-    let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY);
+    let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, handshake, f.MOCK_DISCOVERY);
     assert(res.ok);
     handshake.nonce = "different-nonce";
-    res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY);
+    res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, handshake, f.MOCK_DISCOVERY);
     assert_eq(res.error, "NONCE_MISMATCH");
 });
 
@@ -108,7 +108,7 @@ test('LOGIC: Mandatory Subject Claim', () => {
     let payload = { iss: f.MOCK_CONFIG.issuer_url, aud: f.MOCK_CONFIG.client_id, exp: 3000 }; 
     let token = h.generate_id_token(payload, SECRET);
     let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
-    let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY);
+    let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
     assert_eq(res.error, "MISSING_SUB_CLAIM");
 });
 
