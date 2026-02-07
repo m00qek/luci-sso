@@ -8,7 +8,7 @@ import * as h from 'unit.helpers';
 const SECRET = "tier2-logic-test-secret-32-bytes-!";
 
 // =============================================================================
-// Tier 2: OIDC Business Logic (Platinum Suite)
+// Tier 2: OIDC Business Logic (Platinum Refactor)
 // =============================================================================
 
 test('LOGIC: Discovery - Successful Fetch & Schema', () => {
@@ -109,17 +109,17 @@ test('LOGIC: Verification - Support Multi-Audience Arrays', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
 	// 1. Success: Correct ID in array
-	let payload = { iss: f.MOCK_CONFIG.issuer_url, aud: [ f.MOCK_CONFIG.client_id, "other" ], sub: "u1", exp: 2000000000 };
+	let payload = { iss: f.MOCK_CONFIG.issuer_url, aud: [ f.MOCK_CONFIG.client_id, "other" ], sub: "u1", exp: 2000000000, nonce: "n" };
 	let token = h.generate_id_token(payload, SECRET);
 	mocked.with_env({}, (io) => {
-		assert(oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY).ok);
+		assert(oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY).ok);
 	});
 
 	// 2. Failure: Wrong ID in array
 	payload.aud = [ "wrong-app-1", "wrong-app-2" ];
 	token = h.generate_id_token(payload, SECRET);
 	mocked.with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "AUDIENCE_MISMATCH");
 	});
 
@@ -127,20 +127,82 @@ test('LOGIC: Verification - Support Multi-Audience Arrays', () => {
 	payload.aud = [];
 	token = h.generate_id_token(payload, SECRET);
 	mocked.with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "INVALID_AUDIENCE");
+	});
+});
+
+test('LOGIC: Verification - Support AZP Claim', () => {
+	let mocked = mock.create();
+	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
+	let payload = { 
+		iss: f.MOCK_CONFIG.issuer_url, 
+		aud: [ f.MOCK_CONFIG.client_id, "other" ], 
+		sub: "u1", 
+		exp: 2000000000,
+		nonce: "n" 
+	};
+
+	mocked.with_env({}, (io) => {
+		// 1. Mismatched AZP
+		payload.azp = "evil-app";
+		let token = h.generate_id_token(payload, SECRET);
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY);
+		assert_eq(res.error, "AZP_MISMATCH");
+
+		// 2. Correct AZP
+		payload.azp = f.MOCK_CONFIG.client_id;
+		token = h.generate_id_token(payload, SECRET);
+		assert(oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY).ok);
 	});
 });
 
 test('LOGIC: Verification - Reject Expired ID Token', () => {
 	let mocked = mock.create();
-	let payload = { iss: f.MOCK_CONFIG.issuer_url, sub: "user1", exp: 1500 }; 
+	let payload = { iss: f.MOCK_CONFIG.issuer_url, sub: "user1", exp: 1500, nonce: "n" }; 
 	let token = h.generate_id_token(payload, SECRET);
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
 	mocked.with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "TOKEN_EXPIRED");
+	});
+});
+
+test('LOGIC: Enforce Nonce Matching', () => {
+	let mocked = mock.create();
+	let payload = { 
+		iss: f.MOCK_CONFIG.issuer_url, 
+		aud: f.MOCK_CONFIG.client_id, 
+		sub: "user1", 
+		nonce: "expected-nonce", 
+		exp: 2000000000 
+	};
+	let token = h.generate_id_token(payload, SECRET);
+	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
+	
+	mocked.with_env({}, (io) => {
+		// 1. Success
+		let handshake = { nonce: "expected-nonce" };
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, handshake, f.MOCK_DISCOVERY);
+		assert(res.ok);
+		
+		// 2. Mismatch
+		handshake.nonce = "different-nonce";
+		res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, handshake, f.MOCK_DISCOVERY);
+		assert_eq(res.error, "NONCE_MISMATCH");
+
+		// 3. Missing from token (Blocker #3)
+		delete payload.nonce;
+		let token_no_nonce = h.generate_id_token(payload, SECRET);
+		res = oidc.verify_id_token(io, { id_token: token_no_nonce }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, handshake, f.MOCK_DISCOVERY);
+		assert_eq(res.error, "MISSING_NONCE");
+
+		// 4. Missing from handshake (Blocker #3)
+		payload.nonce = "n";
+		let token_with_nonce = h.generate_id_token(payload, SECRET);
+		res = oidc.verify_id_token(io, { id_token: token_with_nonce }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
+		assert_eq(res.error, "MISSING_NONCE");
 	});
 });
 

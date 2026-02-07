@@ -320,7 +320,10 @@ export function sha256(str) {
  * @returns {string} - Base64URL encoded verifier
  */
 export function pkce_generate_verifier(len) {
-	let bytes = random(len || 43);
+	let byte_len = len || 43;
+	if (byte_len < 32 || byte_len > 96) die("CONTRACT_VIOLATION: PKCE verifier must be 32-96 bytes");
+	
+	let bytes = random(byte_len);
 	return b64url_encode(bytes);
 };
 

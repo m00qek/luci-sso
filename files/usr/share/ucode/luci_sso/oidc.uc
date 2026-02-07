@@ -262,15 +262,24 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery) 
 	if (!result.ok) return result;
 
 	let payload = result.data;
-
-	// OIDC Mandatory Claims Check
+	
+	// 3. OIDC Mandatory Claims Check
 	if (!payload.sub) {
 		return { ok: false, error: "MISSING_SUB_CLAIM" };
 	}
 
-	// Nonce Check
-	if (handshake.nonce && payload.nonce != handshake.nonce) {
+	// 3.1 Nonce Check (Blocker #3: Mandatory)
+	if (!handshake.nonce || !payload.nonce) {
+		return { ok: false, error: "MISSING_NONCE" };
+	}
+	if (payload.nonce != handshake.nonce) {
 		return { ok: false, error: "NONCE_MISMATCH" };
+	}
+
+	// 3.2 Authorized Party Check (Blocker #4: Confused Deputy)
+	// If the aud claim contains multiple audiences, verify that azp matches our client_id.
+	if (type(payload.aud) == "array" && payload.azp && payload.azp !== config.client_id) {
+		return { ok: false, error: "AZP_MISMATCH" };
 	}
 
 	let user_data = {
