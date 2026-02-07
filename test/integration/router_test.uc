@@ -36,7 +36,7 @@ function mock_request(path, query, cookies) {
 }
 
 // =============================================================================
-// Tier 3: Behavioral Integration (Platinum Suite)
+// Tier 3: Behavioral Integration (Platinum Refactor)
 // =============================================================================
 
 when("initiating the OIDC login flow", () => {
@@ -174,17 +174,15 @@ when("processing the OIDC callback", () => {
 			let handshake = state_res.data;
 			let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
 
-			// First attempt (Should proceed past state check)
 			let factory_with_responses = factory.using(io).with_responses({
 				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-				"https://idp.com/token": { error: "STOP_HERE" } // Stop after state check
+				"https://idp.com/token": { error: "STOP_HERE" } 
 			});
 			
 			factory_with_responses.with_env({}, (io_exec) => {
 				router.handle(io_exec, MOCK_CONFIG, req);
 			});
 
-			// Second attempt (Same state, but file should be gone)
 			factory_with_responses.with_env({}, (io_exec) => {
 				let res = router.handle(io_exec, MOCK_CONFIG, req);
 				then("it should reject the replay with a 401 Unauthorized", () => {
@@ -198,10 +196,9 @@ when("processing the OIDC callback", () => {
 	and("an attacker sends binary garbage or malformed protocol parameters", () => {
 		let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
 		factory.with_responses(responses, (io) => {
-			// Malformed state handle (illegal characters)
 			let req = mock_request("/callback", { state: "s" }, { luci_sso_state: "!!!" });
 			let res = router.handle(io, MOCK_CONFIG, req);
-			
+
 			then("it should fail safely with an error and not crash", () => {
 				assert(res.status >= 400);
 			});
@@ -213,7 +210,7 @@ when("a user requests to logout", () => {
 	let factory = mock.create().with_ubus({ "session:destroy": {} });
 
 	let data = factory.spy((io) => {
-		let req = mock_request("/logout", {}, { sysauth: "session-12345" });
+		let req = mock_request("/logout", {}, { "sysauth": "session-12345" });
 		let res = router.handle(io, MOCK_CONFIG, req);
 		assert_eq(res.status, 302);
 		assert_eq(res.headers["Location"], "/");

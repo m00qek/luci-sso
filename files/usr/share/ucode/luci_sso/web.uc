@@ -55,7 +55,8 @@ export function parse_cookies(str) {
 	if (length(str) > MAX_INPUT_LEN) return cookies;
 
 	let count = 0;
-	for (let pair in split(str, ";")) {
+	// RFC 6265: Cookies are separated by semicolon and a space "; "
+	for (let pair in split(str, /;[ ]*/)) {
 		if (count >= MAX_PARAM_COUNT) break;
 		let trimmed = trim(pair);
 		if (!length(trimmed)) continue;

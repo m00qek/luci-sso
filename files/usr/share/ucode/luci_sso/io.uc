@@ -26,16 +26,26 @@ export function create() {
 		
 		log: (level, msg) => warn(`[luci-sso] [${level}] ${msg}\n`),
 
-		http_get: (url) => {
+		http_get: function(url) {
+			// MANDATORY: HTTPS only (Blocker #6)
+			if (substr(url, 0, 8) !== "https://") {
+				this.log("error", `Security violation: Blocked insecure HTTP GET to ${url}`);
+				return { error: "HTTPS_REQUIRED" };
+			}
 			let res = secure_http.request('GET', url, { timeout: 10000 });
 			if (res.error) {
-				warn(`[luci-sso] [error] HTTPS GET failed for ${url}: ${res.error}\n`);
+				this.log("error", `HTTPS GET failed for ${url}: ${res.error}`);
 				return { error: "NETWORK_ERROR" };
 			}
 			return { status: res.status, body: res.body };
 		},
 
-		http_post: (url, opts) => {
+		http_post: function(url, opts) {
+			// MANDATORY: HTTPS only (Blocker #6)
+			if (substr(url, 0, 8) !== "https://") {
+				this.log("error", `Security violation: Blocked insecure HTTP POST to ${url}`);
+				return { error: "HTTPS_REQUIRED" };
+			}
 			let headers = (opts && opts.headers) ? opts.headers : {};
 			let post_data = (opts && opts.body) ? opts.body : null;
 			
@@ -45,7 +55,7 @@ export function create() {
 				post_data: post_data 
 			});
 			if (res.error) {
-				warn(`[luci-sso] [error] HTTPS POST failed for ${url}: ${res.error}\n`);
+				this.log("error", `HTTPS POST failed for ${url}: ${res.error}`);
 				return { error: "NETWORK_ERROR" };
 			}
 			return { status: res.status, body: res.body };

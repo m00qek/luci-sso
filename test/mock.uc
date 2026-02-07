@@ -99,12 +99,16 @@ function build_provider(state) {
 		log: trackable("log", (level, msg) => {}),
 		
 		http_get: trackable("http_get", (url) => {
+			// MANDATORY HTTPS: (Mirroring Production Blocker #6)
+			if (substr(url, 0, 8) !== "https://") return { error: "HTTPS_REQUIRED" };
 			let res = state.responses[url] || { status: 404, body: "" };
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
 			return { status: res.status, body: { read: () => raw_body } };
 		}),
 		
 		http_post: trackable("http_post", (url, opts) => {
+			// MANDATORY HTTPS: (Mirroring Production Blocker #6)
+			if (substr(url, 0, 8) !== "https://") return { error: "HTTPS_REQUIRED" };
 			let res = state.responses[url] || { status: 404, body: "" };
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
 			return { status: res.status, body: { read: () => raw_body } };
@@ -180,17 +184,18 @@ function build_factory(state) {
 		},
 
 		spy: (cb) => {
-			// CONCURRENCY FIX: Clone history to prevent leakage across nested spies
 			let next_state = { ...state, recording: true, history: [ ...state.history ] };
 			let io = build_provider(next_state);
 			cb(io);
 			return create_query_handle(next_state.history);
 		},
 
-		get_stdout: intercepted(
-			{ stdout_buf: "" }, 
-			(s) => s.stdout_buf
-		)
+		get_stdout: (cb) => {
+			let next_state = { ...state, stdout_buf: "" };
+			let io = build_provider(next_state);
+			cb(io);
+			return next_state.stdout_buf;
+		}
 	};
 };
 

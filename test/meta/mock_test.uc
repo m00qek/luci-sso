@@ -78,6 +78,16 @@ when("using the Platinum Mock DSL", () => {
 		assert(data.called("ubus", "obj", "method"));
 	});
 
+	then("it should enforce mandatory HTTPS for all network calls", () => {
+		mocked.with_env({}, (io) => {
+			assert_eq(io.http_get("http://insecure.com").error, "HTTPS_REQUIRED");
+			assert_eq(io.http_post("http://insecure.com").error, "HTTPS_REQUIRED");
+			
+			// Valid https shouldn't hit the requirement block (will just 404 in mock)
+			assert_eq(io.http_get("https://secure.com").status, 404);
+		});
+	});
+
 	then("it should support capturing stdout via intercepted thunk", () => {
 		let buf = mocked.get_stdout((io) => {
 			io.stdout.write("hello ");
