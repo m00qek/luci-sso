@@ -88,7 +88,8 @@ function complete_oauth_flow(io, config, code, handshake) {
 	if (!disc_res.ok) {
 		return { ok: false, error: `OIDC Discovery failed: ${disc_res.error}`, status: 500 };
 	}
-	let discovery = disc_res.data;
+	// Create a shallow copy to avoid mutating the cached object
+	let discovery = { ...disc_res.data };
 
 	// Backchannel Override: The Router must talk to the IdP via the internal network,
 	// even if the Discovery document (meant for the browser) uses the public URL.
@@ -109,6 +110,17 @@ function complete_oauth_flow(io, config, code, handshake) {
 	}
 
 	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery);
+	
+	// Key Rotation / Stale Cache Recovery: 
+	// If verification fails due to signature, re-fetch JWKS without cache and try one more time.
+	if (!verify_res.ok && verify_res.error == "INVALID_SIGNATURE") {
+		if (io.log) io.log("warn", "ID Token signature verification failed; forcing JWKS refresh and retrying");
+		jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri, { force: true });
+		if (jwks_res.ok) {
+			verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery);
+		}
+	}
+
 	if (!verify_res.ok) {
 		return { ok: false, error: `ID Token verification failed: ${verify_res.error}`, status: 401 };
 	}

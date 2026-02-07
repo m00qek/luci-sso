@@ -153,6 +153,57 @@ test('TORTURE: JWKS - Handle Corrupted Cache', () => {
 	assert_eq(res.data[0].kid, "k1");
 });
 
+test('LOGIC: JWKS - Force Refresh', () => {
+	let io = h.create_mock_io(1000);
+	let jwks_uri = "https://trusted.idp/jwks";
+	let cache_path = "/var/run/luci-sso/jwks-force-test.json";
+	
+	// 1. Initial Fetch
+	io._responses[jwks_uri] = { status: 200, body: { keys: [ { kid: "k1" } ] } };
+	oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path });
+	
+	// 2. Change network response but hit cache
+	io._responses[jwks_uri] = { status: 200, body: { keys: [ { kid: "k2" } ] } };
+	let res = oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path });
+	assert_eq(res.data[0].kid, "k1", "Should hit cache by default");
+	
+	// 3. Force refresh
+	res = oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path, force: true });
+	assert_eq(res.data[0].kid, "k2", "Should bypass cache when force=true");
+});
+
+test('LOGIC: Discovery - Immutable Cache (No Pollution)', () => {
+	let io = h.create_mock_io();
+	let issuer = "https://public.idp";
+	let internal = "http://internal.idp";
+	let url = issuer + "/.well-known/openid-configuration";
+	
+	io._responses[url] = { 
+		status: 200, 
+		body: { 
+			issuer: issuer,
+			authorization_endpoint: issuer + "/auth",
+			token_endpoint: issuer + "/token",
+			jwks_uri: issuer + "/jwks"
+		} 
+	};
+	
+	// 1. First discovery (populates cache)
+	let res1 = oidc.discover(io, issuer);
+	assert(res1.ok, "First discovery failed: " + res1.error);
+	assert_eq(res1.data.token_endpoint, issuer + "/token");
+	
+	// 2. Simulate the router's endpoint mangling
+	let discovery = res1.data;
+	discovery.token_endpoint = replace(discovery.token_endpoint, issuer, internal);
+	assert_eq(discovery.token_endpoint, internal + "/token");
+	
+	// 3. Second discovery (should return the ORIGINAL from cache, not the mangled one)
+	// If the cache was polluted, this would return the internal URL.
+	let res2 = oidc.discover(io, issuer);
+	assert_eq(res2.data.token_endpoint, issuer + "/token", "Cache must not be polluted by previous mutations");
+});
+
 test('LOGIC: Split-Horizon - URL Mangle Robustness', () => {
 	let io = h.create_mock_io();
     

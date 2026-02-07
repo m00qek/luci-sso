@@ -15,11 +15,27 @@ let privateKey;
 let publicKey;
 let jwk;
 
+const KEY_PATH = '/etc/luci-sso/certs/signing_key.pem';
+
 async function initKeys() {
-    const keys = await jose.generateKeyPair('RS256');
-    privateKey = keys.privateKey;
-    publicKey = keys.publicKey;
-    jwk = await jose.exportJWK(publicKey);
+    if (fs.existsSync(KEY_PATH)) {
+        console.log(`[MockIdP] Loading persistent signing key from ${KEY_PATH}`);
+        const pem = fs.readFileSync(KEY_PATH, 'utf8');
+        privateKey = await jose.importPKCS8(pem, 'RS256');
+    } else {
+        console.log(`[MockIdP] Generating new signing key...`);
+        const keys = await jose.generateKeyPair('RS256');
+        privateKey = keys.privateKey;
+        const pem = await jose.exportPKCS8(privateKey);
+        fs.writeFileSync(KEY_PATH, pem, { mode: 0o600 });
+        console.log(`[MockIdP] Saved new signing key to ${KEY_PATH}`);
+    }
+
+    // Derive public JWK from the private key
+    const publicKey = await jose.exportSPKI(privateKey);
+    const pubKeyObj = await jose.importSPKI(publicKey, 'RS256');
+    jwk = await jose.exportJWK(pubKeyObj);
+    
     jwk.kid = 'mock-key-1';
     jwk.alg = 'RS256';
     jwk.use = 'sig';

@@ -214,7 +214,21 @@ export function run_all(suite_name) {
 		}
     }
 
-    if (!verbose) print("\n");
+    if (!verbose) {
+		print("\n");
+		if (length(failures_list) > 0) {
+			print(`\n${color(C_BOLD + C_RED, "Failures:")}\n`);
+			for (let f in failures_list) {
+				print(`  ${color(C_RED, "✖")} ${f.name}\n      ${replace(f.error, /\n/g, "\n      ")}\n\n`);
+			}
+		}
+		if (length(errors_list) > 0) {
+			print(`\n${color(C_BOLD + C_BRED, "Errors:")}\n`);
+			for (let e in errors_list) {
+				print(`  ${color(C_BRED, "‼")} ${e.name}\n      ${replace(e.error, /\n/g, "\n      ")}\n\n`);
+			}
+		}
+	}
 
     let end_time = clock();
     let duration = (end_time[0] - start_time[0]) + ((end_time[1] - start_time[1]) / 1000000000.0);

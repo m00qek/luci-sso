@@ -57,7 +57,7 @@ test('COMPLIANCE: HMAC-SHA256 with Oversized Key (RFC 2104)', () => {
 test('COMPLIANCE: RSA 2048-bit Verification', () => {
 	let sig = hex_to_bin(f.RSA_2048.sig_hex);
 	let res = native.verify_rs256(f.RSA_2048.msg, sig, f.RSA_2048.pub);
-	assert(res, "Must support 2048-bit RSA keys");
+	assert(res, "Must support 2048-bit RSA keys with SHA256 (32-byte hash)");
 });
 
 test('COMPLIANCE: RSA Verification with Embedded Null Bytes', () => {

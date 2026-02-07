@@ -146,6 +146,39 @@ when("processing the OIDC callback", () => {
 		});
 	});
 
+	and("the JWKS cache is stale (IdP rotated keys)", () => {
+		let io = create_mock_io();
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+
+		mock_discovery(io, "https://idp.com");
+		
+		// 1. Populate cache with a WRONG key (but validly encoded)
+		let cache_path = "/var/run/luci-sso/oidc-jwks-wv5enLcGYIn8PiwhdkeXzhVPct86Lf3q.json";
+		io._files[cache_path] = sprintf("%J", {
+			keys: [ { kid: "anchor-key", kty: "oct", k: "d3Jvbmc" } ],
+			cached_at: io.time()
+		});
+
+		// 2. Prepare valid token and REAL JWKS on the network
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
+		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
+		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
+
+		let req = { path: "/callback", query_string: `code=c&state=${handshake.state}`, http_cookie: `luci_sso_state=${handshake.token}` };
+		let res = router.handle(io, MOCK_CONFIG, req);
+
+		then("it should detect the failure, force a refresh, and eventually succeed", () => {
+			assert_eq(res.status, 302, "Should recover and redirect");
+			assert_eq(res.headers[0], "Location: /cgi-bin/luci/");
+			
+			// Verify that the cache was UPDATED on disk
+			let cache_content = json(io._files[cache_path]);
+			assert(cache_content, "Cache file should exist");
+			assert_eq(cache_content.keys[0].kid, f.ANCHOR_JWK.kid, "Cache should now contain the correct key ID");
+		});
+	});
+
     and("the user is authenticated at the IdP but NOT found in our local whitelist", () => {
         let io = create_mock_io();
 		

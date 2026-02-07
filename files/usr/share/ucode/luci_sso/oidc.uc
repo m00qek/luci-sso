@@ -68,8 +68,8 @@ function _read_cache(io, path, ttl) {
  */
 function _write_cache(io, path, data) {
 	try {
-		data.cached_at = io.time();
-		io.write_file(path, sprintf("%J", data));
+		let cache_data = { ...data, cached_at: io.time() };
+		io.write_file(path, sprintf("%J", cache_data));
 	} catch (e) {}
 }
 
@@ -125,9 +125,11 @@ export function fetch_jwks(io, jwks_uri, options) {
 	let cache_path = options.cache_path || get_cache_path(jwks_uri, "jwks");
 	let ttl = options.ttl || 86400; // 24 hours default
 	
-	let cached = _read_cache(io, cache_path, ttl);
-	if (cached && type(cached.keys) == "array") {
-		return { ok: true, data: cached.keys };
+	if (!options.force) {
+		let cached = _read_cache(io, cache_path, ttl);
+		if (cached && type(cached.keys) == "array") {
+			return { ok: true, data: cached.keys };
+		}
 	}
 
 	let response = io.http_get(jwks_uri);

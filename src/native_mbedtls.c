@@ -73,25 +73,31 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
     const unsigned char *sig = (const unsigned char *)ucv_string_get(v_sig);
     size_t sig_len = ucv_string_length(v_sig);
     const char *key_pem = ucv_string_get(v_key);
+    size_t key_len = ucv_string_length(v_key);
 
-    unsigned char hash[MBEDTLS_MD_MAX_SIZE];
+    unsigned char hash[32];
     mbedtls_md_context_t md_ctx;
     mbedtls_md_init(&md_ctx);
-    mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 0);
-    mbedtls_md_starts(&md_ctx);
-    mbedtls_md_update(&md_ctx, msg, msg_len);
-    mbedtls_md_finish(&md_ctx, hash);
+    
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (!md_info || mbedtls_md_setup(&md_ctx, md_info, 0) != 0 ||
+        mbedtls_md_starts(&md_ctx) != 0 ||
+        mbedtls_md_update(&md_ctx, msg, msg_len) != 0 ||
+        mbedtls_md_finish(&md_ctx, hash) != 0) {
+        mbedtls_md_free(&md_ctx);
+        return ucv_boolean_new(false);
+    }
     mbedtls_md_free(&md_ctx);
 
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
-    int ret = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, strlen(key_pem) + 1);
+    int ret = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, key_len + 1);
     if (ret != 0) {
         mbedtls_pk_free(&pk);
         return ucv_boolean_new(false);
     }
 
-    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, sig, sig_len);
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, sig, sig_len);
     mbedtls_pk_free(&pk);
     return ucv_boolean_new(ret == 0);
 }
@@ -110,6 +116,7 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
     const unsigned char *raw_sig = (const unsigned char *)ucv_string_get(v_sig);
     size_t raw_sig_len = ucv_string_length(v_sig);
     const char *key_pem = ucv_string_get(v_key);
+    size_t key_len = ucv_string_length(v_key);
 
     if (raw_sig_len != 64) return ucv_boolean_new(false);
 
@@ -121,18 +128,23 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
         return ucv_boolean_new(false);
     }
 
-    unsigned char hash[MBEDTLS_MD_MAX_SIZE];
+    unsigned char hash[32];
     mbedtls_md_context_t md_ctx;
     mbedtls_md_init(&md_ctx);
-    mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 0);
-    mbedtls_md_starts(&md_ctx);
-    mbedtls_md_update(&md_ctx, msg, msg_len);
-    mbedtls_md_finish(&md_ctx, hash);
+
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (!md_info || mbedtls_md_setup(&md_ctx, md_info, 0) != 0 ||
+        mbedtls_md_starts(&md_ctx) != 0 ||
+        mbedtls_md_update(&md_ctx, msg, msg_len) != 0 ||
+        mbedtls_md_finish(&md_ctx, hash) != 0) {
+        mbedtls_md_free(&md_ctx);
+        return ucv_boolean_new(false);
+    }
     mbedtls_md_free(&md_ctx);
 
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
-    int ret = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, strlen(key_pem) + 1);
+    int ret = mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, key_len + 1);
     if (ret != 0) {
         mbedtls_pk_free(&pk);
         return ucv_boolean_new(false);
@@ -143,7 +155,7 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
         return ucv_boolean_new(false);
     }
 
-    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 0, der_sig, der_sig_len);
+    ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, 32, der_sig, der_sig_len);
     mbedtls_pk_free(&pk);
     return ucv_boolean_new(ret == 0);
 }
@@ -156,10 +168,15 @@ static uc_value_t *uc_mbedtls_sha256(uc_vm_t *vm, size_t nargs) {
     unsigned char output[32];
     mbedtls_md_context_t md_ctx;
     mbedtls_md_init(&md_ctx);
-    mbedtls_md_setup(&md_ctx, mbedtls_md_info_from_type(MBEDTLS_MD_SHA256), 0);
-    mbedtls_md_starts(&md_ctx);
-    mbedtls_md_update(&md_ctx, input, input_len);
-    mbedtls_md_finish(&md_ctx, output);
+    
+    const mbedtls_md_info_t *md_info = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    if (!md_info || mbedtls_md_setup(&md_ctx, md_info, 0) != 0 ||
+        mbedtls_md_starts(&md_ctx) != 0 ||
+        mbedtls_md_update(&md_ctx, input, input_len) != 0 ||
+        mbedtls_md_finish(&md_ctx, output) != 0) {
+        mbedtls_md_free(&md_ctx);
+        return NULL;
+    }
     mbedtls_md_free(&md_ctx);
     return ucv_string_new_length((const char *)output, 32);
 }
