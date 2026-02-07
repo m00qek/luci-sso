@@ -134,7 +134,8 @@ function complete_oauth_flow(io, config, code, handshake) {
 	return { 
 		ok: true, 
 		data: verify_res.data, 
-		access_token: tokens.access_token 
+		access_token: tokens.access_token,
+		refresh_token: tokens.refresh_token
 	};
 }
 
@@ -156,8 +157,8 @@ function find_user_mapping(io, config, email) {
  * Creates the final application session and response.
  * @private
  */
-function create_session_response(io, mapping, oidc_email, access_token) {
-	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, oidc_email, access_token);
+function create_session_response(io, mapping, oidc_email, access_token, refresh_token) {
+	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, oidc_email, access_token, refresh_token);
 	if (!ubus_res.ok) {
 		return { ok: false, error: "UBUS_LOGIN_FAILED", status: 500 };
 	}
@@ -189,13 +190,14 @@ function handle_callback(io, config, request) {
 	if (!oauth_res.ok) return error_response(io, oauth_res.error, oauth_res.status);
 	let user_data = oauth_res.data;
 	let access_token = oauth_res.access_token; // From complete_oauth_flow
+	let refresh_token = oauth_res.refresh_token;
 
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
 		return error_response(io, "USER_NOT_AUTHORIZED", 403);
 	}
 
-	let final_res = create_session_response(io, mapping, user_data.email, access_token);
+	let final_res = create_session_response(io, mapping, user_data.email, access_token, refresh_token);
 	if (!final_res.ok) return error_response(io, final_res.error, final_res.status);
 
 	return final_res.data;

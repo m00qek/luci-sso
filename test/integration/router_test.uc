@@ -92,7 +92,7 @@ when("processing the OIDC callback", () => {
 			let data = factory.using(io)
 				.with_responses({
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-					"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
+					"https://idp.com/token": { status: 200, body: { access_token: "at", refresh_token: "rt", id_token: id_token } },
 					"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
 				})
 				.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "session-for-" + args.username }) })
@@ -105,17 +105,18 @@ when("processing the OIDC callback", () => {
 
 			then("it should have performed a UBUS login for the mapped user", () => {
 				assert(data.called("ubus", "session", "login"), "Should have called ubus login");
-				// Verify token was stored
+				// Verify tokens were stored
 				let found_set = false;
 				for (let entry in data.all()) {
 					if (entry.type == "ubus" && entry.args[1] == "set") {
-						if (entry.args[2].values.oidc_access_token == "at") {
+						if (entry.args[2].values.oidc_access_token == "at" &&
+						    entry.args[2].values.oidc_refresh_token == "rt") {
 							found_set = true;
 							break;
 						}
 					}
 				}
-				assert(found_set, "Access token must be persisted in UBUS session");
+				assert(found_set, "Access and Refresh tokens must be persisted in UBUS session");
 			});
 		});
 	});
