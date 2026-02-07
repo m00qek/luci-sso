@@ -95,6 +95,14 @@ function mock_discovery(io, issuer) {
 	};
 }
 
+function mock_request(path, query, cookies) {
+    return {
+        path: path || "/",
+        query: query || {},
+        cookies: cookies || {}
+    };
+}
+
 // =============================================================================
 // Specifications (Tier 3 - System Documentation)
 // =============================================================================
@@ -104,83 +112,82 @@ when("initiating the OIDC login flow", () => {
 	
 	and("the Identity Provider returns a massive response that exceeds memory limits", () => {
 		io._responses["https://idp.com/.well-known/openid-configuration"] = { error: "RESPONSE_TOO_LARGE" };
-		let res = router.handle(io, MOCK_CONFIG, { path: "/" });
+		let res = router.handle(io, MOCK_CONFIG, mock_request("/"));
 		then("it should fail discovery and return a 500 Internal Error", () => {
 			assert_eq(res.status, 500);
 		});
 	});
 
-	and("the Identity Provider is discoverable and healthy", () => {
-		mock_discovery(io, "https://idp.com");
-		let res = router.handle(io, MOCK_CONFIG, { path: "/" });
-		then("it should return a 302 redirect to the Identity Provider", () => {
-			assert_eq(res.status, 302);
-			assert(index(res.headers[0], "Location: https://idp.com/auth") == 0);
+		and("the Identity Provider is discoverable and healthy", () => {
+			mock_discovery(io, "https://idp.com");
+			let res = router.handle(io, MOCK_CONFIG, mock_request("/"));
+			then("it should return a 302 redirect to the Identity Provider", () => {
+				assert_eq(res.status, 302);
+				assert(index(res.headers["Location"], "https://idp.com/auth") == 0);
+			});
 		});
 	});
-});
-
-when("processing the OIDC callback", () => {
 	
-	and("a valid user returns from the IdP with an honest token", () => {
-		let io = create_mock_io();
+	when("processing the OIDC callback", () => {
 		
-		// Initiate handshake using real session logic
-		let state_res = session.create_state(io);
-		assert(state_res.ok);
-		let handshake = state_res.data;
-		let state_token = handshake.token;
-
-		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
-		
-		mock_discovery(io, "https://idp.com");
-		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
-		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
-		
-		let req = { path: "/callback", query_string: `code=c&state=${handshake.state}`, http_cookie: `luci_sso_state=${state_token}` };
-		let res = router.handle(io, MOCK_CONFIG, req);
-
-		then("it should verify all claims, create a LuCI session, and redirect to the dashboard", () => {
-			assert_eq(res.status, 302);
-			assert_eq(res.headers[0], "Location: /cgi-bin/luci/");
-			assert_eq(io._ubus_calls[0].method, "login");
-			assert_eq(io._ubus_calls[0].args.username, "system_admin");
-		});
-	});
-
-	and("the JWKS cache is stale (IdP rotated keys)", () => {
-		let io = create_mock_io();
-		let state_res = session.create_state(io);
-		let handshake = state_res.data;
-
-		mock_discovery(io, "https://idp.com");
-		
-		// 1. Populate cache with a WRONG key (but validly encoded)
-		let cache_path = "/var/run/luci-sso/oidc-jwks-wv5enLcGYIn8PiwhdkeXzhVPct86Lf3q.json";
-		io._files[cache_path] = sprintf("%J", {
-			keys: [ { kid: "anchor-key", kty: "oct", k: "d3Jvbmc" } ],
-			cached_at: io.time()
-		});
-
-		// 2. Prepare valid token and REAL JWKS on the network
-		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
-		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
-		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
-
-		let req = { path: "/callback", query_string: `code=c&state=${handshake.state}`, http_cookie: `luci_sso_state=${handshake.token}` };
-		let res = router.handle(io, MOCK_CONFIG, req);
-
-		then("it should detect the failure, force a refresh, and eventually succeed", () => {
-			assert_eq(res.status, 302, "Should recover and redirect");
-			assert_eq(res.headers[0], "Location: /cgi-bin/luci/");
+		and("a valid user returns from the IdP with an honest token", () => {
+			let io = create_mock_io();
 			
-			// Verify that the cache was UPDATED on disk
-			let cache_content = json(io._files[cache_path]);
-			assert(cache_content, "Cache file should exist");
-			assert_eq(cache_content.keys[0].kid, f.ANCHOR_JWK.kid, "Cache should now contain the correct key ID");
+			// Initiate handshake using real session logic
+			let state_res = session.create_state(io);
+			assert(state_res.ok);
+			let handshake = state_res.data;
+			let state_token = handshake.token;
+	
+			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
+			
+			mock_discovery(io, "https://idp.com");
+			io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
+			io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
+			
+			let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: state_token });
+			let res = router.handle(io, MOCK_CONFIG, req);
+	
+			then("it should verify all claims, create a LuCI session, and redirect to the dashboard", () => {
+				assert_eq(res.status, 302);
+				assert_eq(res.headers["Location"], "/cgi-bin/luci/");
+				assert_eq(io._ubus_calls[0].method, "login");
+				assert_eq(io._ubus_calls[0].args.username, "system_admin");
+			});
 		});
-	});
-
+	
+		and("the JWKS cache is stale (IdP rotated keys)", () => {
+			let io = create_mock_io();
+			let state_res = session.create_state(io);
+			let handshake = state_res.data;
+	
+			mock_discovery(io, "https://idp.com");
+	
+			// 1. Populate cache with a WRONG key (but validly encoded)
+			let cache_path = "/var/run/luci-sso/oidc-jwks-wv5enLcGYIn8PiwhdkeXzhVPct86Lf3q.json";
+			io._files[cache_path] = sprintf("%J", {
+				keys: [ { kid: "anchor-key", kty: "oct", k: "d3Jvbmc" } ],
+				cached_at: io.time()
+			});
+	
+			// 2. Prepare valid token and REAL JWKS on the network
+			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
+			io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
+			io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
+	
+			let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+			let res = router.handle(io, MOCK_CONFIG, req);
+	
+			then("it should detect the failure, force a refresh, and eventually succeed", () => {
+				assert_eq(res.status, 302, "Should recover and redirect");
+				assert_eq(res.headers["Location"], "/cgi-bin/luci/");
+				
+				// Verify that the cache was UPDATED on disk
+				let cache_content = json(io._files[cache_path]);
+				assert(cache_content, "Cache file should exist");
+				assert_eq(cache_content.keys[0].kid, f.ANCHOR_JWK.kid, "Cache should now contain the correct key ID");
+			});
+		});
     and("the user is authenticated at the IdP but NOT found in our local whitelist", () => {
         let io = create_mock_io();
 		
@@ -194,7 +201,7 @@ when("processing the OIDC callback", () => {
 		io._responses["https://idp.com/token"] = { status: 200, body: { access_token: "at", id_token: id_token } };
 		io._responses["https://idp.com/jwks"] = { status: 200, body: { keys: [ f.ANCHOR_JWK ] } };
 		
-		let req = { path: "/callback", query_string: `code=c&state=${handshake.state}`, http_cookie: `luci_sso_state=${handshake.token}` };
+		let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
         
         // Use config with NO mappings
 		let bad_config = { ...MOCK_CONFIG, user_mappings: [] };
@@ -210,7 +217,7 @@ when("processing the OIDC callback", () => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
 
-		let req = { path: "/callback", query_string: "code=c&state=evil-state", http_cookie: `luci_sso_state=${handshake.token}` };
+		let req = mock_request("/callback", { code: "c", state: "evil-state" }, { luci_sso_state: handshake.token });
 		let res = router.handle(io, MOCK_CONFIG, req);
 
         then("it should detect the state mismatch and return a 403 Forbidden", () => {
@@ -220,10 +227,7 @@ when("processing the OIDC callback", () => {
 
 	and("the Identity Provider returns an explicit error (e.g. user cancelled)", () => {
 		let io = create_mock_io();
-		let req = {
-			path: "/callback",
-			query_string: "error=access_denied&error_description=User+cancelled"
-		};
+		let req = mock_request("/callback", { error: "access_denied", error_description: "User cancelled" });
 		let res = router.handle(io, MOCK_CONFIG, req);
 
 		then("it should show the error to the user and return a 400 Bad Request", () => {
@@ -239,7 +243,7 @@ when("processing the OIDC callback", () => {
 		mock_discovery(io, "https://idp.com");
 		io._responses["https://idp.com/token"] = { error: "CONNECT_TIMEOUT" };
 		
-		let req = { path: "/callback", query_string: `code=c&state=${handshake.state}`, http_cookie: `luci_sso_state=${handshake.token}` };
+		let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
 		let res = router.handle(io, MOCK_CONFIG, req);
 
         then("it should fail safely with a 500 Internal Error", () => {
@@ -250,10 +254,7 @@ when("processing the OIDC callback", () => {
 
 when("a user requests to logout", () => {
 	let io = create_mock_io();
-	let res = router.handle(io, MOCK_CONFIG, { 
-		path: "/logout", 
-		http_cookie: "sysauth=session-12345" 
-	});
+	let res = router.handle(io, MOCK_CONFIG, mock_request("/logout", {}, { sysauth: "session-12345" }));
 
 	then("it should destroy the UBUS session on the server side", () => {
 		let call = null;
@@ -265,18 +266,22 @@ when("a user requests to logout", () => {
 	});
 
 	then("it should clear the LuCI session cookies", () => {
-		assert(index(res.headers[1], "sysauth_https=;") >= 0);
-		assert(index(res.headers[2], "sysauth=;") >= 0);
+		assert(type(res.headers["Set-Cookie"]) == "array", "Set-Cookie should be an array for logout");
+		let cleared_sysauth = false;
+		for (let cookie in res.headers["Set-Cookie"]) {
+			if (index(cookie, "sysauth=") == 0 && index(cookie, "Max-Age=0") > 0) cleared_sysauth = true;
+		}
+		assert(cleared_sysauth, "Should have cleared sysauth cookie");
 	});
 
 	then("it should redirect back to the root page", () => {
-		assert_eq(res.headers[0], "Location: /");
+		assert_eq(res.headers["Location"], "/");
 	});
 });
 
 when("accessing an unhandled system path", () => {
 	let io = create_mock_io();
-	let res = router.handle(io, MOCK_CONFIG, { path: "/unknown/path" });
+	let res = router.handle(io, MOCK_CONFIG, mock_request("/unknown/path"));
 
 	then("it should return a 404 Not Found error", () => {
 		assert_eq(res.status, 404);

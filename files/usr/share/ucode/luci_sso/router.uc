@@ -2,7 +2,6 @@ import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
-import { parse_params, parse_cookies } from 'luci_sso.utils';
 
 /**
  * Creates a response object.
@@ -11,7 +10,7 @@ import { parse_params, parse_cookies } from 'luci_sso.utils';
 function response(status, headers, body) {
 	return {
 		status: status || 200,
-		headers: headers || [],
+		headers: headers || {},
 		body: body || ""
 	};
 }
@@ -22,7 +21,7 @@ function response(status, headers, body) {
  */
 function error_response(io, msg, status) {
 	if (io && io.log) io.log("error", `${status || 500}: ${msg}`);
-	return response(status || 500, ["Content-Type: text/plain"], msg);
+	return response(status || 500, { "Content-Type": "text/plain" }, msg);
 }
 
 /**
@@ -39,10 +38,10 @@ function handle_login(io, config) {
 
 	let url = oidc.get_auth_url(io, config, disc_res.data, handshake);
 
-	return response(302, [
-		`Location: ${url}`,
-		`Set-Cookie: luci_sso_state=${handshake.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
-	]);
+	return response(302, {
+		"Location": url,
+		"Set-Cookie": `luci_sso_state=${handshake.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
+	});
 }
 
 /**
@@ -50,8 +49,8 @@ function handle_login(io, config) {
  * @private
  */
 function validate_callback_request(io, config, request) {
-	let query = parse_params(request.query_string);
-	let cookies = parse_cookies(request.http_cookie);
+	let query = request.query || {};
+	let cookies = request.cookies || {};
 
 	if (query.error) {
 		return { ok: false, error: `Identity Provider error: ${query.error}`, status: 400 };
@@ -154,12 +153,14 @@ function create_session_response(io, mapping, oidc_email) {
 
 	return {
 		ok: true,
-		data: response(302, [
-			"Location: /cgi-bin/luci/",
-			`Set-Cookie: sysauth_https=${ubus_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
-			`Set-Cookie: sysauth=${ubus_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
-			"Set-Cookie: luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
-		])
+		data: response(302, {
+			"Location": "/cgi-bin/luci/",
+			"Set-Cookie": [
+				`sysauth_https=${ubus_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+				`sysauth=${ubus_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+				"luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
+			]
+		})
 	};
 }
 
@@ -193,18 +194,20 @@ function handle_callback(io, config, request) {
  * @private
  */
 function handle_logout(io, request) {
-	let cookies = parse_cookies(request.http_cookie);
+	let cookies = request.cookies || {};
 	let sid = cookies.sysauth_https || cookies.sysauth;
 
 	if (sid) {
 		ubus.destroy_session(io, sid);
 	}
 
-	return response(302, [
-		"Location: /",
-		"Set-Cookie: sysauth_https=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
-		"Set-Cookie: sysauth=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
-	]);
+	return response(302, {
+		"Location": "/",
+		"Set-Cookie": [
+			"sysauth_https=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+			"sysauth=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
+		]
+	});
 }
 
 /**
@@ -212,7 +215,7 @@ function handle_logout(io, request) {
  * 
  * @param {object} io - I/O provider
  * @param {object} config - UCI configuration
- * @param {object} request - Parsed request context {path, query_string, http_cookie}
+ * @param {object} request - Parsed request context {path, query, cookies}
  * @returns {object} - Response Object {status, headers, body}
  */
 export function handle(io, config, request) {

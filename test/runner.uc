@@ -29,7 +29,7 @@ const logic_files = [
 	"unit.oidc_logic_test",
 	"unit.session_logic_test",
 	"unit.config_logic_test",
-	"unit.utils_logic_test",
+	"unit.web_logic_test",
 	"unit.security_logic_test",
 	"unit.fuzz_logic_test"
 ];

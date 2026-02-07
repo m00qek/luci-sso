@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { test, assert, assert_eq, assert_throws } from 'testing';
 import * as config_loader from 'luci_sso.config';
 
 /**
@@ -20,6 +20,13 @@ function create_mock_cursor(data) {
 	};
 }
 
+function create_mock_io(data) {
+	return {
+		uci_cursor: () => create_mock_cursor(data),
+		log: () => {}
+	};
+}
+
 // =============================================================================
 // Tier 2: Configuration Logic
 // =============================================================================
@@ -36,18 +43,20 @@ test('LOGIC: Config - Successful Load & RPCD Sync', () => {
 				"issuer_url": "https://idp.com",
 				"client_id": "c1",
 				"client_secret": "s1",
-				"redirect_uri": "r1"
+				"redirect_uri": "r1",
+				"clock_tolerance": "300"
 			},
 			"u1": { ".type": "user", "rpcd_user": "admin", "rpcd_password": "p1", "email": "admin@test.com" }
 		}
 	};
 
-	let cursor = create_mock_cursor(mock_data);
-	let res = config_loader.load(cursor, {});
+	let io = create_mock_io(mock_data);
+	let config = config_loader.load(io);
 
-	assert(res.ok, "Should load valid configuration");
-	assert_eq(res.data.issuer_url, "https://idp.com");
-	assert_eq(res.data.user_mappings[0].rpcd_user, "admin");
+	assert(config, "Should return configuration object");
+	assert_eq(config.issuer_url, "https://idp.com");
+	assert_eq(config.clock_tolerance, 300);
+	assert_eq(config.user_mappings[0].rpcd_user, "admin");
 });
 
 test('LOGIC: Config - Reject Invalid RPCD User', () => {
@@ -56,16 +65,16 @@ test('LOGIC: Config - Reject Invalid RPCD User', () => {
 			"s1": { ".type": "login", "username": "real-user" }
 		},
 		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com" },
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300" },
 			"u1": { ".type": "user", "rpcd_user": "fake-user", "rpcd_password": "p", "email": "test@test.com" }
 		}
 	};
 
-	let cursor = create_mock_cursor(mock_data);
-	let res = config_loader.load(cursor, {});
+	let io = create_mock_io(mock_data);
+	let config = config_loader.load(io);
 
-	assert(res.ok);
-	assert_eq(length(res.data.user_mappings), 0, "Mapping for non-existent RPCD user must be ignored");
+	assert(config);
+	assert_eq(length(config.user_mappings), 0, "Mapping for non-existent RPCD user must be ignored");
 });
 
 test('LOGIC: Config - Handle Disabled State', () => {
@@ -74,24 +83,31 @@ test('LOGIC: Config - Handle Disabled State', () => {
 			"default": { ".type": "oidc", "enabled": "0" }
 		}
 	};
-	let cursor = create_mock_cursor(mock_data);
-	let res = config_loader.load(cursor, {});
-	assert_eq(res.error, "DISABLED");
+	let io = create_mock_io(mock_data);
+	assert_throws(() => config_loader.load(io));
 });
 
 test('LOGIC: Config - Handle Missing Config', () => {
-	let cursor = create_mock_cursor({});
-	let res = config_loader.load(cursor, {});
-	assert_eq(res.error, "CONFIG_NOT_FOUND");
+	let io = create_mock_io({});
+	assert_throws(() => config_loader.load(io));
 });
 
 test('LOGIC: Config - Reject Missing Issuer URL', () => {
 	let mock_data = {
 		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1" }
+			"default": { ".type": "oidc", "enabled": "1", "clock_tolerance": "300" }
 		}
 	};
-	let cursor = create_mock_cursor(mock_data);
-	let res = config_loader.load(cursor, {});
-	assert_eq(res.error, "MISSING_ISSUER_URL");
+	let io = create_mock_io(mock_data);
+	assert_throws(() => config_loader.load(io));
+});
+
+test('LOGIC: Config - Reject Missing Clock Tolerance', () => {
+	let mock_data = {
+		"luci-sso": {
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com" }
+		}
+	};
+	let io = create_mock_io(mock_data);
+	assert_throws(() => config_loader.load(io));
 });
