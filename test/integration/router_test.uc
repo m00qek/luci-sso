@@ -69,12 +69,13 @@ when("the system is accessed for the first time (Bootstrap)", () => {
 	then("it should automatically generate a secret key during the first login attempt", () => {
 		let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
 		
-		let data = factory.with_responses(responses).spy((io) => {
+		let final_key = factory.with_responses(responses, (io) => {
 			router.handle(io, MOCK_CONFIG, mock_request("/"));
+			return io.read_file("/etc/luci-sso/secret.key");
 		});
 
-		assert(data.called("write_file", "/etc/luci-sso/secret.key.tmp"), "Should have written temp key");
-		assert(data.called("rename", "/etc/luci-sso/secret.key.tmp", "/etc/luci-sso/secret.key"), "Should have moved key to final path");
+		assert(final_key, "Secret key should exist after bootstrap");
+		assert_eq(length(final_key), 32, "Secret key should be 32 bytes");
 	});
 });
 

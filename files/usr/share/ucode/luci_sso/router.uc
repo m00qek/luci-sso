@@ -33,7 +33,8 @@ function handle_login(io, config) {
 	if (!disc_res.ok) return error_response(io, `OIDC Discovery failed: ${disc_res.error}`, 500);
 
 	// Ensure system is initialized (bootstrap secret key if needed)
-	session.get_secret_key(io);
+	let key_res = session.get_secret_key(io);
+	if (!key_res.ok) return error_response(io, `System initialization failed: ${key_res.error}`, 500);
 
 	let handshake_res = session.create_state(io);
 	if (!handshake_res.ok) return error_response(io, `Failed to create handshake: ${handshake_res.error}`, 500);

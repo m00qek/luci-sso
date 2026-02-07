@@ -136,7 +136,9 @@ export function create_state(io) {
 	try {
 		let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
 		if (!io.write_file(path, sprintf("%J", data))) {
-			die(sprintf("%s", io.fserror()));
+			let err = io.fserror();
+			if (io.log) io.log("error", `Failed to save handshake state: ${err}`);
+			return { ok: false, error: "STATE_SAVE_FAILED", details: err };
 		}
 	} catch (e) {
 		if (io.log) io.log("error", `Failed to save handshake state: ${e}`);
