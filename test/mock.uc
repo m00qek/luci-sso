@@ -36,7 +36,7 @@ function build_provider(state) {
 		return fn(...args);
 	};
 
-	return {
+	let io = {
 		// Private state handle for inheritance
 		__state__: state,
 
@@ -94,7 +94,7 @@ function build_provider(state) {
 		
 		getenv: trackable("getenv", (key) => state.env[key]),
 		
-		urlencode: trackable("urlencode", (s) => lucihttp.urlencode(s)),
+		urlencode: (s) => lucihttp.urlencode(s), // Pure function, no tracking needed
 		
 		log: trackable("log", (level, msg) => {}),
 		
@@ -116,7 +116,7 @@ function build_provider(state) {
 			return (type(res) == "function") ? res(args) : res;
 		}),
 		
-		uci_cursor: function() {
+		uci_cursor: () => {
 			return {
 				get_all: function(pkg, sec) {
 					let p = state.uci[pkg];
@@ -144,6 +144,7 @@ function build_provider(state) {
 			flush: () => {}
 		}
 	};
+	return io;
 };
 
 /**
@@ -178,10 +179,13 @@ function build_factory(state) {
 			return build_factory(next_state);
 		},
 
-		spy: intercepted(
-			{ recording: true, history: [] }, 
-			(s) => create_query_handle(s.history)
-		),
+		spy: (cb) => {
+			// CONCURRENCY FIX: Clone history to prevent leakage across nested spies
+			let next_state = { ...state, recording: true, history: [ ...state.history ] };
+			let io = build_provider(next_state);
+			cb(io);
+			return create_query_handle(next_state.history);
+		},
 
 		get_stdout: intercepted(
 			{ stdout_buf: "" }, 

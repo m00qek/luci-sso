@@ -148,10 +148,11 @@ when("processing the OIDC callback", () => {
 				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
 				"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
 				"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
-			}, (io_final) => {
+			}, (io_http) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
-				let res = router.handle(io_final, { ...MOCK_CONFIG, user_mappings: [] }, req);
+				let res = router.handle(io_http, { ...MOCK_CONFIG, user_mappings: [] }, req);
 				assert_eq(res.status, 403, "Should return Forbidden for non-whitelisted user");
+				assert(index(res.body, "not authorized") >= 0, "Should explain why access was denied");
 			});
 		});
 	});

@@ -7,7 +7,7 @@ This project adheres to a strict testing architecture designed for security, res
 1.  **Functional Core, Imperative Shell**: Most logic lives in pure modules (`crypto.uc`, `oidc.uc`) that take an injectable `io` provider.
 2.  **Temporal Isolation**: Tests must never leak state. Every mock reality exists only for the duration of a closure.
 3.  **Minimal Mock Context**: **Mandatory Principle.** An `io` provider must contain *only* the mocks strictly required by the function under test. Do not provide a "fat" mock handle just because it is convenient.
-4.  **Off-by-Default Spying**: History recording is disabled by default. It must be explicitly enabled via a `spy()` block.
+4.  **Minimal State Capture**: The mock only records interactions when wrapped in a `spy()` block. This prevents memory leaks and ensures no 'ghost data' leaks between tests.
 
 ## 2. Assertion Hierarchy (Stability Rules)
 

@@ -38,7 +38,7 @@ when("using the Platinum Mock DSL", () => {
 					assert_eq(io3.read_file("/b"), 2);
 					assert_eq(io3.read_file("/c"), 3);
 				});
-				assert_eq(io2.read_file("/c"), null, "Inner state should not leak to parent");
+				assert_eq(io2.read_file("/c"), null, "Parent should not see inner state");
 			});
 		});
 	});
