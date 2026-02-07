@@ -47,6 +47,7 @@ when("initiating the OIDC login flow", () => {
 			let res = router.handle(io, MOCK_CONFIG, mock_request("/"));
 			then("it should fail discovery and return a 500 Internal Error", () => {
 				assert_eq(res.status, 500);
+				assert(res.is_error);
 			});
 		});
 	});
@@ -162,8 +163,10 @@ when("processing the OIDC callback", () => {
 			}, (io_http) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
 				let res = router.handle(io_http, { ...MOCK_CONFIG, user_mappings: [] }, req);
-				assert_eq(res.status, 403, "Should return Forbidden for non-whitelisted user");
-				assert(index(res.body, "not authorized") >= 0, "Should explain why access was denied");
+				then("it should return Forbidden for non-whitelisted user", () => {
+					assert_eq(res.status, 403);
+					assert_eq(res.code, "USER_NOT_AUTHORIZED");
+				});
 			});
 		});
 	});
@@ -187,7 +190,7 @@ when("processing the OIDC callback", () => {
 				let res = router.handle(io_exec, MOCK_CONFIG, req);
 				then("it should reject the replay with a 401 Unauthorized", () => {
 					assert_eq(res.status, 401);
-					assert(index(res.body, "Invalid handshake") >= 0);
+					assert_eq(res.code, "STATE_NOT_FOUND");
 				});
 			});
 		});
@@ -201,6 +204,7 @@ when("processing the OIDC callback", () => {
 
 			then("it should fail safely with an error and not crash", () => {
 				assert(res.status >= 400);
+				assert(res.is_error);
 			});
 		});
 	});

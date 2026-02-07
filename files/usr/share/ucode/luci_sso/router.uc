@@ -16,12 +16,15 @@ function response(status, headers, body) {
 }
 
 /**
- * Creates an error response and logs it.
+ * Creates an error response object for the shell to render.
  * @private
  */
-function error_response(io, msg, status) {
-	if (io && io.log) io.log("error", `${status || 500}: ${msg}`);
-	return response(status || 500, { "Content-Type": "text/plain" }, msg);
+function error_response(io, code, status) {
+	return {
+		is_error: true,
+		code: code,
+		status: status || 500
+	};
 }
 
 /**
@@ -30,14 +33,14 @@ function error_response(io, msg, status) {
  */
 function handle_login(io, config) {
 	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
-	if (!disc_res.ok) return error_response(io, `OIDC Discovery failed: ${disc_res.error}`, 500);
+	if (!disc_res.ok) return error_response(io, "OIDC_DISCOVERY_FAILED", 500);
 
 	// Ensure system is initialized (bootstrap secret key if needed)
 	let key_res = session.get_secret_key(io);
-	if (!key_res.ok) return error_response(io, `System initialization failed: ${key_res.error}`, 500);
+	if (!key_res.ok) return error_response(io, "SYSTEM_INIT_FAILED", 500);
 
 	let handshake_res = session.create_state(io);
-	if (!handshake_res.ok) return error_response(io, `Failed to create handshake: ${handshake_res.error}`, 500);
+	if (!handshake_res.ok) return error_response(io, handshake_res.error, 500);
 	let handshake = handshake_res.data;
 
 	let url = oidc.get_auth_url(io, config, disc_res.data, handshake);
@@ -57,26 +60,26 @@ function validate_callback_request(io, config, request) {
 	let cookies = request.cookies || {};
 
 	if (query.error) {
-		return { ok: false, error: `Identity Provider error: ${query.error}`, status: 400 };
+		return { ok: false, error: "IDP_ERROR", status: 400 };
 	}
 
 	if (!query.code) {
-		return { ok: false, error: "Missing authorization code", status: 400 };
+		return { ok: false, error: "MISSING_CODE", status: 400 };
 	}
 
 	let state_token = cookies.luci_sso_state;
 	if (!state_token) {
-		return { ok: false, error: "Missing handshake cookie (session timeout?)", status: 401 };
+		return { ok: false, error: "MISSING_HANDSHAKE_COOKIE", status: 401 };
 	}
 
 	let handshake_res = session.verify_state(io, state_token, config.clock_tolerance);
 	if (!handshake_res.ok) {
-		return { ok: false, error: `Invalid handshake: ${handshake_res.error}`, status: 401 };
+		return { ok: false, error: handshake_res.error, status: 401 };
 	}
 
 	let handshake = handshake_res.data;
 	if (query.state != handshake.state) {
-		return { ok: false, error: "State mismatch (CSRF protection)", status: 403 };
+		return { ok: false, error: "STATE_MISMATCH", status: 403 };
 	}
 
 	return { ok: true, data: { code: query.code, handshake: handshake } };
@@ -89,7 +92,7 @@ function validate_callback_request(io, config, request) {
 function complete_oauth_flow(io, config, code, handshake) {
 	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
-		return { ok: false, error: `OIDC Discovery failed: ${disc_res.error}`, status: 500 };
+		return { ok: false, error: "OIDC_DISCOVERY_FAILED", status: 500 };
 	}
 	// Create a shallow copy to avoid mutating the cached object
 	let discovery = { ...disc_res.data };
@@ -103,13 +106,13 @@ function complete_oauth_flow(io, config, code, handshake) {
 
 	let exchange_res = oidc.exchange_code(io, config, discovery, code, handshake.code_verifier);
 	if (!exchange_res.ok) {
-		return { ok: false, error: `Token exchange failed: ${exchange_res.error}`, status: 500 };
+		return { ok: false, error: "TOKEN_EXCHANGE_FAILED", status: 500 };
 	}
 	let tokens = exchange_res.data;
 
 	let jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri);
 	if (!jwks_res.ok) {
-		return { ok: false, error: `Failed to fetch IdP keys: ${jwks_res.error}`, status: 500 };
+		return { ok: false, error: "JWKS_FETCH_FAILED", status: 500 };
 	}
 
 	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery);
@@ -125,7 +128,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 	}
 
 	if (!verify_res.ok) {
-		return { ok: false, error: `ID Token verification failed: ${verify_res.error}`, status: 401 };
+		return { ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", status: 401 };
 	}
 
 	return { 
@@ -156,7 +159,7 @@ function find_user_mapping(io, config, email) {
 function create_session_response(io, mapping, oidc_email, access_token) {
 	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, oidc_email, access_token);
 	if (!ubus_res.ok) {
-		return { ok: false, error: "System login failed (UBUS)", status: 500 };
+		return { ok: false, error: "UBUS_LOGIN_FAILED", status: 500 };
 	}
 
 	return {
@@ -189,7 +192,7 @@ function handle_callback(io, config, request) {
 
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
-		return error_response(io, `User ${user_data.email} is not authorized on this device`, 403);
+		return error_response(io, "USER_NOT_AUTHORIZED", 403);
 	}
 
 	let final_res = create_session_response(io, mapping, user_data.email, access_token);

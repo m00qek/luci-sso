@@ -144,6 +144,42 @@ export function render(io, res) {
 };
 
 /**
+ * Maps internal error codes to user-friendly messages.
+ * @private
+ */
+const ERROR_MAP = {
+	"STATE_NOT_FOUND": "Your session has expired or is invalid. Please try logging in again.",
+	"STATE_CORRUPTED": "Authentication failed due to a system error. Please try again.",
+	"STATE_SAVE_FAILED": "Internal server error: Could not initialize authentication.",
+	"OIDC_DISCOVERY_FAILED": "Could not connect to the Identity Provider.",
+	"TOKEN_EXCHANGE_FAILED": "Failed to exchange authorization code for tokens.",
+	"ID_TOKEN_VERIFICATION_FAILED": "The identity token provided by the IdP is invalid.",
+	"USER_NOT_AUTHORIZED": "Your account is not authorized to access this device.",
+	"NETWORK_ERROR": "A network error occurred while communicating with the IdP.",
+	"INSECURE_ENDPOINT": "The IdP provided an insecure endpoint. Connection aborted for security."
+};
+
+/**
+ * Standardizes and renders an error response, preventing internal leakage.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} code - Internal error code (SCREAMING_SNAKE_CASE)
+ * @param {number} status - HTTP status code
+ */
+export function render_error(io, code, status) {
+	let user_msg = ERROR_MAP[code] || "An unexpected authentication error occurred.";
+	
+	if (io.log) {
+		io.log("error", `[${status || 500}] ${code}`);
+	}
+
+	_out(io, {
+		"Status": status || 500,
+		"Content-Type": "text/plain"
+	}, `Error: ${user_msg}\n`);
+};
+
+/**
  * Handles fatal script errors and crashes.
  * 
  * @param {object} io - I/O provider
