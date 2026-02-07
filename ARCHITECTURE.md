@@ -29,12 +29,12 @@ One of the most critical architectural decisions is the explicit support for env
 To achieve "Gold Standard" security, the project enforces an exclusively HTTPS-based OIDC flow.
 
 ### Front-channel (Browser ↔ IdP)
-*   **Enforcement:** The `issuer_url` must use the `https://` scheme (exception granted for `localhost`).
+*   **Enforcement:** The `issuer_url` MUST use the `https://` scheme.
 *   **Reasoning:** Prevents leakage of Authorization Codes over insecure networks and ensures compatibility with `Secure` cookie flags.
 
 ### Back-channel (Router ↔ IdP)
-*   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) must be performed over HTTPS with strict certificate verification.
-*   **Transport Exception:** The `internal_issuer_url` may use `http://` only if explicitly configured for trusted internal-only transport (e.g., Docker bridge), but the logical identity remains HTTPS.
+*   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS. Any configured `internal_issuer_url` must also use TLS.
+*   **Reasoning:** The back-channel carries sensitive credentials (`client_secret`, `access_token`). Insecure transport is never acceptable in this role.
 *   **Trust Model:** The router will reject any connection where the IdP's certificate is not trusted by the system's CA store. This prevents Man-in-the-Middle (MitM) attacks during secret exchange.
 
 ---

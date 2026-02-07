@@ -73,6 +73,14 @@ function _write_cache(io, path, data) {
 	} catch (e) {}
 }
 
+/**
+ * Checks if a URL uses HTTPS.
+ * @private
+ */
+function _is_https(url) {
+	return (type(url) == "string" && substr(url, 0, 8) == "https://");
+}
+
 // --- Public API ---
 
 /**
@@ -81,6 +89,8 @@ function _write_cache(io, path, data) {
 export function discover(io, issuer, options) {
 	validate_io(io);
 	if (type(issuer) != "string") die("CONTRACT_VIOLATION: issuer must be a string");
+
+	if (!_is_https(issuer)) return { ok: false, error: "INSECURE_ISSUER_URL" };
 
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(issuer, "discovery");
@@ -93,6 +103,8 @@ export function discover(io, issuer, options) {
 	
 	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
 	let fetch_url = options.internal_issuer_url || issuer;
+	if (!_is_https(fetch_url)) return { ok: false, error: "INSECURE_FETCH_URL" };
+
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
 	fetch_url += ".well-known/openid-configuration";
 	
@@ -114,6 +126,9 @@ export function discover(io, issuer, options) {
 		if (type(config[field]) != "string" || length(config[field]) == 0) {
 			return { ok: false, error: "MISSING_REQUIRED_FIELD", details: field };
 		}
+		if (!_is_https(config[field])) {
+			return { ok: false, error: "INSECURE_ENDPOINT", details: field };
+		}
 	}
 	
 	_write_cache(io, cache_path, config);
@@ -127,6 +142,8 @@ export function discover(io, issuer, options) {
 export function fetch_jwks(io, jwks_uri, options) {
 	validate_io(io);
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
+
+	if (!_is_https(jwks_uri)) return { ok: false, error: "INSECURE_JWKS_URI" };
 
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(jwks_uri, "jwks");
@@ -196,6 +213,9 @@ export function get_auth_url(io, config, discovery, params) {
  */
 export function exchange_code(io, config, discovery, code, verifier) {
 	validate_io(io);
+
+	if (!_is_https(discovery.token_endpoint)) return { ok: false, error: "INSECURE_TOKEN_ENDPOINT" };
+
 	let body = {
 		grant_type: "authorization_code",
 		client_id: config.client_id,
