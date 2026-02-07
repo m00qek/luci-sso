@@ -5,27 +5,29 @@ import * as web from 'luci_sso.web';
  * Creates a mock IO provider for web logic testing.
  */
 function create_mock_io(env, stdout) {
-	return {
+	let mock_io = {
 		_env: env || {},
 		getenv: function(k) { return this._env[k]; },
-		stdout: stdout || { write: () => {}, flush: () => {} },
-		log: () => {}
+		stdout: stdout || { write: function() {}, flush: function() {} },
+		log: function() {}
 	};
+	return mock_io;
 }
 
 /**
  * Creates a mock stdout that captures all writes.
  */
 function create_mock_stdout() {
-	return {
+	let mock_stdout = {
 		_buf: "",
 		write: function(s) { this._buf += s; },
 		flush: function() { }
 	};
+	return mock_stdout;
 }
 
 // =============================================================================
-// Tier 2: Web Integration Logic
+// Tier 2: Web Integration Logic (Parsing through request)
 // =============================================================================
 
 test('LOGIC: Web - Request Query Parsing', () => {
@@ -74,10 +76,10 @@ test('LOGIC: Web - Enforce Limits', () => {
     // 2. Count Limit (100)
 	let many = "";
 	for (let i = 0; i < 150; i++) many += `k${i}=v&`;
-	io = create_mock_io({ QUERY_STRING: many });
+	let io2 = create_mock_io({ QUERY_STRING: many });
 	
-	req = web.request(io);
-	assert_eq(length(req.query), 100, "Should limit parameter count to 100");
+	let req2 = web.request(io2);
+	assert_eq(length(req2.query), 100, "Should limit parameter count to 100");
 });
 
 test('LOGIC: Web - Render 302 Redirect', () => {

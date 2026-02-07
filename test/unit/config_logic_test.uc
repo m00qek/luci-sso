@@ -5,7 +5,7 @@ import * as config_loader from 'luci_sso.config';
  * Mocks a UCI cursor for testing config logic.
  */
 function create_mock_cursor(data) {
-	return {
+	let mock_cursor = {
 		get_all: function(pkg, sec) {
 			return data[pkg] && data[pkg][sec] ? data[pkg][sec] : null;
 		},
@@ -18,13 +18,15 @@ function create_mock_cursor(data) {
 			}
 		}
 	};
+	return mock_cursor;
 }
 
 function create_mock_io(data) {
-	return {
-		uci_cursor: () => create_mock_cursor(data),
-		log: () => {}
+	let mock_io = {
+		uci_cursor: function() { return create_mock_cursor(data); },
+		log: function() {}
 	};
+	return mock_io;
 }
 
 // =============================================================================
@@ -84,12 +86,12 @@ test('LOGIC: Config - Handle Disabled State', () => {
 		}
 	};
 	let io = create_mock_io(mock_data);
-	assert_throws(() => config_loader.load(io));
+	assert_throws(function() { config_loader.load(io); });
 });
 
 test('LOGIC: Config - Handle Missing Config', () => {
 	let io = create_mock_io({});
-	assert_throws(() => config_loader.load(io));
+	assert_throws(function() { config_loader.load(io); });
 });
 
 test('LOGIC: Config - Reject Missing Issuer URL', () => {
@@ -99,7 +101,7 @@ test('LOGIC: Config - Reject Missing Issuer URL', () => {
 		}
 	};
 	let io = create_mock_io(mock_data);
-	assert_throws(() => config_loader.load(io));
+	assert_throws(function() { config_loader.load(io); });
 });
 
 test('LOGIC: Config - Reject Missing Clock Tolerance', () => {
@@ -109,5 +111,5 @@ test('LOGIC: Config - Reject Missing Clock Tolerance', () => {
 		}
 	};
 	let io = create_mock_io(mock_data);
-	assert_throws(() => config_loader.load(io));
+	assert_throws(function() { config_loader.load(io); });
 });

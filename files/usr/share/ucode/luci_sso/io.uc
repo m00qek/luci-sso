@@ -15,7 +15,7 @@ let _ubus_conn = null;
  */
 export function create() {
 	return {
-		time: time,
+		time: () => time(),
 		read_file: (path) => fs.readfile(path),
 		write_file: (path, data) => fs.writefile(path, data),
 		rename: (old, newpath) => fs.rename(old, newpath),
@@ -26,23 +26,26 @@ export function create() {
 		
 		log: (level, msg) => warn(`[luci-sso] [${level}] ${msg}\n`),
 
-		http_get: function(url) {
+		http_get: (url) => {
 			let res = secure_http.request('GET', url, { timeout: 10000 });
 			if (res.error) {
-				this.log("error", `HTTPS GET failed for ${url}: ${res.error}`);
+				warn(`[luci-sso] [error] HTTPS GET failed for ${url}: ${res.error}\n`);
 				return { error: "NETWORK_ERROR" };
 			}
 			return { status: res.status, body: res.body };
 		},
 
-		http_post: function(url, opts) {
+		http_post: (url, opts) => {
+			let headers = (opts && opts.headers) ? opts.headers : {};
+			let post_data = (opts && opts.body) ? opts.body : null;
+			
 			let res = secure_http.request('POST', url, { 
 				timeout: 10000, 
-				headers: opts?.headers || {},
-				post_data: opts?.body 
+				headers: headers,
+				post_data: post_data 
 			});
 			if (res.error) {
-				this.log("error", `HTTPS POST failed for ${url}: ${res.error}`);
+				warn(`[luci-sso] [error] HTTPS POST failed for ${url}: ${res.error}\n`);
 				return { error: "NETWORK_ERROR" };
 			}
 			return { status: res.status, body: res.body };
@@ -51,7 +54,7 @@ export function create() {
 		urlencode: lucihttp.urlencode,
 		getenv: getenv,
 		
-		ubus_call: function(obj, method, args) {
+		ubus_call: (obj, method, args) => {
 			if (!_ubus_conn) {
 				_ubus_conn = ubus.connect();
 				if (!_ubus_conn) return null;

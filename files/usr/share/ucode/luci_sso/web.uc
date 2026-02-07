@@ -101,7 +101,7 @@ function _out(io, headers, body) {
  * @returns {object} - {path, query, cookies}
  */
 export function request(io) {
-	if (type(io?.getenv) != "function") {
+	if (!io || type(io.getenv) != "function") {
 		die("CONTRACT_VIOLATION: web.request expects an IO provider with getenv");
 	}
 
@@ -119,7 +119,7 @@ export function request(io) {
  * @param {object} res - Response object {status, headers, body}
  */
 export function render(io, res) {
-	if (!io?.stdout || type(io.stdout.write) != "function" || type(io.stdout.flush) != "function") {
+	if (!io || !io.stdout || type(io.stdout.write) != "function" || type(io.stdout.flush) != "function") {
 		die("CONTRACT_VIOLATION: web.render expects an IO provider with a writable stdout");
 	}
 
@@ -149,7 +149,7 @@ export function render(io, res) {
  * @param {any} e - The error object or message
  */
 export function error(io, e) {
-	if (!io?.stdout || type(io.stdout.write) != "function" || type(io.stdout.flush) != "function") {
+	if (!io || !io.stdout || type(io.stdout.write) != "function" || type(io.stdout.flush) != "function") {
 		die("CONTRACT_VIOLATION: web.error expects an IO provider with a writable stdout");
 	}
 

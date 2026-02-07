@@ -10,7 +10,7 @@
  * @returns {object} - The validated configuration object
  */
 export function load(io) {
-	if (type(io?.uci_cursor) != "function") {
+	if (!io || type(io.uci_cursor) != "function") {
 		die("CONTRACT_VIOLATION: config.load expects an IO provider with uci_cursor");
 	}
 

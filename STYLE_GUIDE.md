@@ -601,6 +601,79 @@ static uc_value_t *uc_mbedtls_hmac_sha256(uc_vm_t *vm, size_t nargs) {
 }
 ```
 
+## ucode Syntax Limitations and Gotchas
+
+This section lists syntax features that are either unsupported or behave unexpectedly in the target ucode environment.
+
+### 1. Avoid Optional Chaining (`?.`)
+**Status: DANGEROUS**
+While the parser may accept it, the behavior is inconsistent. When used on a `null` object, it returns a value with an "empty" type that causes crashes (e.g., "left-hand side is not a function") when used in subsequent expressions.
+
+**❌ INCORRECT:**
+```javascript
+let val = io?.getenv("PATH");
+```
+
+**✅ CORRECT:**
+```javascript
+let val = (io && io.getenv) ? io.getenv("PATH") : null;
+```
+
+### 2. No Destructuring (`let { a } = obj`)
+**Status: NOT SUPPORTED**
+ucode does not support object or array destructuring. Using this will result in a compile-time syntax error.
+
+**❌ INCORRECT:**
+```javascript
+let { issuer_url, client_id } = config;
+```
+
+**✅ CORRECT:**
+```javascript
+let issuer_url = config.issuer_url;
+let client_id = config.client_id;
+```
+
+### 3. Arrow Functions
+**Status: PREFERRED**
+Arrow functions are the preferred way to define functions and passthroughs. They should be used for both one-liners and multi-line logic.
+
+**Exception:** Avoid using arrow functions when the function needs to return an **object literal** directly. This prevents parser ambiguity where the interpreter might confuse the object braces `{}` with a code block. Use traditional `function` for these cases.
+
+**❌ INCORRECT (Ambiguous):**
+```javascript
+let get_data = () => { a: 1, b: 2 }; 
+```
+
+**✅ CORRECT (Explicit):**
+```javascript
+let get_data = function() {
+    return { a: 1, b: 2 };
+};
+```
+
+### 4. Shorthand Properties (`{ a }`)
+**Status: SUPPORTED**
+Shorthand property names are safe to use when building objects from existing local variables.
+
+**✅ CORRECT:**
+```javascript
+let a = 1;
+let obj = { a, b: 2 };
+```
+
+### 5. Handling `NaN`
+**Status: Standard IEEE 754**
+`NaN == NaN` is always `false`. When using `int()` or `double()` for conversion, check the resulting type to detect failure.
+
+**✅ CORRECT:**
+```javascript
+let clock_tolerance = int(val);
+if (type(clock_tolerance) != "int") {
+    die("Invalid integer");
+}
+```
+
 ---
 
 ## Module Organization
