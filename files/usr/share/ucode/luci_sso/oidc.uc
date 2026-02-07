@@ -100,7 +100,7 @@ export function discover(io, issuer, options) {
 	if (response.status != 200) return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
 	
 	let config = safe_json_parse(response.body);
-	if (!config) return { ok: false, error: "INVALID_JSON" };
+	if (!config) return { ok: false, error: "INVALID_DISCOVERY_DOC" };
 
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {

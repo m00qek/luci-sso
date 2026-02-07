@@ -1,75 +1,100 @@
-# Luci-SSO Test Suite: The Platinum Standard
+# Testing Gold Standard (Platinum Tier)
 
-This directory contains the exhaustive test suite for `luci-sso`. The suite is designed using a **Tiered Testing Architecture** to ensure mathematical honesty, protocol compliance, and system-wide reliability.
+This project adheres to a strict testing architecture designed for security, resilience, and predictability in an embedded environment.
 
----
+## 1. Testing Philosophy
 
-## **The Philosophy: Why Tiered Testing?**
+1.  **Functional Core, Imperative Shell**: Most logic lives in pure modules (`crypto.uc`, `oidc.uc`) that take an injectable `io` provider.
+2.  **Temporal Isolation**: Tests must never leak state. Every mock reality exists only for the duration of a closure.
+3.  **Minimal Mock Context**: **Mandatory Principle.** An `io` provider must contain *only* the mocks strictly required by the function under test. Do not provide a "fat" mock handle just because it is convenient.
+4.  **Off-by-Default Spying**: History recording is disabled by default. It must be explicitly enabled via a `spy()` block.
 
-Cryptography and OIDC flows are fragile. A failure could be a simple logic bug (wrong timestamp check) or a catastrophic mathematical failure (buffer overflow in C). 
+## 2. Assertion Hierarchy (Stability Rules)
 
-We use a tiered approach to:
-1.  **Isolate Failure Domains:** Instantly know if a bug is in the C-backend, the ucode plumbing, or the OIDC business logic.
-2.  **Ensure Mathematical Honesty:** Prove the C-backend matches OpenSSL results bit-for-bit.
-3.  **Adversarial Defense:** Proactively test "Paranoid" scenarios like signature malleability, key confusion, and future-dated tokens.
+To keep tests robust and refactor-friendly, always follow this priority when writing assertions:
 
-### **Mandatory Isolation Rule**
-**FIXTURE ISOLATION**: Each tier MUST define its own fixtures or use its own generation helpers. **CROSS-TIER FIXTURE IMPORTS ARE FORBIDDEN.** This ensures that a change in one tier's data requirements does not cause cascading failures in unrelated tiers.
+### Tier 1: Return Values (Primary)
+Always assert on the function's return value first. This verifies the **Public Contract**.
+*   **Target**: `assert(res.ok)`, `assert_eq(res.data.sid, "...")`.
 
----
+### Tier 2: Observable State (Secondary)
+If the function has side-effects (like writing a file), verify the **final state** of the mock reality rather than the call itself.
+*   **Target**: `assert(io.read_file("/etc/config/pkg"))`.
+*   **Avoid**: Using `spy()` to check if `write_file` was called, unless the specific arguments or frequency are the target of the test.
 
-## **The Tiers**
-
-### **Tier 0: Backend Compliance (`unit/native_*`)**
-*   **Goal:** Certification of the C extension (`native.so`).
-*   **Method:** Direct mathematical verification of SHA256, HMAC, RSA, and ECDSA against **OpenSSL Golden Values**.
-*   **Focus:** Memory safety, binary robustness (null-byte handling), and raw mathematical correctness.
-
-### **Tier 1: Cryptographic Plumbing (`unit/crypto_plumbing_*`)**
-*   **Goal:** Secure Gatekeeping.
-*   **Method:** Verify the transformation logic (JWK-to-PEM) and structural JWT validation.
-*   **Focus:** Rejecting malformed JSON, enforcing size limits, and ensuring fail-fast component decoding.
-
-### **Tier 2: Business & Protocol Logic (`unit/*_logic_*`)**
-*   **Goal:** 100% OIDC Compliance.
-*   **Method:** Dynamic **HS256 token generation** using a local secret.
-*   **Focus:** Expiration, nonces, audience/issuer matching, and whitelist authorization.
-
-### **Tier 3: Behavioral Integration (`integration/router_test.uc`)**
-*   **Goal:** System-wide Specification.
-*   **Method:** High-level BDD-style (`when/and/then`) testing using a single verified **Anchor RS256 Token**.
-*   **Focus:** UCI configuration loading, UBUS integration, and end-to-end handshake wiring.
+### Tier 3: Spies (Last Resort)
+Use `spy()` ONLY for interactions that leave no persistent state in the mock, or where the protocol sequence is a security requirement.
+*   **Target**: UBUS calls, Log messages, or verifying that a file was *deleted* (if it didn't exist before).
+*   **Target**: `assert(data.called("ubus", "session", "login"))`.
 
 ---
 
-## **Tier Differentiation Strategy**
+## 3. Mocking with `mock.uc`
 
-| Tier | Prefix | Target | Data Source | Failure Domain |
-| :--- | :--- | :--- | :--- | :--- |
-| **0** | **COMPLIANCE:** | `native.so` | Raw Primitives | C-Level Math / Memory |
-| **1** | **PLUMBING:** | `crypto.uc` | `tier1_fixtures.uc` | Format / Encoding / Hand-off |
-| **2** | **LOGIC:** | `oidc.uc` | `helpers.uc` (Dynamic) | Protocol Rules / Claims |
-| **3** | **ANCHOR:** | `router.uc` | `tier1_fixtures.uc` | Glue Code / UCI Config |
+The `mock` module provides a fluent DSL for building mock realities.
 
----
+### Basic Usage
+```javascript
+import * as mock from 'mock';
 
-## **How to Run**
+let factory = mock.create();
 
-The primary entry point is the development Makefile:
+factory.with_env({ PATH_INFO: "/logout" }, (io) => {
+    let req = web.request(io);
+    assert_eq(req.path, "/logout");
+});
+```
 
-```bash
-# Run the entire suite against the default backend (mbedtls)
-make -f dev.mk test
+### Surgical State Inheritance (`using`)
+If a test requires sequential operations with accumulating state, use `using(io)` to derive a new reality from a previous one.
 
-# Run with full diagnostic logs
-make -f dev.mk test VERBOSE=1
+```javascript
+factory.with_files({ "/etc/key": "123" }, (io) => {
+    // 1. First function only gets files
+    let handshake = session.create_state(io);
+
+    // 2. Second function needs Files + Network (Chain surgically)
+    factory.using(io).with_responses({ "https://idp/jwks": {...} }).spy((spying_io) => {
+        router.handle(spying_io, ...);
+    });
+});
+```
+
+### Spying and Interaction Queries
+The `spy()` method returns a **Query Handle**. Interaction assertions should read like English sentences.
+
+```javascript
+let data = factory.with_ubus({ "session:destroy": {} }).spy((io) => {
+    router.handle(io, ...);
+});
+
+// Predicate Engine: .called(type, arg1, arg2, ...)
+assert(data.called("ubus", "session", "destroy"));
+assert(data.called("log", "warn"));
 ```
 
 ---
 
-## **Security Standards Met**
-*   ✅ **Constant-Time Comparisons** for all secrets.
-*   ✅ **Paranoid Encoding Enforcement** (Strict Base64URL).
-*   ✅ **Malleability Defense** (Rejecting trailing garbage).
-*   ✅ **Fail-Fast Structural Validation** before cryptographic operations.
-*   ✅ **Hardware-Level Hardening** (Rejecting weak RSA exponents).
+## 3. Supported Scopes
+
+| Scope | Description |
+| :--- | :--- |
+| `with_files(data, cb)` | Simulates filesystem (`read_file`, `write_file`, `lsdir`). |
+| `with_uci(data, cb)` | Simulates UCI configuration packages. |
+| `with_env(data, cb)` | Simulates CGI environment variables. |
+| `with_responses(data, cb)` | Simulates HTTP network responses. |
+| `with_ubus(data, cb)` | Simulates UBUS object/method calls. |
+| `with_read_only(cb)` | Simulates a read-only filesystem (fails `write_file`, `mkdir`). |
+| `spy(cb)` | Enables interaction recording and returns a Query Handle. |
+| `get_stdout(cb)` | Executes a block and returns the raw captured `stdout`. |
+
+---
+
+## 4. ucode Syntax Gotchas
+
+To ensure cross-version compatibility and parser stability, strictly follow these rules:
+
+1.  **NO Optional Chaining (`?.`)**: It returns an "empty" type that crashes during evaluation.
+2.  **NO Destructuring (`let {a} = obj`)**: Use explicit property assignment.
+3.  **Hybrid Arrow Functions**: Use arrow functions for logic and passthroughs. Use traditional `function` when returning an object literal directly to avoid brace ambiguity.
+4.  **NaN Equality**: Always use `type(x) != "int"` to detect failed integer conversions.

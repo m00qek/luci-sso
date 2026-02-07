@@ -267,8 +267,23 @@ export function verify_jwt(token, pubkey, options) {
 		return { ok: false, error: "ISSUER_MISMATCH" };
 	}
 
-	if (options.aud && payload.aud !== options.aud) {
-		return { ok: false, error: "AUDIENCE_MISMATCH" };
+	if (options.aud) {
+		let aud = payload.aud;
+		let found = false;
+		if (type(aud) == "array") {
+			for (let a in aud) {
+				if (a === options.aud) {
+					found = true;
+					break;
+				}
+			}
+		} else {
+			found = (aud === options.aud);
+		}
+		
+		if (!found) {
+			return { ok: false, error: "AUDIENCE_MISMATCH" };
+		}
 	}
 
 	return { ok: true, data: payload };

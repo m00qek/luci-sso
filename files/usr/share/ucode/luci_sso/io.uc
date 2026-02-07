@@ -63,6 +63,7 @@ export function create() {
 		},
 
 		uci_cursor: () => uci.cursor(),
+		fserror: () => fs.error(),
 		stdout: fs.stdout
 	};
 };

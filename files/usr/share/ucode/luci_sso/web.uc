@@ -156,7 +156,9 @@ export function error(io, e) {
 	let msg = sprintf("%s", e);
 	let stack = (type(e) == "object") ? e.stacktrace : "";
 	
-	warn(`[luci-sso] Router crash: ${msg}\n${stack}\n`);
+	if (io.log) {
+		io.log("error", `Router crash: ${msg}\n${stack}`);
+	}
 	
 	_out(io, {
 		"Status": "500 Internal Server Error",

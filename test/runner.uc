@@ -49,3 +49,8 @@ for (let mod in integration_files) {
 	require(mod);
 }
 run_all("Integration Tests (Tier 3)");
+
+// --- Tier 4: Meta (Test Harness) ---
+clear_tests();
+require("meta.mock_test");
+run_all("Meta Tests (Tier 4)");
