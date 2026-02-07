@@ -172,6 +172,33 @@ when("processing the OIDC callback", () => {
 		});
 	});
 
+	and("an attacker attempts to replay an access_token already in use by another session", () => {
+		factory.with_env({}, (io) => {
+			let state_res = session.create_state(io);
+			let handshake = state_res.data;
+			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
+
+			factory.using(io)
+				.with_responses({
+					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+					"https://idp.com/token": { status: 200, body: { access_token: "ALREADY_USED", id_token: id_token } },
+					"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+				})
+				.with_ubus({ 
+					"session:list": { "session-123": { values: { oidc_access_token: "ALREADY_USED" } } } 
+				})
+				.spy((spying_io) => {
+					let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+					let res = router.handle(spying_io, MOCK_CONFIG, req);
+					
+					then("it should reject the login with TOKEN_REPLAY_DETECTED", () => {
+						assert_eq(res.status, 403);
+						assert_eq(res.code, "TOKEN_REPLAY_DETECTED");
+					});
+				});
+		});
+	});
+
 	and("an attacker attempts to replay a valid state token", () => {
 		factory.with_env({}, (io) => {
 			let state_res = session.create_state(io);

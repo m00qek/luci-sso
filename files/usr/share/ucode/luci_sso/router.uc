@@ -192,6 +192,10 @@ function handle_callback(io, config, request) {
 	let access_token = oauth_res.access_token; // From complete_oauth_flow
 	let refresh_token = oauth_res.refresh_token;
 
+	if (ubus.is_token_replayed(io, access_token)) {
+		return error_response(io, "TOKEN_REPLAY_DETECTED", 403);
+	}
+
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
 		return error_response(io, "USER_NOT_AUTHORIZED", 403);

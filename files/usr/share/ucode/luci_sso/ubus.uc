@@ -57,6 +57,27 @@ export function create_session(io, username, password, oidc_email, access_token,
 };
 
 /**
+ * Checks if an access token is already associated with any active UBUS session.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} access_token - Token to check
+ * @returns {boolean} - True if replayed
+ */
+export function is_token_replayed(io, access_token) {
+	if (!access_token || type(io.ubus_call) != "function") return false;
+
+	let sessions = io.ubus_call("session", "list", {});
+	if (type(sessions) != "object") return false;
+
+	for (let sid, data in sessions) {
+		if (type(data) == "object" && data.values && data.values.oidc_access_token === access_token) {
+			return true;
+		}
+	}
+	return false;
+};
+
+/**
  * Destroys a LuCI system session via UBUS.
  * 
  * @param {object} io - I/O provider
