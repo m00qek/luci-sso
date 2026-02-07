@@ -157,6 +157,33 @@ when("processing the OIDC callback", () => {
 		});
 	});
 
+	and("an attacker attempts to replay a valid state token", () => {
+		factory.with_env({}, (io) => {
+			let state_res = session.create_state(io);
+			let handshake = state_res.data;
+			let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+
+			// First attempt (Should proceed past state check)
+			let factory_with_responses = factory.using(io).with_responses({
+				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+				"https://idp.com/token": { error: "STOP_HERE" } // Stop after state check
+			});
+			
+			factory_with_responses.with_env({}, (io_exec) => {
+				router.handle(io_exec, MOCK_CONFIG, req);
+			});
+
+			// Second attempt (Same state, but file should be gone)
+			factory_with_responses.with_env({}, (io_exec) => {
+				let res = router.handle(io_exec, MOCK_CONFIG, req);
+				then("it should reject the replay with a 401 Unauthorized", () => {
+					assert_eq(res.status, 401);
+					assert(index(res.body, "Invalid handshake") >= 0);
+				});
+			});
+		});
+	});
+
 	and("an attacker sends binary garbage or malformed protocol parameters", () => {
 		let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
 		factory.with_responses(responses, (io) => {

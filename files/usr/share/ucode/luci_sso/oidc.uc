@@ -91,16 +91,23 @@ export function discover(io, issuer, options) {
 		return { ok: true, data: cached };
 	}
 	
-	let discovery_url = issuer;
-	if (substr(discovery_url, -1) != '/') discovery_url += '/';
-	discovery_url += ".well-known/openid-configuration";
+	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
+	let fetch_url = options.internal_issuer_url || issuer;
+	if (substr(fetch_url, -1) != '/') fetch_url += '/';
+	fetch_url += ".well-known/openid-configuration";
 	
-	let response = io.http_get(discovery_url);
+	let response = io.http_get(fetch_url);
 	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
 	if (response.status != 200) return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
 	
 	let config = safe_json_parse(response.body);
 	if (!config) return { ok: false, error: "INVALID_DISCOVERY_DOC" };
+
+	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
+	if (config.issuer && config.issuer != issuer) {
+		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", 
+		         details: `Requested ${issuer}, got ${config.issuer}` };
+	}
 
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {

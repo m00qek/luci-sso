@@ -179,6 +179,8 @@ export function verify_state(io, handle, clock_tolerance) {
 
 	try {
 		content = io.read_file(path);
+		// MANDATORY: Atomic one-time use. Delete immediately after reading (before validation).
+		if (content) io.remove(path);
 	} catch (e) {
 		return { ok: false, error: "STATE_NOT_FOUND" };
 	}
@@ -187,14 +189,12 @@ export function verify_state(io, handle, clock_tolerance) {
 
 	let data = safe_json_parse(content);
 	if (!data) {
-		try { io.remove(path); } catch (e) {}
 		return { ok: false, error: "STATE_CORRUPTED" };
 	}
 
 	let now = io.time();
 
 	if (data.exp && data.exp < (now - clock_tolerance)) {
-		try { io.remove(path); } catch (e) {}
 		return { ok: false, error: "HANDSHAKE_EXPIRED" };
 	}
 
@@ -202,9 +202,6 @@ export function verify_state(io, handle, clock_tolerance) {
 		return { ok: false, error: "HANDSHAKE_NOT_YET_VALID" };
 	}
 	
-	// MANDATORY: One-time use. Delete immediately after successful verification.
-	try { io.remove(path); } catch (e) {}
-
 	return { ok: true, data: data };
 };
 

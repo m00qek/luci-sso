@@ -29,7 +29,7 @@ function error_response(io, msg, status) {
  * @private
  */
 function handle_login(io, config) {
-	let disc_res = oidc.discover(io, config.internal_issuer_url);
+	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) return error_response(io, `OIDC Discovery failed: ${disc_res.error}`, 500);
 
 	// Ensure system is initialized (bootstrap secret key if needed)
@@ -87,7 +87,7 @@ function validate_callback_request(io, config, request) {
  * @private
  */
 function complete_oauth_flow(io, config, code, handshake) {
-	let disc_res = oidc.discover(io, config.internal_issuer_url);
+	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
 		return { ok: false, error: `OIDC Discovery failed: ${disc_res.error}`, status: 500 };
 	}

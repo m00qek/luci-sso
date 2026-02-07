@@ -36,6 +36,19 @@ test('LOGIC: Discovery - Handle Non-JSON Response', () => {
 	});
 });
 
+test('LOGIC: Discovery - Reject Issuer Mismatch', () => {
+	let mocked = mock.create();
+	let issuer = "https://trusted.idp";
+	let url = issuer + "/.well-known/openid-configuration";
+	let evil_doc = { ...f.MOCK_DISCOVERY, issuer: "https://evil.idp" };
+
+	mocked.with_responses({ [url]: { status: 200, body: evil_doc } }, (io) => {
+		let res = oidc.discover(io, issuer);
+		assert(!res.ok);
+		assert_eq(res.error, "DISCOVERY_ISSUER_MISMATCH");
+	});
+});
+
 test('LOGIC: Discovery - Cache Robustness & TTL', () => {
 	let mocked = mock.create();
 	let issuer = "https://trusted.idp";
