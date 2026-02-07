@@ -11,9 +11,10 @@ import * as crypto from 'luci_sso.crypto';
  * @param {string} username - RPCD username
  * @param {string} password - RPCD password
  * @param {string} oidc_email - The real user's email for tagging
+ * @param {string} access_token - OIDC access token to persist
  * @returns {object} - Result Object {ok, data/error}
  */
-export function create_session(io, username, password, oidc_email) {
+export function create_session(io, username, password, oidc_email, access_token) {
 	if (type(io.ubus_call) != "function") {
 		die("CONTRACT_VIOLATION: ubus.create_session requires io.ubus_call");
 	}
@@ -41,6 +42,7 @@ export function create_session(io, username, password, oidc_email) {
 		values: { 
 			username: username,
 			oidc_user: oidc_email,
+			oidc_access_token: access_token,
 			token: csrf_token 
 		}
 	});

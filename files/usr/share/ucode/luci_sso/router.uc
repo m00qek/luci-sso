@@ -128,7 +128,11 @@ function complete_oauth_flow(io, config, code, handshake) {
 		return { ok: false, error: `ID Token verification failed: ${verify_res.error}`, status: 401 };
 	}
 
-	return { ok: true, data: verify_res.data };
+	return { 
+		ok: true, 
+		data: verify_res.data, 
+		access_token: tokens.access_token 
+	};
 }
 
 /**
@@ -149,8 +153,8 @@ function find_user_mapping(io, config, email) {
  * Creates the final application session and response.
  * @private
  */
-function create_session_response(io, mapping, oidc_email) {
-	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, oidc_email);
+function create_session_response(io, mapping, oidc_email, access_token) {
+	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, oidc_email, access_token);
 	if (!ubus_res.ok) {
 		return { ok: false, error: "System login failed (UBUS)", status: 500 };
 	}
@@ -181,13 +185,14 @@ function handle_callback(io, config, request) {
 	let oauth_res = complete_oauth_flow(io, config, code, handshake);
 	if (!oauth_res.ok) return error_response(io, oauth_res.error, oauth_res.status);
 	let user_data = oauth_res.data;
+	let access_token = oauth_res.access_token; // From complete_oauth_flow
 
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
 		return error_response(io, `User ${user_data.email} is not authorized on this device`, 403);
 	}
 
-	let final_res = create_session_response(io, mapping, user_data.email);
+	let final_res = create_session_response(io, mapping, user_data.email, access_token);
 	if (!final_res.ok) return error_response(io, final_res.error, final_res.status);
 
 	return final_res.data;

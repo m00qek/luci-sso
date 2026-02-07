@@ -104,6 +104,17 @@ when("processing the OIDC callback", () => {
 
 			then("it should have performed a UBUS login for the mapped user", () => {
 				assert(data.called("ubus", "session", "login"), "Should have called ubus login");
+				// Verify token was stored
+				let found_set = false;
+				for (let entry in data.all()) {
+					if (entry.type == "ubus" && entry.args[1] == "set") {
+						if (entry.args[2].values.oidc_access_token == "at") {
+							found_set = true;
+							break;
+						}
+					}
+				}
+				assert(found_set, "Access token must be persisted in UBUS session");
 			});
 		});
 	});
