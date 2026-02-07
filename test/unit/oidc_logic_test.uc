@@ -115,7 +115,7 @@ test('LOGIC: Verification - Support Multi-Audience Arrays', () => {
 	token = h.generate_id_token(payload, SECRET);
 	mocked.with_env({}, (io) => {
 		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
-		assert_eq(res.error, "AUDIENCE_MISMATCH");
+		assert_eq(res.error, "INVALID_AUDIENCE");
 	});
 });
 

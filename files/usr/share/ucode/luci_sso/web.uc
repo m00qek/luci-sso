@@ -163,5 +163,5 @@ export function error(io, e) {
 	_out(io, {
 		"Status": "500 Internal Server Error",
 		"Content-Type": "text/plain"
-	}, "Router Crash: " + msg + "\n");
+	}, "Router Crash: An internal error occurred. Please contact support.\n");
 };

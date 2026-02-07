@@ -271,7 +271,9 @@ export function verify_jwt(token, pubkey, options) {
 		let aud = payload.aud;
 		let found = false;
 		if (type(aud) == "array") {
+			if (length(aud) == 0) return { ok: false, error: "INVALID_AUDIENCE" };
 			for (let a in aud) {
+				if (type(a) != "string") return { ok: false, error: "MALFORMED_AUDIENCE" };
 				if (a === options.aud) {
 					found = true;
 					break;

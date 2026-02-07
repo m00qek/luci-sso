@@ -142,7 +142,7 @@ test('LOGIC: Web - Render Error 500', () => {
 	
 	assert(index(buf, "Status: 500 Internal Server Error\n") >= 0);
 	assert(index(buf, "Content-Type: text/plain\n") >= 0);
-	assert(index(buf, "Router Crash: Explosion!") >= 0);
+	assert(index(buf, "An internal error occurred. Please contact support.") >= 0);
 });
 
 test('LOGIC: Web - Handle Missing/Invalid Env', () => {
