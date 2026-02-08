@@ -80,3 +80,19 @@ By creating a valid UBUS session and setting the `sysauth` cookies, modern LuCI 
 | **Unit** | Individual `.uc` modules | Verify crypto and logic (Offline). |
 | **Integration** | CGI script + `ubus` | Verify HTTP headers and system wiring. |
 | **E2E** | Full Stack (Compose) | Verify the complete OIDC flow against a Mock IdP. |
+
+---
+
+## 8. Development Orchestration
+
+### The "Builder-as-a-Service" Pattern
+To avoid massive build times and environment drift, the project uses a dedicated `sdk` service within Docker Compose.
+*   **Encapsulation:** All OpenWrt SDK logic (feeds, cross-compilation, packaging) is contained within the `sdk` container.
+*   **Source of Truth:** The `devenv/Makefile` dynamically parses dependencies from the root `Makefile`, ensuring the dev environment always matches the production recipe.
+*   **Incremental Builds:** A host-side sentinel (`bin/lib/.built`) tracks changes to `src/*.c`, triggering the SDK compiler only when native code is modified.
+
+### Layered Environment
+1.  **PKI Service:** Generates a local Dev CA and per-service TLS certificates (ECC P-256).
+2.  **IdP Service:** A Node.js Mock Identity Provider for OIDC flow testing.
+3.  **LuCI Service:** The target OpenWrt runtime, mounting local project files for "hot-reload" development.
+4.  **Browser Service:** A Playwright-enabled container for automated E2E testing.

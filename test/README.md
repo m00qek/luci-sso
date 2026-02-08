@@ -2,7 +2,38 @@
 
 This project adheres to a strict testing architecture designed for security, resilience, and predictability in an embedded environment.
 
-## 1. Testing Philosophy
+## 1. Running Tests
+
+### Unit & Integration (Tiers 0-4)
+These tests run inside the OpenWrt runtime container (`luci`) to ensure accurate ABI and ucode behavior.
+```bash
+# Run all ucode tests
+make unit-test
+```
+
+### End-to-End (E2E)
+These tests run in a separate Playwright container (`browser`) and verify the full OIDC flow against the Mock IdP and LuCI.
+```bash
+# Start the E2E stack
+make e2e-up
+
+# Run the browser tests
+make e2e-test
+```
+*See [devenv/README.md](../devenv/README.md) for detailed environment setup.*
+
+## 2. Testing Tiers
+
+| Tier | Name | Scope | Goal |
+| :--- | :--- | :--- | :--- |
+| **0** | **Backend Compliance** | C Native Modules | Verify cryptographic primitives (SHA, HMAC, ECC) against test vectors. |
+| **1** | **Plumbing** | `crypto.uc` | Verify the ucode-to-C binding layer. |
+| **2** | **Business Logic** | `oidc.uc`, `session.uc` | **Core Logic.** Verify OIDC state machines, validation rules, and error handling (Offline). |
+| **3** | **Integration** | CGI + UBUS | Verify system wiring, HTTP headers, and UBUS session creation. |
+| **4** | **Meta** | `mock.uc` | Verify the test harness itself ensures the mocks behave correctly. |
+| **E2E** | **Full Stack** | Browser ↔ IdP ↔ Router | Verify the end-to-end user experience and redirection flows. |
+
+## 3. Testing Philosophy
 
 1.  **Functional Core, Imperative Shell**: Most logic lives in pure modules (`crypto.uc`, `oidc.uc`) that take an injectable `io` provider.
 2.  **Temporal Isolation**: Tests must never leak state. Every mock reality exists only for the duration of a closure.

@@ -1024,6 +1024,22 @@ Before submitting PR, verify:
 
 ---
 
+## 12. Development Workflow
+
+### Orchestration
+The primary entry point for development is `devenv/Makefile`. 
+*   **`make compile`**: Triggers the SDK container to build native C components.
+*   **`make up`**: Lifts the full OIDC stack.
+*   **`make unit-test`**: Executes ucode tests inside the active LuCI container.
+
+### Source of Truth
+Never hardcode environment-specific values (versions, domains) in Dockerfiles or Javascript tests. Always derive them from the `devenv/Makefile` variables, which are passed through as `ARG` or `ENV` via Docker Compose.
+
+### Incremental C Builds
+Native C compilation is guarded by a sentinel file in `bin/lib/.built`. If you modify `src/` files, the sentinel is invalidated, and the next `make compile` will trigger a rebuild.
+
+---
+
 ## Questions and Improvements
 
 ### When You're Unsure
