@@ -1,4 +1,5 @@
-FROM node:25-alpine
+ARG NODE_VERSION
+FROM node:${NODE_VERSION}-alpine
 
 # 1. Install Chromium, NSS tools, and dependencies
 RUN apk add --no-cache \

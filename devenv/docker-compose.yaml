@@ -18,6 +18,8 @@ services:
     container_name: ${DOCKER_SUITE}-idp
     build:
       context: ./services/idp
+      args:
+        NODE_VERSION: ${NODE_VERSION}
     working_dir: /app
     stop_grace_period: 0s
     networks:
@@ -100,6 +102,7 @@ services:
       - ../files/www/luci-static/resources/luci-sso-login.js:/www/luci-static/resources/luci-sso-login.js:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
       - ../bin/lib/${CRYPTO_LIB}/luci_sso/native.so:/usr/lib/ucode/luci_sso/native.so:ro
+      - ../test:/usr/share/luci-sso/test:ro
     labels:
       cert.fqdn: "${FQDN_LUCI}"
     command: /bin/sh /usr/local/bin/start.sh --foreground
@@ -114,6 +117,22 @@ services:
       timeout: 2s
       retries: 10
       start_period: 5s
+
+  sdk:
+    container_name: ${DOCKER_SUITE}-sdk
+    build:
+      context: ./services/sdk
+      args:
+        SDK_ARCH: ${SDK_ARCH}
+        SDK_VERSION: ${SDK_VERSION}
+    volumes:
+      - ..:/sdk/package/luci-sso
+      - ../bin/lib:/artifacts
+      - ./services/sdk/build.sh:/usr/local/bin/build.sh:ro
+    working_dir: /sdk
+    user: buildbot
+    environment:
+      - CRYPTO_LIB=${CRYPTO_LIB}
 
 networks:
   lucisso-net:

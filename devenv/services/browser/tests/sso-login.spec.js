@@ -19,8 +19,10 @@ test.describe('Authentication', () => {
       });
 
       await test.step('Then they should be redirected back from the IdP', async () => {
-        const idpUrl = process.env.FQDN_IDP;
-        await expect(page).toHaveURL(new RegExp(idpUrl + '|/cgi-bin/luci'), { timeout: 15000 });
+        const idpHost = process.env.FQDN_IDP;
+        // Escape dots for regex
+        const idpRegex = idpHost.replace(/\./g, '\\.');
+        await expect(page).toHaveURL(new RegExp(idpRegex + '|/cgi-bin/luci'), { timeout: 15000 });
       });
 
       await test.step('And they should see the authenticated dashboard', async () => {

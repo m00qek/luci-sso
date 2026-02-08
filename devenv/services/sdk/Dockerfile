@@ -2,6 +2,9 @@ ARG SDK_ARCH
 ARG SDK_VERSION
 FROM ghcr.io/openwrt/sdk:${SDK_ARCH}-${SDK_VERSION}
 
+# Re-declare ARG to make it available after FROM
+ARG SDK_VERSION
+
 # Copy SDK to /sdk because /builder is defined as a VOLUME in the base image.
 USER root
 RUN cp -a /builder /sdk && chown -R buildbot:buildbot /sdk
@@ -10,9 +13,10 @@ USER buildbot
 WORKDIR /sdk
 
 # Layer 1: Setup Feeds (Slowest, Network dependent)
-RUN echo "src-git base https://github.com/openwrt/openwrt.git;openwrt-24.10" > feeds.conf \
-  && echo "src-git packages https://github.com/openwrt/packages.git;openwrt-24.10" >> feeds.conf \
-  && ./scripts/feeds update base packages
+RUN MAJOR_MINOR=$(echo ${SDK_VERSION} | cut -d. -f1,2) && \
+    echo "src-git base https://github.com/openwrt/openwrt.git;openwrt-$MAJOR_MINOR" > feeds.conf && \
+    echo "src-git packages https://github.com/openwrt/packages.git;openwrt-$MAJOR_MINOR" >> feeds.conf && \
+    ./scripts/feeds update base packages
 
 # Layer 2: Install Packages into SDK (Metadata only)
 RUN ./scripts/feeds install ucode libmbedtls libwolfssl
