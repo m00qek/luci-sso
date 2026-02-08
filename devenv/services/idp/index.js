@@ -8,33 +8,35 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const PORT = 5556;
-const ISSUER = process.env.PUBLIC_ISSUER || `https://localhost:${PORT}`;
+const APP_NAME = process.env.APP_NAME;
+const ISSUER = process.env.ISSUER
 
 let privateKey;
 let publicKey;
 let jwk;
 
-const KEY_PATH = '/etc/luci-sso/certs/signing_key.pem';
+const KEY_PATH = "secrets/signing_key.pem";
+
+function log(message) {
+  console.log(`[${APP_NAME}] ${message}`);
+}
 
 async function initKeys() {
     if (fs.existsSync(KEY_PATH)) {
-        console.log(`[MockIdP] Loading persistent signing key from ${KEY_PATH}`);
+        log(`Loading persistent signing key from ${KEY_PATH}`);
         const pem = fs.readFileSync(KEY_PATH, 'utf8');
         privateKey = await jose.importPKCS8(pem, 'RS256');
     } else {
-        console.log(`[MockIdP] Generating new signing key...`);
+        log(`Generating new signing key...`);
         const keys = await jose.generateKeyPair('RS256');
         privateKey = keys.privateKey;
         const pem = await jose.exportPKCS8(privateKey);
         fs.writeFileSync(KEY_PATH, pem, { mode: 0o600 });
-        console.log(`[MockIdP] Saved new signing key to ${KEY_PATH}`);
+        log(`Saved new signing key to ${KEY_PATH}`);
     }
 
-    // Derive public JWK from the private key
-    const publicKey = await jose.exportSPKI(privateKey);
-    const pubKeyObj = await jose.importSPKI(publicKey, 'RS256');
-    jwk = await jose.exportJWK(pubKeyObj);
+    const pubKeyObject = crypto.createPublicKey(privateKey); 
+    jwk = await jose.exportJWK(pubKeyObject);
     
     jwk.kid = 'mock-key-1';
     jwk.alg = 'RS256';
@@ -60,7 +62,7 @@ app.get('/jwks', (req, res) => {
 
 app.get('/auth', (req, res) => {
     const { client_id, redirect_uri, state, nonce } = req.query;
-    console.log(`[MockIdP] Auth request for ${client_id}`);
+    log(`Auth request for ${client_id}`);
 
     const code = crypto.randomBytes(16).toString('hex');
     app.locals[code] = { nonce, client_id, redirect_uri };
@@ -69,13 +71,13 @@ app.get('/auth', (req, res) => {
     callbackUrl.searchParams.set('code', code);
     callbackUrl.searchParams.set('state', state);
 
-    console.log(`[MockIdP] Redirecting back to ${callbackUrl.toString()}`);
+    log(`Redirecting back to ${callbackUrl.toString()}`);
     res.redirect(callbackUrl.toString());
 });
 
 app.post('/token', async (req, res) => {
     const { code } = req.body;
-    console.log(`[MockIdP] Token exchange for code: ${code}`);
+    log(`Token exchange for code: ${code}`);
 
     const context = app.locals[code];
     if (!context) return res.status(400).json({ error: 'invalid_code' });
@@ -104,13 +106,12 @@ app.post('/token', async (req, res) => {
 
 // Load the shared certificates
 const options = {
-    key: fs.readFileSync('/etc/luci-sso/certs/idp.key'),
-    cert: fs.readFileSync('/etc/luci-sso/certs/idp.crt')
+    key: fs.readFileSync("https.key"),
+    cert: fs.readFileSync("https.crt")
 };
 
 initKeys().then(() => {
-    https.createServer(options, app).listen(PORT, '0.0.0.0', () => {
-        console.log(`[MockIdP] OIDC Provider (HTTPS) running on port ${PORT}`);
-        console.log(`[MockIdP] Logical Issuer Identity: ${ISSUER}`);
+    https.createServer(options, app).listen(443, '0.0.0.0', () => {
+        log(`Logical Issuer Identity: ${ISSUER}`);
     });
 });

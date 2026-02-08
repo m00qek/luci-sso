@@ -1,0 +1,120 @@
+services:
+  pki:
+    container_name: ${DOCKER_SUITE}-pki
+    image: alpine:3
+    volumes:
+      - ./.pki:/out
+      - ./services/pki/gensecrets.sh:/usr/local/bin/gensecrets.sh:ro
+      - ./${RESOLVED_DOCKER_COMPOSE}:/work/${RESOLVED_DOCKER_COMPOSE}:ro
+    environment:
+      - RESOLVED_DOCKER_COMPOSE=${RESOLVED_DOCKER_COMPOSE}
+      - TARGET_UID=${UID:-1000}
+      - TARGET_GID=${GID:-1000}
+      - PKI_CURVE=${PKI_CURVE}
+    stop_grace_period: 0s
+    command: /bin/sh /usr/local/bin/gensecrets.sh
+
+  idp:
+    container_name: ${DOCKER_SUITE}-idp
+    build:
+      context: ./services/idp
+    working_dir: /app
+    stop_grace_period: 0s
+    networks:
+      lucisso-net:
+        aliases:
+          - "${FQDN_IDP}"
+    volumes:
+      # Certificates & keys
+      - ./.pki/CA.crt:/usr/local/share/ca-certificates/CA.crt:ro
+      - ./.pki/${FQDN_IDP}.crt:/app/https.crt:ro
+      - ./.pki/${FQDN_IDP}.key:/app/https.key:ro
+      - ./.pki/idp:/app/secrets:rw
+      # APP
+      - ./services/idp/package.json:/app/package.json:ro
+      - ./services/idp/index.js:/app/index.js:ro
+      # Unified Start Script
+      - ./services/idp/start.sh:/usr/local/bin/start.sh:ro
+      - ./base-startup.sh:/usr/local/bin/base-startup.sh:ro
+    environment:
+      - NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/CA.crt
+      - NPM_CONFIG_LOGLEVEL=warn
+      - NPM_CONFIG_FUND=false
+      - NPM_CONFIG_AUDIT=false
+      - NPM_CONFIG_UPDATE_NOTIFIER=false
+      - APP_NAME=MockIdP
+    labels:
+      cert.fqdn: "${FQDN_IDP}"
+    depends_on:
+      pki:
+        condition: service_completed_successfully
+    command: /bin/sh /usr/local/bin/start.sh --foreground
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sSf https://${FQDN_IDP}/.well-known/openid-configuration > /dev/null",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+  luci:
+    container_name: ${DOCKER_SUITE}-luci
+    stop_grace_period: 0s
+    build:
+      context: ./services/luci
+      args:
+        SDK_ARCH: ${SDK_ARCH}
+        SDK_VERSION: ${SDK_VERSION}
+        PKG_DEPENDS: "${PKG_DEPENDS}"
+    networks:
+      lucisso-net:
+        aliases:
+          - "${FQDN_LUCI}"
+    environment:
+      - DOCKER_SUITE=${DOCKER_SUITE}
+      - SDK_VERSION=${SDK_VERSION}
+      - DOMAIN=${DOMAIN}
+      - FQDN_IDP=${FQDN_IDP}
+      - FQDN_LUCI=${FQDN_LUCI}
+      - CRYPTO_LIB=${CRYPTO_LIB}
+    volumes:
+      # Certificates
+      - ./.pki/CA.crt:/etc/ssl/certs/CA.crt:ro
+      - ./.pki/${FQDN_LUCI}.crt:/etc/uhttpd.crt:ro
+      - ./.pki/${FQDN_LUCI}.key:/etc/uhttpd.key:ro
+
+      # Unified Start Scripts
+      - ./services/luci/start.sh:/usr/local/bin/start.sh:ro
+      - ./services/luci/setup-uci.sh:/usr/local/bin/setup-uci.sh:ro
+      - ./base-startup.sh:/usr/local/bin/base-startup.sh:ro
+
+      # Static Configs
+      - ./services/luci/board.json:/etc/board.json.init:ro
+
+      # Project Code
+      - ../files/usr/share/ucode/luci_sso:/usr/share/ucode/luci_sso:ro
+      - ../files/www/cgi-bin/luci-sso:/www/cgi-bin/luci-sso:ro
+      - ../files/www/luci-static/resources/luci-sso-login.js:/www/luci-static/resources/luci-sso-login.js:ro
+      - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
+      - ../bin/lib/${CRYPTO_LIB}/luci_sso/native.so:/usr/lib/ucode/luci_sso/native.so:ro
+    labels:
+      cert.fqdn: "${FQDN_LUCI}"
+    command: /bin/sh /usr/local/bin/start.sh --foreground
+    depends_on:
+      idp:
+        condition: service_healthy
+      pki:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "uclient-fetch -qO- https://${FQDN_LUCI} > /dev/null"]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s
+
+networks:
+  lucisso-net:
+    driver: bridge

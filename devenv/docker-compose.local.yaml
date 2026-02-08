@@ -1,0 +1,14 @@
+services:
+  idp:
+    ports:
+      - "${PORT_IDP}:443"
+    environment:
+      - ISSUER=https://localhost:${PORT_IDP}
+
+  luci:
+    ports:
+      - "${PORT_LUCI}:443"
+    environment:
+      - REDIRECT_URL=https://localhost:${PORT_LUCI}
+      - ISSUER_URL=https://localhost:${PORT_IDP}
+      - ISSUER_INTERNAL_URL=https://${FQDN_IDP}

@@ -1,0 +1,20 @@
+{
+	"model": {
+		"id": "generic",
+		"name": "OpenWrt Container"
+	},
+	"board": {},
+	"network": {
+		"lan": {
+			"ifname": "eth0",
+			"protocol": "static"
+		}
+	},
+	"credentials": {
+		"ssh_authorized_keys": {}
+	},
+	"release": {
+		"distribution": "OpenWrt",
+		"version": "${SDK_VERSION}"
+	}
+}

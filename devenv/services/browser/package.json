@@ -1,0 +1,7 @@
+{
+  "name": "luci-browser-e2e",
+  "version": "1.0.0",
+  "devDependencies": {
+    "@playwright/test": "^1.49.1"
+  }
+}
