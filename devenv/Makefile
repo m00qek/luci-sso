@@ -66,7 +66,7 @@ run: .run
 compile: DOCKER_SUITE = local
 compile: .compile
 
-unit-test: DOCKER_SUITE = local
+unit-test: DOCKER_SUITE = e2e
 unit-test: .unit-test
 
 package: DOCKER_SUITE = local
@@ -169,6 +169,14 @@ $(SENTINEL): $(wildcard ../src/*.c) $(wildcard ../src/*.h) ../src/CMakeLists.txt
 	@touch $(SENTINEL)
 
 .unit-test:
+	@# VALIDATION: Ensure it is running
+	@if [ -z "$(SUITE_IS_RUNNING)" ]; then
+		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."
+		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"
+		echo -e "\n      make e2e-up"
+		exit 1
+	fi
+	
 	@echo -e " $(GREEN)🧪$(RESET) Running unit tests in luci container..."
 	docker compose $(COMPOSE_FLAGS) exec luci ucode \
 		-L /usr/share/ucode \

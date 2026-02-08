@@ -30,7 +30,7 @@ services:
       - ./.pki/CA.crt:/usr/local/share/ca-certificates/CA.crt:ro
       - ./services/browser/start.sh:/usr/local/bin/start.sh:ro
       - ./base-startup.sh:/usr/local/bin/base-startup.sh:ro
-      - ./services/browser/tests:/app/tests:ro
+      - ../test/e2e:/app/tests:ro
       - ./services/browser/playwright.config.js:/app/playwright.config.js:ro
       - ./services/browser/reporter.js:/app/reporter.js:ro
     labels:

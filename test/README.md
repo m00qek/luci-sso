@@ -24,14 +24,14 @@ make e2e-test
 
 ## 2. Testing Tiers
 
-| Tier | Name | Scope | Goal |
-| :--- | :--- | :--- | :--- |
-| **0** | **Backend Compliance** | C Native Modules | Verify cryptographic primitives (SHA, HMAC, ECC) against test vectors. |
-| **1** | **Plumbing** | `crypto.uc` | Verify the ucode-to-C binding layer. |
-| **2** | **Business Logic** | `oidc.uc`, `session.uc` | **Core Logic.** Verify OIDC state machines, validation rules, and error handling (Offline). |
-| **3** | **Integration** | CGI + UBUS | Verify system wiring, HTTP headers, and UBUS session creation. |
-| **4** | **Meta** | `mock.uc` | Verify the test harness itself ensures the mocks behave correctly. |
-| **E2E** | **Full Stack** | Browser ↔ IdP ↔ Router | Verify the end-to-end user experience and redirection flows. |
+| Tier | Name | Language | Scope | Goal |
+| :--- | :--- | :--- | :--- | :--- |
+| **0** | **Backend Compliance** | ucode | C Native Modules | Verify cryptographic primitives (SHA, HMAC, ECC) against test vectors. |
+| **1** | **Plumbing** | ucode | `crypto.uc` | Verify the ucode-to-C binding layer. |
+| **2** | **Business Logic** | ucode | `oidc.uc`, `session.uc` | **Core Logic.** Verify OIDC state machines and validation (Offline). |
+| **3** | **Integration** | ucode | CGI + UBUS | Verify system wiring, HTTP headers, and UBUS session creation. |
+| **4** | **Meta** | ucode | `mock.uc` | Verify the test harness itself ensures the mocks behave correctly. |
+| **E2E** | **Full Stack** | **JavaScript** | Browser ↔ IdP ↔ Router | Verify the end-to-end user experience using Playwright. |
 
 ## 3. Testing Philosophy
 
