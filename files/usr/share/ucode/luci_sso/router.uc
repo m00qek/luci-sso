@@ -119,13 +119,30 @@ function complete_oauth_flow(io, config, code, handshake) {
 
 	let verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time());
 	
-	// Key Rotation / Stale Cache Recovery: 
-	// If verification fails due to signature, re-fetch JWKS without cache and try one more time.
-	if (!verify_res.ok && verify_res.error == "INVALID_SIGNATURE") {
-		io.log("warn", `ID Token signature verification failed for [session_id: ${session_id}]; forcing JWKS refresh and retrying`);
-		jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri, { force: true });
-		if (jwks_res.ok) {
-			verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time());
+	// Key Rotation / Stale Cache Recovery: (Warning #8 in 1770660561)
+	// We only retry if:
+	// 1. The token has a 'kid' that is NOT in our current keyset.
+	// 2. OR the token has NO 'kid' (primitive IdP) and verification failed.
+	if (!verify_res.ok) {
+		let should_retry = false;
+		if (verify_res.error == "KEY_NOT_FOUND") {
+			should_retry = true;
+		} else if (verify_res.error == "INVALID_SIGNATURE") {
+			// If signature is bad but we used a 'kid' we ALREADY have, do NOT retry (DoS protection)
+			// We only retry signature failure if NO kid was used (fallback for primitive IdPs)
+			let parts = split(tokens.id_token, ".");
+			let header = json(crypto.b64url_decode(parts[0]));
+			if (!header || !header.kid) {
+				should_retry = true;
+			}
+		}
+
+		if (should_retry) {
+			io.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
+			jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri, { force: true });
+			if (jwks_res.ok) {
+				verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time());
+			}
 		}
 	}
 
