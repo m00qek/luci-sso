@@ -11,4 +11,5 @@ bin/
 .idea/
 devenv/.pki/
 **/.pki/
-REVIEWS/
+.reviews/
+GEMINI.md

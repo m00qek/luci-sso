@@ -2,6 +2,10 @@
 .ONESHELL: # Run recipes as single shell scripts
 .SHELLFLAGS = -ec # Exit immediately on error
 
+# Directory Resolution
+DEVENV_DIR   := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+PROJECT_ROOT := $(abspath $(DEVENV_DIR)/..)
+
 # ANSI Color Codes
 GREEN := \033[1;32m
 BLUE  := \033[1;34m
@@ -18,7 +22,7 @@ export CRYPTO_LIB  ?= mbedtls
 
 # Dynamic Dependency Parsing from root Makefile
 # Grab all DEPENDS lines, remove +, remove luci-sso*, and flatten into a unique sorted list
-export PKG_DEPENDS := $(shell grep 'DEPENDS:=' ../Makefile | sed 's/DEPENDS:=//' | tr '+' ' ' | tr ' ' '\n' | grep -v 'luci-sso' | sort -u | tr '\n' ' ')
+export PKG_DEPENDS := $(shell grep 'DEPENDS:=' $(PROJECT_ROOT)/Makefile | sed 's/DEPENDS:=//' | tr '+' ' ' | tr ' ' '\n' | grep -v 'luci-sso' | sort -u | tr '\n' ' ')
 
 export DOMAIN := luci-sso.test
 export FQDN_IDP := idp.$(DOMAIN)
@@ -33,18 +37,18 @@ export PORT_LUCI := 8443
 export DOCKER_SUITE ?= local
 
 # Lazy variables (=) evaluated at runtime
-export RESOLVED_DOCKER_COMPOSE = .resolved.docker-compose.$(DOCKER_SUITE).yaml
-COMPOSE_FLAGS = -p $(DOCKER_SUITE) -f docker-compose.yaml -f docker-compose.$(DOCKER_SUITE).yaml
+export RESOLVED_DOCKER_COMPOSE = $(DEVENV_DIR)/.resolved.docker-compose.$(DOCKER_SUITE).yaml
+COMPOSE_FLAGS = -p $(DOCKER_SUITE) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
 
 # Helper: Returns container ID if any service in the suite is running
 SUITE_IS_RUNNING = $(shell docker compose $(COMPOSE_FLAGS) ps -q 2>/dev/null)
 
 # --- 3. PUBLIC INTERFACE ---
 .PHONY: up e2e-up shell run e2e-shell e2e-run down e2e-down ps e2e-ps
-.PHONY: compile unit-test package sync-headers
+.PHONY: compile unit-test e2e-test test package sync-headers
 
 # Sentinel file tracks the last successful build
-SENTINEL := ../bin/lib/.built
+SENTINEL := $(PROJECT_ROOT)/bin/lib/.built
 
 # Wrappers sets the context and calls the implementation
 up: DOCKER_SUITE = local
@@ -68,6 +72,11 @@ compile: .compile
 
 unit-test: DOCKER_SUITE = e2e
 unit-test: .unit-test
+
+e2e-test: DOCKER_SUITE = e2e
+e2e-test: .e2e-test
+
+test: unit-test e2e-test
 
 package: DOCKER_SUITE = local
 package: .package
@@ -112,15 +121,15 @@ endef
 
 .unit-test:
 	$(VALIDATE_SUITE_RUNNING)
-	@./scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
+	@$(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
 .e2e-test:
 	$(VALIDATE_SUITE_RUNNING)
-	@./scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
+	@$(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
 
 .watch-tests:
 	$(VALIDATE_SUITE_RUNNING)
-	@./scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
+	@$(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
 .up:
 	@# VALIDATION: Check if already running
@@ -165,9 +174,9 @@ CONTAINER ?= luci
 
 .compile: $(SENTINEL)
 
-$(SENTINEL): $(wildcard ../src/*.c) $(wildcard ../src/*.h) ../src/CMakeLists.txt
+$(SENTINEL): $(wildcard $(PROJECT_ROOT)/src/*.c) $(wildcard $(PROJECT_ROOT)/src/*.h) $(PROJECT_ROOT)/src/CMakeLists.txt
 	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(CRYPTO_LIB)..."
-	@mkdir -p ../bin/lib
+	@mkdir -p $(PROJECT_ROOT)/bin/lib
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
 	@touch $(SENTINEL)
 
@@ -177,5 +186,5 @@ $(SENTINEL): $(wildcard ../src/*.c) $(wildcard ../src/*.h) ../src/CMakeLists.txt
 
 .sync-headers:
 	@echo -e " $(BLUE)🔄$(RESET) Syncing headers for LSP..."
-	@mkdir -p .include
+	@mkdir -p $(DEVENV_DIR)/.include
 	docker compose $(COMPOSE_FLAGS) run --rm sdk sh -c "cp -r /sdk/staging_dir/target-*/usr/include/* /sdk/package/luci-sso/devenv/.include/"
