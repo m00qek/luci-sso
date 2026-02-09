@@ -33,10 +33,12 @@
 
         if (!primaryBtn) return false;
 
-        console.log("LuCI SSO: Found active login button, injecting...");
-
         // 3. Create UI
         var container = primaryBtn.parentNode;
+        // Defensive Check (Blocker #1 in 1770661270)
+        if (!container || container.nodeType !== Node.ELEMENT_NODE) {
+            return false;
+        }
         
         var separator = document.createElement('div');
         separator.id = SEP_ID;
@@ -80,8 +82,11 @@
         injectSsoButton();
 
         // Heavy-duty observer to handle LuCI.js dynamic rendering
+        // Nitpick in 1770661270: Debounce to reduce CPU load
+        var debounceTimer;
         var observer = new MutationObserver(function() {
-            injectSsoButton();
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(injectSsoButton, 100);
         });
 
         observer.observe(document.body, { 
