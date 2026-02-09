@@ -2,6 +2,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
+import * as utils from 'luci_sso.utils';
 
 /**
  * Creates a response object.
@@ -134,7 +135,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 		return { ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", status: 401 };
 	}
 
-	io.log("info", `ID Token successfully validated for sub=${verify_res.data.sub} [session_id: ${session_id}]`);
+	io.log("info", `ID Token successfully validated for [sub_id: ${utils.safe_id(verify_res.data.sub)}] [session_id: ${session_id}]`);
 
 	return { 
 		ok: true, 
@@ -201,20 +202,20 @@ function handle_callback(io, config, request) {
 	let refresh_token = oauth_res.refresh_token;
 
 	if (ubus.is_token_replayed(io, access_token)) {
-		io.log("error", `Access token replay detected for sub=${user_data.sub} [session_id: ${session_id}]`);
+		io.log("error", `Access token replay detected for [sub_id: ${utils.safe_id(user_data.sub)}] [session_id: ${session_id}]`);
 		return error_response(io, "TOKEN_REPLAY_DETECTED", 403);
 	}
 
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
-		io.log("warn", `User sub=${user_data.sub} (email=${user_data.email}) not found in mapping whitelist [session_id: ${session_id}]`);
+		io.log("warn", `User [sub_id: ${utils.safe_id(user_data.sub)}] not found in mapping whitelist [session_id: ${session_id}]`);
 		return error_response(io, "USER_NOT_AUTHORIZED", 403);
 	}
 
 	let final_res = create_session_response(io, mapping, user_data.email, access_token, refresh_token);
 	if (!final_res.ok) return error_response(io, final_res.error, final_res.status);
 
-	io.log("info", `Session successfully created for user sub=${user_data.sub} [session_id: ${session_id}] (mapped to rpcd_user=${mapping.rpcd_user})`);
+	io.log("info", `Session successfully created for user [sub_id: ${utils.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to rpcd_user=${mapping.rpcd_user})`);
 
 	return final_res.data;
 }

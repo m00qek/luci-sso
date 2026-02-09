@@ -1,4 +1,5 @@
 import * as crypto from 'luci_sso.crypto';
+import * as utils from 'luci_sso.utils';
 
 /**
  * Logic for interacting with UBUS sessions.
@@ -49,7 +50,7 @@ export function create_session(io, username, password, oidc_email, access_token,
 		}
 	});
 
-	io.log("info", `Successful SSO login for ${oidc_email} mapped to system user ${username}`);
+	io.log("info", `Successful SSO login for [oidc_id: ${utils.safe_id(oidc_email)}] mapped to system user ${username}`);
 
 	return { ok: true, data: sid };
 };

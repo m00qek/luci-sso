@@ -1,4 +1,5 @@
 import * as crypto from 'luci_sso.crypto';
+import * as utils from 'luci_sso.utils';
 
 const SECRET_KEY_PATH = "/etc/luci-sso/secret.key";
 const SESSION_DURATION = 3600;
@@ -106,7 +107,7 @@ export function create_state(io) {
 	let now = io.time();
 
 	let data = {
-		id: substr(handle, 0, 8), // Correlation ID for logs
+		id: utils.safe_id(handle), // Correlation ID for logs
 		state: state,
 		code_verifier: pkce.verifier,
 		nonce: nonce,
@@ -159,7 +160,7 @@ export function verify_state(io, handle, clock_tolerance) {
 	let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
 	let consume_path = `${path}.consumed`;
 	let content = null;
-	let session_id = substr(handle, 0, 8);
+	let session_id = utils.safe_id(handle);
 
 	try {
 		// MANDATORY: Atomic one-time use. (Blocker #2 in 1770660561)
