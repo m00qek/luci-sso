@@ -5,7 +5,7 @@ services:
     volumes:
       - ./.pki:/out
       - ./services/pki/gensecrets.sh:/usr/local/bin/gensecrets.sh:ro
-      - ./${RESOLVED_DOCKER_COMPOSE}:/work/${RESOLVED_DOCKER_COMPOSE}:ro
+      - ${RESOLVED_DOCKER_COMPOSE}:/work/${RESOLVED_DOCKER_COMPOSE}:ro
     environment:
       - RESOLVED_DOCKER_COMPOSE=${RESOLVED_DOCKER_COMPOSE}
       - TARGET_UID=${UID:-1000}

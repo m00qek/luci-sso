@@ -9,4 +9,18 @@ mkdir -p "$CACHE_DIR"
 chown root:root "$CACHE_DIR"
 chmod 0700 "$CACHE_DIR"
 
+# 3. Register Token Reaper Cron Job
+# Runs at 4:00 AM daily to prune expired token locks
+CLEANUP_SCRIPT="/usr/sbin/luci-sso-cleanup"
+CRON_JOB="0 4 * * * $CLEANUP_SCRIPT"
+
+mkdir -p /etc/crontabs
+touch /etc/crontabs/root
+
+if ! grep -q "$CLEANUP_SCRIPT" /etc/crontabs/root; then
+    echo "$CRON_JOB" >> /etc/crontabs/root
+    # Restart cron to pick up changes if it's already running
+    [ -x "/etc/init.d/cron" ] && /etc/init.d/cron restart >/dev/null 2>&1 || true
+fi
+
 exit 0

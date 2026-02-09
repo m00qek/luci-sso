@@ -52,6 +52,9 @@ watch_setup &
 
 # 7. SSO Permissions
 chmod +x /www/cgi-bin/luci-sso 2>/dev/null || true
+mkdir -p /usr/sbin
+cp /usr/share/luci-sso/test/../files/usr/sbin/luci-sso-cleanup /usr/sbin/ 2>/dev/null || true
+chmod +x /usr/sbin/luci-sso-cleanup 2>/dev/null || true
 
 # 8. Core Daemons
 /sbin/ubusd &

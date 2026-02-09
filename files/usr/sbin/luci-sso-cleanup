@@ -1,0 +1,11 @@
+#!/bin/sh
+# luci-sso: Token Registry Reaper
+# This script removes atomic lock directories for OIDC tokens that have 
+# likely expired (older than 24 hours) to prevent tmpfs exhaustion.
+
+REGISTRY="/var/run/luci-sso/tokens"
+
+if [ -d "$REGISTRY" ]; then
+    # Find directories (-type d) older than 1440 minutes and remove them
+    find "$REGISTRY" -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec rmdir {} + 2>/dev/null
+fi
