@@ -2,7 +2,7 @@ import * as oidc from 'luci_sso.oidc';
 import * as testing from 'testing';
 import * as mock from 'mock';
 
-testing.test("oidc.discover rejects insecure HTTP issuer", function() {
+testing.test("OIDC: Discovery - Reject insecure HTTP issuer", function() {
 	let mocked = mock.create();
 	mocked.with_responses({}, (io) => {
 		let res = oidc.discover(io, "http://insecure.com");
@@ -11,7 +11,7 @@ testing.test("oidc.discover rejects insecure HTTP issuer", function() {
 	});
 });
 
-testing.test("oidc.discover rejects insecure internal_issuer_url", function() {
+testing.test("OIDC: Discovery - Reject insecure internal_issuer_url", function() {
 	let mocked = mock.create();
 	mocked.with_responses({}, (io) => {
 		let res = oidc.discover(io, "https://secure.com", { internal_issuer_url: "http://insecure.local" });

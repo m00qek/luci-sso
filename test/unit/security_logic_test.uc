@@ -5,7 +5,7 @@ import * as crypto from 'luci_sso.crypto';
 // Tier 2: Security Enforcement Logic
 // =============================================================================
 
-test('LOGIC: Security - Reject alg: none', () => {
+test('Security: JWT - Reject alg: none', () => {
 	let none_header = crypto.b64url_encode(sprintf("%J", { alg: "none", typ: "JWT" }));
 	let payload = crypto.b64url_encode(sprintf("%J", { sub: "admin" }));
 	let token = none_header + "." + payload + ".";
@@ -19,7 +19,7 @@ test('LOGIC: Security - Reject alg: none', () => {
 	assert_eq(res.error, "UNSUPPORTED_ALGORITHM");
 });
 
-test('LOGIC: Security - Reject Stripped Signature', () => {
+test('Security: JWT - Reject Stripped Signature', () => {
     let header = crypto.b64url_encode(sprintf("%J", { alg: "HS256" }));
     let payload = crypto.b64url_encode(sprintf("%J", { sub: "admin" }));
     let stripped = header + "." + payload + ".";
@@ -28,7 +28,7 @@ test('LOGIC: Security - Reject Stripped Signature', () => {
     assert_eq(res.error, "INVALID_SIGNATURE_ENCODING");
 });
 
-test('LOGIC: Security - Payload Integrity', () => {
+test('Security: JWT - Payload Integrity', () => {
 	let secret = "secret";
 	let good_token = crypto.sign_jws({foo: "bar"}, secret);
 	let parts = split(good_token, ".");

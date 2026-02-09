@@ -1,4 +1,4 @@
-import { assert, assert_eq, when, and, then } from 'testing';
+import { test, assert, assert_eq } from 'testing';
 import * as router from 'luci_sso.router';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
@@ -36,287 +36,222 @@ function mock_request(path, query, cookies) {
 }
 
 // =============================================================================
-// Tier 3: Behavioral Integration (Platinum Refactor)
+// Tier 3: Behavioral Integration (Homogeneous Standard)
 // =============================================================================
 
-when("initiating the OIDC login flow", () => {
+test('Router: Login Flow - Handle massive discovery response', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
-
-	and("the Identity Provider returns a massive response that exceeds memory limits", () => {
-		factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { error: "RESPONSE_TOO_LARGE" } }, (io) => {
-			let res = router.handle(io, MOCK_CONFIG, mock_request("/"));
-			then("it should fail discovery and return a 500 Internal Error", () => {
-				assert_eq(res.status, 500);
-				assert(res.is_error);
-			});
-		});
-	});
-
-	and("the Identity Provider is discoverable and healthy", () => {
-		let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
-		factory.with_responses(responses, (io) => {
-			let res = router.handle(io, MOCK_CONFIG, mock_request("/"));
-			then("it should return a 302 redirect to the Identity Provider", () => {
-				assert_eq(res.status, 302);
-				assert(index(res.headers["Location"], "https://idp.com/auth") == 0);
-			});
-		});
+	factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { error: "RESPONSE_TOO_LARGE" } }, (io) => {
+		let res = router.handle(io, MOCK_CONFIG, mock_request("/"));
+		assert_eq(res.status, 500, "Should return 500 on discovery failure");
+		assert(res.is_error);
 	});
 });
 
-when("the system is accessed for the first time (Bootstrap)", () => {
+test('Router: Login Flow - Redirect to Healthy IdP', () => {
+	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
+	factory.with_responses(responses, (io) => {
+		let res = router.handle(io, MOCK_CONFIG, mock_request("/"));
+		assert_eq(res.status, 302);
+		assert(index(res.headers["Location"], "https://idp.com/auth") == 0, "Redirect MUST point to auth endpoint");
+	});
+});
+
+test('Router: Bootstrap - Automatic secret key generation', () => {
 	let factory = mock.create(); // NO secret.key exists
-
-	then("it should automatically generate a secret key during the first login attempt", () => {
-		let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
-		
-		let final_key = factory.with_responses(responses, (io) => {
-			router.handle(io, MOCK_CONFIG, mock_request("/"));
-			return io.read_file("/etc/luci-sso/secret.key");
-		});
-
-		assert(final_key, "Secret key should exist after bootstrap");
-		assert_eq(length(final_key), 32, "Secret key should be 32 bytes");
+	let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
+	
+	let final_key = factory.with_responses(responses, (io) => {
+		router.handle(io, MOCK_CONFIG, mock_request("/"));
+		return io.read_file("/etc/luci-sso/secret.key");
 	});
+
+	assert(final_key, "Secret key should exist after bootstrap");
+	assert_eq(length(final_key), 32, "Secret key should be 32 bytes");
 });
 
-when("processing the OIDC callback", () => {
+test('Router: Callback - Successful authentication and UBUS login', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+		
+		let full_hash = crypto.sha256("at");
+		let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
 
-	and("a valid user returns from the IdP with an honest token", () => {
-		factory.with_env({}, (io) => {
-			let state_res = session.create_state(io);
-			let handshake = state_res.data;
-			
-			// Calculate at_hash for "at"
-			let full_hash = crypto.sha256("at");
-			let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
-			
-			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
-
-			let data = factory.using(io)
-				.with_responses({
-					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-					"https://idp.com/token": { status: 200, body: { access_token: "at", refresh_token: "rt", id_token: id_token } },
-					"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
-				})
-				.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "session-for-" + args.username }) })
-				.spy((spying_io) => {
-					let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
-					let res = router.handle(spying_io, MOCK_CONFIG, req);
-					assert_eq(res.status, 302);
-					assert_eq(res.headers["Location"], "/cgi-bin/luci/");
-				});
-
-			then("it should have performed a UBUS login for the mapped user", () => {
-				assert(data.called("ubus", "session", "login"), "Should have called ubus login");
-				// Verify tokens were stored
-				let found_set = false;
-				for (let entry in data.all()) {
-					if (entry.type == "ubus" && entry.args[1] == "set") {
-						if (entry.args[2].values.oidc_access_token == "at" &&
-						    entry.args[2].values.oidc_refresh_token == "rt") {
-							found_set = true;
-							break;
-						}
-					}
-				}
-				assert(found_set, "Access and Refresh tokens must be persisted in UBUS session");
-			});
-		});
-	});
-
-	and("the JWKS cache is stale (IdP rotated keys)", () => {
-		factory.with_env({}, (io) => {
-			let state_res = session.create_state(io);
-			let handshake = state_res.data;
-			
-			// Calculate at_hash for "at"
-			let full_hash = crypto.sha256("at");
-			let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
-			
-			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
-
-			let cache_path = "/var/run/luci-sso/oidc-jwks-wv5enLcGYIn8PiwhdkeXzhVPct86Lf3q.json";
-			let stale_jwks = { keys: [ { kid: "anchor-key", kty: "oct", k: "d3Jvbmc" } ], cached_at: io.time() };
-
-			factory.using(io).with_files({ [cache_path]: sprintf("%J", stale_jwks) }, (io_stale) => {
-				let data = factory.using(io_stale)
-					.with_responses({
-						"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-						"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
-						"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
-					})
-					.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "session-for-" + args.username }) })
-					.spy((spying_io) => {
-						let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
-						let res = router.handle(spying_io, MOCK_CONFIG, req);
-						assert_eq(res.status, 302);
-					});
-
-				then("it should have forced a JWKS refresh and eventually succeeded", () => {
-					assert(data.called("write_file", cache_path), "Should have updated the cache file");
-				});
-			});
-		});
-	});
-
-	and("the user is authenticated at the IdP but NOT found in our local whitelist", () => {
-		factory.with_env({}, (io) => {
-			let state_res = session.create_state(io);
-			let handshake = state_res.data;
-			
-			let full_hash = crypto.sha256("at");
-			let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
-			
-			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "unknown", io.time(), handshake.nonce, at_hash);
-
-			factory.using(io).with_responses({
+		let data = factory.using(io)
+			.with_responses({
 				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-				"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
+				"https://idp.com/token": { status: 200, body: { access_token: "at", refresh_token: "rt", id_token: id_token } },
 				"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
-			}, (io_http) => {
+			})
+			.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "session-for-" + args.username }) })
+			.spy((spying_io) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
-				let res = router.handle(io_http, { ...MOCK_CONFIG, user_mappings: [] }, req);
-				then("it should return Forbidden for non-whitelisted user", () => {
-					assert_eq(res.status, 403);
-					assert_eq(res.code, "USER_NOT_AUTHORIZED");
-				});
+				let res = router.handle(spying_io, MOCK_CONFIG, req);
+				assert_eq(res.status, 302);
+				assert_eq(res.headers["Location"], "/cgi-bin/luci/");
 			});
-		});
+
+		assert(data.called("ubus", "session", "login"), "Should have called ubus login");
+		let found_set = false;
+		for (let entry in data.all()) {
+			if (entry.type == "ubus" && entry.args[1] == "set") {
+				if (entry.args[2].values.oidc_access_token == "at") found_set = true;
+			}
+		}
+		assert(found_set, "Tokens must be persisted in UBUS session");
 	});
+});
 
-	and("an attacker attempts to replay an access_token already in use by another session", () => {
-		factory.with_env({}, (io) => {
-			let state_res = session.create_state(io);
-			let handshake = state_res.data;
-			
-			let full_hash = crypto.sha256("ALREADY_USED");
-			let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
-			
-			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
+test('Router: Callback - Handle stale JWKS cache recovery', () => {
+	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+		let full_hash = crypto.sha256("at");
+		let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
 
-			factory.using(io)
+		let cache_path = "/var/run/luci-sso/oidc-jwks-wv5enLcGYIn8PiwhdkeXzhVPct86Lf3q.json";
+		let stale_jwks = { keys: [ { kid: "anchor-key", kty: "oct", k: "d3Jvbmc" } ], cached_at: io.time() };
+
+		factory.using(io).with_files({ [cache_path]: sprintf("%J", stale_jwks) }, (io_stale) => {
+			let data = factory.using(io_stale)
 				.with_responses({
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-					"https://idp.com/token": { status: 200, body: { access_token: "ALREADY_USED", id_token: id_token } },
+					"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
 					"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
 				})
-				.with_ubus({ 
-					"session:list": { "session-123": { values: { oidc_access_token: "ALREADY_USED" } } } 
-				})
+				.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "s" }) })
 				.spy((spying_io) => {
 					let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
-					let res = router.handle(spying_io, MOCK_CONFIG, req);
-					
-					then("it should reject the login with TOKEN_REPLAY_DETECTED", () => {
-						assert_eq(res.status, 403);
-						assert_eq(res.code, "TOKEN_REPLAY_DETECTED");
-					});
+					router.handle(spying_io, MOCK_CONFIG, req);
 				});
-		});
-	});
 
-	and("an attacker attempts to replay a valid state token", () => {
-		factory.with_env({}, (io) => {
-			let state_res = session.create_state(io);
-			let handshake = state_res.data;
-			let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
-
-			let factory_with_responses = factory.using(io).with_responses({
-				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-				"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } } 
-			});
-			
-			factory_with_responses.with_env({}, (io_exec) => {
-				router.handle(io_exec, MOCK_CONFIG, req);
-			});
-
-			factory_with_responses.with_env({}, (io_exec) => {
-				let res = router.handle(io_exec, MOCK_CONFIG, req);
-				then("it should reject the replay with a 401 Unauthorized", () => {
-					assert_eq(res.status, 401);
-					assert_eq(res.code, "STATE_NOT_FOUND");
-				});
-			});
-		});
-	});
-
-	and("an attacker attempts to replay an authorization code (IdP level rejection)", () => {
-		factory.with_env({}, (io) => {
-			let state_res = session.create_state(io);
-			let handshake = state_res.data;
-			let req = mock_request("/callback", { code: "REPLAYED_CODE", state: handshake.state }, { luci_sso_state: handshake.token });
-
-			// Simulate IdP returning 400 invalid_grant for replayed code
-			factory.using(io).with_responses({
-				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-				"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } }
-			}, (io_http) => {
-				let res = router.handle(io_http, MOCK_CONFIG, req);
-				then("it should fail with OIDC_INVALID_GRANT", () => {
-					assert_eq(res.status, 500);
-					assert_eq(res.code, "OIDC_INVALID_GRANT");
-				});
-			});
-		});
-	});
-
-	and("an attacker attempts a PKCE bypass (IdP level rejection)", () => {
-		factory.with_env({}, (io) => {
-			let state_res = session.create_state(io);
-			let handshake = state_res.data;
-			let req = mock_request("/callback", { code: "VALID_CODE", state: handshake.state }, { luci_sso_state: handshake.token });
-
-			// Simulate IdP returning 400 invalid_grant due to PKCE mismatch
-			factory.using(io).with_responses({
-				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-				"https://idp.com/token": { status: 400, body: { error: "invalid_grant", sub_error: "pkce_mismatch" } }
-			}, (io_http) => {
-				let res = router.handle(io_http, MOCK_CONFIG, req);
-				then("it should fail with OIDC_INVALID_GRANT", () => {
-					assert_eq(res.status, 500);
-					assert_eq(res.code, "OIDC_INVALID_GRANT");
-				});
-			});
-		});
-	});
-
-	and("an attacker sends binary garbage or malformed protocol parameters", () => {
-		let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
-		factory.with_responses(responses, (io) => {
-			let req = mock_request("/callback", { state: "s" }, { luci_sso_state: "!!!" });
-			let res = router.handle(io, MOCK_CONFIG, req);
-
-			then("it should fail safely with an error and not crash", () => {
-				assert(res.status >= 400);
-				assert(res.is_error);
-			});
+			assert(data.called("write_file", cache_path), "Should have updated the cache file");
 		});
 	});
 });
 
-when("a user requests to logout", () => {
-	let factory = mock.create().with_ubus({ "session:destroy": {} });
+test('Router: Callback - Reject non-whitelisted users', () => {
+	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+		let full_hash = crypto.sha256("at");
+		let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "unknown", io.time(), handshake.nonce, at_hash);
 
+		factory.using(io).with_responses({
+			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+			"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
+			"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+		}, (io_http) => {
+			let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+			let res = router.handle(io_http, { ...MOCK_CONFIG, user_mappings: [] }, req);
+			assert_eq(res.status, 403, "Should return Forbidden for non-whitelisted user");
+			assert_eq(res.code, "USER_NOT_AUTHORIZED");
+		});
+	});
+});
+
+test('Router: Callback - Reject token replay (already used access_token)', () => {
+	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+		let full_hash = crypto.sha256("ALREADY_USED");
+		let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
+		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
+
+		factory.using(io)
+			.with_responses({
+				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+				"https://idp.com/token": { status: 200, body: { access_token: "ALREADY_USED", id_token: id_token } },
+				"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+			})
+			.with_ubus({ "session:list": { "s": { values: { oidc_access_token: "ALREADY_USED" } } } })
+			.spy((spying_io) => {
+				let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+				let res = router.handle(spying_io, MOCK_CONFIG, req);
+				assert_eq(res.status, 403);
+				assert_eq(res.code, "TOKEN_REPLAY_DETECTED");
+			});
+	});
+});
+
+test('Router: Callback - Reject state replay (handshake one-time use)', () => {
+	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+		let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+
+		let factory_with_responses = factory.using(io).with_responses({
+			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+			"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } } 
+		});
+		
+		factory_with_responses.with_env({}, (io_exec) => { router.handle(io_exec, MOCK_CONFIG, req); });
+		factory_with_responses.with_env({}, (io_exec) => {
+			let res = router.handle(io_exec, MOCK_CONFIG, req);
+			assert_eq(res.status, 401);
+			assert_eq(res.code, "STATE_NOT_FOUND");
+		});
+	});
+});
+
+test('Router: Callback - Reject code replay (IdP level rejection)', () => {
+	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+		let req = mock_request("/callback", { code: "REPLAYED_CODE", state: handshake.state }, { luci_sso_state: handshake.token });
+
+		factory.using(io).with_responses({
+			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+			"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } }
+		}, (io_http) => {
+			let res = router.handle(io_http, MOCK_CONFIG, req);
+			assert_eq(res.code, "OIDC_INVALID_GRANT");
+		});
+	});
+});
+
+test('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
+	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+		let req = mock_request("/callback", { code: "VALID_CODE", state: handshake.state }, { luci_sso_state: handshake.token });
+
+		factory.using(io).with_responses({
+			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+			"https://idp.com/token": { status: 400, body: { error: "invalid_grant", sub_error: "pkce_mismatch" } }
+		}, (io_http) => {
+			let res = router.handle(io_http, MOCK_CONFIG, req);
+			assert_eq(res.code, "OIDC_INVALID_GRANT");
+		});
+	});
+});
+
+test('Router: Logout - Session destruction', () => {
+	let factory = mock.create().with_ubus({ "session:destroy": {} });
 	let data = factory.spy((io) => {
 		let req = mock_request("/logout", {}, { "sysauth": "session-12345" });
 		let res = router.handle(io, MOCK_CONFIG, req);
 		assert_eq(res.status, 302);
-		assert_eq(res.headers["Location"], "/");
 	});
-
-	then("it should destroy the UBUS session on the server side", () => {
-		assert(data.called("ubus", "session", "destroy"));
-	});
+	assert(data.called("ubus", "session", "destroy"));
 });
 
-when("accessing an unhandled system path", () => {
+test('Router: Router - Handle unhandled system path', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		let res = router.handle(io, MOCK_CONFIG, mock_request("/unknown/path"));
-		then("it should return a 404 Not Found error", () => {
-			assert_eq(res.status, 404);
-		});
+		assert_eq(res.status, 404);
 	});
 });

@@ -53,7 +53,7 @@ run_unit() {
 	local translated_modules=$(translate_unit_paths "$modules")
 	
 	log_info "🧪 Running unit tests in luci container..."
-	docker compose $COMPOSE_FLAGS exec -e MODULES="$translated_modules" -e FILTER="$filter" luci ucode \
+	docker compose $COMPOSE_FLAGS exec -e MODULES="$translated_modules" -e FILTER="$filter" -e VERBOSE="$VERBOSE" luci ucode \
 		-L /usr/share/ucode \
 		-L /usr/lib/ucode \
 		-L /usr/share/ucode/luci_sso \

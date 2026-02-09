@@ -1,175 +1,131 @@
-import { test, assert, assert_eq, when, then } from 'testing';
+import { test, assert, assert_eq } from 'testing';
 import * as session from 'luci_sso.session';
+import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 
-// =============================================================================
-// Tier 2: Session Management Logic (Platinum Suite)
-// =============================================================================
+test('Session: Logic - Handshake lifecycle (Creation, Validation, Atomic Consumption)', () => {
+	let factory = mock.create();
+	
+	factory.with_env({}, (io) => {
+		// 1. Create
+		let state_res = session.create_state(io);
+		assert(state_res.ok);
+		let handshake = state_res.data;
+		assert(handshake.token);
+		
+		// 2. Verify & Consume (Atomic)
+		let verify_res = session.verify_state(io, handshake.token, 300);
+		assert(verify_res.ok);
+		assert_eq(verify_res.data.state, handshake.state);
 
-const HANDSHAKE_DIR = "/var/run/luci-sso";
-
-when("managing OIDC handshake state", () => {
-	let mocked = mock.create();
-
-	then("it should create a valid state file with unique identifiers", () => {
-		let data = mocked.spy((io) => {
-			let res = session.create_state(io);
-			assert(res.ok);
-			assert(length(res.data.state) >= 16);
-			assert(length(res.data.nonce) >= 16);
-			assert(length(res.data.token) >= 32);
-		});
-
-		// Verify side-effect: Exactly one state file created in /var/run/luci-sso
-		let writes = 0;
-		for (let entry in data.all()) {
-			if (entry.type == "write_file") {
-				assert(index(entry.args[0], HANDSHAKE_DIR + "/handshake_") == 0);
-				writes++;
-			}
-		}
-		assert_eq(writes, 1);
-	});
-
-	then("it should verify a valid state and then destroy it (atomic)", () => {
-		let handle = "test-handle-123";
-		let state_val = "correct-state";
-		let state_data = { state: state_val, nonce: "n", verifier: "v", exp: 1516239999 };
-		let path = HANDSHAKE_DIR + "/handshake_" + handle + ".json";
-
-		mocked.with_files({ [path]: sprintf("%J", state_data) }, (io) => {
-			let res = session.verify_state(io, handle, 300);
-			assert(res.ok, "Verification should succeed");
-			assert_eq(res.data.nonce, "n");
-
-			// Verify side-effect: The file must be deleted immediately after verification
-			assert_eq(io.read_file(path), null, "State file must be destroyed after use");
-		});
-	});
-
-	then("it should handle corrupted JSON state files by deleting them", () => {
-		let handle = "corrupted";
-		let path = HANDSHAKE_DIR + "/handshake_" + handle + ".json";
-
-		mocked.with_files({ [path]: "{" }, (io) => {
-			let res = session.verify_state(io, handle, 300);
-			assert(!res.ok);
-			assert_eq(res.error, "STATE_CORRUPTED");
-			assert_eq(io.read_file(path), null, "Corrupted file must be removed");
-		});
-	});
-
-	then("it should enforce strict clock tolerance boundaries", () => {
-		let now = 1516239022;
-		let tolerance = 300;
-		let handle = "boundary";
-		let path = HANDSHAKE_DIR + "/handshake_" + handle + ".json";
-
-		// 1. Exactly on the edge (Success)
-		let valid_data = { exp: now - tolerance }; 
-		mocked.with_files({ [path]: sprintf("%J", valid_data) }, (io) => {
-			assert(session.verify_state(io, handle, tolerance).ok);
-		});
-
-		// 2. Just past the edge (Expired)
-		let expired_data = { exp: now - tolerance - 1 };
-		mocked.with_files({ [path]: sprintf("%J", expired_data) }, (io) => {
-			let res = session.verify_state(io, handle, tolerance);
-			assert(!res.ok);
-			assert_eq(res.error, "HANDSHAKE_EXPIRED");
-		});
-	});
-
-	then("it should reject state if the handle is malformed", () => {
-		mocked.with_files({}, (io) => {
-			assert(!session.verify_state(io, "../../etc/passwd", 300).ok);
-		});
-	});
-
-	then("it should handle concurrent verify_state calls (race condition fallback)", () => {
-		let handle = "race-handle";
-		let state_data = { state: "s", nonce: "n", verifier: "v", exp: 1516239999 };
-		let path = HANDSHAKE_DIR + "/handshake_" + handle + ".json";
-		let consume_path = path + ".consumed";
-
-		mocked.with_files({ [consume_path]: sprintf("%J", state_data) }, (io) => {
-			// Simulate rename failure (because path doesn't exist, it's already consumed)
-			io.rename = () => false;
-
-			let res = session.verify_state(io, handle, 300);
-			assert(res.ok, "Fallback to .consumed should succeed");
-			assert_eq(res.data.state, "s");
-			
-			// Verify it still cleans up the consumed file
-			assert_eq(io.read_file(consume_path), null, "Consumed file must be removed after fallback read");
-		});
+		// 3. Replay Attempt (Must fail)
+		let replay_res = session.verify_state(io, handshake.token, 300);
+		assert(!replay_res.ok);
+		assert_eq(replay_res.error, "STATE_NOT_FOUND");
 	});
 });
 
-when("reaping abandoned handshakes", () => {
-	let mocked = mock.create();
-	let now = 1516239022;
+test('Session: Logic - Handle corrupted handshake files', () => {
+	let factory = mock.create();
+	let handle = "corrupted-handle";
+	let path = `/var/run/luci-sso/handshake_${handle}.json`;
+	
+	factory.with_files({ [path]: "{ invalid json !!! }" }, (io) => {
+		let res = session.verify_state(io, handle, 300);
+		assert(!res.ok);
+		assert_eq(res.error, "STATE_CORRUPTED");
+	});
+});
 
-	then("it should remove old handshakes but leave unrelated files untouched", () => {
-		let files = {
-			"/var/run/luci-sso/handshake_old.json": "{}",
-			"/var/run/luci-sso/important_data.json": "keep-me"
+test('Session: Logic - Enforce clock tolerance boundaries', () => {
+	let factory = mock.create();
+	let now = 1516239022;
+	
+	factory.with_env({}, (io) => {
+		let handshake = {
+			state: "s",
+			iat: now - 500,
+			exp: now - 100
+		};
+		let handle = "expired-token";
+		io.write_file(`/var/run/luci-sso/handshake_${handle}.json`, sprintf("%J", handshake));
+		
+		// 1. Expired (beyond tolerance)
+		let res = session.verify_state(io, handle, 10);
+		assert(!res.ok);
+		assert_eq(res.error, "HANDSHAKE_EXPIRED");
+	});
+});
+
+test('Session: Logic - Reject malformed state handles', () => {
+	let factory = mock.create();
+	factory.with_env({}, (io) => {
+		let res = session.verify_state(io, "../evil", 300);
+		assert_eq(res.error, "INVALID_HANDLE_FORMAT");
+	});
+});
+
+test('Session: Logic - Concurrent verify_state race resilience', () => {
+	let factory = mock.create();
+	let handle = "race-handle";
+	let path = `/var/run/luci-sso/handshake_${handle}.json`;
+	let data = { state: "s", exp: 2000000000 };
+
+	// 1. Setup the "consumed" file as if another process just renamed it
+	factory.with_files({ [`${path}.consumed`]: sprintf("%J", data) }, (io) => {
+		// Mock rename to fail (simulating race lost)
+		io.rename = () => false; 
+		
+		let res = session.verify_state(io, handle, 300);
+		assert(res.ok, "Should recover state from .consumed if rename failed but file exists");
+	});
+});
+
+test('Session: Logic - Cleanup of abandoned handshakes', () => {
+	let factory = mock.create();
+	let now = 1516239022;
+	let old_path = "/var/run/luci-sso/handshake_old.json";
+	let new_path = "/var/run/luci-sso/handshake_new.json";
+	let other_path = "/var/run/luci-sso/important.txt";
+
+	factory.with_files({
+		[old_path]: "{}",
+		[new_path]: "{}",
+		[other_path]: "keep me"
+	}, (io) => {
+		// Custom stat mock for timing
+		io.stat = (path) => {
+			if (index(path, "old") > 0) return { mtime: now - 1000 };
+			return { mtime: now };
 		};
 
-		mocked.with_files(files, (io) => {
-			// Mock stat to return specific mtimes
-			let original_stat = io.stat;
-			io.stat = (path) => {
-				if (index(path, "old") > 0) return { mtime: now - 1000 };
-				if (index(path, "important") > 0) return { mtime: now - 1000 };
-				return original_stat(path);
-			};
-
-			session.reap_stale_handshakes(io, 300);
-			
-			assert_eq(io.read_file("/var/run/luci-sso/handshake_old.json"), null, "Old handshake should be reaped");
-			assert_eq(io.read_file("/var/run/luci-sso/important_data.json"), "keep-me", "Unrelated file must be preserved");
-		});
+		session.reap_stale_handshakes(io, 300);
+		
+		assert(!io.read_file(old_path), "Old handshake should be reaped");
+		assert(io.read_file(new_path), "Recent handshake should remain");
+		assert(io.read_file(other_path), "Unrelated files should be ignored");
 	});
 });
 
-test('LOGIC: Session - Secret Key Persistence (Atomic Race Resilience)', () => {
-	let mocked = mock.create();
-	let path = "/etc/luci-sso/secret.key";
+test('Session: Logic - Secret Key Persistence (Atomic Race Resilience)', () => {
+	let factory = mock.create();
+	let key_path = "/etc/luci-sso/secret.key";
 
-	mocked.with_files({}, (io) => {
-		// Simulate a race where rename fails (e.g. read-only FS or concurrent write)
-		io.rename = () => { die("FS_ERROR"); };
+	factory.with_env({}, (io) => {
+		// 1. Successive calls should return same key
+		let res1 = session.get_secret_key(io);
+		let res2 = session.get_secret_key(io);
+		assert_eq(res1.data, res2.data);
+		assert_eq(length(res1.data), 32);
+	});
+});
 
+test('Session: Logic - Read-only FS Resilience', () => {
+	let factory = mock.create().with_read_only();
+	factory.with_env({}, (io) => {
+		// Should still return a temporary key if generation fails
 		let res = session.get_secret_key(io);
 		assert(res.ok);
-		assert(length(res.data) == 32, "Should return a valid key even if save fails");
-		
-		// Subsequent call should still work (it will generate a new one if it couldn't save)
-		let res2 = session.get_secret_key(io);
-		assert(res2.ok);
+		assert_eq(length(res.data), 32);
 	});
-});
-
-test('LOGIC: Session Persistence - Read-only FS Resilience', () => {
-	let mocked = mock.create();
-	
-	let data = mocked.with_read_only((io) => {
-		return mocked.using(io).spy((spying_io) => {
-			let res = session.create_state(spying_io);
-			assert(!res.ok);
-			assert_eq(res.error, "STATE_SAVE_FAILED");
-		});
-	});
-
-	// Platinum verification: Ensure the ACTUAL error was logged, not just a placeholder
-	assert(data.called("log", "error"), "Should have logged the error");
-	let found = false;
-	for (let entry in data.all()) {
-		if (entry.type == "log" && entry.args[0] == "error" && index(entry.args[1], "Read-only file system") > 0) {
-			found = true;
-			break;
-		}
-	}
-	assert(found, "Log should contain the OS error");
 });

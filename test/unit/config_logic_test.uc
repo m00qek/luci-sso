@@ -6,7 +6,7 @@ import * as mock from 'mock';
 // Tier 2: Configuration Logic (Platinum Suite)
 // =============================================================================
 
-test('LOGIC: Config - Successful Load & RPCD Sync', () => {
+test('Config: Logic - Successful Load & RPCD Sync', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"rpcd": {
@@ -35,7 +35,7 @@ test('LOGIC: Config - Successful Load & RPCD Sync', () => {
 	});
 });
 
-test('LOGIC: Config - Normalization (Email list vs string)', () => {
+test('Config: Logic - Normalization (Email list vs string)', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"rpcd": { "s1": { ".type": "login", "username": "u1" }, "s2": { ".type": "login", "username": "u2" } },
@@ -53,7 +53,7 @@ test('LOGIC: Config - Normalization (Email list vs string)', () => {
 	});
 });
 
-test('LOGIC: Config - HTTPS Enforcement & Localhost Exceptions', () => {
+test('Config: Logic - HTTPS Enforcement & Localhost Exceptions', () => {
 	let mocked = mock.create();
 	
 	let check = (url) => {
@@ -71,7 +71,7 @@ test('LOGIC: Config - HTTPS Enforcement & Localhost Exceptions', () => {
 	assert(!check("http://idp.com"), "Insecure remote HTTP must be rejected");
 });
 
-test('LOGIC: Config - Reject Invalid RPCD User', () => {
+test('Config: Logic - Reject Invalid RPCD User', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"rpcd": {
@@ -93,7 +93,7 @@ test('LOGIC: Config - Reject Invalid RPCD User', () => {
 	});
 });
 
-test('LOGIC: Config - Handle Disabled State', () => {
+test('Config: Logic - Handle Disabled State', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -105,14 +105,14 @@ test('LOGIC: Config - Handle Disabled State', () => {
 	});
 });
 
-test('LOGIC: Config - Handle Missing Config', () => {
+test('Config: Logic - Handle Missing Config', () => {
 	let mocked = mock.create();
 	mocked.with_uci({}, (io) => {
 		assert_throws(() => config_loader.load(io));
 	});
 });
 
-test('LOGIC: Config - Reject Missing Issuer URL', () => {
+test('Config: Logic - Reject Missing Issuer URL', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -124,7 +124,7 @@ test('LOGIC: Config - Reject Missing Issuer URL', () => {
 	});
 });
 
-test('LOGIC: Config - Reject Missing Clock Tolerance', () => {
+test('Config: Logic - Reject Missing Clock Tolerance', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {

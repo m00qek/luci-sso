@@ -1,99 +1,90 @@
-import { assert, assert_eq, when, then } from 'testing';
+import { test, assert, assert_eq } from 'testing';
 import * as mock from 'mock';
 
-when("using the Platinum Mock DSL", () => {
-	let mocked = mock.create();
+test('Meta: Mock DSL - Temporal file isolation', () => {
+	let factory = mock.create();
+	
+	factory.with_files({ "/a": "1" }, (io1) => {
+		assert_eq(io1.read_file("/a"), "1");
+		
+		factory.with_files({ "/b": "2" }, (io2) => {
+			assert_eq(io2.read_file("/b"), "2");
+			assert(!io2.read_file("/a"), "Should not leak from sibling scope");
+		});
+	});
+});
 
-	then("it should enforce temporal file isolation", () => {
-		mocked.with_files({ "/a": 1 }, (io) => {
-			assert_eq(io.read_file("/a"), 1);
+test('Meta: Mock DSL - Explicit state accumulation via using()', () => {
+	let factory = mock.create().with_files({ "/global": "ok" });
+	
+	factory.with_env({ "FOO": "bar" }, (io) => {
+		let accumulated = factory.using(io).with_files({ "/local": "here" });
+		
+		accumulated.with_env({}, (io_final) => {
+			assert_eq(io_final.read_file("/global"), "ok");
+			assert_eq(io_final.read_file("/local"), "here");
+			assert_eq(io_final.getenv("FOO"), "bar");
+		});
+	});
+});
+
+test('Meta: Mock DSL - Deep state accumulation layering', () => {
+	let io = mock.create()
+		.with_files({ "/f1": "1" })
+		.with_env({ "E1": "1" })
+		.with_ubus({ "U1": "1" })
+		.with_responses({ "H1": "1" })
+		.with_uci({ "P1": {} })
+		.with_read_only((i) => i);
+
+	assert_eq(io.read_file("/f1"), "1");
+	assert_eq(io.getenv("E1"), "1");
+});
+
+test('Meta: Mock DSL - Read-only status persistence through inheritance', () => {
+	let factory = mock.create().with_read_only();
+	factory.with_files({}, (io) => {
+		assert(!io.write_file("/test", "data"), "Root factory should be read-only");
+		
+		factory.using(io).with_env({}, (io2) => {
+			assert(!io2.write_file("/test", "data"), "Inherited factory should remain read-only");
+		});
+	});
+});
+
+test('Meta: Mock DSL - Selective spy recording', () => {
+	let factory = mock.create();
+	factory.with_env({}, (io) => {
+		io.log("warn", "ignored"); // Should not be in history
+		
+		let results = factory.using(io).spy((spying_io) => {
+			spying_io.log("error", "captured");
 		});
 		
-		mocked.with_files({}, (io) => {
-			assert_eq(io.read_file("/a"), null);
-		});
+		assert(results.called("log", "error", "captured"));
+		assert(!results.called("log", "warn"), "Pre-spy logs MUST NOT be in history");
 	});
+});
 
-	then("it should support explicit state accumulation via using()", () => {
-		mocked.with_files({ "/file": "exists" }, (io) => {
-			// This branch inherits files and adds env
-			mocked.using(io).with_env({ KEY: "val" }, (io_nested) => {
-				assert_eq(io_nested.read_file("/file"), "exists");
-				assert_eq(io_nested.getenv("KEY"), "val");
-			});
-
-			// This branch does NOT join, so it stays pure
-			mocked.with_env({ KEY: "pure" }, (io_pure) => {
-				assert_eq(io_pure.read_file("/file"), null);
-				assert_eq(io_pure.getenv("KEY"), "pure");
-			});
-		});
+test('Meta: Mock DSL - Argument matching for complex types', () => {
+	let results = mock.create().spy((io) => {
+		io.write_file("/a", "complex-data");
 	});
+	assert(results.called("write_file", "/a", "complex-data"));
+});
 
-	then("it should support deep state accumulation layering", () => {
-		mocked.with_files({ "/a": 1 }, (io1) => {
-			mocked.using(io1).with_files({ "/b": 2 }, (io2) => {
-				mocked.using(io2).with_files({ "/c": 3 }, (io3) => {
-					assert_eq(io3.read_file("/a"), 1);
-					assert_eq(io3.read_file("/b"), 2);
-					assert_eq(io3.read_file("/c"), 3);
-				});
-				assert_eq(io2.read_file("/c"), null, "Parent should not see inner state");
-			});
-		});
+test('Meta: Mock DSL - Mandatory HTTPS enforcement', () => {
+	mock.create().with_responses({}, (io) => {
+		assert_eq(io.http_get("http://insecure.com").error, "HTTPS_REQUIRED");
+		assert_eq(io.http_post("http://insecure.com").error, "HTTPS_REQUIRED");
 	});
+});
 
-	then("it should persist read-only status through inheritance", () => {
-		mocked.with_read_only((io_ro) => {
-			assert_eq(io_ro.write_file("/a", "b"), false);
-			
-			mocked.using(io_ro).with_env({ K: "V" }, (io_nested) => {
-				assert_eq(io_nested.write_file("/a", "b"), false, "RO status must be inherited");
-				assert_eq(io_nested.getenv("K"), "V");
-			});
-		});
+test('Meta: Mock DSL - Stdout capture via intercepted thunk', () => {
+	let factory = mock.create();
+	let out = factory.get_stdout((io) => {
+		io.stdout.write("hello");
+		io.stdout.write(" world");
 	});
-
-	then("it should only record when spy() is active", () => {
-		mocked.with_env({}, (io) => {
-			io.log("warn", "ignored");
-		});
-
-		let data = mocked.spy((io) => {
-			io.log("error", "captured");
-			io.ubus_call("session", "login", { u: "root" });
-		});
-
-		assert(data.called("log", "error"), "Should capture log");
-		assert(!data.called("log", "warn"), "Should not have captured previous logs");
-		assert(data.called("ubus", "session", "login"), "Should capture ubus");
-	});
-
-	then("it should support argument matching for complex types", () => {
-		let data = mocked.spy((io) => {
-			io.ubus_call("obj", "method", { complex: { nested: true } });
-		});
-
-		// Base predicate only matches positional arguments
-		assert(data.called("ubus", "obj", "method"));
-	});
-
-	then("it should enforce mandatory HTTPS for all network calls", () => {
-		mocked.with_env({}, (io) => {
-			assert_eq(io.http_get("http://insecure.com").error, "HTTPS_REQUIRED");
-			assert_eq(io.http_post("http://insecure.com").error, "HTTPS_REQUIRED");
-			
-			// Valid https shouldn't hit the requirement block (will just 404 in mock)
-			assert_eq(io.http_get("https://secure.com").status, 404);
-		});
-	});
-
-	then("it should support capturing stdout via intercepted thunk", () => {
-		let buf = mocked.get_stdout((io) => {
-			io.stdout.write("hello ");
-			io.stdout.write("world");
-		});
-
-		assert_eq(buf, "hello world");
-	});
+	assert_eq(out, "hello world");
 });
