@@ -53,7 +53,7 @@ test('Config: Logic - Normalization (Email list vs string)', () => {
 	});
 });
 
-test('Config: Logic - HTTPS Enforcement & Localhost Exceptions', () => {
+test('Config: Logic - HTTPS Enforcement', () => {
 	let mocked = mock.create();
 	
 	let check = (url) => {
@@ -66,8 +66,8 @@ test('Config: Logic - HTTPS Enforcement & Localhost Exceptions', () => {
 	};
 
 	assert(check("https://idp.com"), "HTTPS should be allowed");
-	assert(check("http://localhost:8080"), "http://localhost should be allowed");
-	assert(check("http://127.0.0.1"), "http://127.0.0.1 should be allowed");
+	assert(!check("http://localhost:8080"), "http://localhost must now be rejected");
+	assert(!check("http://127.0.0.1"), "http://127.0.0.1 must now be rejected");
 	assert(!check("http://idp.com"), "Insecure remote HTTP must be rejected");
 });
 

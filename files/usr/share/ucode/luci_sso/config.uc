@@ -36,9 +36,8 @@ export function load(io) {
 		die("CONFIG_ERROR: issuer_url is mandatory");
 	}
 
-	let is_localhost = (index(issuer, "://localhost") > 0 || index(issuer, "://127.0.0.1") > 0);
-	if (substr(issuer, 0, 8) !== "https://" && !is_localhost) {
-		die("CONFIG_ERROR: issuer_url must use HTTPS (unless localhost)");
+	if (substr(issuer, 0, 8) !== "https://") {
+		die("CONFIG_ERROR: issuer_url must use HTTPS");
 	}
 
 	if (oidc_cfg.clock_tolerance == null || oidc_cfg.clock_tolerance == "") {
