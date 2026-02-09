@@ -32,3 +32,26 @@ test('Web: Parsing - Standard query parameters', () => {
 	assert_eq(p.a, "1");
 	assert_eq(p.b, "2 3");
 });
+
+test('Web: Security - Prevent XSS in Redirect Location', () => {
+	let malicious_loc = 'javascript:alert("XSS")//"><img src=x onerror=alert(1)>';
+	let res = {
+		status: 302,
+		headers: { "Location": malicious_loc }
+	};
+
+	mock.create().spy((io) => {
+		web.render(io, res);
+		let out = io.__state__.stdout_buf;
+		
+		// 1. Verify Header is correct (Unescaped for protocol)
+		assert(index(out, `Location: ${malicious_loc}\n`) >= 0, "Location header should be unescaped for HTTP");
+
+		// 2. Verify Body is escaped (everything after \n\n)
+		let parts = split(out, "\n\n", 2);
+		let body = parts[1] || "";
+		
+		assert(index(body, malicious_loc) == -1, "Raw malicious location MUST NOT be present in HTML body");
+		assert(index(body, 'alert(&quot;XSS&quot;)') >= 0 || index(body, 'alert(&#x27;XSS&#x27;)') >= 0, "Location MUST be HTML escaped in body");
+	});
+});

@@ -116,6 +116,20 @@ export function request(io) {
 };
 
 /**
+ * Safely escapes a string for inclusion in HTML content.
+ * @private
+ */
+function html_escape(str) {
+	if (type(str) != "string") return "";
+	let res = replace(str, /&/g, "&amp;");
+	res = replace(res, /</g, "&lt;");
+	res = replace(res, />/g, "&gt;");
+	res = replace(res, /"/g, "&quot;");
+	res = replace(res, /'/g, "&#x27;");
+	return res;
+}
+
+/**
  * Formats and sends the HTTP response to stdout.
  * 
  * @param {object} io - I/O provider
@@ -130,8 +144,9 @@ export function render(io, res) {
 		headers["Content-Type"] = "text/html";
 		
 		let loc = headers["Location"] || "";
-		body = '<html><head><script>window.location.href="' + loc + '";</script></head>';
-		body += '<body><p>Redirecting to <a href="' + loc + '">' + loc + '</a>...</p></body></html>\n';
+		let escaped_loc = html_escape(loc);
+		body = '<html><head><script>window.location.href="' + escaped_loc + '";</script></head>';
+		body += '<body><p>Redirecting to <a href="' + escaped_loc + '">' + escaped_loc + '</a>...</p></body></html>\n';
 	} else if (res.status == 401) {
 		headers["Status"] = "401 Unauthorized";
 	} else if (res.status == 403) {

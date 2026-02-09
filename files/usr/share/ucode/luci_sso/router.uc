@@ -90,7 +90,7 @@ function validate_callback_request(io, config, request) {
  * Executes the full OIDC exchange and verification flow.
  * @private
  */
-function complete_oauth_flow(io, config, code, handshake) {
+function complete_oauth_flow(io, config, code, handshake, policy) {
 	let session_id = handshake.id;
 	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
@@ -117,7 +117,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 		return { ok: false, error: "JWKS_FETCH_FAILED", status: 500 };
 	}
 
-	let verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time());
+	let verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
 	
 	// Key Rotation / Stale Cache Recovery: (Warning #8 in 1770660561)
 	// We only retry if:
@@ -141,7 +141,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 			io.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
 			jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri, { force: true });
 			if (jwks_res.ok) {
-				verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time());
+				verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
 			}
 		}
 	}
@@ -202,7 +202,7 @@ function create_session_response(io, mapping, oidc_email, access_token, refresh_
  * Handles the OIDC callback path.
  * @private
  */
-function handle_callback(io, config, request) {
+function handle_callback(io, config, request, policy) {
 	io.log("info", "OIDC callback received");
 
 	let val_res = validate_callback_request(io, config, request);
@@ -211,7 +211,7 @@ function handle_callback(io, config, request) {
 	let handshake = val_res.data.handshake;
 	let session_id = handshake.id;
 
-	let oauth_res = complete_oauth_flow(io, config, code, handshake);
+	let oauth_res = complete_oauth_flow(io, config, code, handshake, policy);
 	if (!oauth_res.ok) return error_response(oauth_res.error, oauth_res.status);
 	let user_data = oauth_res.data;
 	let access_token = oauth_res.access_token; // From complete_oauth_flow
@@ -264,9 +264,10 @@ function handle_logout(io, request) {
  * @param {object} io - I/O provider
  * @param {object} config - UCI configuration
  * @param {object} request - Parsed request context {path, query, cookies}
+ * @param {object} [policy] - Security policy (Second Dimension)
  * @returns {object} - Response Object {status, headers, body}
  */
-export function handle(io, config, request) {
+export function handle(io, config, request, policy) {
 	// Periodic Cleanup: Stale handshakes
 	session.reap_stale_handshakes(io, config.clock_tolerance);
 
@@ -277,7 +278,7 @@ export function handle(io, config, request) {
 	if (path == "/") {
 		return handle_login(io, config);
 	} else if (path == "/callback") {
-		return handle_callback(io, config, request);
+		return handle_callback(io, config, request, policy);
 	} else if (path == "/logout") {
 		return handle_logout(io, request);
 	}

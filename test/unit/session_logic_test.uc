@@ -121,85 +121,44 @@ test('Session: Logic - Secret Key Persistence (Atomic Race Resilience)', () => {
 });
 
 test('Session: Logic - Read-only FS Resilience', () => {
-
 	let factory = mock.create().with_read_only();
-
 	factory.with_env({}, (io) => {
-
 		// Should still return a temporary key if generation fails
-
 		let res = session.get_secret_key(io);
-
 		assert(res.ok);
-
 		assert_eq(length(res.data), 32);
-
 	});
-
 });
 
-
-
 test('Session: Logic - Secret Key Lock Collision Fallback', () => {
-
 	let factory = mock.create();
-
 	let key_path = "/etc/luci-sso/secret.key";
 
-
-
 	// Scenario A: Lock held, but key eventually appears (concurrent success)
-
 	factory.with_env({}, (io) => {
-
 		let call_count = 0;
-
 		io.mkdir = () => false; // Lock collision
-
 		io.read_file = (path) => {
-
 			if (path == key_path) {
-
 				call_count++;
-
 				// First call (check) fails, second call (fallback) succeeds
-
 				return (call_count > 1) ? "ANOTHER_PROCESS_KEY_012345678901" : null;
-
 			}
-
 			return null;
-
 		};
 
-
-
 		let res = session.get_secret_key(io);
-
 		assert(res.ok);
-
 		assert_eq(res.data, "ANOTHER_PROCESS_KEY_012345678901", "Should recover key from concurrent process");
-
 	});
-
-
 
 	// Scenario B: Lock held, and key NEVER appears (concurrent failure/slowness)
-
 	factory.with_env({}, (io) => {
-
 		io.mkdir = () => false; // Lock collision
-
 		io.read_file = () => null; // File missing
 
-
-
 		let res = session.get_secret_key(io);
-
 		assert(res.ok);
-
 		assert_eq(length(res.data), 32, "Should fallback to temporary random key on collision failure");
-
 	});
-
 });
