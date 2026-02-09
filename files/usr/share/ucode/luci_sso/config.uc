@@ -10,10 +10,6 @@
  * @returns {object} - The validated configuration object
  */
 export function load(io) {
-	if (!io || type(io.uci_cursor) != "function") {
-		die("CONTRACT_VIOLATION: config.load expects an IO provider with uci_cursor");
-	}
-
 	let cursor = io.uci_cursor();
 
 	// 1. Load RPCD users to build a validation set
@@ -61,7 +57,7 @@ export function load(io) {
 		let emails = (type(s.email) == "array") ? s.email : (s.email ? [ s.email ] : []);
 
 		if (!rpcd_user || !s.rpcd_password || length(emails) == 0) {
-			if (io.log && rpcd_user) {
+			if (rpcd_user) {
 				io.log("warn", `Ignoring mapping for '${rpcd_user}': missing password or email list`);
 			}
 			return;
@@ -69,9 +65,7 @@ export function load(io) {
 
 		// Validation: Does this user exist in rpcd?
 		if (!valid_rpcd_users[rpcd_user]) {
-			if (io.log) {
-				io.log("warn", `Ignoring mapping for '${rpcd_user}': user not found in /etc/config/rpcd`);
-			}
+			io.log("warn", `Ignoring mapping for '${rpcd_user}': user not found in /etc/config/rpcd`);
 			return;
 		}
 

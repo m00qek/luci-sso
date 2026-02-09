@@ -6,30 +6,11 @@ const HANDSHAKE_DURATION = 300;
 const HANDSHAKE_DIR = "/var/run/luci-sso";
 
 /**
- * Validates the IO object.
- * @private
- */
-function validate_io(io) {
-	if (type(io) != "object" || 
-		type(io.read_file) != "function" || 
-		type(io.write_file) != "function" || 
-		type(io.time) != "function" ||
-		type(io.rename) != "function" ||
-		type(io.remove) != "function" ||
-		type(io.mkdir) != "function" ||
-		type(io.lsdir) != "function" ||
-		type(io.stat) != "function") {
-		die("CONTRACT_VIOLATION: Invalid IO provider");
-	}
-}
-
-/**
  * Removes handshake files older than the duration.
  * @param {object} io - I/O provider
  * @param {number} clock_tolerance - Clock skew tolerance
  */
 export function reap_stale_handshakes(io, clock_tolerance) {
-	validate_io(io);
 	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: reap_stale_handshakes expects mandatory integer clock_tolerance");
 
 	let files = io.lsdir(HANDSHAKE_DIR);
@@ -116,7 +97,6 @@ export function get_secret_key(io) {
  * @returns {object} - Result Object {ok, data/error}
  */
 export function create_state(io) {
-	validate_io(io);
 	ensure_handshake_dir(io);
 
 	let pkce = crypto.pkce_pair();
@@ -126,6 +106,7 @@ export function create_state(io) {
 	let now = io.time();
 
 	let data = {
+		id: substr(handle, 0, 8), // Correlation ID for logs
 		state: state,
 		code_verifier: pkce.verifier,
 		nonce: nonce,
@@ -137,13 +118,15 @@ export function create_state(io) {
 		let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
 		if (!io.write_file(path, sprintf("%J", data))) {
 			let err = io.fserror();
-			if (io.log) io.log("error", `Failed to save handshake state: ${err}`);
+			io.log("error", `Failed to save handshake state: ${err}`);
 			return { ok: false, error: "STATE_SAVE_FAILED", details: err };
 		}
 	} catch (e) {
-		if (io.log) io.log("error", `Failed to save handshake state: ${e}`);
+		io.log("error", `Failed to save handshake state: ${e}`);
 		return { ok: false, error: "STATE_SAVE_FAILED" };
 	}
+
+	io.log("info", `Handshake state created [session_id: ${data.id}]`);
 
 	return {
 		ok: true,
@@ -165,7 +148,6 @@ export function create_state(io) {
  * @returns {object} - Result Object {ok, data/error}
  */
 export function verify_state(io, handle, clock_tolerance) {
-	validate_io(io);
 	if (type(handle) != "string") die("CONTRACT_VIOLATION: verify_state expects string handle");
 	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: verify_state expects mandatory integer clock_tolerance");
 
@@ -177,6 +159,7 @@ export function verify_state(io, handle, clock_tolerance) {
 	let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
 	let consume_path = `${path}.consumed`;
 	let content = null;
+	let session_id = substr(handle, 0, 8);
 
 	try {
 		// MANDATORY: Atomic one-time use. (Blocker #2 in 1770660561)
@@ -185,33 +168,44 @@ export function verify_state(io, handle, clock_tolerance) {
 			// Race Fallback: Check if another process already consumed it just now (Warning #6 in 1770661270)
 			content = io.read_file(consume_path);
 			if (!content) {
+				io.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
 				return { ok: false, error: "STATE_NOT_FOUND" };
 			}
+			io.log("info", `Handshake state consumption race resolved [session_id: ${session_id}]`);
 		} else {
 			content = io.read_file(consume_path);
 		}
 		
 		if (content) io.remove(consume_path);
 	} catch (e) {
+		io.log("error", `Handshake state consumption failed [session_id: ${session_id}]: ${e}`);
 		return { ok: false, error: "STATE_NOT_FOUND" };
 	}
 
-	if (!content) return { ok: false, error: "STATE_NOT_FOUND" };
+	if (!content) {
+		io.log("error", `Handshake state content missing [session_id: ${session_id}]`);
+		return { ok: false, error: "STATE_NOT_FOUND" };
+	}
 
 	let data = safe_json_parse(content);
 	if (!data) {
+		io.log("error", `Handshake state corrupted [session_id: ${session_id}]`);
 		return { ok: false, error: "STATE_CORRUPTED" };
 	}
 
 	let now = io.time();
 
 	if (data.exp && data.exp < (now - clock_tolerance)) {
+		io.log("warn", `Handshake state expired [session_id: ${session_id}]`);
 		return { ok: false, error: "HANDSHAKE_EXPIRED" };
 	}
 
 	if (data.iat && data.iat > (now + clock_tolerance)) {
+		io.log("warn", `Handshake state not yet valid [session_id: ${session_id}]`);
 		return { ok: false, error: "HANDSHAKE_NOT_YET_VALID" };
 	}
+	
+	io.log("info", `Handshake state successfully validated [session_id: ${session_id}]`);
 	
 	return { ok: true, data: data };
 };
@@ -224,7 +218,6 @@ export function verify_state(io, handle, clock_tolerance) {
  * @returns {object} - Result Object {ok, data/error}
  */
 export function create(io, user_data) {
-	validate_io(io);
 	if (!user_data || (type(user_data.sub) != "string" && type(user_data.email) != "string")) {
 		return { ok: false, error: "INVALID_USER_DATA" };
 	}
@@ -254,7 +247,6 @@ export function create(io, user_data) {
  * @returns {object} - Result Object {ok, data/error}
  */
 export function verify(io, token, clock_tolerance) {
-	validate_io(io);
 	if (!token) return { ok: false, error: "NO_SESSION" };
 	if (type(token) != "string") die("CONTRACT_VIOLATION: verify expects string token");
 	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: verify expects mandatory integer clock_tolerance");

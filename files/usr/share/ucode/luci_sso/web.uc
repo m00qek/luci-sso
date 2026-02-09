@@ -79,6 +79,12 @@ export function parse_cookies(str) {
  * @private
  */
 function _out(io, headers, body) {
+	// CGI SPEC: Status header MUST come first if present
+	if (headers["Status"]) {
+		io.stdout.write(`Status: ${headers["Status"]}\n`);
+		delete headers["Status"];
+	}
+
 	for (let k, v in headers) {
 		if (type(v) == "array") {
 			for (let val in v) {
@@ -102,10 +108,6 @@ function _out(io, headers, body) {
  * @returns {object} - {path, query, cookies}
  */
 export function request(io) {
-	if (!io || type(io.getenv) != "function") {
-		die("CONTRACT_VIOLATION: web.request expects an IO provider with getenv");
-	}
-
 	return {
 		path: safe_getenv(io, "PATH_INFO") || "/",
 		query: parse_params(safe_getenv(io, "QUERY_STRING")),
@@ -120,10 +122,6 @@ export function request(io) {
  * @param {object} res - Response object {status, headers, body}
  */
 export function render(io, res) {
-	if (!io || !io.stdout || type(io.stdout.write) != "function" || type(io.stdout.flush) != "function") {
-		die("CONTRACT_VIOLATION: web.render expects an IO provider with a writable stdout");
-	}
-
 	let headers = res.headers || {};
 	let body = res.body || "";
 
@@ -134,10 +132,16 @@ export function render(io, res) {
 		let loc = headers["Location"] || "";
 		body = '<html><head><script>window.location.href="' + loc + '";</script></head>';
 		body += '<body><p>Redirecting to <a href="' + loc + '">' + loc + '</a>...</p></body></html>\n';
+	} else if (res.status == 401) {
+		headers["Status"] = "401 Unauthorized";
+	} else if (res.status == 403) {
+		headers["Status"] = "403 Forbidden";
+	} else if (res.status == 404) {
+		headers["Status"] = "404 Not Found";
+	} else if (res.status >= 500) {
+		headers["Status"] = "500 Internal Server Error";
 	} else {
-		if (res.status != 200) {
-			headers["Status"] = res.status;
-		}
+		headers["Status"] = "200 OK";
 	}
 
 	_out(io, headers, body);
@@ -171,9 +175,7 @@ const ERROR_MAP = {
 export function render_error(io, code, status) {
 	let user_msg = ERROR_MAP[code] || "An unexpected authentication error occurred.";
 	
-	if (io.log) {
-		io.log("error", `[${status || 500}] ${code}`);
-	}
+	io.log("error", `[${status || 500}] ${code}`);
 
 	_out(io, {
 		"Status": status || 500,
@@ -188,16 +190,10 @@ export function render_error(io, code, status) {
  * @param {any} e - The error object or message
  */
 export function error(io, e) {
-	if (!io || !io.stdout || type(io.stdout.write) != "function" || type(io.stdout.flush) != "function") {
-		die("CONTRACT_VIOLATION: web.error expects an IO provider with a writable stdout");
-	}
-
 	let msg = sprintf("%s", e);
 	let stack = (type(e) == "object") ? e.stacktrace : "";
 	
-	if (io.log) {
-		io.log("error", `Router crash: ${msg}\n${stack}`);
-	}
+	io.log("error", `Router crash: ${msg}\n${stack}`);
 	
 	_out(io, {
 		"Status": "500 Internal Server Error",

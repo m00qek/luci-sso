@@ -96,7 +96,9 @@ function build_provider(state) {
 		
 		urlencode: (s) => lucihttp.urlencode(s), // Pure function, no tracking needed
 		
-		log: trackable("log", (level, msg) => {}),
+		log: trackable("log", (level, msg) => {
+			// In mock mode, we just record it. History is handled by the trackable wrapper.
+		}),
 		
 		http_get: trackable("http_get", (url) => {
 			// MANDATORY HTTPS: (Mirroring Production Blocker #6)

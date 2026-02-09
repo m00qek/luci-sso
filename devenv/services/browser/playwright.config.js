@@ -10,6 +10,9 @@ module.exports = defineConfig({
     baseURL: process.env.BASE_URL,
     ignoreHTTPSErrors: false,
     screenshot: 'only-on-failure',
+    timeout: 5000,
+    actionTimeout: 5000,
+    navigationTimeout: 5000,
   },
   projects: [
     {

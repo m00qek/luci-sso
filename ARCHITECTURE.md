@@ -10,6 +10,8 @@ This document describes the architectural design, security model, and key techni
 The project strictly follows the pattern of keeping business logic (OIDC, Session management) pure and testable, while isolating side effects (Network, FS, Time) into an "IO Provider" object.
 *   **Functional Core:** ucode modules in `files/usr/share/ucode/luci_sso/`.
 *   **Imperative Shell:** The CGI script in `files/www/cgi-bin/luci-sso` which initializes the real `io` object.
+*   **IO Contract:** The `io` object MUST implement a standard set of methods: `time`, `random`, `read_file`, `write_file`, `rename`, `remove`, `mkdir`, `lsdir`, `stat`, `http_get`, `http_post`, and **`log`**.
+*   **Mandatory Auditing:** Logging is NOT optional. All security-relevant events, including handshake creation, validation failures, and network errors, MUST be logged for forensic purposes.
 *   **Benefit:** Enables 100% offline unit testing without mocks for the logic itself.
 
 ### Minimal C Surface

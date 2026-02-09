@@ -108,6 +108,7 @@ export function discover(issuer, options) {
 let io = {
 	time: function() { return time(); },           // ✅ Current timestamp
 	random: function(n) { return crypto.random(n); },  // ✅ Unpredictable
+	log: function(level, msg) { /* ... */ },       // ✅ Mandatory Auditing
 	http_get: function(url) { /* ... */ },         // ✅ Network I/O
 	http_post: function(url, opts) { /* ... */ },  // ✅ Network I/O
 	read_file: function(path) { /* ... */ },       // ✅ Filesystem I/O
@@ -127,6 +128,8 @@ let result = replace(s, p, r);  // ❌ String manipulation
 ```
 
 **Rule of Thumb:** If the function always returns the same output for the same input and has no side effects, it's NOT I/O.
+
+**Contractual Obligation:** The `log` function MUST be present in all `io` provider implementations. Logs are NOT optional in this security-critical application.
 
 ---
 

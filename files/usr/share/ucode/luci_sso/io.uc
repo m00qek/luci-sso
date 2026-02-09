@@ -3,6 +3,7 @@
 import * as fs from 'fs';
 import * as uci from 'uci';
 import * as ubus from 'ubus';
+import * as log from 'log';
 import * as lucihttp from 'lucihttp';
 import * as secure_http from 'luci_sso.secure_http';
 
@@ -14,6 +15,9 @@ let _ubus_conn = null;
  * @returns {object} - IO provider implementing the luci-sso contract.
  */
 export function create() {
+	// Initialize system logger
+	log.openlog("luci-sso", log.LOG_PID, log.LOG_USER);
+
 	return {
 		time: () => time(),
 		read_file: (path) => fs.readfile(path),
@@ -24,7 +28,10 @@ export function create() {
 		lsdir: (path) => fs.lsdir(path),
 		stat: (path) => fs.stat(path),
 		
-		log: (level, msg) => warn(`[luci-sso] [${level}] ${msg}\n`),
+		log: function(level, msg) {
+			let priority = (level == "error") ? log.LOG_ERR : (level == "warn") ? log.LOG_WARNING : log.LOG_INFO;
+			log.syslog(priority, msg);
+		},
 
 		http_get: function(url) {
 			// MANDATORY: HTTPS only (Blocker #6)

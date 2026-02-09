@@ -5,16 +5,6 @@ import * as crypto from 'luci_sso.crypto';
 // --- Internal Helpers ---
 
 /**
- * Validates the IO object.
- * @private
- */
-function validate_io(io) {
-	if (type(io) != "object" || type(io.http_get) != "function" || type(io.time) != "function") {
-		die("CONTRACT_VIOLATION: Invalid IO provider");
-	}
-}
-
-/**
  * Decodes JSON safely.
  * @private
  */
@@ -87,7 +77,6 @@ function _is_https(url) {
  * Fetches and caches OIDC discovery document.
  */
 export function discover(io, issuer, options) {
-	validate_io(io);
 	if (type(issuer) != "string") die("CONTRACT_VIOLATION: issuer must be a string");
 
 	if (!_is_https(issuer)) return { ok: false, error: "INSECURE_ISSUER_URL" };
@@ -109,17 +98,29 @@ export function discover(io, issuer, options) {
 	fetch_url += ".well-known/openid-configuration";
 
 	let response = io.http_get(fetch_url, { verify: true });
-	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
-	if (response.status != 200) return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
+	if (!response || response.error) {
+		io.log("warn", `Discovery fetch failed for ${issuer}: ${response?.error || "no response"}`);
+		return { ok: false, error: "NETWORK_ERROR" };
+	}
+	if (response.status != 200) {
+		io.log("warn", `Discovery fetch HTTP ${response.status} from ${issuer}`);
+		return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
+	}
 
 	let config = safe_json_parse(response.body);
-	if (!config) return { ok: false, error: "INVALID_DISCOVERY_DOC" };
+	if (!config) {
+		io.log("error", `Invalid discovery document format from ${issuer}`);
+		return { ok: false, error: "INVALID_DISCOVERY_DOC" };
+	}
 
 	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
 	if (config.issuer && config.issuer != issuer) {
+		io.log("error", `Discovery issuer mismatch: Requested ${issuer}, got ${config.issuer}`);
 		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", 
 			 details: `Requested ${issuer}, got ${config.issuer}` };
 	}
+
+	io.log("info", `Discovery successful for ${issuer}`);
 
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {
@@ -140,7 +141,6 @@ export function discover(io, issuer, options) {
  * Fetches JWK Set from IdP with caching.
  */
 export function fetch_jwks(io, jwks_uri, options) {
-	validate_io(io);
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
 
 	if (!_is_https(jwks_uri)) return { ok: false, error: "INSECURE_JWKS_URI" };
@@ -152,16 +152,28 @@ export function fetch_jwks(io, jwks_uri, options) {
 	if (!options.force) {
 		let cached = _read_cache(io, cache_path, ttl);
 		if (cached && type(cached.keys) == "array") {
+			io.log("info", `JWKS loaded from cache for ${jwks_uri}`);
 			return { ok: true, data: cached.keys };
 		}
 	}
 
 	let response = io.http_get(jwks_uri, { verify: true });
-	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
-	if (response.status != 200) return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
+	if (!response || response.error) {
+		io.log("warn", `JWKS fetch failed for ${jwks_uri}: ${response?.error || "no response"}`);
+		return { ok: false, error: "NETWORK_ERROR" };
+	}
+	if (response.status != 200) {
+		io.log("warn", `JWKS fetch HTTP ${response.status} from ${jwks_uri}`);
+		return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
+	}
 
 	let jwks = safe_json_parse(response.body);
-	if (!jwks || type(jwks.keys) != "array") return { ok: false, error: "INVALID_JWKS_FORMAT" };
+	if (!jwks || type(jwks.keys) != "array") {
+		io.log("error", `Invalid JWKS format from ${jwks_uri}`);
+		return { ok: false, error: "INVALID_JWKS_FORMAT" };
+	}
+
+	io.log("info", `JWKS successfully fetched: ${length(jwks.keys)} keys from ${jwks_uri}`);
 
 	_write_cache(io, cache_path, jwks);
 
@@ -211,15 +223,16 @@ export function get_auth_url(io, config, discovery, params) {
 /**
  * Exchanges authorization code for tokens.
  */
-export function exchange_code(io, config, discovery, code, verifier) {
-	validate_io(io);
+export function exchange_code(io, config, discovery, code, verifier, session_id) {
 
 	if (!_is_https(discovery.token_endpoint)) return { ok: false, error: "INSECURE_TOKEN_ENDPOINT" };
 
 	// Audit logging for PKCE usage (Blocker #2)
-	if (io.log) io.log("info", `Initiating token exchange with PKCE verifier (len: ${length(verifier)})`);
+	let sid_ctx = session_id ? ` [session_id: ${session_id}]` : "";
+	io.log("info", `Initiating token exchange${sid_ctx} with PKCE verifier (len: ${length(verifier)})`);
 
 	if (type(verifier) != "string" || length(verifier) < 43) {
+		io.log("error", `Rejected token exchange${sid_ctx}: PKCE verifier too short`);
 		return { ok: false, error: "INVALID_PKCE_VERIFIER" };
 	}
 
@@ -246,17 +259,27 @@ export function exchange_code(io, config, discovery, code, verifier) {
 		verify: true // Explicitly request TLS certificate verification
 	});
 
-	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
+	if (!response || response.error) {
+		io.log("warn", `Token exchange network error${sid_ctx}: ${response?.error || "no response"}`);
+		return { ok: false, error: "NETWORK_ERROR" };
+	}
 	if (response.status != 200) {
 		let err_data = safe_json_parse(response.body);
 		if (err_data && err_data.error == "invalid_grant") {
+			io.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
 			return { ok: false, error: "OIDC_INVALID_GRANT" };
 		}
+		io.log("warn", `Token exchange HTTP ${response.status}${sid_ctx}`);
 		return { ok: false, error: "TOKEN_EXCHANGE_FAILED", details: response.status };
 	}
 
 	let tokens = safe_json_parse(response.body);
-	if (!tokens) return { ok: false, error: "INVALID_JSON" };
+	if (!tokens) {
+		io.log("error", `Invalid JSON response in token exchange${sid_ctx}`);
+		return { ok: false, error: "INVALID_JSON" };
+	}
+
+	io.log("info", `Token exchange successful${sid_ctx}`);
 
 	return { ok: true, data: tokens };
 };
@@ -264,7 +287,7 @@ export function exchange_code(io, config, discovery, code, verifier) {
 /**
  * Verifies ID Token and matches nonce.
  */
-export function verify_id_token(io, tokens, keys, config, handshake, discovery) {
+export function verify_id_token(tokens, keys, config, handshake, discovery, now) {
 	if (!tokens.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
 
 	let parts = split(tokens.id_token, ".");
@@ -286,7 +309,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery) 
 
 	let validation_opts = { 
 		alg: header.alg,
-		now: io.time(),
+		now: now,
 		clock_tolerance: config.clock_tolerance,
 		iss: config.issuer_url,
 		aud: config.client_id

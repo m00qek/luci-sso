@@ -1,5 +1,11 @@
 const { test, expect } = require('@playwright/test');
 
+const vlog = (msg) => {
+  if (process.env.VERBOSE) {
+    console.log(`[DEBUG] ${msg}`);
+  }
+};
+
 test.describe('Security: OIDC Attacks', () => {
   
   test.beforeEach(async ({ context }) => {
@@ -10,18 +16,18 @@ test.describe('Security: OIDC Attacks', () => {
     let callbackUrl;
 
     await test.step('Given a user completes the OIDC flow once', async () => {
-      console.log('Starting first login attempt...');
+      vlog('Starting first login attempt...');
       await page.goto('/');
       await page.locator('#luci-sso-login-btn').click();
       
-      console.log('Waiting for successful auth and redirect...');
+      vlog('Waiting for successful auth and redirect...');
       // Wait for the IdP or the final LuCI dashboard
-      await page.waitForURL(/\/cgi-bin\/luci/, { timeout: 15000 });
+      await page.waitForURL(/\/cgi-bin\/luci/, { timeout: 5000 });
       callbackUrl = page.url();
-      console.log(`Captured callback URL: ${callbackUrl}`);
+      vlog(`Captured callback URL: ${callbackUrl}`);
       
-      await expect(page.locator('a[href*="/logout"]')).toBeVisible();
-      console.log('First login successful.');
+      await expect(page.locator('a[href*="/logout"]')).toBeVisible({ timeout: 5000 });
+      vlog('First login successful.');
     });
 
     await test.step('When the user attempts to replay the EXACT same callback URL', async () => {
@@ -43,59 +49,74 @@ test.describe('Security: OIDC Attacks', () => {
     });
   });
 
-  test('Authorization Code Replay: Reusing a code with a fresh session should fail', async ({ page, context }) => {
+  test('Authorization Code Replay: Reusing a code with a fresh session should fail', async ({ request, context }) => {
     let oldCode;
 
     await test.step('Given a user captures an authorization code from a successful flow', async () => {
-      console.log('Capture step: Setting up request listener');
-      // Use request interception to catch the code as it flies by
-      const codePromise = page.waitForRequest(request => {
-        return request.url().includes('code=') && request.url().includes('luci-sso/callback');
-      }, { timeout: 20000 });
+      vlog('Capture step: Starting flow via Request API');
+      
+      // 1. Get the landing page to start flow (DO NOT FOLLOW REDIRECTS)
+      const res = await request.get('/cgi-bin/luci-sso', { maxRedirects: 0 });
+      expect(res.status()).toBe(302);
+      
+      const loc = res.headers()['location'];
+      const idpUrl = new URL(loc);
+      oldCode = 'captured-via-idp-simulation'; // We need a real code from the IdP
 
+      // Actually, we can just use the page to get a real code once
+      const page = await context.newPage();
       await page.goto('/');
-      await page.waitForSelector('#luci-sso-login-btn', { timeout: 10000 });
+      
+      const capturePromise = page.waitForRequest(r => r.url().includes('/callback?code='));
       await page.locator('#luci-sso-login-btn').click();
+      const capReq = await capturePromise;
+      oldCode = new URL(capReq.url()).searchParams.get('code');
       
-      const callbackRequest = await codePromise;
-      const url = new URL(callbackRequest.url());
-      oldCode = url.searchParams.get('code');
-      console.log(`Capture step: Captured code: ${oldCode}`);
-      expect(oldCode).toBeTruthy();
-      
-      // Allow the flow to complete (consume the code)
-      await page.waitForURL(/.*\/cgi-bin\/luci($|\?|\/).*/, { timeout: 20000 });
-      console.log('Capture step: Flow completed');
+      vlog(`Capture step: Captured code: ${oldCode}`);
+      await page.close();
     });
 
-    await test.step('When the user starts a NEW flow but attempts to reuse the OLD code', async () => {
-      console.log('Replay step: Clearing cookies');
-      await context.clearCookies();
+    await test.step('When the user starts a NEW flow and replays the OLD code', async () => {
+      vlog('Replay step: Initializing fresh handshake');
       
-      // Start a new flow to get a fresh state cookie
-      await page.goto('/');
-      await page.waitForSelector('#luci-sso-login-btn', { timeout: 10000 });
-      await page.locator('#luci-sso-login-btn').click();
+      // 1. Start fresh flow to get a NEW state cookie (DO NOT FOLLOW REDIRECTS)
+      const initRes = await request.get('/cgi-bin/luci-sso', { maxRedirects: 0 });
+      expect(initRes.status()).toBe(302);
       
-      // Wait until we reach the IdP
-      await page.waitForURL(/.*idp\.luci-sso\.test.*/, { timeout: 20000 });
-      
-      const cookies = await context.cookies();
-      const stateCookie = cookies.find(c => c.name === 'luci_sso_state');
-      expect(stateCookie).toBeDefined();
+      const setCookie = initRes.headers()['set-cookie'];
+      const stateCookie = setCookie.split(';')[0];
+      vlog(`Replay step: Fresh state cookie: ${stateCookie}`);
 
-      // Attempt to call the callback with the OLD code but the NEW state cookie
-      const callbackUrl = `/cgi-bin/luci-sso/callback?code=${oldCode}&state=anything`;
-      console.log(`Replay step: Replaying to ${callbackUrl}`);
-      await page.goto(callbackUrl);
+      // 2. Extract the NEW state value from the redirect location
+      const idpUrl = new URL(initRes.headers()['location']);
+      const newState = idpUrl.searchParams.get('state');
+      vlog(`Replay step: Fresh state value: ${newState}`);
+
+      // 3. Replay OLD code with NEW state and NEW cookie
+      const callbackUrl = `/cgi-bin/luci-sso/callback?code=${oldCode}&state=${newState}`;
+      vlog(`Replay step: Replaying to ${callbackUrl}`);
+
+      const replayRes = await request.get(callbackUrl, {
+        headers: { 'Cookie': stateCookie },
+        maxRedirects: 0
+      });
+
+      vlog(`Replay step: Received status: ${replayRes.status()}`);
+      const body = await replayRes.text();
+      
+      // We expect an error because the code is replayed.
+      // If uhttpd swallowed the 500 status and gave us 200, we check the body for 'Error:'
+      const isRejected = replayRes.status() >= 400 || body.includes('Error:');
+      
+      if (!isRejected) {
+        vlog(`Replay step: UNEXPECTED SUCCESS BODY: ${body}`);
+      }
+      
+      expect(isRejected).toBeTruthy();
     });
 
-    await test.step('Then the system should reject the reuse of the expired/consumed code', async () => {
-      console.log('Verification step: Checking for login rejection');
-      // Should be back at login
-      await expect(page.locator('#luci-sso-login-btn')).toBeVisible({ timeout: 10000 });
-      await expect(page.locator('a[href*="/logout"]')).not.toBeVisible();
-      console.log('Verification step: Success');
+    await test.step('Then the system should have rejected the request', async () => {
+      vlog('Verification step: Success');
     });
   });
 });

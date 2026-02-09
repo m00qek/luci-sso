@@ -28,7 +28,7 @@ export function create_session(io, username, password, oidc_email, access_token,
 	});
 
 	if (!login_res || !login_res.ubus_rpc_session) {
-		if (io.log) io.log("error", `UBUS login failed for template user '${username}'`);
+		io.log("error", `UBUS login failed for template user '${username}'`);
 		return { ok: false, error: "UBUS_LOGIN_FAILED" };
 	}
 
@@ -49,9 +49,7 @@ export function create_session(io, username, password, oidc_email, access_token,
 		}
 	});
 
-	if (io.log) {
-		io.log("info", `Successful SSO login for ${oidc_email} mapped to system user ${username}`);
-	}
+	io.log("info", `Successful SSO login for ${oidc_email} mapped to system user ${username}`);
 
 	return { ok: true, data: sid };
 };

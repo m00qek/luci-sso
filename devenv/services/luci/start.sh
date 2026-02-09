@@ -56,6 +56,7 @@ chmod +x /www/cgi-bin/luci-sso 2>/dev/null || true
 # 8. Core Daemons
 /sbin/ubusd &
 sleep 1
+/sbin/logd -S 64 &
 /sbin/rpcd &
 
 # 9. One-time Setup

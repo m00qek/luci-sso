@@ -32,6 +32,7 @@ function error_response(io, code, status) {
  * @private
  */
 function handle_login(io, config) {
+	io.log("info", "Initiating OIDC login flow");
 	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) return error_response(io, "OIDC_DISCOVERY_FAILED", 500);
 
@@ -90,6 +91,7 @@ function validate_callback_request(io, config, request) {
  * @private
  */
 function complete_oauth_flow(io, config, code, handshake) {
+	let session_id = handshake.id;
 	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
 		return { ok: false, error: "OIDC_DISCOVERY_FAILED", status: 500 };
@@ -104,7 +106,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 		discovery.jwks_uri = replace(discovery.jwks_uri, config.issuer_url, config.internal_issuer_url);
 	}
 
-	let exchange_res = oidc.exchange_code(io, config, discovery, code, handshake.code_verifier);
+	let exchange_res = oidc.exchange_code(io, config, discovery, code, handshake.code_verifier, session_id);
 	if (!exchange_res.ok) {
 		return { ok: false, error: "TOKEN_EXCHANGE_FAILED", status: 500 };
 	}
@@ -115,21 +117,24 @@ function complete_oauth_flow(io, config, code, handshake) {
 		return { ok: false, error: "JWKS_FETCH_FAILED", status: 500 };
 	}
 
-	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery);
+	let verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time());
 	
 	// Key Rotation / Stale Cache Recovery: 
 	// If verification fails due to signature, re-fetch JWKS without cache and try one more time.
 	if (!verify_res.ok && verify_res.error == "INVALID_SIGNATURE") {
-		if (io.log) io.log("warn", "ID Token signature verification failed; forcing JWKS refresh and retrying");
+		io.log("warn", `ID Token signature verification failed for [session_id: ${session_id}]; forcing JWKS refresh and retrying`);
 		jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri, { force: true });
 		if (jwks_res.ok) {
-			verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery);
+			verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time());
 		}
 	}
 
 	if (!verify_res.ok) {
+		io.log("error", `ID Token verification failed [session_id: ${session_id}]: ${verify_res.error}`);
 		return { ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", status: 401 };
 	}
+
+	io.log("info", `ID Token successfully validated for sub=${verify_res.data.sub} [session_id: ${session_id}]`);
 
 	return { 
 		ok: true, 
@@ -181,10 +186,13 @@ function create_session_response(io, mapping, oidc_email, access_token, refresh_
  * @private
  */
 function handle_callback(io, config, request) {
+	io.log("info", "OIDC callback received");
+
 	let val_res = validate_callback_request(io, config, request);
 	if (!val_res.ok) return error_response(io, val_res.error, val_res.status);
 	let code = val_res.data.code;
 	let handshake = val_res.data.handshake;
+	let session_id = handshake.id;
 
 	let oauth_res = complete_oauth_flow(io, config, code, handshake);
 	if (!oauth_res.ok) return error_response(io, oauth_res.error, oauth_res.status);
@@ -193,16 +201,20 @@ function handle_callback(io, config, request) {
 	let refresh_token = oauth_res.refresh_token;
 
 	if (ubus.is_token_replayed(io, access_token)) {
+		io.log("error", `Access token replay detected for sub=${user_data.sub} [session_id: ${session_id}]`);
 		return error_response(io, "TOKEN_REPLAY_DETECTED", 403);
 	}
 
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
+		io.log("warn", `User sub=${user_data.sub} (email=${user_data.email}) not found in mapping whitelist [session_id: ${session_id}]`);
 		return error_response(io, "USER_NOT_AUTHORIZED", 403);
 	}
 
 	let final_res = create_session_response(io, mapping, user_data.email, access_token, refresh_token);
 	if (!final_res.ok) return error_response(io, final_res.error, final_res.status);
+
+	io.log("info", `Session successfully created for user sub=${user_data.sub} [session_id: ${session_id}] (mapped to rpcd_user=${mapping.rpcd_user})`);
 
 	return final_res.data;
 }
@@ -237,10 +249,6 @@ function handle_logout(io, request) {
  * @returns {object} - Response Object {status, headers, body}
  */
 export function handle(io, config, request) {
-	if (type(io) != "object" || type(config) != "object" || type(request) != "object") {
-		die("CONTRACT_VIOLATION: router.handle expects (io, config, request)");
-	}
-
 	// Periodic Cleanup: Stale handshakes
 	session.reap_stale_handshakes(io, config.clock_tolerance);
 

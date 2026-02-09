@@ -22,7 +22,7 @@ test.describe('Authentication', () => {
         const idpHost = process.env.FQDN_IDP;
         // Escape dots for regex
         const idpRegex = idpHost.replace(/\./g, '\\.');
-        await expect(page).toHaveURL(new RegExp(idpRegex + '|/cgi-bin/luci'), { timeout: 15000 });
+        await expect(page).toHaveURL(new RegExp(idpRegex + '|/cgi-bin/luci'), { timeout: 5000 });
       });
 
       await test.step('And they should see the authenticated dashboard', async () => {
