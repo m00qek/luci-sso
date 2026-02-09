@@ -19,7 +19,7 @@ const MOCK_DISCOVERY = {
 when("exchanging code with an insecure token endpoint", () => {
 	mock.create().with_files({}, (io) => {
 		then("it should reject the exchange with INSECURE_TOKEN_ENDPOINT", () => {
-			let res = oidc.exchange_code(io, MOCK_CONFIG, MOCK_DISCOVERY, "code123", "verifier123");
+			let res = oidc.exchange_code(io, MOCK_CONFIG, MOCK_DISCOVERY, "code123", "a-very-long-and-secure-verifier-that-is-at-least-43-chars-long");
 			assert_eq(res.ok, false);
 			assert_eq(res.error, "INSECURE_TOKEN_ENDPOINT");
 		});
@@ -30,7 +30,7 @@ when("exchanging code and the network fails (e.g. invalid certificate)", () => {
 	mock.create().with_responses({ "https://idp.com/token": { error: "CERT_VALIDATION_FAILED" } }, (io) => {
 		then("it should return NETWORK_ERROR", () => {
 			let secure_discovery = { ...MOCK_DISCOVERY, token_endpoint: "https://idp.com/token" };
-			let res = oidc.exchange_code(io, MOCK_CONFIG, secure_discovery, "code123", "verifier123");
+			let res = oidc.exchange_code(io, MOCK_CONFIG, secure_discovery, "code123", "a-very-long-and-secure-verifier-that-is-at-least-43-chars-long");
 			assert_eq(res.ok, false);
 			assert_eq(res.error, "NETWORK_ERROR");
 		});

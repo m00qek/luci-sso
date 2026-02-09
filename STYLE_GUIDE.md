@@ -796,22 +796,24 @@ let state = sprintf("%d", time());
 
 ```javascript
 export function verify_jwt(token, pubkey, options) {
-	// Validate types
+	// 1. Contract Bugs (Programming errors) -> die()
 	if (type(token) != "string")
-		die("INVALID_ARGUMENT: token not string");
+		die("CONTRACT_VIOLATION: token must be string");
 	if (type(options) != "object")
-		die("INVALID_ARGUMENT: options not object");
+		die("CONTRACT_VIOLATION: options must be object");
 	
-	// Validate structure
+	// 2. Runtime Realities (Invalid data) -> return { ok: false }
 	let parts = split(token, ".");
 	if (length(parts) != 3)
-		die("MALFORMED_JWT: expected 3 parts");
+		return { ok: false, error: "MALFORMED_JWT" };
 	
 	// Validate algorithm
 	if (!options.alg)
-		die("MISSING_ALGORITHM");
+		return { ok: false, error: "MISSING_ALGORITHM" };
+	
+	let header = decode_header(parts[0]);
 	if (header.alg != options.alg)
-		die("ALGORITHM_MISMATCH");
+		return { ok: false, error: "ALGORITHM_MISMATCH" };
 	
 	// ...
 };

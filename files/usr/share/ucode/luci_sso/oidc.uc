@@ -216,6 +216,13 @@ export function exchange_code(io, config, discovery, code, verifier) {
 
 	if (!_is_https(discovery.token_endpoint)) return { ok: false, error: "INSECURE_TOKEN_ENDPOINT" };
 
+	// Audit logging for PKCE usage (Blocker #2)
+	if (io.log) io.log("info", `Initiating token exchange with PKCE verifier (len: ${length(verifier)})`);
+
+	if (type(verifier) != "string" || length(verifier) < 43) {
+		return { ok: false, error: "INVALID_PKCE_VERIFIER" };
+	}
+
 	let body = {
 		grant_type: "authorization_code",
 		client_id: config.client_id,
@@ -309,9 +316,13 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery) 
 		return { ok: false, error: "AZP_MISMATCH" };
 	}
 
-	// 3.3 Access Token Hash Check (Blocker #7: Binding)
+	// 3.3 Access Token Hash Check (Blocker #7 in 1770661270: Binding)
 	// Per OIDC Core 3.1.3.3: If at_hash is present, it MUST match the access_token.
-	if (tokens.access_token) {
+	// To prevent stripping attacks and ensure binding, we enforce that if either is present, both must be.
+	if (tokens.access_token || payload.at_hash) {
+		if (!tokens.access_token) {
+			return { ok: false, error: "AT_HASH_PRESENT_WITHOUT_ACCESS_TOKEN" };
+		}
 		if (!payload.at_hash) {
 			return { ok: false, error: "MISSING_AT_HASH" };
 		}

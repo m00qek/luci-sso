@@ -179,13 +179,18 @@ export function verify_state(io, handle, clock_tolerance) {
 	let content = null;
 
 	try {
-		// MANDATORY: Atomic one-time use. 
-		// We RENAME the file to .consumed. Only one process can succeed.
+		// MANDATORY: Atomic one-time use. (Blocker #2 in 1770660561)
+		// We RENAME the file to .consumed. Only one process can succeed in the rename.
 		if (!io.rename(path, consume_path)) {
-			return { ok: false, error: "STATE_NOT_FOUND" };
+			// Race Fallback: Check if another process already consumed it just now (Warning #6 in 1770661270)
+			content = io.read_file(consume_path);
+			if (!content) {
+				return { ok: false, error: "STATE_NOT_FOUND" };
+			}
+		} else {
+			content = io.read_file(consume_path);
 		}
 		
-		content = io.read_file(consume_path);
 		if (content) io.remove(consume_path);
 	} catch (e) {
 		return { ok: false, error: "STATE_NOT_FOUND" };

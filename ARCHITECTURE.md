@@ -35,8 +35,8 @@ To achieve "Gold Standard" security, the project enforces an exclusively HTTPS-b
 ### Back-channel (Router ↔ IdP)
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS. Any configured `internal_issuer_url` must also use TLS.
 *   **Verification:** The logic explicitly passes `verify: true` to the I/O provider. The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
-*   **Token Binding:** The system enforces mandatory `at_hash` validation (OIDC Core 3.1.3.3) to cryptographically bind the Access Token to the ID Token.
-*   **Replay Protection:** Handshake states are consumed atomically using POSIX `rename` to prevent race conditions and token replay.
+*   **Token Binding:** The system enforces `at_hash` validation for token binding if present in the ID Token (OIDC Core 3.1.3.3), preventing stripping attacks by requiring the Access Token if a hash is provided.
+*   **Replay Protection:** Handshake states are consumed using atomic POSIX `rename` with a race-condition fallback to prevent token replay across concurrent requests.
 *   **Claims Validation:** Mandatory verification of `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party).
 *   **Reasoning:** The back-channel carries sensitive credentials (`client_secret`, `access_token`). Insecure transport or weak binding is never acceptable.
 

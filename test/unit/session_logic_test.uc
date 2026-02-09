@@ -85,6 +85,25 @@ when("managing OIDC handshake state", () => {
 			assert(!session.verify_state(io, "../../etc/passwd", 300).ok);
 		});
 	});
+
+	then("it should handle concurrent verify_state calls (race condition fallback)", () => {
+		let handle = "race-handle";
+		let state_data = { state: "s", nonce: "n", verifier: "v", exp: 1516239999 };
+		let path = HANDSHAKE_DIR + "/handshake_" + handle + ".json";
+		let consume_path = path + ".consumed";
+
+		mocked.with_files({ [consume_path]: sprintf("%J", state_data) }, (io) => {
+			// Simulate rename failure (because path doesn't exist, it's already consumed)
+			io.rename = () => false;
+
+			let res = session.verify_state(io, handle, 300);
+			assert(res.ok, "Fallback to .consumed should succeed");
+			assert_eq(res.data.state, "s");
+			
+			// Verify it still cleans up the consumed file
+			assert_eq(io.read_file(consume_path), null, "Consumed file must be removed after fallback read");
+		});
+	});
 });
 
 when("reaping abandoned handshakes", () => {

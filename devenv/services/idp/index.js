@@ -65,7 +65,12 @@ app.get('/auth', (req, res) => {
     log(`Auth request for ${client_id}`);
 
     const code = crypto.randomBytes(16).toString('hex');
-    app.locals[code] = { nonce, client_id, redirect_uri };
+    app.locals[code] = { 
+        nonce, 
+        client_id, 
+        redirect_uri,
+        expires_at: Date.now() + 300000 // 5-minute TTL
+    };
 
     const callbackUrl = new URL(redirect_uri);
     callbackUrl.searchParams.set('code', code);
@@ -81,6 +86,13 @@ app.post('/token', async (req, res) => {
 
     const context = app.locals[code];
     if (!context) return res.status(400).json({ error: 'invalid_code' });
+
+    // Single-use enforcement and TTL check (Blocker #4 in 1770661270)
+    delete app.locals[code];
+    if (Date.now() > context.expires_at) {
+        log(`Authorization code expired for ${context.client_id}`);
+        return res.status(400).json({ error: 'code_expired' });
+    }
 
     const accessToken = 'mock-access-token';
     

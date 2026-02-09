@@ -72,17 +72,18 @@ test('OIDC: Token - Successful Exchange', () => {
 			body: { access_token: "mock-access", id_token: "mock-id" }
 		}
 	}, (io) => {
-		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "code123", "verifier123");
+		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "code123", "a-very-long-and-secure-verifier-that-is-at-least-43-chars-long");
 		assert(res.ok);
 	});
 });
 
 test('OIDC: Token - Handle IdP Errors (401/400)', () => {
+	let v = "a-very-long-and-secure-verifier-that-is-at-least-43-chars-long";
 	// 1. Unauthorized (401)
 	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 401, body: { error: "invalid_client" } }
 	}, (io) => {
-		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "v");
+		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", v);
 		assert(!res.ok);
 		assert_eq(res.error, "TOKEN_EXCHANGE_FAILED");
 	});
@@ -91,7 +92,7 @@ test('OIDC: Token - Handle IdP Errors (401/400)', () => {
 	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "something_else" } }
 	}, (io) => {
-		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "v");
+		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", v);
 		assert(!res.ok);
 		assert_eq(res.error, "TOKEN_EXCHANGE_FAILED");
 	});
@@ -100,7 +101,7 @@ test('OIDC: Token - Handle IdP Errors (401/400)', () => {
 	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "invalid_grant" } }
 	}, (io) => {
-		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "v");
+		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", v);
 		assert(!res.ok);
 		assert_eq(res.error, "OIDC_INVALID_GRANT");
 	});
@@ -235,6 +236,27 @@ test('OIDC: JWKS - Handle Corrupted Cache', () => {
 	});
 });
 
+test('OIDC: Token - Enforce PKCE Verifier Length', () => {
+	mock.create().with_responses({}, (io) => {
+		// 1. Weak verifier
+		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "code", "weak");
+		assert(!res.ok);
+		assert_eq(res.error, "INVALID_PKCE_VERIFIER");
+
+		// 2. Valid verifier
+		mock.create().using(io).with_responses({
+			[f.MOCK_DISCOVERY.token_endpoint]: {
+				status: 200,
+				body: { access_token: "a", id_token: "i" }
+			}
+		}, (io_ok) => {
+			let long_verifier = "a-very-long-and-secure-verifier-that-is-at-least-43-chars-long";
+			let res_ok = oidc.exchange_code(io_ok, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "code", long_verifier);
+			assert(res_ok.ok);
+		});
+	});
+});
+
 test('OIDC: ID Token - at_hash validation ensures token binding', () => {
 	let access_token = "valid-access-token-123";
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
@@ -249,7 +271,7 @@ test('OIDC: ID Token - at_hash validation ensures token binding', () => {
 		let res1 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert(res1.ok, "Should accept matching at_hash");
 
-		// 2. Success: No access_token, at_hash ignored
+		// 2. Success: No access_token, no at_hash
 		let p2 = { ...f.MOCK_CLAIMS };
 		let res2 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p2, SECRET) }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert(res2.ok, "Should pass if both are missing");
@@ -261,6 +283,10 @@ test('OIDC: ID Token - at_hash validation ensures token binding', () => {
 		// 4. Failure: at_hash missing when access_token present
 		let res4 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p2, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert(!res4.ok && res4.error == "MISSING_AT_HASH");
+
+		// 5. Failure: at_hash present but access_token missing (Stripping Attack)
+		let res5 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, SECRET) }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
+		assert(!res5.ok && res5.error == "AT_HASH_PRESENT_WITHOUT_ACCESS_TOKEN");
 	});
 });
 
