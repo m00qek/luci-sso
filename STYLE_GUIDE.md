@@ -133,7 +133,26 @@ let result = replace(s, p, r);  // ❌ String manipulation
 
 ---
 
-### 3. Minimal C Code
+### 3. Two-Dimensional Config (Policy Pattern)
+
+**ALWAYS** use the policy dimension for internal security enforcement that should NOT be editable by the system administrator.
+
+```javascript
+// Dimension 1: config (UCI) - Admin controlled
+// Dimension 2: policy (Internal) - Logic controlled
+export function verify(tokens, config, policy) {
+    const DEFAULT_POLICY = { allowed_algs: ["RS256"] };
+    let p = policy || DEFAULT_POLICY;
+    
+    // Use p.allowed_algs for verification
+};
+```
+
+**Rationale:** Prevents "Algorithm Confusion" and "Reflective Trust" vulnerabilities by keeping critical whitelists out of UCI.
+
+---
+
+### 4. Minimal C Code
 
 **Crypto operations ONLY in C.** Everything else in ucode.
 
@@ -844,7 +863,22 @@ return payload;  // Accept if no explicit rejection
 
 ---
 
-### 5. No Secrets in Logs
+### 5. Fail-Safe Execution Order (Consumption First)
+
+**ALWAYS** register/consume a token or secret **BEFORE** performing computationally expensive or potentially failing verification.
+
+```javascript
+// ✅ CORRECT
+let tokens = exchange_code(code);
+register_token(tokens.access_token); // Fail-Safe: Consumed even if verify fails
+verify_id_token(tokens.id_token);
+```
+
+**Rationale:** Prevents brute-force signature or padding attacks by ensuring an attacker only gets one attempt per token.
+
+---
+
+### 6. No Secrets in Logs
 
 **NEVER log secrets:**
 

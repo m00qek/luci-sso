@@ -116,6 +116,10 @@ export function discover(io, issuer, options) {
 	}
 
 	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
+	if (!config.issuer) {
+		io.log("error", `Discovery document missing issuer field from [id: ${issuer_id}]`);
+		return { ok: false, error: "DISCOVERY_MISSING_ISSUER" };
+	}
 	if (config.issuer && config.issuer != issuer) {
 		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${crypto.safe_id(config.issuer)}]`);
 		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", 

@@ -37,23 +37,28 @@ To achieve "Gold Standard" security, the project enforces an exclusively HTTPS-b
 ### Back-channel (Router ↔ IdP)
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS. Any configured `internal_issuer_url` must also use TLS.
 *   **Verification:** The logic explicitly passes `verify: true` to the I/O provider. The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
-*   **Token Binding:** The system enforces `at_hash` validation for token binding if present in the ID Token (OIDC Core 3.1.3.3), preventing stripping attacks by requiring the Access Token if a hash is provided.
-*   **Replay Protection:** Handshake states are consumed using atomic POSIX `rename` with a race-condition fallback to prevent token replay across concurrent requests.
+*   **Token Binding:** The system enforces `at_hash` validation **unconditionally** for all flows (even where OIDC Core 1.0 makes it optional) to prevent token substitution attacks. Calculation MUST be performed using byte-safe extraction to prevent UTF-8 boundary errors.
+*   **Replay Protection:** Handshake states are consumed using atomic POSIX `rename`. OIDC Access Tokens are registered in a local registry **immediately after exchange and BEFORE verification** (Fail-Safe consumption) to prevent brute-force signature or padding attacks.
+*   **Algorithm Enforcement:** The system implements a **Two-Dimensional Config** (Security Policy). By default, it MUST ONLY accept asymmetric signatures (RS256, ES256). Symmetric algorithms (HS256) are strictly forbidden in production to prevent "Algorithm Confusion" attacks.
 *   **Claims Validation:** Mandatory verification of `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party).
-*   **Reasoning:** The back-channel carries sensitive credentials (`client_secret`, `access_token`). Insecure transport or weak binding is never acceptable.
+*   **Reasoning:** The back-channel carries sensitive credentials (`client_secret`, `access_token`). Insecure transport, weak binding, or reflective algorithm trust is never acceptable.
 
 ---
 
 ## 4. Environment Resilience
 
-### HTTP Implementation: Native `uclient` with `uloop`
-The project utilizes the native `uclient` ucode module integrated with the `uloop` event loop.
-*   **Decision:** We implement a synchronous-looking wrapper in `https.uc` that leverages `uloop` to handle asynchronous HTTP events.
-*   **Why:** This approach is more performant, provides better control over SSL context initialization, and eliminates the overhead of spawning shell processes. By using the OpenWrt SDK for builds, we ensure ABI compatibility for the native module across target architectures.
+### Background Maintenance (Cron)
+To prevent Algorithmic Complexity DoS attacks, periodic maintenance tasks (reaping expired tokens and handshakes) are decoupled from the CGI request loop.
+*   **Orchestration:** A native OpenWrt cron job executes `/usr/sbin/luci-sso-cleanup` daily.
+*   **Benefit:** Ensures the hot-path (Authentication) remains performant even under heavy load or abandoned flows.
 
 ---
 
-## 5. UI Integration Strategy
+## 5. Session & CSRF Handling
+
+### Security Cookies
+The system utilizes the `__Host-` cookie prefix for all session-related cookies.
+*   **Requirement:** This mandates `Secure`, `Path=/`, and prevents cookie shadowing from subdomains, fulfilling modern web security best practices.
 
 ### Modern LuCI Hook (JavaScript)
 Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not use server-side Lua templates.

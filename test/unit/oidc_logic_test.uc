@@ -46,6 +46,19 @@ test('OIDC: Discovery - Reject Issuer Mismatch', () => {
 	});
 });
 
+test('OIDC: Discovery - Reject document missing issuer field', () => {
+	let issuer = "https://trusted.idp";
+	let url = issuer + "/.well-known/openid-configuration";
+	let bad_doc = { ...f.MOCK_DISCOVERY };
+	delete bad_doc.issuer;
+
+	mock.create().with_responses({ [url]: { status: 200, body: bad_doc } }, (io) => {
+		let res = oidc.discover(io, issuer);
+		assert(!res.ok, "Should fail if issuer field is missing");
+		assert_eq(res.error, "DISCOVERY_MISSING_ISSUER");
+	});
+});
+
 test('OIDC: Discovery - Cache Robustness & TTL', () => {
 	let issuer = "https://trusted.idp";
 	let cache_path = "/var/run/luci-sso/oidc-cache-test.json";

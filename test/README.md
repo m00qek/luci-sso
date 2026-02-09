@@ -33,6 +33,16 @@ make e2e-test
 | **4** | **Meta** | ucode | `mock.uc` | Verify the test harness itself ensures the mocks behave correctly. |
 | **E2E** | **Full Stack** | **JavaScript** | Browser ↔ IdP ↔ Router | Verify the end-to-end user experience using Playwright. |
 
+### Platinum Security Suites (Hardened Validation)
+
+The project includes specialized security tests beyond basic coverage:
+- **PII Redaction (Logs)**: Verifies that raw emails or names NEVER leak into `io.log` during session operations.
+- **at_hash Torture**: Verifies byte-safe calculation of token hashes using binary-sensitive sequences (e.g., `0xC2`) to prevent character boundary errors.
+- **Fail-Safe Consumption**: Verifies that access tokens are consumed in the replay registry even if ID token verification fails.
+- **Algorithm Confusion**: Verifies that symmetric `HS256` tokens are rejected in production mode.
+
+---
+
 ## 3. Testing Philosophy
 
 1.  **Functional Core, Imperative Shell**: Most logic lives in pure modules (`crypto.uc`, `oidc.uc`) that take an injectable `io` provider.
