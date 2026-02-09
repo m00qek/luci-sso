@@ -261,6 +261,37 @@ test('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
 	});
 });
 
+test('Router: Security - Access token is consumed EVEN IF verification fails (Fail-Safe)', () => {
+	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handshake = state_res.data;
+		let access_token = "FAIL_SAFE_TOKEN";
+		
+		// 1. Setup response with INVALID ID token (wrong signature)
+		factory.using(io).with_responses({
+			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+			"https://idp.com/token": { status: 200, body: { access_token: access_token, id_token: "invalid.jwt.sig" } },
+			"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+		}, (io_http) => {
+			let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
+			
+			// First attempt fails at verification
+			let res1 = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
+			assert_eq(res1.status, 401, "Should fail verification");
+
+			// SECOND attempt should fail with AUTH_FAILED (Replay) because the token was consumed!
+			// We need a fresh handshake for the second attempt
+			let state_res2 = session.create_state(io_http);
+			let req2 = mock_request("/callback", { code: "c2", state: state_res2.data.state }, { "__Host-luci_sso_state": state_res2.data.token });
+			
+			let res2 = router.handle(io_http, MOCK_CONFIG, req2, TEST_POLICY);
+			assert_eq(res2.status, 403, "Should fail with REPLAY even if first attempt failed verification");
+			assert_eq(res2.code, "AUTH_FAILED");
+		});
+	});
+});
+
 test('Router: Logout - Session destruction', () => {
 	let factory = mock.create().with_ubus({ "session:destroy": {} });
 	let data = factory.spy((io) => {

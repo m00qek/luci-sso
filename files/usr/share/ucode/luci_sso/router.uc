@@ -111,6 +111,14 @@ function complete_oauth_flow(io, config, code, handshake, policy) {
 		return exchange_res;
 	}
 	let tokens = exchange_res.data;
+	let access_token = tokens.access_token;
+
+	// MANDATORY: Register token BEFORE verification (Fail-Safe)
+	// This ensures the token is "Consumed" even if ID token verification fails.
+	if (!ubus.register_token(io, access_token)) {
+		io.log("error", `Access token replay detected [session_id: ${session_id}]`);
+		return { ok: false, error: "AUTH_FAILED", status: 403 };
+	}
 
 	let jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri);
 	if (!jwks_res.ok) {
@@ -217,12 +225,6 @@ function handle_callback(io, config, request, policy) {
 	let access_token = oauth_res.access_token; // From complete_oauth_flow
 	let refresh_token = oauth_res.refresh_token;
 
-	// MANDATORY: Atomic Replay Protection (Blocker #1 in 1770660569)
-	if (!ubus.register_token(io, access_token)) {
-		io.log("error", `Access token replay detected for [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}]`);
-		return error_response("AUTH_FAILED", 403);
-	}
-
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
 		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] not found in mapping whitelist [session_id: ${session_id}]`);
@@ -269,6 +271,8 @@ function handle_logout(io, request) {
  */
 export function handle(io, config, request, policy) {
 	// Periodic Cleanup: Stale handshakes
+	// NOTE: Token reaping is handled by a background cron job (/usr/sbin/luci-sso-cleanup)
+	// to prevent algorithmic complexity DoS attacks on the CGI interface.
 	session.reap_stale_handshakes(io, config.clock_tolerance);
 
 	let path = request.path || "/";

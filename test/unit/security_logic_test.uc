@@ -1,6 +1,7 @@
 import { test, assert, assert_eq } from 'testing';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
+import * as ubus from 'luci_sso.ubus';
 import * as mock from 'mock';
 
 // =============================================================================
@@ -85,20 +86,70 @@ test('Security: JWT - Payload Integrity', () => {
 	
 		// ASSERTION: Verify that no log message contains the '@' symbol or the raw name
 	
-		for (let call in data.calls) {
+			for (let call in data.calls) {
 	
-			if (call[0] == "log") {
+				if (call[0] == "log") {
 	
-				let msg = call[2];
+					let msg = call[2];
 	
-				assert(!match(msg, /@/), `Security Violation: Raw email found in logs: ${msg}`);
+					assert(!match(msg, /@/), `Security Violation: Raw email found in logs: ${msg}`);
 	
-				assert(!match(msg, /Evil Attacker/), `Security Violation: Raw name found in logs: ${msg}`);
+					assert(!match(msg, /Evil Attacker/), `Security Violation: Raw name found in logs: ${msg}`);
+	
+				}
 	
 			}
 	
-		}
+		});
 	
-	});
+		
+	
+		test('Security: Token Registry - Cleanup of stale tokens', () => {
+	
+			let factory = mock.create();
+	
+			let now = 1516239022;
+	
+			let old_token_path = "/var/run/luci-sso/tokens/old-id";
+	
+			let new_token_path = "/var/run/luci-sso/tokens/new-id";
+	
+		
+	
+			factory.with_files({
+	
+				[old_token_path]: { ".type": "directory" },
+	
+				[new_token_path]: { ".type": "directory" }
+	
+			}, (io) => {
+	
+				// Mock stat for timing
+	
+				io.stat = (path) => {
+	
+					if (index(path, "old") > 0) return { mtime: now - 90000 }; // > 24h
+	
+					return { mtime: now };
+	
+				};
+	
+		
+	
+				ubus.reap_stale_tokens(io);
+	
+				
+	
+				let files = io.lsdir("/var/run/luci-sso/tokens");
+	
+				assert(index(files, "old-id") == -1, "Old token should be reaped");
+	
+				assert(index(files, "new-id") >= 0, "New token should remain");
+	
+			});
+	
+		});
+	
+		
 	
 	
