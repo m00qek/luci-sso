@@ -289,13 +289,38 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 
 /**
  * Verifies ID Token and matches nonce.
+ * 
+ * @param {object} tokens - Token response {id_token, access_token}
+ * @param {array} keys - JWK keyset
+ * @param {object} config - UCI configuration
+ * @param {object} handshake - Handshake state {nonce, ...}
+ * @param {object} discovery - Discovery document
+ * @param {number} now - Current timestamp
+ * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
  */
-export function verify_id_token(tokens, keys, config, handshake, discovery, now) {
+export function verify_id_token(tokens, keys, config, handshake, discovery, now, policy) {
 	if (!tokens.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
+
+	// 1. Policy Enforcement (Second Dimension)
+	// Hardcoded safe defaults for production.
+	const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
+	let p = policy || DEFAULT_POLICY;
 
 	let parts = split(tokens.id_token, ".");
 	let header = safe_json_parse(crypto.b64url_decode(parts[0]));
 	if (!header) return { ok: false, error: "INVALID_JWT_HEADER" };
+
+	// BLOCKER: Enforce algorithm whitelist from policy
+	let alg_allowed = false;
+	for (let a in p.allowed_algs) {
+		if (header.alg == a) {
+			alg_allowed = true;
+			break;
+		}
+	}
+	if (!alg_allowed) {
+		return { ok: false, error: "UNSUPPORTED_ALGORITHM", details: header.alg };
+	}
 
 	let jwk_res = find_jwk(keys, header.kid);
 	if (!jwk_res.ok) return jwk_res;
@@ -353,8 +378,18 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now)
 	}
 
 	let full_hash = crypto.sha256(tokens.access_token);
-	let left_half = substr(full_hash, 0, length(full_hash) / 2);
+	if (!full_hash) return { ok: false, error: "CRYPTO_ERROR" };
+
+	// OIDC Core 1.0 Section 3.1.3.6: at_hash is the left-most half 
+	// of the hash of the octets of the ASCII representation of the access_token.
+	// We MUST extract the first 16 bytes manually to ensure byte-safety 
+	// (ucode substr() counts characters, which is incorrect for raw bytes).
+	let left_half = "";
+	for (let i = 0; i < 16; i++) {
+		left_half += chr(ord(full_hash, i));
+	}
 	let expected_hash = crypto.b64url_encode(left_half);
+
 	if (expected_hash != payload.at_hash) {
 		return { ok: false, error: "AT_HASH_MISMATCH" };
 	}

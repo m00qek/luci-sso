@@ -1,7 +1,37 @@
 import { test, assert, assert_eq } from 'testing';
 import * as oidc from 'luci_sso.oidc';
+import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
+
+const TEST_POLICY = { allowed_algs: ["RS256", "ES256", "HS256"] };
+
+test('OIDC: Security - Reject HS256 Algorithm Confusion (Reflective Trust)', () => {
+	// 1. Setup malicious HS256 token signed with a string key
+	let header = { alg: "HS256", typ: "JWT", kid: "key1" };
+	let payload = { 
+		iss: f.MOCK_CONFIG.issuer_url, 
+		aud: f.MOCK_CONFIG.client_id,
+		sub: "user1",
+		nonce: "n1",
+		iat: 100,
+		exp: 1000,
+		at_hash: "fake_hash"
+	};
+	let token = crypto.sign_jws(payload, "secret-key"); // Maliciously signed with symmetric HS256
+
+	let tokens = { id_token: token, access_token: "fake" };
+	let keys = [{ kty: "RSA", kid: "key1", n: "...", e: "..." }]; // IdP only advertises RSA
+
+	mock.create().with_env({}, (io) => {
+		// BLOCKER: Here we do NOT pass TEST_POLICY, so it uses the production DEFAULT_POLICY (RS256/ES256)
+		// This verifies the production fix.
+		let res = oidc.verify_id_token(tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500);
+		
+		assert(!res.ok, "Should NOT accept HS256 token in OIDC flow");
+		assert_eq(res.error, "UNSUPPORTED_ALGORITHM");
+	});
+});
 
 test('OIDC: Security - Reject insecure token endpoint', () => {
 	let insecure_disc = { ...f.MOCK_DISCOVERY, token_endpoint: "http://insecure.com/token" };
