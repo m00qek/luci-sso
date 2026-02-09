@@ -11,68 +11,62 @@ const SECRET = "tier2-logic-test-secret-32-bytes-!";
 // Tier 2: OIDC Business Logic (Platinum Refactor)
 // =============================================================================
 
-test('LOGIC: Discovery - Successful Fetch & Schema', () => {
-	let mocked = mock.create();
+test('OIDC: Discovery - Successful Fetch & Schema', () => {
 	let issuer = "https://trusted.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	
-	mocked.with_responses({ [url]: { status: 200, body: f.MOCK_DISCOVERY } }, (io) => {
+	mock.create().with_responses({ [url]: { status: 200, body: f.MOCK_DISCOVERY } }, (io) => {
 		let res = oidc.discover(io, issuer);
 		assert(res.ok);
 		assert_eq(res.data.issuer, f.MOCK_DISCOVERY.issuer);
 	});
 });
 
-test('LOGIC: Discovery - Handle Non-JSON Response', () => {
-	let mocked = mock.create();
+test('OIDC: Discovery - Handle Non-JSON Response', () => {
 	let issuer = "https://broken.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	
-	// Simulate proxy error returning HTML instead of JSON
-	mocked.with_responses({ [url]: { status: 200, body: "<html>Error</html>" } }, (io) => {
+	mock.create().with_responses({ [url]: { status: 200, body: "<html>Error</html>" } }, (io) => {
 		let res = oidc.discover(io, issuer);
 		assert(!res.ok);
 		assert_eq(res.error, "INVALID_DISCOVERY_DOC");
 	});
 });
 
-test('LOGIC: Discovery - Reject Issuer Mismatch', () => {
-	let mocked = mock.create();
+test('OIDC: Discovery - Reject Issuer Mismatch', () => {
 	let issuer = "https://trusted.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	let evil_doc = { ...f.MOCK_DISCOVERY, issuer: "https://evil.idp" };
 
-	mocked.with_responses({ [url]: { status: 200, body: evil_doc } }, (io) => {
+	mock.create().with_responses({ [url]: { status: 200, body: evil_doc } }, (io) => {
 		let res = oidc.discover(io, issuer);
 		assert(!res.ok);
 		assert_eq(res.error, "DISCOVERY_ISSUER_MISMATCH");
 	});
 });
 
-test('LOGIC: Discovery - Cache Robustness & TTL', () => {
-	let mocked = mock.create();
+test('OIDC: Discovery - Cache Robustness & TTL', () => {
 	let issuer = "https://trusted.idp";
 	let cache_path = "/var/run/luci-sso/oidc-cache-test.json";
 	let url = issuer + "/.well-known/openid-configuration";
 	
-	mocked.with_responses({ [url]: { status: 200, body: f.MOCK_DISCOVERY } }, (io) => {
+	mock.create().with_responses({ [url]: { status: 200, body: f.MOCK_DISCOVERY } }, (io) => {
 		oidc.discover(io, issuer, { cache_path: cache_path, ttl: 100 });
 		
-		mocked.using(io).with_responses({}, (io_cache) => {
+		mock.create().using(io).with_responses({}, (io_cache) => {
 			let res = oidc.discover(io_cache, issuer, { cache_path: cache_path, ttl: 100 });
 			assert(res.ok, "Should hit cache");
 		});
 
-		let data = mocked.using(io).spy((spying_io) => {
+		let data = mock.create().using(io).spy((spying_io) => {
 			oidc.discover(spying_io, issuer, { cache_path: cache_path, ttl: -1 }); 
 		});
 		assert(data.called("http_get", url), "Should have attempted network refresh");
 	});
 });
 
-test('LOGIC: Token - Successful Exchange', () => {
-	let mocked = mock.create();
-	mocked.with_responses({
+test('OIDC: Token - Successful Exchange', () => {
+	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: {
 			status: 200,
 			body: { access_token: "mock-access", id_token: "mock-id" }
@@ -83,11 +77,9 @@ test('LOGIC: Token - Successful Exchange', () => {
 	});
 });
 
-test('LOGIC: Token - Handle IdP Errors (401/400)', () => {
-	let mocked = mock.create();
-	
+test('OIDC: Token - Handle IdP Errors (401/400)', () => {
 	// 1. Unauthorized (401)
-	mocked.with_responses({
+	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 401, body: { error: "invalid_client" } }
 	}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "v");
@@ -96,7 +88,7 @@ test('LOGIC: Token - Handle IdP Errors (401/400)', () => {
 	});
 
 	// 2. Bad Request (400) - Generic
-	mocked.with_responses({
+	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "something_else" } }
 	}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "v");
@@ -104,8 +96,8 @@ test('LOGIC: Token - Handle IdP Errors (401/400)', () => {
 		assert_eq(res.error, "TOKEN_EXCHANGE_FAILED");
 	});
 
-	// 3. Bad Request (400) - Specific invalid_grant (Warning #10)
-	mocked.with_responses({
+	// 3. Bad Request (400) - Specific invalid_grant
+	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "invalid_grant" } }
 	}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "v");
@@ -114,113 +106,96 @@ test('LOGIC: Token - Handle IdP Errors (401/400)', () => {
 	});
 });
 
-test('LOGIC: Verification - Support Multi-Audience Arrays', () => {
-	let mocked = mock.create();
+test('OIDC: ID Token - Support Multi-Audience Arrays', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
 	// 1. Success: Correct ID in array
-	let payload = { iss: f.MOCK_CONFIG.issuer_url, aud: [ f.MOCK_CONFIG.client_id, "other" ], sub: "u1", exp: 2000000000, nonce: "n" };
+	let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ] };
 	let token = h.generate_id_token(payload, SECRET);
-	mocked.with_env({}, (io) => {
-		assert(oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY).ok);
+	mock.create().with_env({}, (io) => {
+		assert(oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY).ok);
 	});
 
 	// 2. Failure: Wrong ID in array
 	payload.aud = [ "wrong-app-1", "wrong-app-2" ];
 	token = h.generate_id_token(payload, SECRET);
-	mocked.with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY);
+	mock.create().with_env({}, (io) => {
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "AUDIENCE_MISMATCH");
 	});
 
 	// 3. Failure: Empty array
 	payload.aud = [];
 	token = h.generate_id_token(payload, SECRET);
-	mocked.with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY);
+	mock.create().with_env({}, (io) => {
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "INVALID_AUDIENCE");
 	});
 });
 
-test('LOGIC: Verification - Support AZP Claim', () => {
-	let mocked = mock.create();
+test('OIDC: ID Token - Support AZP Claim', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
-	let payload = { 
-		iss: f.MOCK_CONFIG.issuer_url, 
-		aud: [ f.MOCK_CONFIG.client_id, "other" ], 
-		sub: "u1", 
-		exp: 2000000000,
-		nonce: "n" 
-	};
+	let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ] };
 
-	mocked.with_env({}, (io) => {
+	mock.create().with_env({}, (io) => {
 		// 1. Mismatched AZP
 		payload.azp = "evil-app";
 		let token = h.generate_id_token(payload, SECRET);
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY);
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "AZP_MISMATCH");
 
 		// 2. Correct AZP
 		payload.azp = f.MOCK_CONFIG.client_id;
 		token = h.generate_id_token(payload, SECRET);
-		assert(oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY).ok);
+		assert(oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY).ok);
 	});
 });
 
-test('LOGIC: Verification - Reject Expired ID Token', () => {
-	let mocked = mock.create();
-	let payload = { iss: f.MOCK_CONFIG.issuer_url, sub: "user1", exp: 1500, nonce: "n" }; 
+test('OIDC: ID Token - Reject Expired ID Token', () => {
+	let payload = { ...f.MOCK_CLAIMS, exp: 1500 }; 
 	let token = h.generate_id_token(payload, SECRET);
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
-	mocked.with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, { nonce: "n" }, f.MOCK_DISCOVERY);
+	mock.create().with_env({}, (io) => {
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "TOKEN_EXPIRED");
 	});
 });
 
-test('LOGIC: Enforce Nonce Matching', () => {
-	let mocked = mock.create();
-	let payload = { 
-		iss: f.MOCK_CONFIG.issuer_url, 
-		aud: f.MOCK_CONFIG.client_id, 
-		sub: "user1", 
-		nonce: "expected-nonce", 
-		exp: 2000000000 
-	};
+test('OIDC: ID Token - Enforce Nonce Matching', () => {
+	let payload = { ...f.MOCK_CLAIMS };
 	let token = h.generate_id_token(payload, SECRET);
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
-	mocked.with_env({}, (io) => {
+	mock.create().with_env({}, (io) => {
 		// 1. Success
-		let handshake = { nonce: "expected-nonce" };
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, handshake, f.MOCK_DISCOVERY);
+		let handshake = { nonce: "n" };
+		let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY);
 		assert(res.ok);
 		
 		// 2. Mismatch
 		handshake.nonce = "different-nonce";
-		res = oidc.verify_id_token(io, { id_token: token }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, handshake, f.MOCK_DISCOVERY);
+		res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "NONCE_MISMATCH");
 
-		// 3. Missing from token (Blocker #3)
+		// 3. Missing from token
 		delete payload.nonce;
 		let token_no_nonce = h.generate_id_token(payload, SECRET);
-		res = oidc.verify_id_token(io, { id_token: token_no_nonce }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, handshake, f.MOCK_DISCOVERY);
+		res = oidc.verify_id_token(io, { id_token: token_no_nonce }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "MISSING_NONCE");
 
-		// 4. Missing from handshake (Blocker #3)
+		// 4. Missing from handshake
 		payload.nonce = "n";
 		let token_with_nonce = h.generate_id_token(payload, SECRET);
-		res = oidc.verify_id_token(io, { id_token: token_with_nonce }, keys, { ...f.MOCK_CONFIG, clock_tolerance: 300 }, {}, f.MOCK_DISCOVERY);
+		res = oidc.verify_id_token(io, { id_token: token_with_nonce }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY);
 		assert_eq(res.error, "MISSING_NONCE");
 	});
 });
 
-test('LOGIC: Verification - Handle Binary Garbage', () => {
-	let mocked = mock.create();
+test('OIDC: ID Token - Handle Binary Garbage', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
-	mocked.with_env({}, (io) => {
+	mock.create().with_env({}, (io) => {
 		let res = oidc.verify_id_token(io, { id_token: "not.a.token" }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY);
 		assert(!res.ok);
 		
@@ -229,32 +204,30 @@ test('LOGIC: Verification - Handle Binary Garbage', () => {
 	});
 });
 
-test('LOGIC: JWKS - Successful Fetch, Cache & TTL', () => {
-	let mocked = mock.create();
+test('OIDC: JWKS - Successful Fetch, Cache & TTL', () => {
 	let jwks_uri = "https://trusted.idp/jwks";
 	let cache_path = "/var/run/luci-sso/jwks-cache-test.json";
 	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
 	
-	mocked.with_responses({ [jwks_uri]: { status: 200, body: mock_jwks } }, (io) => {
+	mock.create().with_responses({ [jwks_uri]: { status: 200, body: mock_jwks } }, (io) => {
 		let res = oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path, ttl: 3600 });
 		assert(res.ok);
 		assert_eq(res.data[0].kid, "k1");
 		
-		mocked.using(io).with_responses({}, (io_cache) => {
+		mock.create().using(io).with_responses({}, (io_cache) => {
 			let res2 = oidc.fetch_jwks(io_cache, jwks_uri, { cache_path: cache_path, ttl: 3600 });
 			assert(res2.ok, "Should hit cache");
 		});
 	});
 });
 
-test('TORTURE: JWKS - Handle Corrupted Cache', () => {
-	let mocked = mock.create();
+test('OIDC: JWKS - Handle Corrupted Cache', () => {
 	let jwks_uri = "https://trusted.idp/jwks";
 	let cache_path = "/var/run/luci-sso/jwks-corrupt.json";
 	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
 	
-	mocked.with_files({ [cache_path]: "{ invalid json !!! }" }, (io) => {
-		mocked.using(io).with_responses({ [jwks_uri]: { status: 200, body: mock_jwks } }, (io_final) => {
+	mock.create().with_files({ [cache_path]: "{ invalid json !!! }" }, (io) => {
+		mock.create().using(io).with_responses({ [jwks_uri]: { status: 200, body: mock_jwks } }, (io_final) => {
 			let res = oidc.fetch_jwks(io_final, jwks_uri, { cache_path: cache_path });
 			assert(res.ok, "Should fall back to network if cache is corrupted");
 			assert_eq(res.data[0].kid, "k1");
@@ -262,8 +235,36 @@ test('TORTURE: JWKS - Handle Corrupted Cache', () => {
 	});
 });
 
-test('LOGIC: Discovery - Immutable Cache (No Pollution)', () => {
-	let mocked = mock.create();
+test('OIDC: ID Token - at_hash validation ensures token binding', () => {
+	let access_token = "valid-access-token-123";
+	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
+	
+	let full_hash = crypto.sha256(access_token);
+	let left_half = substr(full_hash, 0, 16);
+	let correct_hash = crypto.b64url_encode(left_half);
+
+	mock.create().with_env({}, (io) => {
+		// 1. Success: at_hash matches access_token
+		let p1 = { ...f.MOCK_CLAIMS, at_hash: correct_hash };
+		let res1 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
+		assert(res1.ok, "Should accept matching at_hash");
+
+		// 2. Success: No access_token, at_hash ignored
+		let p2 = { ...f.MOCK_CLAIMS };
+		let res2 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p2, SECRET) }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
+		assert(res2.ok, "Should pass if both are missing");
+
+		// 3. Failure: at_hash does not match access_token
+		let res3 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, SECRET), access_token: "wrong" }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
+		assert(!res3.ok && res3.error == "AT_HASH_MISMATCH");
+
+		// 4. Failure: at_hash missing when access_token present
+		let res4 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p2, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY);
+		assert(!res4.ok && res4.error == "MISSING_AT_HASH");
+	});
+});
+
+test('OIDC: Discovery - Immutable Cache (No Pollution)', () => {
 	let issuer = "https://public.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	let mock_disc = { 
@@ -273,7 +274,7 @@ test('LOGIC: Discovery - Immutable Cache (No Pollution)', () => {
 		jwks_uri: issuer + "/jwks"
 	};
 	
-	mocked.with_responses({ [url]: { status: 200, body: mock_disc } }, (io) => {
+	mock.create().with_responses({ [url]: { status: 200, body: mock_disc } }, (io) => {
 		let res1 = oidc.discover(io, issuer);
 		assert(res1.ok);
 		res1.data.token_endpoint = "http://EVIL";

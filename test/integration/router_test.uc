@@ -87,7 +87,12 @@ when("processing the OIDC callback", () => {
 		factory.with_env({}, (io) => {
 			let state_res = session.create_state(io);
 			let handshake = state_res.data;
-			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
+			
+			// Calculate at_hash for "at"
+			let full_hash = crypto.sha256("at");
+			let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
+			
+			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
 
 			let data = factory.using(io)
 				.with_responses({
@@ -125,7 +130,12 @@ when("processing the OIDC callback", () => {
 		factory.with_env({}, (io) => {
 			let state_res = session.create_state(io);
 			let handshake = state_res.data;
-			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
+			
+			// Calculate at_hash for "at"
+			let full_hash = crypto.sha256("at");
+			let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
+			
+			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
 
 			let cache_path = "/var/run/luci-sso/oidc-jwks-wv5enLcGYIn8PiwhdkeXzhVPct86Lf3q.json";
 			let stale_jwks = { keys: [ { kid: "anchor-key", kty: "oct", k: "d3Jvbmc" } ], cached_at: io.time() };
@@ -155,7 +165,11 @@ when("processing the OIDC callback", () => {
 		factory.with_env({}, (io) => {
 			let state_res = session.create_state(io);
 			let handshake = state_res.data;
-			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "unknown", io.time(), handshake.nonce);
+			
+			let full_hash = crypto.sha256("at");
+			let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
+			
+			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "unknown", io.time(), handshake.nonce, at_hash);
 
 			factory.using(io).with_responses({
 				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -176,7 +190,11 @@ when("processing the OIDC callback", () => {
 		factory.with_env({}, (io) => {
 			let state_res = session.create_state(io);
 			let handshake = state_res.data;
-			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce);
+			
+			let full_hash = crypto.sha256("ALREADY_USED");
+			let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
+			
+			let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
 
 			factory.using(io)
 				.with_responses({

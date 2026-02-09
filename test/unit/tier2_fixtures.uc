@@ -5,7 +5,8 @@
 export const MOCK_CONFIG = {
     issuer_url: "https://trusted.idp",
     client_id: "luci-app",
-    client_secret: "top-secret"
+    client_secret: "top-secret",
+    clock_tolerance: 300
 };
 
 export const MOCK_DISCOVERY = {
@@ -13,4 +14,12 @@ export const MOCK_DISCOVERY = {
     authorization_endpoint: "https://trusted.idp/auth",
     token_endpoint: "https://trusted.idp/token",
     jwks_uri: "https://trusted.idp/jwks"
+};
+
+export const MOCK_CLAIMS = {
+    iss: "https://trusted.idp",
+    aud: "luci-app",
+    sub: "user-123",
+    nonce: "n",
+    exp: 2000000000
 };

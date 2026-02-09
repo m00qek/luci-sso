@@ -82,6 +82,13 @@ app.post('/token', async (req, res) => {
     const context = app.locals[code];
     if (!context) return res.status(400).json({ error: 'invalid_code' });
 
+    const accessToken = 'mock-access-token';
+    
+    // Calculate at_hash: leftmost half of SHA-256 of access_token
+    const fullHash = crypto.createHash('sha256').update(accessToken).digest();
+    const halfHash = fullHash.slice(0, fullHash.length / 2);
+    const atHash = jose.base64url.encode(halfHash);
+
     const idToken = await new jose.SignJWT({
         sub: '1234567890',
         name: 'John Doe',
@@ -91,13 +98,14 @@ app.post('/token', async (req, res) => {
         exp: Math.floor(Date.now() / 1000) + 3600,
         aud: context.client_id,
         iss: ISSUER,
-        nonce: context.nonce
+        nonce: context.nonce,
+        at_hash: atHash
     })
     .setProtectedHeader({ alg: 'RS256', kid: 'mock-key-1' })
     .sign(privateKey);
 
     res.json({
-        access_token: 'mock-access-token',
+        access_token: accessToken,
         id_token: idToken,
         token_type: 'Bearer',
         expires_in: 3600

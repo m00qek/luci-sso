@@ -28,8 +28,9 @@ export const ANCHOR_JWK = {
  * @param {string} email - User email
  * @param {number} now - Current time
  * @param {string} [nonce] - Optional nonce
+ * @param {string} [at_hash] - Optional access token hash
  */
-export function sign_anchor_token(crypto, issuer, email, now, nonce) {
+export function sign_anchor_token(crypto, issuer, email, now, nonce, at_hash) {
 	let payload = {
 		sub: email,
 		email: email,
@@ -37,7 +38,8 @@ export function sign_anchor_token(crypto, issuer, email, now, nonce) {
 		aud: "luci-app",
 		iat: now,
 		exp: now + 300,
-		nonce: nonce || "test-nonce"
+		nonce: nonce || "test-nonce",
+		at_hash: at_hash
 	};
 	// We use sign_jws which creates HS256
 	return crypto.sign_jws(payload, ANCHOR_SECRET);

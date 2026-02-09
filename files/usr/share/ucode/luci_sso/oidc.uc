@@ -23,7 +23,7 @@ function safe_json_parse(data) {
 	if (type(data) == "object" && type(data.read) == "function") {
 		raw = data.read();
 	}
-	
+
 	if (type(raw) != "string") return null;
 
 	try {
@@ -95,30 +95,30 @@ export function discover(io, issuer, options) {
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(issuer, "discovery");
 	let ttl = options.ttl || 3600;
-	
+
 	let cached = _read_cache(io, cache_path, ttl);
 	if (cached && cached.issuer == issuer) {
 		return { ok: true, data: cached };
 	}
-	
+
 	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
 	let fetch_url = options.internal_issuer_url || issuer;
 	if (!_is_https(fetch_url)) return { ok: false, error: "INSECURE_FETCH_URL" };
 
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
 	fetch_url += ".well-known/openid-configuration";
-	
+
 	let response = io.http_get(fetch_url, { verify: true });
 	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
 	if (response.status != 200) return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
-	
+
 	let config = safe_json_parse(response.body);
 	if (!config) return { ok: false, error: "INVALID_DISCOVERY_DOC" };
 
 	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
 	if (config.issuer && config.issuer != issuer) {
 		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", 
-		         details: `Requested ${issuer}, got ${config.issuer}` };
+			 details: `Requested ${issuer}, got ${config.issuer}` };
 	}
 
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
@@ -130,9 +130,9 @@ export function discover(io, issuer, options) {
 			return { ok: false, error: "INSECURE_ENDPOINT", details: field };
 		}
 	}
-	
+
 	_write_cache(io, cache_path, config);
-	
+
 	return { ok: true, data: config };
 };
 
@@ -148,7 +148,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(jwks_uri, "jwks");
 	let ttl = options.ttl || 86400; // 24 hours default
-	
+
 	if (!options.force) {
 		let cached = _read_cache(io, cache_path, ttl);
 		if (cached && type(cached.keys) == "array") {
@@ -159,10 +159,10 @@ export function fetch_jwks(io, jwks_uri, options) {
 	let response = io.http_get(jwks_uri, { verify: true });
 	if (!response || response.error) return { ok: false, error: "NETWORK_ERROR" };
 	if (response.status != 200) return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
-	
+
 	let jwks = safe_json_parse(response.body);
 	if (!jwks || type(jwks.keys) != "array") return { ok: false, error: "INVALID_JWKS_FORMAT" };
-	
+
 	_write_cache(io, cache_path, jwks);
 
 	return { ok: true, data: jwks.keys };
@@ -289,7 +289,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery) 
 	if (!result.ok) return result;
 
 	let payload = result.data;
-	
+
 	// 3. OIDC Mandatory Claims Check
 	if (!payload.sub) {
 		return { ok: false, error: "MISSING_SUB_CLAIM" };
@@ -307,6 +307,20 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery) 
 	// If the aud claim contains multiple audiences, verify that azp matches our client_id.
 	if (type(payload.aud) == "array" && payload.azp && payload.azp !== config.client_id) {
 		return { ok: false, error: "AZP_MISMATCH" };
+	}
+
+	// 3.3 Access Token Hash Check (Blocker #7: Binding)
+	// Per OIDC Core 3.1.3.3: If at_hash is present, it MUST match the access_token.
+	if (tokens.access_token) {
+		if (!payload.at_hash) {
+			return { ok: false, error: "MISSING_AT_HASH" };
+		}
+		let full_hash = crypto.sha256(tokens.access_token);
+		let left_half = substr(full_hash, 0, length(full_hash) / 2);
+		let expected_hash = crypto.b64url_encode(left_half);
+		if (expected_hash != payload.at_hash) {
+			return { ok: false, error: "AT_HASH_MISMATCH" };
+		}
 	}
 
 	let user_data = {

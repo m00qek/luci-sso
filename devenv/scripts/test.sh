@@ -52,7 +52,7 @@ run_unit() {
 	local filter=$2
 	local translated_modules=$(translate_unit_paths "$modules")
 	
-	echo -e " ${GREEN}🧪${RESET} Running unit tests in luci container..."
+	log_info "🧪 Running unit tests in luci container..."
 	docker compose $COMPOSE_FLAGS exec -e MODULES="$translated_modules" -e FILTER="$filter" luci ucode \
 		-L /usr/share/ucode \
 		-L /usr/lib/ucode \
@@ -67,7 +67,7 @@ run_e2e() {
 	local filter=$2
 	local translated_modules=$(translate_e2e_paths "$modules")
 	
-	echo -e " $(GREEN)🧪$(RESET) Running E2E tests in browser container..."
+	log_info "🧪 Running E2E tests in browser container..."
 	local grep_flag=""
 	[ -n "$filter" ] && grep_flag="-g $filter"
 	

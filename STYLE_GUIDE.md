@@ -1027,10 +1027,11 @@ Before submitting PR, verify:
 ## 12. Development Workflow
 
 ### Orchestration
-The primary entry point for development is `devenv/Makefile`. 
+The primary entry point for development is `devenv/Makefile`, which delegates complex logic to `devenv/scripts/test.sh`.
 *   **`make compile`**: Triggers the SDK container to build native C components.
-*   **`make up`**: Lifts the full OIDC stack.
-*   **`make unit-test`**: Executes ucode tests inside the active LuCI container.
+*   **`make up` / `make e2e-up`**: Lifts the local or E2E OIDC stack.
+*   **`make unit-test` / `make e2e-test`**: Executes tests with support for `MODULES="..."` and `FILTER="..."`.
+*   **`make watch-tests`**: Polyglot watcher that runs unit or E2E tests automatically on change.
 
 ### Source of Truth
 Never hardcode environment-specific values (versions, domains) in Dockerfiles or Javascript tests. Always derive them from the `devenv/Makefile` variables, which are passed through as `ARG` or `ENV` via Docker Compose.
