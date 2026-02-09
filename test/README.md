@@ -1,4 +1,4 @@
-# Testing Gold Standard (Platinum Tier)
+# Testing Standards and Verification
 
 This project adheres to a strict testing architecture designed for security, resilience, and predictability in an embedded environment.
 
@@ -33,7 +33,7 @@ make e2e-test
 | **4** | **Meta** | ucode | `mock.uc` | Verify the test harness itself ensures the mocks behave correctly. |
 | **E2E** | **Full Stack** | **JavaScript** | Browser ↔ IdP ↔ Router | Verify the end-to-end user experience using Playwright. |
 
-### Platinum Security Suites (Hardened Validation)
+### Hardened Security Validation
 
 The project includes specialized security tests beyond basic coverage:
 - **PII Redaction (Logs)**: Verifies that raw emails or names NEVER leak into `io.log` during session operations.

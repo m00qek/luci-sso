@@ -28,7 +28,7 @@ One of the most critical architectural decisions is the explicit support for env
 
 ## 3. Strict HTTPS Policy
 
-To achieve "Gold Standard" security, the project enforces an exclusively HTTPS-based OIDC flow.
+To ensure transport security, the project enforces an exclusively HTTPS-based OIDC flow.
 
 ### Front-channel (Browser ↔ IdP)
 *   **Enforcement:** The `issuer_url` MUST use the `https://` scheme.

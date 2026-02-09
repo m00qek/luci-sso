@@ -293,9 +293,9 @@ use(result.session);
 
 ## Testing Standards
 
-### Gold Standard Tests
+### Reference Implementation Tests
 
-**All tests in `test/unit/` are REFERENCE IMPLEMENTATIONS.**
+**All tests in `test/unit/` serve as reference implementations.**
 
 Tests are not just validation—they are:
 - ✅ **Documentation** - Show how to use the API
