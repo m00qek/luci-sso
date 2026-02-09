@@ -31,6 +31,7 @@ services:
       - ./services/browser/start.sh:/usr/local/bin/start.sh:ro
       - ./base-startup.sh:/usr/local/bin/base-startup.sh:ro
       - ../test/e2e:/app/tests:ro
+      - ../files/www/luci-static/resources/luci-sso-login.js:/app/luci-sso-login.js:ro
       - ./services/browser/playwright.config.js:/app/playwright.config.js:ro
       - ./services/browser/reporter.js:/app/reporter.js:ro
     labels:
