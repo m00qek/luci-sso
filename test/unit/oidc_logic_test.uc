@@ -155,6 +155,13 @@ test('OIDC: ID Token - Support AZP Claim', () => {
 		payload.azp = f.MOCK_CONFIG.client_id;
 		token = h.generate_id_token(payload, SECRET);
 		assert(oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time()).ok);
+
+		// 3. Blocker #5: Universal AZP (Single audience with mismatched AZP)
+		payload.aud = f.MOCK_CONFIG.client_id;
+		payload.azp = "mismatched-client";
+		token = h.generate_id_token(payload, SECRET);
+		res = oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time());
+		assert_eq(res.error, "AZP_MISMATCH", "AZP must match even for single audience");
 	});
 });
 

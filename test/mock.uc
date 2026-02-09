@@ -85,6 +85,14 @@ function build_provider(state) {
 			return true;
 		}),
 		
+		chmod: trackable("chmod", (path, mode) => {
+			if (state.read_only) {
+				state.last_error = "Permission denied";
+				return false;
+			}
+			return true;
+		}),
+		
 		lsdir: trackable("lsdir", (path) => {
 			let results = [];
 			let prefix = path;

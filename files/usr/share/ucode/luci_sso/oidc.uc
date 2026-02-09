@@ -336,9 +336,9 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now)
 		return { ok: false, error: "NONCE_MISMATCH" };
 	}
 
-	// 3.2 Authorized Party Check (Blocker #4: Confused Deputy)
-	// If the aud claim contains multiple audiences, verify that azp matches our client_id.
-	if (type(payload.aud) == "array" && payload.azp && payload.azp !== config.client_id) {
+	// 3.2 Authorized Party Check (Blocker #5 in 1770661209: Universal AZP)
+	// If the azp claim is present, it MUST match our client_id to prevent Confused Deputy attacks.
+	if (payload.azp && payload.azp !== config.client_id) {
 		return { ok: false, error: "AZP_MISMATCH" };
 	}
 

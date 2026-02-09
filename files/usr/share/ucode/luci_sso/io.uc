@@ -25,6 +25,7 @@ export function create() {
 		rename: (old, newpath) => fs.rename(old, newpath),
 		remove: (path) => fs.unlink(path),
 		mkdir: (path, mode) => fs.mkdir(path, mode),
+		chmod: (path, mode) => fs.chmod(path, mode),
 		lsdir: (path) => fs.lsdir(path),
 		stat: (path) => fs.stat(path),
 		

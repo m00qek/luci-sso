@@ -77,7 +77,9 @@ export function get_secret_key(io) {
 				// 2. We are the generator: Generate and Write
 				let new_key = crypto.random(32);
 				let tmp_path = SECRET_KEY_PATH + ".tmp";
+				// MANDATORY: Restricted permissions for secrets
 				io.write_file(tmp_path, new_key);
+				io.chmod(tmp_path, 0600);
 				io.rename(tmp_path, SECRET_KEY_PATH);
 				key = new_key;
 			} catch (e) {
@@ -129,6 +131,7 @@ export function create_state(io) {
 			io.log("error", `Failed to save handshake state: ${err}`);
 			return { ok: false, error: "STATE_SAVE_FAILED", details: err };
 		}
+		io.chmod(path, 0600);
 	} catch (e) {
 		io.log("error", `Failed to save handshake state: ${e}`);
 		return { ok: false, error: "STATE_SAVE_FAILED" };
