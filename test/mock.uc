@@ -77,6 +77,11 @@ function build_provider(state) {
 				state.last_error = "Permission denied";
 				return false;
 			}
+			// Simulate POSIX: return false if already exists
+			if (state.files[path] != null) return false;
+			
+			// Track directory as a special entry
+			state.files[path] = { ".type": "directory" };
 			return true;
 		}),
 		

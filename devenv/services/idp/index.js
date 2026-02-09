@@ -119,7 +119,7 @@ app.post('/token', async (req, res) => {
         return res.status(400).json({ error: 'code_expired' });
     }
 
-    const accessToken = 'mock-access-token';
+    const accessToken = crypto.randomBytes(32).toString('hex');
     
     // Calculate at_hash: leftmost half of SHA-256 of access_token
     const fullHash = crypto.createHash('sha256').update(accessToken).digest();

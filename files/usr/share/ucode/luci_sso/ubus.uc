@@ -1,5 +1,4 @@
 import * as crypto from 'luci_sso.crypto';
-import * as utils from 'luci_sso.utils';
 
 /**
  * Logic for interacting with UBUS sessions.
@@ -50,29 +49,40 @@ export function create_session(io, username, password, oidc_email, access_token,
 		}
 	});
 
-	io.log("info", `Successful SSO login for [oidc_id: ${utils.safe_id(oidc_email)}] mapped to system user ${username}`);
+	io.log("info", `Successful SSO login for [oidc_id: ${crypto.safe_id(oidc_email)}] mapped to system user ${username}`);
 
 	return { ok: true, data: sid };
 };
 
+const TOKEN_REGISTRY_DIR = "/var/run/luci-sso/tokens";
+
 /**
- * Checks if an access token is already associated with any active UBUS session.
+ * Atomically registers an access token to prevent replay.
+ * Uses atomic filesystem directory creation as a lock.
  * 
  * @param {object} io - I/O provider
- * @param {string} access_token - Token to check
- * @returns {boolean} - True if replayed
+ * @param {string} access_token - Token to register
+ * @returns {boolean} - True if registration succeeded (first use), false if replayed.
  */
-export function is_token_replayed(io, access_token) {
-	if (!access_token || type(io.ubus_call) != "function") return false;
+export function register_token(io, access_token) {
+	try {
+		if (!access_token || type(access_token) != "string") return false;
 
-	let sessions = io.ubus_call("session", "list", {});
-	if (type(sessions) != "object") return false;
+		// 1. Ensure registry exists
+		try { io.mkdir(TOKEN_REGISTRY_DIR, 0700); } catch(e) {}
 
-	for (let sid, data in sessions) {
-		if (type(data) == "object" && data.values && data.values.oidc_access_token === access_token) {
+		// 2. Generate a unique safe ID for the token
+		let token_id = crypto.safe_id(access_token);
+		let lock_path = `${TOKEN_REGISTRY_DIR}/${token_id}`;
+
+		// 3. ATOMIC: Try to create the directory. This is an atomic "test-and-set" in POSIX.
+		if (io.mkdir(lock_path, 0700)) {
 			return true;
 		}
+	} catch (e) {
+		io.log("error", `Exception in register_token: ${e}`);
 	}
+
 	return false;
 };
 

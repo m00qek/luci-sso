@@ -1,7 +1,6 @@
 import * as uclient from 'uclient';
 import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
-import * as utils from 'luci_sso.utils';
 
 // --- Internal Helpers ---
 
@@ -99,7 +98,7 @@ export function discover(io, issuer, options) {
 	fetch_url += ".well-known/openid-configuration";
 
 	let response = io.http_get(fetch_url, { verify: true });
-	let issuer_id = utils.safe_id(issuer);
+	let issuer_id = crypto.safe_id(issuer);
 
 	if (!response || response.error) {
 		io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${response?.error || "no response"}`);
@@ -118,7 +117,7 @@ export function discover(io, issuer, options) {
 
 	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
 	if (config.issuer && config.issuer != issuer) {
-		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${utils.safe_id(config.issuer)}]`);
+		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${crypto.safe_id(config.issuer)}]`);
 		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", 
 			 details: `Requested ${issuer}, got ${config.issuer}` };
 	}
@@ -151,7 +150,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(jwks_uri, "jwks");
 	let ttl = options.ttl || 86400; // 24 hours default
-	let uri_id = utils.safe_id(jwks_uri);
+	let uri_id = crypto.safe_id(jwks_uri);
 
 	if (!options.force) {
 		let cached = _read_cache(io, cache_path, ttl);

@@ -160,7 +160,7 @@ const ERROR_MAP = {
 	"OIDC_INVALID_GRANT": "The authorization code is expired or has already been used. Please try logging in again.",
 	"ID_TOKEN_VERIFICATION_FAILED": "The identity token provided by the IdP is invalid.",
 	"USER_NOT_AUTHORIZED": "Your account is not authorized to access this device.",
-	"TOKEN_REPLAY_DETECTED": "This authentication session has already been used. Please start a new login.",
+	"AUTH_FAILED": "Authentication failed. Please try logging in again.",
 	"NETWORK_ERROR": "A network error occurred while communicating with the IdP.",
 	"INSECURE_ENDPOINT": "The IdP provided an insecure endpoint. Connection aborted for security."
 };

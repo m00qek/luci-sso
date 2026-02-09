@@ -2,7 +2,6 @@ import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
-import * as utils from 'luci_sso.utils';
 
 /**
  * Creates a response object.
@@ -20,7 +19,7 @@ function response(status, headers, body) {
  * Creates an error response object for the shell to render.
  * @private
  */
-function error_response(io, code, status) {
+function error_response(code, status) {
 	return {
 		is_error: true,
 		code: code,
@@ -35,14 +34,14 @@ function error_response(io, code, status) {
 function handle_login(io, config) {
 	io.log("info", "Initiating OIDC login flow");
 	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
-	if (!disc_res.ok) return error_response(io, "OIDC_DISCOVERY_FAILED", 500);
+	if (!disc_res.ok) return error_response("OIDC_DISCOVERY_FAILED", 500);
 
 	// Ensure system is initialized (bootstrap secret key if needed)
 	let key_res = session.get_secret_key(io);
-	if (!key_res.ok) return error_response(io, "SYSTEM_INIT_FAILED", 500);
+	if (!key_res.ok) return error_response("SYSTEM_INIT_FAILED", 500);
 
 	let handshake_res = session.create_state(io);
-	if (!handshake_res.ok) return error_response(io, handshake_res.error, 500);
+	if (!handshake_res.ok) return error_response(handshake_res.error, 500);
 	let handshake = handshake_res.data;
 
 	let url = oidc.get_auth_url(io, config, disc_res.data, handshake);
@@ -135,7 +134,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 		return { ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", status: 401 };
 	}
 
-	io.log("info", `ID Token successfully validated for [sub_id: ${utils.safe_id(verify_res.data.sub)}] [session_id: ${session_id}]`);
+	io.log("info", `ID Token successfully validated for [sub_id: ${crypto.safe_id(verify_res.data.sub)}] [session_id: ${session_id}]`);
 
 	return { 
 		ok: true, 
@@ -190,32 +189,33 @@ function handle_callback(io, config, request) {
 	io.log("info", "OIDC callback received");
 
 	let val_res = validate_callback_request(io, config, request);
-	if (!val_res.ok) return error_response(io, val_res.error, val_res.status);
+	if (!val_res.ok) return error_response(val_res.error, val_res.status);
 	let code = val_res.data.code;
 	let handshake = val_res.data.handshake;
 	let session_id = handshake.id;
 
 	let oauth_res = complete_oauth_flow(io, config, code, handshake);
-	if (!oauth_res.ok) return error_response(io, oauth_res.error, oauth_res.status);
+	if (!oauth_res.ok) return error_response(oauth_res.error, oauth_res.status);
 	let user_data = oauth_res.data;
 	let access_token = oauth_res.access_token; // From complete_oauth_flow
 	let refresh_token = oauth_res.refresh_token;
 
-	if (ubus.is_token_replayed(io, access_token)) {
-		io.log("error", `Access token replay detected for [sub_id: ${utils.safe_id(user_data.sub)}] [session_id: ${session_id}]`);
-		return error_response(io, "TOKEN_REPLAY_DETECTED", 403);
+	// MANDATORY: Atomic Replay Protection (Blocker #1 in 1770660569)
+	if (!ubus.register_token(io, access_token)) {
+		io.log("error", `Access token replay detected for [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}]`);
+		return error_response("AUTH_FAILED", 403);
 	}
 
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
-		io.log("warn", `User [sub_id: ${utils.safe_id(user_data.sub)}] not found in mapping whitelist [session_id: ${session_id}]`);
-		return error_response(io, "USER_NOT_AUTHORIZED", 403);
+		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] not found in mapping whitelist [session_id: ${session_id}]`);
+		return error_response("USER_NOT_AUTHORIZED", 403);
 	}
 
 	let final_res = create_session_response(io, mapping, user_data.email, access_token, refresh_token);
-	if (!final_res.ok) return error_response(io, final_res.error, final_res.status);
+	if (!final_res.ok) return error_response(final_res.error, final_res.status);
 
-	io.log("info", `Session successfully created for user [sub_id: ${utils.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to rpcd_user=${mapping.rpcd_user})`);
+	io.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to rpcd_user=${mapping.rpcd_user})`);
 
 	return final_res.data;
 }
@@ -265,5 +265,5 @@ export function handle(io, config, request) {
 		return handle_logout(io, request);
 	}
 
-	return error_response(io, "Not Found", 404);
+	return error_response("Not Found", 404);
 };

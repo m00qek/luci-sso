@@ -159,26 +159,40 @@ test('Router: Callback - Reject non-whitelisted users', () => {
 });
 
 test('Router: Callback - Reject token replay (already used access_token)', () => {
-	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
+	let factory = mock.create().with_files({ 
+		"/etc/luci-sso/secret.key": TEST_SECRET,
+		"/var/run/luci-sso/tokens/": { ".type": "directory" }
+	});
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
-		let full_hash = crypto.sha256("ALREADY_USED");
+		let access_token = "ALREADY_USED";
+		
+		let full_hash = crypto.sha256(access_token);
 		let at_hash = crypto.b64url_encode(substr(full_hash, 0, 16));
 		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
 
+		// PRE-REGISTER the token to simulate replay
+		// We manually implement the safe_id logic here to avoid module resolution issues in the test script
+		let hash_bin = crypto.sha256(access_token);
+		let token_id = "";
+		for (let i = 0; i < 4; i++) token_id += sprintf("%02x", ord(hash_bin, i));
+		
 		factory.using(io)
+			.with_files({
+				[`/var/run/luci-sso/tokens/${token_id}`]: { ".type": "directory" }
+			})
 			.with_responses({
 				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-				"https://idp.com/token": { status: 200, body: { access_token: "ALREADY_USED", id_token: id_token } },
+				"https://idp.com/token": { status: 200, body: { access_token: access_token, id_token: id_token } },
 				"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
 			})
-			.with_ubus({ "session:list": { "s": { values: { oidc_access_token: "ALREADY_USED" } } } })
+			.with_ubus({ "session:list": {} })
 			.spy((spying_io) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
 				let res = router.handle(spying_io, MOCK_CONFIG, req);
 				assert_eq(res.status, 403);
-				assert_eq(res.code, "TOKEN_REPLAY_DETECTED");
+				assert_eq(res.code, "AUTH_FAILED");
 			});
 	});
 });

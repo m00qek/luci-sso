@@ -1,5 +1,4 @@
 import * as crypto from 'luci_sso.crypto';
-import * as utils from 'luci_sso.utils';
 
 const SECRET_KEY_PATH = "/etc/luci-sso/secret.key";
 const SESSION_DURATION = 3600;
@@ -64,28 +63,36 @@ export function get_secret_key(io) {
 	}
 
 	if (!key || length(key) == 0) {
-		// 1. Generate new key
-		let new_key = crypto.random(32);
-		let tmp_path = SECRET_KEY_PATH + ".tmp";
-		
+		// 1. Atomic Lock Attempt: Try to create a lock directory
+		const lock_path = SECRET_KEY_PATH + ".lock";
+		let acquired = false;
 		try {
-			// 2. Atomic Write Attempt: Write to .tmp, then Rename
-			io.write_file(tmp_path, new_key);
-			io.rename(tmp_path, SECRET_KEY_PATH);
+			acquired = io.mkdir(lock_path, 0700);
 		} catch (e) {
-			// Failures here mean another process likely won or FS is read-only
+			// Lock already held by another process
 		}
 
-		// 3. CRITICAL: Re-read from disk to ensure all concurrent processes 
-		// synchronize on the same "winner" key.
-		try {
+		if (acquired) {
+			try {
+				// 2. We are the generator: Generate and Write
+				let new_key = crypto.random(32);
+				let tmp_path = SECRET_KEY_PATH + ".tmp";
+				io.write_file(tmp_path, new_key);
+				io.rename(tmp_path, SECRET_KEY_PATH);
+				key = new_key;
+			} catch (e) {
+				// Error during generation/write
+			}
+			// 3. ALWAYS release the lock
+			try { io.remove(lock_path); } catch (e) {}
+		} else {
+			// 4. Lock held by another: Wait a bit and re-read
+			// (On embedded, simple re-read is usually enough after small delay)
 			key = io.read_file(SECRET_KEY_PATH);
-		} catch (e) {
-			// If re-read fails (e.g. read-only FS), use the local key as fallback
-		}
-
-		if (!key) {
-			key = new_key;
+			if (!key || length(key) == 0) {
+				// Last resort fallback to temporary key if another process is too slow
+				key = crypto.random(32);
+			}
 		}
 	}
 	return { ok: true, data: key };
@@ -107,7 +114,7 @@ export function create_state(io) {
 	let now = io.time();
 
 	let data = {
-		id: utils.safe_id(handle), // Correlation ID for logs
+		id: crypto.safe_id(handle), // Correlation ID for logs
 		state: state,
 		code_verifier: pkce.verifier,
 		nonce: nonce,
@@ -160,7 +167,7 @@ export function verify_state(io, handle, clock_tolerance) {
 	let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
 	let consume_path = `${path}.consumed`;
 	let content = null;
-	let session_id = utils.safe_id(handle);
+	let session_id = crypto.safe_id(handle);
 
 	try {
 		// MANDATORY: Atomic one-time use. (Blocker #2 in 1770660561)
