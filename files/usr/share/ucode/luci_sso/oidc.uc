@@ -341,20 +341,19 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now)
 
 	// 3.3 Access Token Hash Check (Blocker #7 in 1770661270: Binding)
 	// Per OIDC Core 3.1.3.3: If at_hash is present, it MUST match the access_token.
-	// To prevent stripping attacks and ensure binding, we enforce that if either is present, both must be.
-	if (tokens.access_token || payload.at_hash) {
-		if (!tokens.access_token) {
-			return { ok: false, error: "AT_HASH_PRESENT_WITHOUT_ACCESS_TOKEN" };
-		}
-		if (!payload.at_hash) {
-			return { ok: false, error: "MISSING_AT_HASH" };
-		}
-		let full_hash = crypto.sha256(tokens.access_token);
-		let left_half = substr(full_hash, 0, length(full_hash) / 2);
-		let expected_hash = crypto.b64url_encode(left_half);
-		if (expected_hash != payload.at_hash) {
-			return { ok: false, error: "AT_HASH_MISMATCH" };
-		}
+	// PARANOID MODE: We enforce that both MUST be present to ensure cryptographic binding.
+	if (!tokens.access_token) {
+		return { ok: false, error: "MISSING_ACCESS_TOKEN" };
+	}
+	if (!payload.at_hash) {
+		return { ok: false, error: "MISSING_AT_HASH" };
+	}
+
+	let full_hash = crypto.sha256(tokens.access_token);
+	let left_half = substr(full_hash, 0, length(full_hash) / 2);
+	let expected_hash = crypto.b64url_encode(left_half);
+	if (expected_hash != payload.at_hash) {
+		return { ok: false, error: "AT_HASH_MISMATCH" };
 	}
 
 	let user_data = {

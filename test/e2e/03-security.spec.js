@@ -119,4 +119,48 @@ test.describe('Security: OIDC Attacks', () => {
       vlog('Verification step: Success');
     });
   });
+
+  test('PKCE Protection: Reusing a code with a different session must fail', async ({ request, context }) => {
+    let codeA;
+
+    await test.step('Given a user captures a code from Session A', async () => {
+      const page = await context.newPage();
+      await page.goto('/');
+      
+      const capturePromise = page.waitForRequest(r => r.url().includes('/callback?code='));
+      await page.locator('#luci-sso-login-btn').click();
+      const capReq = await capturePromise;
+      codeA = new URL(capReq.url()).searchParams.get('code');
+      
+      vlog(`Capture A: code=${codeA}`);
+      await page.close();
+    });
+
+    await test.step('When the user attempts to use codeA with a fresh Session B', async () => {
+      // 1. Initialize Session B
+      const initRes = await request.get('/cgi-bin/luci-sso', { maxRedirects: 0 });
+      const stateCookieB = initRes.headers()['set-cookie'].split(';')[0];
+      const stateB = new URL(initRes.headers()['location']).searchParams.get('state');
+      
+      vlog(`Session B initialized: state=${stateB}`);
+
+      // 2. Attempt to use codeA with sessionB
+      const callbackUrl = `/cgi-bin/luci-sso/callback?code=${codeA}&state=${stateB}`;
+      const replayRes = await request.get(callbackUrl, {
+        headers: { 'Cookie': stateCookieB },
+        maxRedirects: 0
+      });
+
+      vlog(`Replay result: status=${replayRes.status()}`);
+      const body = await replayRes.text();
+      
+      // Verification: IdP (Mock) should reject verifierB for codeA (which is tied to challengeA)
+      const isRejected = replayRes.status() >= 400 || body.includes('Error:');
+      expect(isRejected).toBeTruthy();
+    });
+
+    await test.step('Then the system should have rejected the cross-session code swap', async () => {
+      vlog('Verification step: Success');
+    });
+  });
 });

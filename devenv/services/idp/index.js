@@ -61,14 +61,20 @@ app.get('/jwks', (req, res) => {
 });
 
 app.get('/auth', (req, res) => {
-    const { client_id, redirect_uri, state, nonce } = req.query;
-    log(`Auth request for ${client_id}`);
+    const { client_id, redirect_uri, state, nonce, code_challenge, code_challenge_method } = req.query;
+    log(`Auth request for ${client_id} (PKCE: ${code_challenge_method || 'none'})`);
+
+    if (!code_challenge || code_challenge_method !== 'S256') {
+        log(`REJECTED: PKCE S256 required, got method=${code_challenge_method}`);
+        return res.status(400).send('PKCE S256 required');
+    }
 
     const code = crypto.randomBytes(16).toString('hex');
     app.locals[code] = { 
         nonce, 
         client_id, 
         redirect_uri,
+        code_challenge,
         expires_at: Date.now() + 300000 // 5-minute TTL
     };
 
@@ -81,7 +87,7 @@ app.get('/auth', (req, res) => {
 });
 
 app.post('/token', async (req, res) => {
-    const { code } = req.body;
+    const { code, code_verifier } = req.body;
     log(`Token exchange for code: ${code}`);
 
     const context = app.locals[code];
@@ -89,6 +95,25 @@ app.post('/token', async (req, res) => {
 
     // Single-use enforcement and TTL check (Blocker #4 in 1770661270)
     delete app.locals[code];
+
+    // PKCE Validation (Blocker #2 in 1770661250)
+    if (!code_verifier) {
+        log(`REJECTED: Missing code_verifier for ${context.client_id}`);
+        return res.status(400).json({ error: 'invalid_grant', sub_error: 'missing_pkce_verifier' });
+    }
+
+    const calculatedChallenge = crypto.createHash('sha256')
+        .update(code_verifier)
+        .digest('base64url')
+        .replace(/=/g, ''); // Ensure no padding as per RFC 7636
+
+    if (calculatedChallenge !== context.code_challenge) {
+        log(`REJECTED: PKCE mismatch for ${context.client_id}`);
+        log(`  Expected (stored): ${context.code_challenge}`);
+        log(`  Actual (calc):   ${calculatedChallenge}`);
+        return res.status(400).json({ error: 'invalid_grant', sub_error: 'pkce_mismatch' });
+    }
+
     if (Date.now() > context.expires_at) {
         log(`Authorization code expired for ${context.client_id}`);
         return res.status(400).json({ error: 'code_expired' });

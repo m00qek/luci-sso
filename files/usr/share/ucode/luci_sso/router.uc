@@ -108,7 +108,7 @@ function complete_oauth_flow(io, config, code, handshake) {
 
 	let exchange_res = oidc.exchange_code(io, config, discovery, code, handshake.code_verifier, session_id);
 	if (!exchange_res.ok) {
-		return { ok: false, error: "TOKEN_EXCHANGE_FAILED", status: 500 };
+		return exchange_res;
 	}
 	let tokens = exchange_res.data;
 

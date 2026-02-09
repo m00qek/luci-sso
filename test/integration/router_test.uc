@@ -225,7 +225,7 @@ when("processing the OIDC callback", () => {
 
 			let factory_with_responses = factory.using(io).with_responses({
 				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-				"https://idp.com/token": { error: "STOP_HERE" } 
+				"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } } 
 			});
 			
 			factory_with_responses.with_env({}, (io_exec) => {
@@ -254,9 +254,29 @@ when("processing the OIDC callback", () => {
 				"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } }
 			}, (io_http) => {
 				let res = router.handle(io_http, MOCK_CONFIG, req);
-				then("it should fail with TOKEN_EXCHANGE_FAILED", () => {
+				then("it should fail with OIDC_INVALID_GRANT", () => {
 					assert_eq(res.status, 500);
-					assert_eq(res.code, "TOKEN_EXCHANGE_FAILED");
+					assert_eq(res.code, "OIDC_INVALID_GRANT");
+				});
+			});
+		});
+	});
+
+	and("an attacker attempts a PKCE bypass (IdP level rejection)", () => {
+		factory.with_env({}, (io) => {
+			let state_res = session.create_state(io);
+			let handshake = state_res.data;
+			let req = mock_request("/callback", { code: "VALID_CODE", state: handshake.state }, { luci_sso_state: handshake.token });
+
+			// Simulate IdP returning 400 invalid_grant due to PKCE mismatch
+			factory.using(io).with_responses({
+				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+				"https://idp.com/token": { status: 400, body: { error: "invalid_grant", sub_error: "pkce_mismatch" } }
+			}, (io_http) => {
+				let res = router.handle(io_http, MOCK_CONFIG, req);
+				then("it should fail with OIDC_INVALID_GRANT", () => {
+					assert_eq(res.status, 500);
+					assert_eq(res.code, "OIDC_INVALID_GRANT");
 				});
 			});
 		});
