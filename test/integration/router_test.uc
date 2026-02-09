@@ -89,7 +89,7 @@ test('Router: Callback - Successful authentication and UBUS login', () => {
 			})
 			.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "session-for-" + args.username }) })
 			.spy((spying_io) => {
-				let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+				let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 				let res = router.handle(spying_io, MOCK_CONFIG, req);
 				assert_eq(res.status, 302);
 				assert_eq(res.headers["Location"], "/cgi-bin/luci/");
@@ -127,7 +127,7 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 				})
 				.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "s" }) })
 				.spy((spying_io) => {
-					let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+					let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 					router.handle(spying_io, MOCK_CONFIG, req);
 				});
 
@@ -150,7 +150,7 @@ test('Router: Callback - Reject non-whitelisted users', () => {
 			"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
 			"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
 		}, (io_http) => {
-			let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+			let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 			let res = router.handle(io_http, { ...MOCK_CONFIG, user_mappings: [] }, req);
 			assert_eq(res.status, 403, "Should return Forbidden for non-whitelisted user");
 			assert_eq(res.code, "USER_NOT_AUTHORIZED");
@@ -189,7 +189,7 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 			})
 			.with_ubus({ "session:list": {} })
 			.spy((spying_io) => {
-				let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+				let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 				let res = router.handle(spying_io, MOCK_CONFIG, req);
 				assert_eq(res.status, 403);
 				assert_eq(res.code, "AUTH_FAILED");
@@ -202,7 +202,7 @@ test('Router: Callback - Reject state replay (handshake one-time use)', () => {
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
-		let req = mock_request("/callback", { code: "c", state: handshake.state }, { luci_sso_state: handshake.token });
+		let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 
 		let factory_with_responses = factory.using(io).with_responses({
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -223,7 +223,7 @@ test('Router: Callback - Reject code replay (IdP level rejection)', () => {
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
-		let req = mock_request("/callback", { code: "REPLAYED_CODE", state: handshake.state }, { luci_sso_state: handshake.token });
+		let req = mock_request("/callback", { code: "REPLAYED_CODE", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 
 		factory.using(io).with_responses({
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -240,7 +240,7 @@ test('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
-		let req = mock_request("/callback", { code: "VALID_CODE", state: handshake.state }, { luci_sso_state: handshake.token });
+		let req = mock_request("/callback", { code: "VALID_CODE", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 
 		factory.using(io).with_responses({
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },

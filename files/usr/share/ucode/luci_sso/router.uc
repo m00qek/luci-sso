@@ -48,7 +48,7 @@ function handle_login(io, config) {
 
 	return response(302, {
 		"Location": url,
-		"Set-Cookie": `luci_sso_state=${handshake.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
+		"Set-Cookie": `__Host-luci_sso_state=${handshake.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
 	});
 }
 
@@ -68,7 +68,7 @@ function validate_callback_request(io, config, request) {
 		return { ok: false, error: "MISSING_CODE", status: 400 };
 	}
 
-	let state_token = cookies.luci_sso_state;
+	let state_token = cookies["__Host-luci_sso_state"];
 	if (!state_token) {
 		return { ok: false, error: "MISSING_HANDSHAKE_COOKIE", status: 401 };
 	}
@@ -192,7 +192,7 @@ function create_session_response(io, mapping, oidc_email, access_token, refresh_
 			"Set-Cookie": [
 				`sysauth_https=${ubus_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
 				`sysauth=${ubus_res.data}; HttpOnly; Secure; SameSite=Strict; Path=/`,
-				"luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
+				"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 			]
 		})
 	};
