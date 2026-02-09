@@ -75,6 +75,10 @@ package: .package
 sync-headers: DOCKER_SUITE = local
 sync-headers: .sync-headers
 
+# Watcher: Run tests automatically on change
+watch-tests: DOCKER_SUITE = e2e
+watch-tests: .watch-tests
+
 # E2E Variants
 e2e-up: DOCKER_SUITE = e2e
 e2e-up: .up
@@ -88,13 +92,36 @@ e2e-down: .down
 e2e-ps: DOCKER_SUITE = e2e
 e2e-ps: .ps
 
+unit-test: DOCKER_SUITE = e2e
+unit-test: .unit-test
+
 e2e-test: DOCKER_SUITE = e2e
 e2e-test: .e2e-test
 
-e2e-run: DOCKER_SUITE = e2e
-e2e-run: .run
-
 # --- 4. IMPLEMENTATION (Private Targets) ---
+
+# Macro: Abort if the current DOCKER_SUITE is not running
+define VALIDATE_SUITE_RUNNING
+	@if [ -z "$(SUITE_IS_RUNNING)" ]; then \
+		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."; \
+		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"; \
+		echo -e "\n      make $(if $(filter e2e,$(DOCKER_SUITE)),e2e-,)up"; \
+		exit 1; \
+	fi
+endef
+
+.unit-test:
+	$(VALIDATE_SUITE_RUNNING)
+	@./scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
+
+.e2e-test:
+	$(VALIDATE_SUITE_RUNNING)
+	@./scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
+
+.watch-tests:
+	$(VALIDATE_SUITE_RUNNING)
+	@./scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
+
 .up:
 	@# VALIDATION: Check if already running
 	@if [ -n "$(SUITE_IS_RUNNING)" ]; then
@@ -125,40 +152,16 @@ e2e-run: .run
 CONTAINER ?= luci
 
 .shell:
-	@# VALIDATION: Ensure it is running before trying to connect
-	@if [ -z "$(SUITE_IS_RUNNING)" ]; then
-		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."
-		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"
-		echo -e "\n      make $(if $(filter e2e,$(DOCKER_SUITE)),e2e-,)up"
-		exit 1
-	fi
+	$(VALIDATE_SUITE_RUNNING)
 	
 	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER) ($(DOCKER_SUITE))..."
 	docker compose $(COMPOSE_FLAGS) exec $(CONTAINER) /bin/sh
 
 .run:
-	@# VALIDATION: Ensure it is running before trying to connect
-	@if [ -z "$(SUITE_IS_RUNNING)" ]; then
-		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."
-		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"
-		echo -e "\n      make $(if $(filter e2e,$(DOCKER_SUITE)),e2e-,)up"
-		exit 1
-	fi
+	$(VALIDATE_SUITE_RUNNING)
 	
 	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER) ($(DOCKER_SUITE))..."
 	docker compose $(COMPOSE_FLAGS) run -it --rm $(CONTAINER) /bin/sh
-
-.e2e-test:
-	@# VALIDATION: Ensure it is running
-	@if [ -z "$(SUITE_IS_RUNNING)" ]; then
-		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."
-		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"
-		echo -e "\n      make e2e-up"
-		exit 1
-	fi
-	
-	@echo -e " $(GREEN)🧪$(RESET) Running E2E tests in browser container..."
-	docker compose $(COMPOSE_FLAGS) exec browser npx playwright test
 
 .compile: $(SENTINEL)
 
@@ -167,24 +170,6 @@ $(SENTINEL): $(wildcard ../src/*.c) $(wildcard ../src/*.h) ../src/CMakeLists.txt
 	@mkdir -p ../bin/lib
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
 	@touch $(SENTINEL)
-
-.unit-test:
-	@# VALIDATION: Ensure it is running
-	@if [ -z "$(SUITE_IS_RUNNING)" ]; then
-		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."
-		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"
-		echo -e "\n      make e2e-up"
-		exit 1
-	fi
-	
-	@echo -e " $(GREEN)🧪$(RESET) Running unit tests in luci container..."
-	docker compose $(COMPOSE_FLAGS) exec luci ucode \
-		-L /usr/share/ucode \
-		-L /usr/lib/ucode \
-		-L /usr/share/ucode/luci_sso \
-		-L /usr/share/luci-sso/test/mocks \
-		-L /usr/share/luci-sso/test \
-		/usr/share/luci-sso/test/runner.uc
 
 .package:
 	@echo -e " $(BLUE)📦$(RESET) Building IPK package..."

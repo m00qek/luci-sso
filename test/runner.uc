@@ -1,6 +1,19 @@
 import { run_all, clear_tests } from 'testing';
 import * as fs from 'fs';
 
+// --- Multi-Module Mode ---
+let modules_str = getenv("MODULES");
+if (modules_str) {
+	let modules_list = split(modules_str, " ");
+	for (let mod in modules_list) {
+		if (length(mod) > 0) {
+			require(mod);
+		}
+	}
+	run_all("Targeted Modules: " + modules_str);
+	exit(0);
+}
+
 // --- Tier 0: Backend Compliance ---
 const backend_files = [
 	"unit.native_compliance_test",

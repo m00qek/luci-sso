@@ -106,6 +106,12 @@ function colorize_spec(str) {
 
 function run_item(t) {
 	if (!t.fn) return { ok: true, type: "header" };
+
+	let filter = getenv("FILTER");
+	if (filter && index(t.name, filter) == -1) {
+		return { ok: true, type: "skipped" };
+	}
+
 	try {
 		t.fn();
 		return { ok: true, type: "test" };
@@ -166,7 +172,7 @@ export function run_all(suite_name) {
 				for (let r in spec_results) {
 					let indent = "       "; // Align with '[PASS] '
 					for (let k = 0; k < r.item.depth; k++) indent += "  ";
-					
+
 					if (r.result.type == "header") {
 						print(`${indent}${color(C_BOLD, colorize_spec(r.item.name))}\n`);
 					} else if (r.result.type == "skipped") {
@@ -174,7 +180,7 @@ export function run_all(suite_name) {
 					} else {
 						let s = r.result.ok ? "" : color(C_RED, "[FAIL] ");
 						let line_indent = r.result.ok ? indent : substr(indent, 0, length(indent) - 7);
-						
+
 						print(`${line_indent}${s}${colorize_spec(r.item.name)}\n`);
 						if (!r.result.ok) {
 							let msg = r.result.failure || r.result.error;
@@ -208,7 +214,7 @@ export function run_all(suite_name) {
 			}
 		}
 		i++;
-		
+
 		if (verbose && (i < length(tests)) && tests[i].depth == 0) {
 			print("\n");
 		}
