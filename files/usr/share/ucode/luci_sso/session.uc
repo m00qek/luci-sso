@@ -175,12 +175,18 @@ export function verify_state(io, handle, clock_tolerance) {
 	}
 
 	let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
+	let consume_path = `${path}.consumed`;
 	let content = null;
 
 	try {
-		content = io.read_file(path);
-		// MANDATORY: Atomic one-time use. Delete immediately after reading (before validation).
-		if (content) io.remove(path);
+		// MANDATORY: Atomic one-time use. 
+		// We RENAME the file to .consumed. Only one process can succeed.
+		if (!io.rename(path, consume_path)) {
+			return { ok: false, error: "STATE_NOT_FOUND" };
+		}
+		
+		content = io.read_file(consume_path);
+		if (content) io.remove(consume_path);
 	} catch (e) {
 		return { ok: false, error: "STATE_NOT_FOUND" };
 	}

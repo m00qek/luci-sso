@@ -10,4 +10,5 @@ bin/
 .vscode/
 .idea/
 devenv/.pki/
+**/.pki/
 REVIEWS/
