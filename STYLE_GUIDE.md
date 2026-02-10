@@ -720,8 +720,12 @@ let enc = lucihttp.urlencode(url);
 luci-sso/
 ├── files/usr/share/ucode/luci_sso/
 │   ├── crypto.uc      # High-level crypto API (wraps native)
-│   ├── oidc.uc        # OIDC discovery, JWK fetching
+│   ├── oidc.uc        # OIDC protocol (exchange, verification)
+│   ├── discovery.uc   # OIDC metadata fetching and caching
+│   ├── handshake.uc   # OIDC state machine and session orchestration
 │   ├── session.uc     # Session management (JWS tokens)
+│   ├── encoding.uc    # Pure data encoding and string logic
+│   ├── jwk.uc         # JSON Web Key management
 │   ├── config.uc      # UCI configuration loader
 │   ├── web.uc         # CGI and HTTP request/response logic
 │   ├── secure_http.uc # HTTPS client logic

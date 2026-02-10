@@ -2,59 +2,10 @@ import * as uclient from 'uclient';
 import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
+import * as jwk from 'luci_sso.jwk';
+import * as discovery from 'luci_sso.discovery';
 
 // --- Internal Helpers ---
-
-/**
- * Generates a unique cache path for an identifier (issuer or JWKS URI).
- * @private
- */
-function get_cache_path(id, prefix) {
-	let h = crypto.b64url_encode(crypto.sha256(id));
-	return `/var/run/luci-sso/oidc-${prefix}-${substr(h, 0, 32)}.json`;
-}
-
-/**
- * Reads and validates a cached object.
- * @private
- */
-function _read_cache(io, path, ttl) {
-	try {
-		let content = io.read_file(path);
-		if (!content) return null;
-
-		let res = encoding.safe_json(content);
-		if (!res.ok) return null;
-
-		let data = res.data;
-		if (!data || !data.cached_at) return null;
-
-		if ((io.time() - data.cached_at) > ttl) return null;
-
-		return data;
-	} catch (e) {
-		return null;
-	}
-}
-
-/**
- * Writes data to cache with a timestamp (Atomic).
- * @private
- */
-function _write_cache(io, path, data) {
-	try {
-		let cache_data = { ...data, cached_at: io.time() };
-		let tmp_path = `${path}.${crypto.b64url_encode(crypto.random(8))}.tmp`;
-		
-		if (io.write_file(tmp_path, sprintf("%J", cache_data))) {
-			if (!io.rename(tmp_path, path)) {
-				io.remove(tmp_path);
-			}
-		}
-	} catch (e) {
-		io.log("error", `Cache write failure: ${e}`);
-	}
-}
 
 /**
  * Checks if a URL uses HTTPS.
@@ -69,144 +20,22 @@ function _is_https(url) {
 /**
  * Fetches and caches OIDC discovery document.
  */
-export function discover(io, issuer, options) {
-	if (type(issuer) != "string") die("CONTRACT_VIOLATION: issuer must be a string");
-
-	if (!_is_https(issuer)) return { ok: false, error: "INSECURE_ISSUER_URL" };
-
-	options = options || {};
-	let cache_path = options.cache_path || get_cache_path(issuer, "discovery");
-	let ttl = options.ttl || 3600;
-
-	let cached = _read_cache(io, cache_path, ttl);
-	if (cached && cached.issuer == issuer) {
-		return { ok: true, data: cached };
-	}
-
-	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
-	let fetch_url = options.internal_issuer_url || issuer;
-	if (!_is_https(fetch_url)) return { ok: false, error: "INSECURE_FETCH_URL" };
-
-	if (substr(fetch_url, -1) != '/') fetch_url += '/';
-	fetch_url += ".well-known/openid-configuration";
-
-	let response = io.http_get(fetch_url, { verify: true });
-	let issuer_id = crypto.safe_id(issuer);
-
-	if (!response || response.error) {
-		io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${response?.error || "no response"}`);
-		return { ok: false, error: "NETWORK_ERROR" };
-	}
-	if (response.status != 200) {
-		io.log("warn", `Discovery fetch HTTP ${response.status} from [id: ${issuer_id}]`);
-		return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
-	}
-
-	let res = encoding.safe_json(response.body);
-	if (!res.ok) {
-		io.log("error", `Discovery JSON parse error: ${res.details} (Data: ${res.raw_fragment}...)`);
-		return { ok: false, error: "INVALID_DISCOVERY_DOC" };
-	}
-	let config = res.data;
-
-	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
-	if (!config.issuer) {
-		io.log("error", `Discovery document missing issuer field from [id: ${issuer_id}]`);
-		return { ok: false, error: "DISCOVERY_MISSING_ISSUER" };
-	}
-	if (config.issuer && config.issuer != issuer) {
-		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${crypto.safe_id(config.issuer)}]`);
-		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", 
-			 details: `Requested ${issuer}, got ${config.issuer}` };
-	}
-
-	io.log("info", `Discovery successful for [id: ${issuer_id}]`);
-
-	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
-	for (let i, field in required) {
-		if (type(config[field]) != "string" || length(config[field]) == 0) {
-			return { ok: false, error: "MISSING_REQUIRED_FIELD", details: field };
-		}
-		if (!_is_https(config[field])) {
-			return { ok: false, error: "INSECURE_ENDPOINT", details: field };
-		}
-	}
-
-	// OPTIONAL: RP-Initiated Logout support (RFC 7522 / OIDC)
-	if (config.end_session_endpoint && !_is_https(config.end_session_endpoint)) {
-		io.log("warn", `Insecure end_session_endpoint ignored from [id: ${issuer_id}]`);
-		delete config.end_session_endpoint;
-	}
-
-	_write_cache(io, cache_path, config);
-
-	return { ok: true, data: config };
-};
+export const discover = discovery.discover;
 
 /**
  * Fetches JWK Set from IdP with caching.
  */
-export function fetch_jwks(io, jwks_uri, options) {
-	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
-
-	if (!_is_https(jwks_uri)) return { ok: false, error: "INSECURE_JWKS_URI" };
-
-	options = options || {};
-	let cache_path = options.cache_path || get_cache_path(jwks_uri, "jwks");
-	let ttl = options.ttl || 86400; // 24 hours default
-	let uri_id = crypto.safe_id(jwks_uri);
-
-	if (!options.force) {
-		let cached = _read_cache(io, cache_path, ttl);
-		if (cached && type(cached.keys) == "array") {
-			io.log("info", `JWKS loaded from cache for [id: ${uri_id}]`);
-			return { ok: true, data: cached.keys };
-		}
-	}
-
-	let response = io.http_get(jwks_uri, { verify: true });
-	if (!response || response.error) {
-		io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${response?.error || "no response"}`);
-		return { ok: false, error: "NETWORK_ERROR" };
-	}
-	if (response.status != 200) {
-		io.log("warn", `JWKS fetch HTTP ${response.status} from [id: ${uri_id}]`);
-		return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
-	}
-
-	let res = encoding.safe_json(response.body);
-	if (!res.ok || type(res.data.keys) != "array") {
-		io.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"} (Data: ${res.raw_fragment}...)`);
-		return { ok: false, error: "INVALID_JWKS_FORMAT" };
-	}
-	let jwks = res.data;
-
-	io.log("info", `JWKS successfully fetched: ${length(jwks.keys)} keys from [id: ${uri_id}]`);
-
-	_write_cache(io, cache_path, jwks);
-
-	return { ok: true, data: jwks.keys };
-};
+export const fetch_jwks = discovery.fetch_jwks;
 
 /**
  * Finds the correct JWK by key ID (kid).
  */
-export function find_jwk(keys, kid) {
-	if (type(keys) != "array") die("CONTRACT_VIOLATION: keys must be an array");
-	if (!kid) {
-		if (length(keys) > 0) return { ok: true, data: keys[0] };
-		return { ok: false, error: "NO_KEYS_AVAILABLE" };
-	}
-	for (let i, key in keys) {
-		if (key.kid == kid) return { ok: true, data: key };
-	}
-	return { ok: false, error: "KEY_NOT_FOUND", details: kid };
-};
+export const find_jwk = discovery.find_jwk;
 
 /**
  * Generates the authorization URL.
  */
-export function get_auth_url(io, config, discovery, params) {
+export function get_auth_url(io, config, discovery_doc, params) {
 	let query = {
 		response_type: "code",
 		client_id: config.client_id,
@@ -218,7 +47,7 @@ export function get_auth_url(io, config, discovery, params) {
 		code_challenge_method: "S256"
 	};
 
-	let url = discovery.authorization_endpoint;
+	let url = discovery_doc.authorization_endpoint;
 	let sep = (index(url, '?') == -1) ? '?' : '&';
 	for (let k, v in query) {
 		if (v == null) continue;
@@ -332,7 +161,7 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 	let jwk_res = find_jwk(keys, header.kid);
 	if (!jwk_res.ok) return jwk_res;
 
-	let pem_res = crypto.jwk_to_pem(jwk_res.data);
+	let pem_res = jwk.jwk_to_pem(jwk_res.data);
 	if (!pem_res.ok) return pem_res;
 
 	// MANDATORY Claims Check
