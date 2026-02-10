@@ -300,7 +300,7 @@ test('Router: Logout - OIDC RP-Initiated Logout', () => {
 	};
 	let factory = mock.create()
 		.with_ubus({ 
-			"session:get": (args) => ({ values: { oidc_id_token: "mock-id-token" } }),
+			"session:get": (args) => ({ values: { oidc_id_token: "mock-id-token", token: "csrf-123" } }),
 			"session:destroy": {} 
 		})
 		.with_responses({
@@ -308,7 +308,7 @@ test('Router: Logout - OIDC RP-Initiated Logout', () => {
 		});
 
 	let data = factory.spy((io) => {
-		let req = mock_request("/logout", {}, { "sysauth": "session-12345" }, { HTTP_HOST: "router.lan" });
+		let req = mock_request("/logout", { stoken: "csrf-123" }, { "sysauth": "session-12345" }, { HTTP_HOST: "router.lan" });
 		let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
 		
 		assert_eq(res.status, 302);
@@ -323,13 +323,16 @@ test('Router: Logout - OIDC RP-Initiated Logout', () => {
 
 test('Router: Logout - Fallback to local logout', () => {
 	let factory = mock.create()
-		.with_ubus({ "session:destroy": {} })
+		.with_ubus({ 
+			"session:get": (args) => ({ values: { token: "csrf-456" } }),
+			"session:destroy": {} 
+		})
 		.with_responses({
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC }
 		});
 
 	let data = factory.spy((io) => {
-		let req = mock_request("/logout", {}, { "sysauth": "session-12345" });
+		let req = mock_request("/logout", { stoken: "csrf-456" }, { "sysauth": "session-12345" });
 		let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
 		assert_eq(res.status, 302);
 		assert_eq(res.headers["Location"], "/");

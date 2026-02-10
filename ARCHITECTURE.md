@@ -10,7 +10,7 @@ This document describes the architectural design, security model, and key techni
 The project strictly follows the pattern of keeping business logic (OIDC, Session management) pure and testable, while isolating side effects (Network, FS, Time) into an "IO Provider" object.
 *   **Functional Core:** ucode modules in `files/usr/share/ucode/luci_sso/`.
 *   **Imperative Shell:** The CGI script in `files/www/cgi-bin/luci-sso` which initializes the real `io` object.
-*   **IO Contract:** The `io` object MUST implement a standard set of methods: `time`, `random`, `read_file`, `write_file`, `rename`, `remove`, `mkdir`, `lsdir`, `stat`, `http_get`, `http_post`, and **`log`**.
+*   **IO Contract:** The `io` object MUST implement a standard set of methods: `time`, `random`, `read_file`, `write_file`, `rename`, `remove`, `mkdir`, `lsdir`, `stat`, `chmod`, `fserror`, `getenv`, `stdout`, `ubus_call`, `uci_cursor`, and **`log`**.
 *   **Mandatory Auditing:** Logging is NOT optional. All security-relevant events, including handshake creation, validation failures, and network errors, MUST be logged for forensic purposes.
 *   **Benefit:** Enables 100% offline unit testing without mocks for the logic itself.
 
@@ -68,9 +68,9 @@ Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not
 
 ---
 
-## 6. Session & CSRF Handling
+## 6. UBUS Integration
 
-### UBUS Integration
+### Logic & Session Injection
 Upon a successful OIDC handshake, the service:
 1.  Performs a standard `ubus session login` using a "template" system user (e.g., `root`).
 2.  Generates a random **CSRF Token**.
@@ -104,7 +104,7 @@ The system implements full session synchronization during logout to prevent "Loc
 
 ---
 
-## 8. Development Orchestration
+## 9. Development Orchestration
 
 ### The "Builder-as-a-Service" Pattern
 To avoid massive build times and environment drift, the project uses a dedicated `sdk` service within Docker Compose.

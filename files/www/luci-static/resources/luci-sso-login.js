@@ -99,8 +99,7 @@
         var attempts = 0;
         var interval = setInterval(function() {
             if (injectSsoButton() || ++attempts > 30) {
-                // We don't clear interval, because LuCI might re-render 
-                // if the user enters a wrong password.
+                clearInterval(interval);
             }
         }, 500);
     }

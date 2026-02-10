@@ -86,9 +86,8 @@ export function safe_json(io, str) {
 
 /**
  * Constant-time string comparison to prevent timing attacks.
- * @private
  */
-function constant_time_eq(a, b) {
+export function constant_time_eq(a, b) {
 	if (type(a) != "string" || type(b) != "string") return false;
 	let len_a = length(a);
 	if (len_a != length(b)) return false;
@@ -98,7 +97,7 @@ function constant_time_eq(a, b) {
 		res |= (ord(a, i) ^ ord(b, i));
 	}
 	return (res == 0);
-}
+};
 
 // --- Public API ---
 

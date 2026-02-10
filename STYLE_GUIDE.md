@@ -722,26 +722,22 @@ luci-sso/
 │   ├── crypto.uc      # High-level crypto API (wraps native)
 │   ├── oidc.uc        # OIDC discovery, JWK fetching
 │   ├── session.uc     # Session management (JWS tokens)
-│   ├── utils.uc       # Pure utilities (urlencode, etc.)
+│   ├── config.uc      # UCI configuration loader
+│   ├── web.uc         # CGI and HTTP request/response logic
+│   ├── secure_http.uc # HTTPS client logic
+│   ├── ubus.uc        # UBUS session integration
 │   └── io.uc          # I/O abstraction (create_io helper)
 ├── src/
 │   ├── native_mbedtls.c   # mbedtls backend
 │   └── native_wolfssl.c   # wolfssl backend
 ├── test/
-│   ├── unit/
-│   │   ├── crypto_test.uc
-│   │   ├── oidc_test.uc
-│   │   ├── session_test.uc
-│   │   └── security_test.uc
-│   ├── integration/
-│   │   └── google_oidc_test.uc  # Real IdP tests (optional)
-│   ├── fixtures.uc         # Shared test data
-│   ├── helpers.uc          # create_mock_io, etc.
-│   └── runner.uc           # Test harness
-└── docs/
-    ├── API.md              # Public API documentation
-    ├── SECURITY.md         # Security considerations
-    └── STYLE_GUIDE.md      # This file
+│   ├── unit/          # Unit tests for individual modules
+│   ├── integration/   # Integration tests for router and UBUS
+│   ├── e2e/           # Playwright browser tests
+│   ├── fixtures.uc    # Shared test data
+│   ├── mock.uc        # Mock I/O provider
+│   └── runner.uc      # Test harness
+└── ARCHITECTURE.md    # System architecture and security model
 ```
 
 ---

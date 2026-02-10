@@ -2,34 +2,45 @@
 
 /**
  * Placeholder for WolfSSL backend.
- * Currently only implements signatures to allow CI setup.
+ * Currently NOT implemented. Calling any function will die.
  */
 
+static void uc_wolfssl_die(uc_vm_t *vm, const char *msg) {
+    uc_vm_raise_exception(vm, "NOT_IMPLEMENTED", "WolfSSL backend: %s", msg);
+}
+
 static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
-    return ucv_boolean_new(false);
+    uc_wolfssl_die(vm, "verify_rs256");
+    return NULL;
 }
 
 static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
-    return ucv_boolean_new(false);
+    uc_wolfssl_die(vm, "verify_es256");
+    return NULL;
 }
 
 static uc_value_t *uc_wolfssl_sha256(uc_vm_t *vm, size_t nargs) {
+    uc_wolfssl_die(vm, "sha256");
     return NULL;
 }
 
 static uc_value_t *uc_wolfssl_random(uc_vm_t *vm, size_t nargs) {
+    uc_wolfssl_die(vm, "random");
     return NULL;
 }
 
 static uc_value_t *uc_wolfssl_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
+    uc_wolfssl_die(vm, "jwk_rsa_to_pem");
     return NULL;
 }
 
 static uc_value_t *uc_wolfssl_jwk_ec_p256_to_pem(uc_vm_t *vm, size_t nargs) {
+    uc_wolfssl_die(vm, "jwk_ec_p256_to_pem");
     return NULL;
 }
 
 static uc_value_t *uc_wolfssl_hmac_sha256(uc_vm_t *vm, size_t nargs) {
+    uc_wolfssl_die(vm, "hmac_sha256");
     return NULL;
 }
 

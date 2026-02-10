@@ -292,7 +292,10 @@ test('OIDC: ID Token - at_hash validation ensures token binding', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
 	let full_hash = crypto.sha256(access_token);
-	let left_half = substr(full_hash, 0, 16);
+	let left_half = "";
+	for (let i = 0; i < 16; i++) {
+		left_half += chr(ord(full_hash, i));
+	}
 	let correct_hash = crypto.b64url_encode(left_half);
 
 	mock.create().with_env({}, (io) => {

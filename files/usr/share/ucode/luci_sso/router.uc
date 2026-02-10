@@ -177,9 +177,10 @@ function complete_oauth_flow(io, config, code, handshake, policy) {
  */
 function find_user_mapping(io, config, email) {
 	if (!config.user_mappings || !email) return null;
+	let target = lc(email);
 	for (let mapping in config.user_mappings) {
 		for (let allowed in mapping.emails) {
-			if (allowed == email) return mapping;
+			if (lc(allowed) == target) return mapping;
 		}
 	}
 	return null;
@@ -248,12 +249,18 @@ function handle_callback(io, config, request, policy) {
  */
 function handle_logout(io, config, request) {
 	let cookies = request.cookies || {};
+	let query = request.query || {};
 	let sid = cookies.sysauth_https || cookies.sysauth;
 	let id_token_hint = null;
 
 	if (sid) {
 		let session_res = ubus.get_session(io, sid);
 		if (session_res.ok) {
+			// CSRF Protection: Verify that the 'stoken' parameter matches the session token
+			if (!query.stoken || !crypto.constant_time_eq(query.stoken, session_res.data.token)) {
+				io.log("warn", "Logout attempt with invalid or missing CSRF token");
+				return error_response("AUTH_FAILED", 403);
+			}
 			id_token_hint = session_res.data.oidc_id_token;
 		}
 		ubus.destroy_session(io, sid);
