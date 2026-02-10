@@ -4,7 +4,7 @@
 
 > **⚠️ STATUS: PUBLIC BETA**
 >
-> While this codebase has undergone rigorous security auditing and hardening (passing 100+ unit/compliance tests), it is currently distributed as source. You must build the `.ipk` package for your specific router architecture using the included Dockerized toolchain.
+> While this codebase is passing 100+ unit/compliance tests, it is currently distributed as source. You must build the `.ipk` package for your specific router architecture using the included Dockerized toolchain.
 
 ---
 
@@ -54,7 +54,7 @@ make package SDK_ARCH=mips_24kc
 ### 3. Retrieve Artifacts
 The compiled packages will be available in:
 ```text
-bin/lib/<ARCH>/packages/luci-sso_1.0.0-1_*.ipk
+bin/lib/<ARCH>/packages/luci-sso*.ipk
 ```
 
 ---
@@ -63,7 +63,7 @@ bin/lib/<ARCH>/packages/luci-sso_1.0.0-1_*.ipk
 
 1.  **Upload** the `.ipk` file to your router (e.g., via `scp`):
     ```bash
-    scp bin/lib/.../luci-sso*.ipk root@192.168.1.1:/tmp/
+    scp -O bin/lib/.../luci-sso*.ipk root@192.168.1.1:/tmp/
     ```
 
 2.  **Install** dependencies and the package:
