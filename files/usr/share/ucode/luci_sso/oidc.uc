@@ -1,30 +1,9 @@
 import * as uclient from 'uclient';
 import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
+import * as encoding from 'luci_sso.encoding';
 
 // --- Internal Helpers ---
-
-/**
- * Decodes JSON safely and logs errors.
- * @private
- */
-function safe_json_parse(io, data) {
-	let raw = data;
-	if (type(data) == "object" && type(data.read) == "function") {
-		raw = data.read();
-	}
-
-	if (type(raw) != "string") return null;
-
-	try {
-		return json(raw);
-	} catch (e) {
-		if (io) {
-			io.log("warn", `JSON parse error: ${e} (Data: ${substr(raw, 0, 64)}...)`);
-		}
-		return null;
-	}
-}
 
 /**
  * Generates a unique cache path for an identifier (issuer or JWKS URI).
@@ -44,7 +23,10 @@ function _read_cache(io, path, ttl) {
 		let content = io.read_file(path);
 		if (!content) return null;
 
-		let data = safe_json_parse(io, content);
+		let res = encoding.safe_json(content);
+		if (!res.ok) return null;
+
+		let data = res.data;
 		if (!data || !data.cached_at) return null;
 
 		if ((io.time() - data.cached_at) > ttl) return null;
@@ -120,11 +102,12 @@ export function discover(io, issuer, options) {
 		return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
 	}
 
-	let config = safe_json_parse(io, response.body);
-	if (!config) {
-		io.log("error", `Invalid discovery document format from [id: ${issuer_id}]`);
+	let res = encoding.safe_json(response.body);
+	if (!res.ok) {
+		io.log("error", `Discovery JSON parse error: ${res.details} (Data: ${res.raw_fragment}...)`);
 		return { ok: false, error: "INVALID_DISCOVERY_DOC" };
 	}
+	let config = res.data;
 
 	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
 	if (!config.issuer) {
@@ -191,11 +174,12 @@ export function fetch_jwks(io, jwks_uri, options) {
 		return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
 	}
 
-	let jwks = safe_json_parse(io, response.body);
-	if (!jwks || type(jwks.keys) != "array") {
-		io.log("error", `Invalid JWKS format from [id: ${uri_id}]`);
+	let res = encoding.safe_json(response.body);
+	if (!res.ok || type(res.data.keys) != "array") {
+		io.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"} (Data: ${res.raw_fragment}...)`);
 		return { ok: false, error: "INVALID_JWKS_FORMAT" };
 	}
+	let jwks = res.data;
 
 	io.log("info", `JWKS successfully fetched: ${length(jwks.keys)} keys from [id: ${uri_id}]`);
 
@@ -287,8 +271,8 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 		return { ok: false, error: "NETWORK_ERROR" };
 	}
 	if (response.status != 200) {
-		let err_data = safe_json_parse(io, response.body);
-		if (err_data && err_data.error == "invalid_grant") {
+		let res_err = encoding.safe_json(response.body);
+		if (res_err.ok && res_err.data.error == "invalid_grant") {
 			io.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
 			return { ok: false, error: "OIDC_INVALID_GRANT" };
 		}
@@ -296,11 +280,12 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 		return { ok: false, error: "TOKEN_EXCHANGE_FAILED", details: response.status };
 	}
 
-	let tokens = safe_json_parse(io, response.body);
-	if (!tokens) {
-		io.log("error", `Invalid JSON response in token exchange${sid_ctx}`);
+	let res = encoding.safe_json(response.body);
+	if (!res.ok) {
+		io.log("error", `Token exchange JSON parse error${sid_ctx}: ${res.details}`);
 		return { ok: false, error: "INVALID_JSON" };
 	}
+	let tokens = res.data;
 
 	io.log("info", `Token exchange successful${sid_ctx}`);
 
@@ -350,8 +335,12 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	let p = p_arg || DEFAULT_POLICY;
 
 	let parts = split(t.id_token, ".");
-	let header = safe_json_parse(provider, crypto.b64url_decode(parts[0]));
-	if (!header) return { ok: false, error: "INVALID_JWT_HEADER" };
+	let res_h = encoding.safe_json(crypto.b64url_decode(parts[0]));
+	if (!res_h.ok) {
+		if (provider) provider.log("error", `ID Token header parse error: ${res_h.details}`);
+		return { ok: false, error: "INVALID_JWT_HEADER" };
+	}
+	let header = res_h.data;
 
 	// BLOCKER: Enforce algorithm whitelist from policy
 	let alg_allowed = false;
@@ -427,10 +416,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	// of the hash of the octets of the ASCII representation of the access_token.
 	// We MUST extract the first 16 bytes manually to ensure byte-safety 
 	// (ucode substr() counts characters, which is incorrect for raw bytes).
-	let left_half = "";
-	for (let i = 0; i < 16; i++) {
-		left_half += chr(ord(full_hash, i));
-	}
+	let left_half = encoding.binary_truncate(full_hash, 16);
 	let expected_hash = crypto.b64url_encode(left_half);
 
 	if (expected_hash != payload.at_hash) {

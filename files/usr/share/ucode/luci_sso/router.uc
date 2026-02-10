@@ -140,8 +140,8 @@ function complete_oauth_flow(io, config, code, handshake, policy) {
 			// If signature is bad but we used a 'kid' we ALREADY have, do NOT retry (DoS protection)
 			// We only retry signature failure if NO kid was used (fallback for primitive IdPs)
 			let parts = split(tokens.id_token, ".");
-			let header = crypto.safe_json(io, crypto.b64url_decode(parts[0]));
-			if (!header || !header.kid) {
+			let res_h = crypto.safe_json(crypto.b64url_decode(parts[0]));
+			if (!res_h.ok || !res_h.data.kid) {
 				should_retry = true;
 			}
 		}

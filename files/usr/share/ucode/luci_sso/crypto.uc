@@ -1,86 +1,14 @@
 import * as native from 'luci_sso.native';
+import * as encoding from 'luci_sso.encoding';
 
 const MAX_TOKEN_SIZE = 16384; // 16 KB
-const MAX_UTILS_SIZE = 32768; // 32 KB
-
-// --- Base64URL Internal Helpers ---
-
-/**
- * Maps standard Base64 characters to URL-safe ones.
- * @private
- */
-function _map_to_url_safe(str) {
-	let res = replace(str, /\+/g, '-');
-	return replace(res, /\//g, '_');
-}
-
-/**
- * Maps URL-safe characters back to standard Base64.
- * @private
- */
-function _map_from_url_safe(str) {
-	let res = replace(str, /-/g, '+');
-	return replace(res, /_/g, '/');
-}
-
-/**
- * Adds padding characters to a Base64 string if needed.
- * @private
- */
-function _add_padding(str) {
-	let pad = (4 - (length(str) % 4)) % 4;
-	for (let i = 0; i < pad; i++) {
-		str += '=';
-	}
-	return str;
-}
-
-/**
- * Removes all padding characters from a Base64 string.
- * @private
- */
-function _strip_padding(str) {
-	return replace(str, /=/g, '');
-}
-
-/**
- * Converts Base64URL to Standard Base64 with padding.
- * Internal helper for decoding operations.
- * @private
- */
-function b64url_to_b64(str) {
-	if (type(str) != "string") return null;
-	if (length(str) == 0) return "";
-	
-	// Validate Base64URL charset: [A-Za-z0-9_-]
-	if (!match(str, /^[A-Za-z0-9_-]+$/)) return null;
-	
-	return _add_padding(_map_from_url_safe(str));
-}
 
 // --- JSON Helpers ---
 
 /**
- * Decodes JSON safely and optionally logs errors.
+ * Decodes JSON safely using the pure encoding module.
  */
-export function safe_json(io, str) {
-	// Support both safe_json(str) and safe_json(io, str)
-	let raw = str;
-	let provider = io;
-	if (type(io) == "string") {
-		raw = io;
-		provider = null;
-	}
-
-	try {
-		return json(raw);
-	} catch (e) {
-		if (provider) {
-			provider.log("warn", `JSON parse error: ${e} (Data: ${substr(raw, 0, 64)}...)`);
-		}
-		return null;
-	}
-};
+export const safe_json = encoding.safe_json;
 
 // --- String Comparison ---
 
@@ -102,33 +30,14 @@ export function constant_time_eq(a, b) {
 // --- Public API ---
 
 /**
- * Decodes a Base64URL string to a raw string.
- * Enforces a strict size limit to prevent OOM.
- * 
- * @param {string} str - Base64URL string
- * @returns {string} - Raw binary string or null
+ * Encodes a raw string to Base64URL.
  */
-export function b64url_decode(str) {
-	if (type(str) != "string") die("CONTRACT_VIOLATION: b64url_decode expects string");
-	
-	if (length(str) > MAX_UTILS_SIZE) return null;
-
-	let b64 = b64url_to_b64(str);
-	return (b64 != null) ? b64dec(b64) : null;
-};
+export const b64url_encode = encoding.b64url_encode;
 
 /**
- * Encodes a raw string to Base64URL.
- * 
- * @param {string} str - Raw binary string
- * @returns {string} - Base64URL string
+ * Decodes a Base64URL string to a raw string.
  */
-export function b64url_encode(str) {
-	if (type(str) != "string") die("CONTRACT_VIOLATION: b64url_encode expects string");
-	
-	let b64 = b64enc(str);
-	return _strip_padding(_map_to_url_safe(b64));
-};
+export const b64url_decode = encoding.b64url_decode;
 
 /**
  * Signs a payload using HMAC-SHA256 and returns a JWS (Compact Serialization).
@@ -171,9 +80,11 @@ export function verify_jws(token, secret) {
 	// 1. Decode and Validate Header
 	let header_json = b64url_decode(parts[0]);
 	if (!header_json) return { ok: false, error: "INVALID_HEADER_ENCODING" };
-	let header = safe_json(null, header_json);
-	if (!header || header.alg != "HS256") {
-		return { ok: false, error: "UNSUPPORTED_ALGORITHM", details: header ? header.alg : "missing" };
+	let res_h = safe_json(header_json);
+	if (!res_h.ok) return { ok: false, error: "INVALID_HEADER_JSON" };
+	let header = res_h.data;
+	if (header.alg != "HS256") {
+		return { ok: false, error: "UNSUPPORTED_ALGORITHM", details: header.alg };
 	}
 
 	// 2. Verify Signature
@@ -189,8 +100,9 @@ export function verify_jws(token, secret) {
 	// 3. Decode Payload
 	let payload_json = b64url_decode(parts[1]);
 	if (!payload_json) return { ok: false, error: "INVALID_PAYLOAD_ENCODING" };
-	let payload = safe_json(null, payload_json);
-	if (!payload) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
+	let res_p = safe_json(payload_json);
+	if (!res_p.ok) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
+	let payload = res_p.data;
 
 	return { ok: true, data: payload };
 };
@@ -219,8 +131,9 @@ export function verify_jwt(token, pubkey, options) {
 	// 1. Decode and Validate Header
 	let header_json = b64url_decode(parts[0]);
 	if (!header_json) return { ok: false, error: "INVALID_HEADER_ENCODING" };
-	let header = safe_json(null, header_json);
-	if (!header || !header.alg) return { ok: false, error: "INVALID_HEADER_JSON" };
+	let res_h = safe_json(header_json);
+	if (!res_h.ok || !res_h.data.alg) return { ok: false, error: "INVALID_HEADER_JSON" };
+	let header = res_h.data;
 
 	// 2. Decode and Validate Payload Encoding (Fail Fast)
 	let payload_json = b64url_decode(parts[1]);
@@ -253,8 +166,9 @@ export function verify_jwt(token, pubkey, options) {
 	if (!valid) return { ok: false, error: "INVALID_SIGNATURE" };
 
 	// 5. Decode Payload JSON
-	let payload = safe_json(null, payload_json);
-	if (!payload) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
+	let res_p = safe_json(payload_json);
+	if (!res_p.ok) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
+	let payload = res_p.data;
 
 	// 6. Claims Validation
 	let clock_tolerance = options.clock_tolerance;

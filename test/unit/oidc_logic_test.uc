@@ -1,6 +1,7 @@
 import { test, assert, assert_eq } from 'testing';
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
+import * as encoding from 'luci_sso.encoding';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 import * as h from 'unit.helpers';
@@ -292,10 +293,7 @@ test('OIDC: ID Token - at_hash validation ensures token binding', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
 	let full_hash = crypto.sha256(access_token);
-	let left_half = "";
-	for (let i = 0; i < 16; i++) {
-		left_half += chr(ord(full_hash, i));
-	}
+	let left_half = encoding.binary_truncate(full_hash, 16);
 	let correct_hash = crypto.b64url_encode(left_half);
 
 	mock.create().with_env({}, (io) => {
@@ -333,10 +331,7 @@ test('OIDC: ID Token - at_hash validation byte-safety torture', () => {
 	let full_hash = crypto.sha256(access_token);
 	
 	// Manually construct the left-half correctly (raw bytes)
-	let left_half = "";
-	for (let i = 0; i < 16; i++) {
-		left_half += chr(ord(full_hash, i));
-	}
+	let left_half = encoding.binary_truncate(full_hash, 16);
 	let correct_at_hash = crypto.b64url_encode(left_half);
 
 	mock.create().with_env({}, (io) => {

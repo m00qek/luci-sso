@@ -1,4 +1,5 @@
 import * as crypto from 'luci_sso.crypto';
+import * as encoding from 'luci_sso.encoding';
 
 const SECRET_KEY_PATH = "/etc/luci-sso/secret.key";
 const SESSION_DURATION = 3600;
@@ -28,14 +29,6 @@ export function reap_stale_handshakes(io, clock_tolerance) {
 		}
 	}
 };
-
-/**
- * Internal helper to decode JSON safely.
- * @private
- */
-function safe_json_parse(str) {
-	try { return json(str); } catch (e) { return null; }
-}
 
 /**
  * Ensures the handshake directory exists.
@@ -215,11 +208,12 @@ export function verify_state(io, handle, clock_tolerance) {
 		return { ok: false, error: "STATE_NOT_FOUND" };
 	}
 
-	let data = safe_json_parse(content);
-	if (!data) {
-		io.log("error", `Handshake state corrupted [session_id: ${session_id}]`);
+	let res = encoding.safe_json(content);
+	if (!res.ok) {
+		io.log("error", `Handshake state corrupted [session_id: ${session_id}]: ${res.details}`);
 		return { ok: false, error: "STATE_CORRUPTED" };
 	}
+	let data = res.data;
 
 	let now = io.time();
 
