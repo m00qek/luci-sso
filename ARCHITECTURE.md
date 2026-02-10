@@ -50,13 +50,13 @@ To ensure transport security, the project enforces an exclusively HTTPS-based OI
 ### Back-channel (Router ↔ IdP)
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS. Any configured `internal_issuer_url` must also use TLS.
 *   **Verification:** The logic explicitly passes `verify: true` to the I/O provider. The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
+*   **DoS Protection:** To prevent memory exhaustion attacks, the system enforces a **256 KB** maximum size limit on all incoming HTTP response bodies.
 *   **Token Binding:** The system enforces `at_hash` validation **unconditionally** for all flows (even where OIDC Core 1.0 makes it optional) to prevent token substitution attacks. Calculation MUST be performed using byte-safe extraction to prevent UTF-8 boundary errors.
-*   **Replay Protection:** Handshake states are consumed using atomic POSIX `rename`. OIDC Access Tokens are registered in a local registry **immediately after exchange and BEFORE verification** (Fail-Safe consumption) to prevent brute-force signature or padding attacks.
+*   **Replay Protection:** Handshake states are consumed using atomic POSIX `rename`. The system enforces **strict one-time use**; any race condition or replay attempt results in immediate state invalidation. OIDC Access Tokens are registered in a local registry **immediately after exchange and BEFORE verification** (Fail-Safe consumption) to prevent brute-force signature or padding attacks.
     *   **Registry Constraints:** Access tokens are tracked for a **24-hour window**. Tokens with a lifetime exceeding 24 hours SHOULD NOT be used, as they may be re-playable after the registry is reaped.
     *   **Collision Probability:** The token registry uses a **64-bit** safe ID (16-hex-char). Collision probability reaches 50% at ~2^32 tokens, which is considered acceptable for the intended embedded scale.
 *   **Algorithm Enforcement:** The system implements a **Two-Dimensional Config** (Security Policy). By default, it MUST ONLY accept asymmetric signatures (RS256, ES256). Symmetric algorithms (HS256) are strictly forbidden in production to prevent "Algorithm Confusion" attacks.
-*   **Claims Validation:** Mandatory verification of `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party).
-*   **Reasoning:** The back-channel carries sensitive credentials (`client_secret`, `access_token`). Insecure transport, weak binding, or reflective algorithm trust is never acceptable.
+*   **Claims Validation:** Mandatory verification of **`exp` (Expiry)**, **`iat` (Issued At)**, `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party). Missing mandatory claims result in immediate rejection.
 
 ---
 

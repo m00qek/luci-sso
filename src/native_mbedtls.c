@@ -254,7 +254,7 @@ static uc_value_t *uc_mbedtls_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
 		return NULL;
 	}
 
-	unsigned char buf[2048]; 
+	unsigned char buf[4096]; 
 	memset(buf, 0, sizeof(buf));
 	if (mbedtls_pk_write_pubkey_pem(&pk, buf, sizeof(buf)) != 0) {
 		mbedtls_pk_free(&pk);
@@ -301,7 +301,7 @@ static uc_value_t *uc_mbedtls_jwk_ec_p256_to_pem(uc_vm_t *vm, size_t nargs) {
 		return NULL;
 	}
 
-	unsigned char buf[1024];
+	unsigned char buf[2048];
 	memset(buf, 0, sizeof(buf));
 	if (mbedtls_pk_write_pubkey_pem(&pk, buf, sizeof(buf)) != 0) {
 		mbedtls_pk_free(&pk);

@@ -535,6 +535,18 @@ function validate(input) {
 
 ## C Code Style
 
+### Standards: MbedTLS 3.x / PSA Crypto
+This project exclusively uses **MbedTLS 3.x**. All new cryptographic operations MUST be implemented using the **PSA Crypto API** (`psa/crypto.h`).
+
+**Requirements:**
+- ✅ Call `psa_crypto_init()` in `uc_module_init`.
+- ✅ Check `psa_status_t` for ALL operations.
+- ✅ Use opaque handles (`psa_key_id_t`) where possible.
+- ✅ Destroy keys (`psa_destroy_key`) on all return paths.
+- ✅ Use `MBEDTLS_PRIVATE()` macro if direct structure access is unavoidable (deprecated).
+
+---
+
 ### Minimize C Code
 
 **Ask first:** "Can this be done in ucode?"

@@ -187,17 +187,11 @@ export function verify_state(io, handle, clock_tolerance) {
 		// MANDATORY: Atomic one-time use. (Blocker #2 in 1770660561)
 		// We RENAME the file to .consumed. Only one process can succeed in the rename.
 		if (!io.rename(path, consume_path)) {
-			// Race Fallback: Check if another process already consumed it just now (Warning #6 in 1770661270)
-			content = io.read_file(consume_path);
-			if (!content) {
-				io.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
-				return { ok: false, error: "STATE_NOT_FOUND" };
-			}
-			io.log("info", `Handshake state consumption race resolved [session_id: ${session_id}]`);
-		} else {
-			content = io.read_file(consume_path);
+			io.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
+			return { ok: false, error: "STATE_NOT_FOUND" };
 		}
 		
+		content = io.read_file(consume_path);
 		if (content) io.remove(consume_path);
 	} catch (e) {
 		io.log("error", `Handshake state consumption failed [session_id: ${session_id}]: ${e}`);

@@ -40,6 +40,7 @@ function error_response(code, status) {
  * @private
  */
 function handle_login(io, config) {
+	session.reap_stale_handshakes(io, config.clock_tolerance);
 	let res = handshake.initiate(io, config);
 	if (!res.ok) return error_response(res.error, res.status);
 
@@ -121,8 +122,6 @@ function handle_logout(io, config, request) {
  * Main entry point for the router.
  */
 export function handle(io, config, request, policy) {
-	session.reap_stale_handshakes(io, config.clock_tolerance);
-
 	let path = request.path || "/";
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);

@@ -143,8 +143,7 @@ export function safe_json(data) {
 		return { 
 			ok: false, 
 			error: "PARSE_ERROR", 
-			details: e, 
-			raw_fragment: substr(raw, 0, 64) 
+			details: e
 		};
 	}
 };

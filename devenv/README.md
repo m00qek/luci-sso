@@ -71,14 +71,15 @@ The environment follows an **Authoritative SDK** model. You define the SDK you w
 | **`aarch64_generic`** | `aarch64_generic` | Raspberry Pi 4/5, Yuncore AX835, NanoPi R4S |
 
 *   **Variables:**
+    *   **`CRYPTO_LIB`**: The backend to use (`mbedtls` or `wolfssl`).
     *   `SDK_ARCH`: The build authority (must match a tag in `ghcr.io/openwrt/sdk`).
     *   `ROOTFS_ARCH`: The runtime target (derived automatically from `SDK_ARCH`).
 *   **Auto-detection:** The `Makefile` automatically detects your host architecture and selects the matching `SDK_ARCH` for testing.
 *   **Artifact Segregation:** Binaries are stored in `bin/lib/${SDK_ARCH}/${CRYPTO_LIB}/`.
 *   **Manual Override (Building Only):**
-    Force a specific SDK for packaging:
+    Force a specific SDK or backend for packaging:
     ```bash
-    make package SDK_ARCH=aarch64_generic
+    make package SDK_ARCH=aarch64_generic CRYPTO_LIB=wolfssl
     ```
 
 ## 🔐 PKI & Trust

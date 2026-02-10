@@ -121,6 +121,10 @@ function build_provider(state) {
 			if (res.error) return { error: res.error };
 
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
+			
+			// Mirror B2 security policy: Unbounded accumulation protection
+			if (length(raw_body) > 262144) return { error: "RESPONSE_TOO_LARGE" };
+
 			return { status: res.status, body: { read: () => raw_body } };
 		}),
 		
@@ -132,6 +136,10 @@ function build_provider(state) {
 			if (res.error) return { error: res.error };
 
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
+
+			// Mirror B2 security policy: Unbounded accumulation protection
+			if (length(raw_body) > 262144) return { error: "RESPONSE_TOO_LARGE" };
+
 			return { status: res.status, body: { read: () => raw_body } };
 		}),
 		

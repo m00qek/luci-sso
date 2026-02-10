@@ -40,6 +40,10 @@ The project includes specialized security tests beyond basic coverage:
 - **at_hash Torture**: Verifies byte-safe calculation of token hashes using binary-sensitive sequences (e.g., `0xC2`) to prevent character boundary errors.
 - **Fail-Safe Consumption**: Verifies that access tokens are consumed in the replay registry even if ID token verification fails.
 - **Algorithm Confusion**: Verifies that symmetric `HS256` tokens are rejected in production mode.
+- **DoS Protection (Memory)**: Verifies that HTTP responses exceeding **256 KB** are aborted to prevent memory exhaustion.
+- **Native Hardening**: Verifies that the C native bridge rejects insecure RSA exponents (even or < 3) and maintains persistent DRBG state.
+- **JWKS Key Rotation**: Verifies the automatic recovery path and forced cache refresh when a new key ID is encountered.
+- **Constant-Time Integrity**: Verifies the `constant_time_eq` implementation against multi-value type confusion and long strings.
 
 ---
 

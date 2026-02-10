@@ -65,7 +65,7 @@ test('Session: Logic - Reject malformed state handles', () => {
 	});
 });
 
-test('Session: Logic - Concurrent verify_state race resilience', () => {
+test('Session: Logic - Concurrent verify_state race rejection', () => {
 	let factory = mock.create();
 	let handle = "race-handle";
 	let path = `/var/run/luci-sso/handshake_${handle}.json`;
@@ -77,7 +77,8 @@ test('Session: Logic - Concurrent verify_state race resilience', () => {
 		io.rename = () => false; 
 		
 		let res = session.verify_state(io, handle, 300);
-		assert(res.ok, "Should recover state from .consumed if rename failed but file exists");
+		assert(!res.ok, "Should NOT recover state from .consumed if rename failed (Strict One-Time Use)");
+		assert_eq(res.error, "STATE_NOT_FOUND");
 	});
 });
 
