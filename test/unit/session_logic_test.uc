@@ -123,10 +123,10 @@ test('Session: Logic - Secret Key Persistence (Atomic Race Resilience)', () => {
 test('Session: Logic - Read-only FS Resilience', () => {
 	let factory = mock.create().with_read_only();
 	factory.with_env({}, (io) => {
-		// Should still return a temporary key if generation fails
+		// Should FAIL if it cannot persist the key
 		let res = session.get_secret_key(io);
-		assert(res.ok);
-		assert_eq(length(res.data), 32);
+		assert(!res.ok);
+		assert_eq(res.error, "SYSTEM_KEY_UNAVAILABLE");
 	});
 });
 
@@ -141,7 +141,7 @@ test('Session: Logic - Secret Key Lock Collision Fallback', () => {
 		io.read_file = (path) => {
 			if (path == key_path) {
 				call_count++;
-				// First call (check) fails, second call (fallback) succeeds
+				// First call (check) fails, second call (after lock fail) succeeds
 				return (call_count > 1) ? "ANOTHER_PROCESS_KEY_012345678901" : null;
 			}
 			return null;
@@ -158,8 +158,8 @@ test('Session: Logic - Secret Key Lock Collision Fallback', () => {
 		io.read_file = () => null; // File missing
 
 		let res = session.get_secret_key(io);
-		assert(res.ok);
-		assert_eq(length(res.data), 32, "Should fallback to temporary random key on collision failure");
+		assert(!res.ok, "Should fail if lock is held and key never appears");
+		assert_eq(res.error, "SYSTEM_KEY_UNAVAILABLE");
 	});
 });
 

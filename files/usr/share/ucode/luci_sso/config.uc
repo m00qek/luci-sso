@@ -89,6 +89,7 @@ export function load(io) {
 		client_id: oidc_cfg.client_id,
 		client_secret: oidc_cfg.client_secret,
 		redirect_uri: oidc_cfg.redirect_uri,
+		scope: oidc_cfg.scope,
 		clock_tolerance: clock_tolerance,
 		user_mappings: user_mappings
 	};

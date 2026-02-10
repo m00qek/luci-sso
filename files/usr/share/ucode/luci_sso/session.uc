@@ -60,6 +60,8 @@ export function get_secret_key(io) {
 		const lock_path = SECRET_KEY_PATH + ".lock";
 		let acquired = false;
 		try {
+			// Ensure parent directory exists (Avoid SYSTEM_INIT_FAILED on fresh boot)
+			io.mkdir("/etc/luci-sso", 0700);
 			acquired = io.mkdir(lock_path, 0700);
 		} catch (e) {
 			// Lock already held by another process
@@ -81,12 +83,11 @@ export function get_secret_key(io) {
 			// 3. ALWAYS release the lock
 			try { io.remove(lock_path); } catch (e) {}
 		} else {
-			// 4. Lock held by another: Wait a bit and re-read
-			// (On embedded, simple re-read is usually enough after small delay)
+			// 4. Lock held by another: Re-read to see if it's finished
 			key = io.read_file(SECRET_KEY_PATH);
 			if (!key || length(key) == 0) {
-				// Last resort fallback to temporary key if another process is too slow
-				key = crypto.random(32);
+				// FAIL: Do not fallback to random key (avoids transient session invalidation)
+				return { ok: false, error: "SYSTEM_KEY_UNAVAILABLE" };
 			}
 		}
 	}
