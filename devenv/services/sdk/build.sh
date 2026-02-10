@@ -29,7 +29,7 @@ package)
   make package/$PKG_NAME/compile V=s QUICK=1 CHECK_KEY=0
 
   # Copy IPKs to artifacts
-  find bin/targets -name "*.ipk" -exec cp -v {} "$ARTIFACTS_DIR/" \;
+  find bin/ -name "*.ipk" -exec cp -v {} "$ARTIFACTS_DIR/" \;
   ;;
 
 test)
