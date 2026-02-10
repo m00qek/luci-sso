@@ -126,7 +126,7 @@ function complete_oauth_flow(io, config, code, handshake, policy) {
 		return { ok: false, error: "JWKS_FETCH_FAILED", status: 500 };
 	}
 
-	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
+	let verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
 	
 	// Key Rotation / Stale Cache Recovery: (Warning #8 in 1770660561)
 	// We only retry if:
@@ -150,13 +150,13 @@ function complete_oauth_flow(io, config, code, handshake, policy) {
 			io.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
 			jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri, { force: true });
 			if (jwks_res.ok) {
-				verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
+				verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
 			}
 		}
 	}
 
 	if (!verify_res.ok) {
-		io.log("error", `ID Token verification failed [session_id: ${session_id}]: ${verify_res.error}`);
+		io.log("error", `ID Token verification failed [session_id: ${session_id}]: ${verify_res.error} (Details: ${verify_res.details || "none"})`);
 		return { ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", status: 401 };
 	}
 

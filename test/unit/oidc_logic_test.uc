@@ -132,14 +132,14 @@ test('OIDC: ID Token - Support Multi-Audience Arrays', () => {
 	let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], at_hash: ah };
 	let token = h.generate_id_token(payload, SECRET);
 	mock.create().with_env({}, (io) => {
-		assert(oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY).ok);
+		assert(oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY).ok);
 	});
 
 	// 2. Failure: Wrong ID in array
 	payload.aud = [ "wrong-app-1", "wrong-app-2" ];
 	token = h.generate_id_token(payload, SECRET);
 	mock.create().with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res = oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert_eq(res.error, "AUDIENCE_MISMATCH");
 	});
 
@@ -147,7 +147,7 @@ test('OIDC: ID Token - Support Multi-Audience Arrays', () => {
 	payload.aud = [];
 	token = h.generate_id_token(payload, SECRET);
 	mock.create().with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res = oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert_eq(res.error, "INVALID_AUDIENCE");
 	});
 });
@@ -163,19 +163,19 @@ test('OIDC: ID Token - Support AZP Claim', () => {
 		// 1. Mismatched AZP
 		payload.azp = "evil-app";
 		let token = h.generate_id_token(payload, SECRET);
-		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res = oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert_eq(res.error, "AZP_MISMATCH");
 
 		// 2. Correct AZP
 		payload.azp = f.MOCK_CONFIG.client_id;
 		token = h.generate_id_token(payload, SECRET);
-		assert(oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY).ok);
+		assert(oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY).ok);
 
 		// 3. Blocker #5: Universal AZP (Single audience with mismatched AZP)
 		payload.aud = f.MOCK_CONFIG.client_id;
 		payload.azp = "mismatched-client";
 		token = h.generate_id_token(payload, SECRET);
-		res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		res = oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert_eq(res.error, "AZP_MISMATCH", "AZP must match even for single audience");
 	});
 });
@@ -186,7 +186,7 @@ test('OIDC: ID Token - Reject Expired ID Token', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
 	mock.create().with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res = oidc.verify_id_token({ id_token: token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert_eq(res.error, "TOKEN_EXPIRED");
 	});
 });
@@ -202,24 +202,24 @@ test('OIDC: ID Token - Enforce Nonce Matching', () => {
 	mock.create().with_env({}, (io) => {
 		// 1. Success
 		let handshake = { nonce: "n" };
-		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res = oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert(res.ok);
 		
 		// 2. Mismatch
 		handshake.nonce = "different-nonce";
-		res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		res = oidc.verify_id_token({ id_token: token, access_token: at }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert_eq(res.error, "NONCE_MISMATCH");
 
 		// 3. Missing from token
 		delete payload.nonce;
 		let token_no_nonce = h.generate_id_token(payload, SECRET);
-		res = oidc.verify_id_token(io, { id_token: token_no_nonce, access_token: at }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		res = oidc.verify_id_token({ id_token: token_no_nonce, access_token: at }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert_eq(res.error, "MISSING_NONCE");
 
 		// 4. Missing from handshake
 		payload.nonce = "n";
 		let token_with_nonce = h.generate_id_token(payload, SECRET);
-		res = oidc.verify_id_token(io, { id_token: token_with_nonce, access_token: at }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		res = oidc.verify_id_token({ id_token: token_with_nonce, access_token: at }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert_eq(res.error, "MISSING_NONCE");
 	});
 });
@@ -228,10 +228,10 @@ test('OIDC: ID Token - Handle Binary Garbage', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
 	mock.create().with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: "not.a.token" }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res = oidc.verify_id_token({ id_token: "not.a.token" }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert(!res.ok);
 		
-		res = oidc.verify_id_token(io, { id_token: "\x00\xff\xdeadbeef" }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		res = oidc.verify_id_token({ id_token: "\x00\xff\xdeadbeef" }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert(!res.ok);
 	});
 });
@@ -299,24 +299,24 @@ test('OIDC: ID Token - at_hash validation ensures token binding', () => {
 	mock.create().with_env({}, (io) => {
 		// 1. Success: at_hash matches access_token
 		let p1 = { ...f.MOCK_CLAIMS, at_hash: correct_hash };
-		let res1 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res1 = oidc.verify_id_token({ id_token: h.generate_id_token(p1, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert(res1.ok, "Should accept matching at_hash");
 
 		// 2. Failure: Both missing (Stripping Attack / Hybrid Bypass)
 		let p2 = { ...f.MOCK_CLAIMS };
-		let res2 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p2, SECRET) }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res2 = oidc.verify_id_token({ id_token: h.generate_id_token(p2, SECRET) }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert(!res2.ok && res2.error == "MISSING_ACCESS_TOKEN", "Should fail if access_token is missing");
 
 		// 3. Failure: at_hash does not match access_token
-		let res3 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, SECRET), access_token: "wrong" }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res3 = oidc.verify_id_token({ id_token: h.generate_id_token(p1, SECRET), access_token: "wrong" }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert(!res3.ok && res3.error == "AT_HASH_MISMATCH");
 
 		// 4. Failure: at_hash missing when access_token present
-		let res4 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p2, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res4 = oidc.verify_id_token({ id_token: h.generate_id_token(p2, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert(!res4.ok && res4.error == "MISSING_AT_HASH");
 
 		// 5. Failure: at_hash present but access_token missing (Stripping Attack)
-		let res5 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, SECRET) }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res5 = oidc.verify_id_token({ id_token: h.generate_id_token(p1, SECRET) }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert(!res5.ok && res5.error == "MISSING_ACCESS_TOKEN");
 	});
 });
@@ -336,7 +336,7 @@ test('OIDC: ID Token - at_hash validation byte-safety torture', () => {
 
 	mock.create().with_env({}, (io) => {
 		let p = { ...f.MOCK_CLAIMS, at_hash: correct_at_hash };
-		let res = oidc.verify_id_token(io, { id_token: h.generate_id_token(p, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res = oidc.verify_id_token({ id_token: h.generate_id_token(p, SECRET), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		
 		assert(res.ok, "at_hash validation MUST be byte-safe (failed for binary sequence)");
 	});

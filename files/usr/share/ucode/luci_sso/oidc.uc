@@ -295,7 +295,6 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 /**
  * Verifies ID Token and matches nonce.
  * 
- * @param {object} [io] - Optional I/O provider for logging
  * @param {object} tokens - Token response {id_token, access_token}
  * @param {array} keys - JWK keyset
  * @param {object} config - UCI configuration
@@ -304,41 +303,17 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
  * @param {number} now - Current timestamp
  * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
  */
-export function verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy) {
-	// Support both (io, tokens, ...) and (tokens, keys, ...) for backward compatibility
-	let provider = io;
-	let t = tokens;
-	let k = keys;
-	let c = config;
-	let h = handshake;
-	let d = discovery;
-	let n = now;
-	let p_arg = policy;
-
-	if (type(io) == "object" && !io.log) {
-		// First arg is tokens
-		provider = null;
-		t = io;
-		k = tokens;
-		c = keys;
-		h = config;
-		d = handshake;
-		n = discovery;
-		p_arg = now;
-	}
-
-	if (!t.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
+export function verify_id_token(tokens, keys, config, handshake, discovery, now, policy) {
+	if (!tokens.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
 
 	// 1. Policy Enforcement (Second Dimension)
-	// Hardcoded safe defaults for production.
 	const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
-	let p = p_arg || DEFAULT_POLICY;
+	let p = policy || DEFAULT_POLICY;
 
-	let parts = split(t.id_token, ".");
+	let parts = split(tokens.id_token, ".");
 	let res_h = encoding.safe_json(crypto.b64url_decode(parts[0]));
 	if (!res_h.ok) {
-		if (provider) provider.log("error", `ID Token header parse error: ${res_h.details}`);
-		return { ok: false, error: "INVALID_JWT_HEADER" };
+		return { ok: false, error: "INVALID_JWT_HEADER", details: res_h.details };
 	}
 	let header = res_h.data;
 
@@ -354,28 +329,30 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 		return { ok: false, error: "UNSUPPORTED_ALGORITHM", details: header.alg };
 	}
 
-	let jwk_res = find_jwk(k, header.kid);
+	let jwk_res = find_jwk(keys, header.kid);
 	if (!jwk_res.ok) return jwk_res;
 
 	let pem_res = crypto.jwk_to_pem(jwk_res.data);
 	if (!pem_res.ok) return pem_res;
 
-	// MANDATORY Claims Check: 
-	// The issuer in the token MUST match the discovery document, 
-	// AND the discovery document MUST match our configured expectation.
-	if (d.issuer != c.issuer_url) {
-		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", details: `Expected ${c.issuer_url}, IdP claimed ${d.issuer}` };
+	// MANDATORY Claims Check
+	if (discovery.issuer != config.issuer_url) {
+		return { 
+			ok: false, 
+			error: "DISCOVERY_ISSUER_MISMATCH", 
+			details: `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}` 
+		};
 	}
 
 	let validation_opts = { 
 		alg: header.alg,
-		now: n,
-		clock_tolerance: c.clock_tolerance,
-		iss: c.issuer_url,
-		aud: c.client_id
+		now: now,
+		clock_tolerance: config.clock_tolerance,
+		iss: config.issuer_url,
+		aud: config.client_id
 	};
 
-	let result = crypto.verify_jwt(t.id_token, pem_res.data, validation_opts);
+	let result = crypto.verify_jwt(tokens.id_token, pem_res.data, validation_opts);
 	if (!result.ok) return result;
 
 	let payload = result.data;
@@ -386,36 +363,29 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	}
 
 	// 3.1 Nonce Check (Blocker #3: Mandatory)
-	if (!h.nonce || !payload.nonce) {
+	if (!handshake.nonce || !payload.nonce) {
 		return { ok: false, error: "MISSING_NONCE" };
 	}
-	if (payload.nonce != h.nonce) {
+	if (payload.nonce != handshake.nonce) {
 		return { ok: false, error: "NONCE_MISMATCH" };
 	}
 
-	// 3.2 Authorized Party Check (Blocker #5 in 1770661209: Universal AZP)
-	// If the azp claim is present, it MUST match our client_id to prevent Confused Deputy attacks.
-	if (payload.azp && payload.azp !== c.client_id) {
-		return { ok: false, error: "AZP_MISMATCH" };
+	// 3.2 Authorized Party Check
+	if (payload.azp && payload.azp !== config.client_id) {
+		return { ok: false, error: "AZP_MISMATCH", details: `Expected ${config.client_id}, got ${payload.azp}` };
 	}
 
-	// 3.3 Access Token Hash Check (Blocker #7 in 1770661270: Binding)
-	// Per OIDC Core 3.1.3.3: If at_hash is present, it MUST match the access_token.
-	// PARANOID MODE: We enforce that both MUST be present to ensure cryptographic binding.
-	if (!t.access_token) {
+	// 3.3 Access Token Hash Check
+	if (!tokens.access_token) {
 		return { ok: false, error: "MISSING_ACCESS_TOKEN" };
 	}
 	if (!payload.at_hash) {
 		return { ok: false, error: "MISSING_AT_HASH" };
 	}
 
-	let full_hash = crypto.sha256(t.access_token);
+	let full_hash = crypto.sha256(tokens.access_token);
 	if (!full_hash) return { ok: false, error: "CRYPTO_ERROR" };
 
-	// OIDC Core 1.0 Section 3.1.3.6: at_hash is the left-most half 
-	// of the hash of the octets of the ASCII representation of the access_token.
-	// We MUST extract the first 16 bytes manually to ensure byte-safety 
-	// (ucode substr() counts characters, which is incorrect for raw bytes).
 	let left_half = encoding.binary_truncate(full_hash, 16);
 	let expected_hash = crypto.b64url_encode(left_half);
 
