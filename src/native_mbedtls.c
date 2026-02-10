@@ -181,31 +181,34 @@ static uc_value_t *uc_mbedtls_sha256(uc_vm_t *vm, size_t nargs) {
     return ucv_string_new_length((const char *)output, 32);
 }
 
+static mbedtls_entropy_context global_entropy;
+static mbedtls_ctr_drbg_context global_ctr_drbg;
+static int drbg_initialized = 0;
+
 static uc_value_t *uc_mbedtls_random(uc_vm_t *vm, size_t nargs) {
     uc_value_t *arg = uc_fn_arg(0);
     int len = (ucv_type(arg) == UC_INTEGER) ? ucv_int64_get(arg) : 32;
     if (len <= 0 || len > 4096) return NULL;
+
+    if (!drbg_initialized) {
+        const char *pers = "ucode_mbedtls_persistent";
+        mbedtls_entropy_init(&global_entropy);
+        mbedtls_ctr_drbg_init(&global_ctr_drbg);
+        int ret = mbedtls_ctr_drbg_seed(&global_ctr_drbg, mbedtls_entropy_func, &global_entropy, 
+                                        (const unsigned char *)pers, strlen(pers));
+        if (ret != 0) return NULL;
+        drbg_initialized = 1;
+    }
+
     unsigned char *buf = malloc(len);
     if (!buf) return NULL;
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context ctr_drbg;
-    const char *pers = "ucode_mbedtls";
-    mbedtls_entropy_init(&entropy);
-    mbedtls_ctr_drbg_init(&ctr_drbg);
-    int ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char *)pers, strlen(pers));
-    if (ret != 0) {
-        free(buf);
-        mbedtls_ctr_drbg_free(&ctr_drbg);
-        mbedtls_entropy_free(&entropy);
-        return NULL;
-    }
-    ret = mbedtls_ctr_drbg_random(&ctr_drbg, buf, len);
-    mbedtls_ctr_drbg_free(&ctr_drbg);
-    mbedtls_entropy_free(&entropy);
+
+    int ret = mbedtls_ctr_drbg_random(&global_ctr_drbg, buf, len);
     if (ret != 0) {
         free(buf);
         return NULL;
     }
+
     uc_value_t *res = ucv_string_new_length((const char *)buf, len);
     free(buf);
     return res;
@@ -237,8 +240,15 @@ static uc_value_t *uc_mbedtls_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
 
     mbedtls_rsa_context *rsa = mbedtls_pk_rsa(pk);
     
-    // Security: Explicitly reject insecure exponents (0 and 1)
-    if (e_len == 1 && (e[0] == 0 || e[0] == 1)) {
+    // Security: Reject exponents that are:
+    // 1. Empty
+    // 2. Even (mathematically invalid for RSA)
+    // 3. Less than 3
+    if (e_len == 0 || (e[e_len - 1] & 1) == 0) {
+        mbedtls_pk_free(&pk);
+        return NULL;
+    }
+    if (e_len == 1 && e[0] < 3) {
         mbedtls_pk_free(&pk);
         return NULL;
     }
