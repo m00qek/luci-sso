@@ -82,3 +82,28 @@ test('OIDC: Security - Reject discovery document with insecure endpoints', () =>
 		assert_eq(res.error, "INSECURE_ENDPOINT");
 	});
 });
+
+test('OIDC: Security - Reject invalid at_hash', () => {
+	let access_token = "access-token-123";
+	let secret = f.MOCK_CONFIG.client_secret;
+	
+	let payload = { 
+		iss: f.MOCK_CONFIG.issuer_url, 
+		aud: f.MOCK_CONFIG.client_id,
+		sub: "user1",
+		nonce: "n1",
+		iat: 100,
+		exp: 1000,
+		at_hash: "wrong_hash_!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+	};
+	
+	let token = crypto.sign_jws(payload, secret);
+	let tokens = { id_token: token, access_token: access_token };
+	let keys = [{ kty: "oct", kid: "dummy", k: crypto.b64url_encode(secret) }];
+
+	mock.create().with_responses({}, (io) => {
+		let res = oidc.verify_id_token(tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
+		assert(!res.ok, "Should reject invalid at_hash");
+		assert_eq(res.error, "AT_HASH_MISMATCH");
+	});
+});

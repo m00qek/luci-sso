@@ -54,7 +54,7 @@ function _validate_callback_request(io, config, request) {
 	}
 
 	let handshake = handshake_res.data;
-	if (query.state != handshake.state) {
+	if (!crypto.constant_time_eq(query.state, handshake.state)) {
 		return { ok: false, error: "STATE_MISMATCH", status: 403 };
 	}
 

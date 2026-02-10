@@ -14,8 +14,16 @@ The project strictly follows the pattern of keeping business logic (OIDC, Sessio
     *   `discovery.uc`: Metadata fetching and caching.
     *   `crypto.uc`: Cryptographic primitives and JWT logic.
     *   `encoding.uc`: Pure data transformations.
+    *   `session.uc`: Handshake and secret key persistence.
+    *   `router.uc`: CGI request routing and logout orchestration.
+    *   `config.uc`: UCI configuration parsing and validation.
+    *   `web.uc`: HTTP request/cookie parsing.
+    *   `secure_http.uc`: HTTPS scheme enforcement.
+    *   `jwk.uc`: JWK to PEM conversion.
+    *   `ubus.uc`: LuCI session and token registry via ubus.
+    *   `io.uc`: I/O abstraction layer.
 *   **Imperative Shell:** The CGI script in `files/www/cgi-bin/luci-sso` which initializes the real `io` object and the `router.uc` CGI controller.
-*   **IO Contract:** The `io` object MUST implement a standard set of methods: `time`, `random`, `read_file`, `write_file`, `rename`, `remove`, `mkdir`, `lsdir`, `stat`, `chmod`, `fserror`, `getenv`, `stdout`, `ubus_call`, `uci_cursor`, and **`log`**.
+*   **IO Contract:** The `io` object MUST implement a standard set of methods: `time`, `read_file`, `write_file`, `rename`, `remove`, `mkdir`, `lsdir`, `stat`, `chmod`, `fserror`, `getenv`, `stdout`, `ubus_call`, `uci_cursor`, `http_get`, `http_post`, `urlencode`, and **`log`**.
 *   **Mandatory Auditing:** Logging is NOT optional. All security-relevant events, including handshake creation, validation failures, and network errors, MUST be logged for forensic purposes.
 *   **Benefit:** Enables 100% offline unit testing without mocks for the logic itself.
 

@@ -195,7 +195,7 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 	if (!handshake.nonce || !payload.nonce) {
 		return { ok: false, error: "MISSING_NONCE" };
 	}
-	if (payload.nonce != handshake.nonce) {
+	if (!crypto.constant_time_eq(payload.nonce, handshake.nonce)) {
 		return { ok: false, error: "NONCE_MISMATCH" };
 	}
 
@@ -218,7 +218,7 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 	let left_half = encoding.binary_truncate(full_hash, 16);
 	let expected_hash = crypto.b64url_encode(left_half);
 
-	if (expected_hash != payload.at_hash) {
+	if (!crypto.constant_time_eq(expected_hash, payload.at_hash)) {
 		return { ok: false, error: "AT_HASH_MISMATCH" };
 	}
 

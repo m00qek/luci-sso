@@ -28,7 +28,8 @@ run_all("Backend Compliance (Tier 0)");
 // --- Tier 1: Cryptographic Plumbing ---
 clear_tests();
 const plumbing_files = [
-	"unit.crypto_plumbing_test"
+	"unit.crypto_plumbing_test",
+	"unit.crypto_constant_time_test"
 ];
 
 for (let mod in plumbing_files) {
