@@ -62,6 +62,24 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources
 	$(CP) ./files/www/luci-static/resources/luci-sso-login.js $(1)/www/luci-static/resources/
 endef
+
+define Package/$(PKG_NAME)/prerm
+#!/bin/sh
+# Clean up cron job
+sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
+[ -x "/etc/init.d/cron" ] && /etc/init.d/cron restart
+
+# Revert UI patches
+sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/sysauth.ut 2>/dev/null
+sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/themes/bootstrap/sysauth.ut 2>/dev/null
+
+# Clear LuCI cache to reflect removal
+rm -rf /tmp/luci-modulecache/* 2>/dev/null
+rm -rf /tmp/luci-indexcache 2>/dev/null
+
+exit 0
+endef
+
 define Package/$(PKG_NAME)-crypto-mbedtls/install
 	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
 	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_mbedtls.so ] && \
