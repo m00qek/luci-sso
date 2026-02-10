@@ -191,6 +191,14 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 		return { ok: false, error: "MISSING_SUB_CLAIM" };
 	}
 
+	// B1 & W2: Enforce mandatory exp and iat claims (OIDC Core 1.0 §2)
+	if (type(payload.exp) != "int") {
+		return { ok: false, error: "MISSING_EXP_CLAIM" };
+	}
+	if (type(payload.iat) != "int") {
+		return { ok: false, error: "MISSING_IAT_CLAIM" };
+	}
+
 	// 3.1 Nonce Check (Blocker #3: Mandatory)
 	if (!handshake.nonce || !payload.nonce) {
 		return { ok: false, error: "MISSING_NONCE" };

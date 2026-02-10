@@ -107,3 +107,28 @@ test('OIDC: Security - Reject invalid at_hash', () => {
 		assert_eq(res.error, "AT_HASH_MISMATCH");
 	});
 });
+
+test('OIDC: Security - Reject missing mandatory claims (exp, iat)', () => {
+	let secret = f.MOCK_CONFIG.client_secret;
+	let keys = [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(secret) }];
+
+	// Case 1: Missing exp
+	let p_no_exp = { ...f.MOCK_CLAIMS, exp: null, nonce: "n1", sub: "u1", iat: 100 };
+	let t_no_exp = { id_token: crypto.sign_jws(p_no_exp, secret), access_token: "a" };
+
+	mock.create().with_responses({}, (io) => {
+		let res = oidc.verify_id_token(t_no_exp, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
+		assert(!res.ok, "Should reject ID token missing 'exp' claim");
+		assert_eq(res.error, "MISSING_EXP_CLAIM");
+	});
+
+	// Case 2: Missing iat
+	let p_no_iat = { ...f.MOCK_CLAIMS, iat: null, nonce: "n1", sub: "u1" };
+	let t_no_iat = { id_token: crypto.sign_jws(p_no_iat, secret), access_token: "a" };
+
+	mock.create().with_responses({}, (io) => {
+		let res = oidc.verify_id_token(t_no_iat, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
+		assert(!res.ok, "Should reject ID token missing 'iat' claim");
+		assert_eq(res.error, "MISSING_IAT_CLAIM");
+	});
+});

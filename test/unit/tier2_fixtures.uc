@@ -21,5 +21,6 @@ export const MOCK_CLAIMS = {
     aud: "luci-app",
     sub: "user-123",
     nonce: "n",
+    iat: 1000,
     exp: 2000000000
 };

@@ -175,15 +175,15 @@ export function verify_jwt(token, pubkey, options) {
 	let clock_tolerance = options.clock_tolerance;
 	let now = options.now;
 
-	if (payload.exp && payload.exp < (now - clock_tolerance)) {
+	if (type(payload.exp) == "int" && payload.exp < (now - clock_tolerance)) {
 		return { ok: false, error: "TOKEN_EXPIRED" };
 	}
 	
-	if (payload.nbf && payload.nbf > (now + clock_tolerance)) {
+	if (type(payload.nbf) == "int" && payload.nbf > (now + clock_tolerance)) {
 		return { ok: false, error: "TOKEN_NOT_YET_VALID" };
 	}
 
-	if (payload.iat && payload.iat > (now + clock_tolerance)) {
+	if (type(payload.iat) == "int" && payload.iat > (now + clock_tolerance)) {
 		return { ok: false, error: "TOKEN_ISSUED_IN_FUTURE" };
 	}
 
