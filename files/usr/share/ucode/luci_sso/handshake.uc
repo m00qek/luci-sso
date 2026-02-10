@@ -93,6 +93,17 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		return { ok: false, error: "AUTH_FAILED", status: 403 };
 	}
 
+	// W2: Warn if access token lifetime exceeds the 24h replay protection window
+	let a_parts = split(access_token, ".");
+	if (length(a_parts) == 3) {
+		let res_ap = crypto.safe_json(crypto.b64url_decode(a_parts[1]));
+		if (res_ap.ok && res_ap.data.exp && res_ap.data.iat) {
+			if ((res_ap.data.exp - res_ap.data.iat) > 86400) {
+				io.log("warn", `Access token lifetime exceeds 24h replay window [session_id: ${session_id}]`);
+			}
+		}
+	}
+
 	let jwks_res = discovery.fetch_jwks(io, discovery_doc.jwks_uri);
 	if (!jwks_res.ok) {
 		return { ok: false, error: "JWKS_FETCH_FAILED", status: 500 };

@@ -43,6 +43,7 @@ const logic_files = [
 	"unit.oidc_logic_test",
 	"unit.oidc_security_test",
 	"unit.handshake_rotation_test",
+	"unit.handshake_warning_test",
 	"unit.session_logic_test",
 	"unit.session_race_test",
 	"unit.ubus_logic_test",
