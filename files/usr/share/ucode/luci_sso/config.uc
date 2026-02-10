@@ -44,6 +44,10 @@ export function load(io) {
 		die("CONFIG_ERROR: client_id and client_secret are mandatory");
 	}
 
+	if (!oidc_cfg.redirect_uri || substr(oidc_cfg.redirect_uri, 0, 8) !== "https://") {
+		die("CONFIG_ERROR: redirect_uri is mandatory and must use HTTPS");
+	}
+
 	if (oidc_cfg.clock_tolerance == null || oidc_cfg.clock_tolerance == "") {
 		die("CONFIG_ERROR: clock_tolerance option is mandatory");
 	}

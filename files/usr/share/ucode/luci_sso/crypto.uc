@@ -62,9 +62,8 @@ function b64url_to_b64(str) {
 
 /**
  * Decodes JSON safely and optionally logs errors.
- * @private
  */
-function safe_json(io, str) {
+export function safe_json(io, str) {
 	// Support both safe_json(str) and safe_json(io, str)
 	let raw = str;
 	let provider = io;
@@ -81,7 +80,7 @@ function safe_json(io, str) {
 		}
 		return null;
 	}
-}
+};
 
 // --- String Comparison ---
 

@@ -13,7 +13,7 @@ const MOCK_CONFIG = {
 	internal_issuer_url: "https://idp.com",
 	client_id: "luci-app",
 	client_secret: "secret123",
-	redirect_uri: "http://router/callback",
+	redirect_uri: "https://router/callback",
 	alg: "RS256",
 	clock_tolerance: 300,
 	user_mappings: [

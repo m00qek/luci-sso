@@ -124,7 +124,8 @@ export function request(io) {
  */
 function html_escape(str) {
 	if (type(str) != "string") return "";
-	let res = replace(str, /&/g, "&amp;");
+	let res = replace(str, /\\/g, "\\\\");
+	res = replace(res, /&/g, "&amp;");
 	res = replace(res, /</g, "&lt;");
 	res = replace(res, />/g, "&gt;");
 	res = replace(res, /"/g, "&quot;");
