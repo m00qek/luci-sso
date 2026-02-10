@@ -24,7 +24,7 @@ fi
 # 3. Execution Mode
 if [ "$SHOULD_FOREGROUND" = "true" ]; then
     echo "🚀 Running E2E tests..."
-    npx playwright test
+    ./node_modules/.bin/playwright test
 fi
 
 # Fallback to idle

@@ -10,10 +10,6 @@ CURVE_NAME="${PKI_CURVE}"
 CA_KEY="$TARGET_DIR/CA.key"
 CA_CERT="$TARGET_DIR/CA.crt"
 
-# --- SETUP ---
-echo "🔧 Installing dependencies..."
-apk add --no-cache openssl yq-go
-
 # --- FUNCTIONS ---
 
 ensure_ca() {

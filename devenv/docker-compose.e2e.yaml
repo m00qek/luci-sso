@@ -16,6 +16,7 @@ services:
       context: ./services/browser
       args:
         NODE_VERSION: ${NODE_VERSION}
+        ALPINE_VERSION: ${ALPINE_VERSION}
     networks:
       lucisso-net:
         aliases:

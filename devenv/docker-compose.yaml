@@ -1,7 +1,10 @@
 services:
   pki:
     container_name: ${DOCKER_SUITE}-pki
-    image: alpine:3
+    build:
+      context: ./services/pki
+      args:
+        ALPINE_VERSION: ${ALPINE_VERSION}
     volumes:
       - ./.pki:/out
       - ./services/pki/gensecrets.sh:/usr/local/bin/gensecrets.sh:ro
@@ -20,6 +23,7 @@ services:
       context: ./services/idp
       args:
         NODE_VERSION: ${NODE_VERSION}
+        ALPINE_VERSION: ${ALPINE_VERSION}
     working_dir: /app
     stop_grace_period: 0s
     networks:

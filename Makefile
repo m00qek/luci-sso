@@ -8,6 +8,7 @@ PKG_MAINTAINER:=António Móra <m00qek@gmail.com>
 PKG_LICENSE:=MIT
 
 PKG_INSTALL:=1
+PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
@@ -16,7 +17,7 @@ define Package/$(PKG_NAME)
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=OIDC/OAuth2 SSO for LuCI
-  DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode +luci-sso-crypto
+  DEPENDS:=$(PKG_DEPENDS) +luci-sso-crypto
 endef
 
 define Package/$(PKG_NAME)/description

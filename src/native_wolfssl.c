@@ -6,7 +6,7 @@
  */
 
 static void uc_wolfssl_die(uc_vm_t *vm, const char *msg) {
-    uc_vm_raise_exception(vm, "NOT_IMPLEMENTED", "WolfSSL backend: %s", msg);
+    uc_vm_raise_exception(vm, EXCEPTION_RUNTIME, "WolfSSL backend: %s", msg);
 }
 
 static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {

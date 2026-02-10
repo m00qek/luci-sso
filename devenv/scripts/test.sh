@@ -71,7 +71,7 @@ run_e2e() {
 	local grep_flag=""
 	[ -n "$filter" ] && grep_flag="-g $filter"
 	
-	docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser npx playwright test $translated_modules $grep_flag
+	docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test $translated_modules $grep_flag
 }
 
 # --- MAIN ---

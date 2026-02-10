@@ -1,12 +1,9 @@
 ARG NODE_VERSION
-FROM node:${NODE_VERSION}-alpine
+ARG ALPINE_VERSION
+FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION}
 
-RUN apk add --no-cache curl ca-certificates gettext
+RUN apk add --no-cache ca-certificates curl
 
 WORKDIR /app
-
-# Bake dependencies
 COPY package.json .
 RUN npm install --quiet && npm install -g nodemon
-
-# Note: index.js and start.sh are mounted via docker-compose for dev
