@@ -5,7 +5,7 @@ services:
     environment:
       - ISSUER=https://localhost:${PORT_IDP}
 
-  luci:
+  openwrt:
     ports:
       - "${PORT_LUCI}:443"
     environment:

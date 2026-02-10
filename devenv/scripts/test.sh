@@ -7,7 +7,7 @@ set -e
 # --- CONFIGURATION ---
 BASE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 DEVENV_DIR="$BASE_DIR/devenv"
-COMPOSE_FLAGS="-p e2e -f docker-compose.yaml -f docker-compose.e2e.yaml"
+COMPOSE_FLAGS="-p ci -f docker-compose.yaml -f docker-compose.ci.yaml"
 
 # Colors
 RED='\033[1;31m'
@@ -34,7 +34,7 @@ translate_unit_paths() {
 	echo "$translated"
 }
 
-translate_e2e_paths() {
+translate_ci_paths() {
 	local modules=$1
 	local translated=""
 	for mod in $modules; do
@@ -52,8 +52,8 @@ run_unit() {
 	local filter=$2
 	local translated_modules=$(translate_unit_paths "$modules")
 	
-	log_info "🧪 Running unit tests in luci container..."
-	docker compose $COMPOSE_FLAGS exec -e MODULES="$translated_modules" -e FILTER="$filter" -e VERBOSE="$VERBOSE" luci ucode \
+	log_info "🧪 Running unit tests in openwrt container..."
+	docker compose $COMPOSE_FLAGS exec -e MODULES="$translated_modules" -e FILTER="$filter" -e VERBOSE="$VERBOSE" openwrt ucode \
 		-L /usr/share/ucode \
 		-L /usr/lib/ucode \
 		-L /usr/share/ucode/luci_sso \
@@ -62,12 +62,12 @@ run_unit() {
 		/usr/share/luci-sso/test/runner.uc
 }
 
-run_e2e() {
+run_ci() {
 	local modules=$1
 	local filter=$2
-	local translated_modules=$(translate_e2e_paths "$modules")
+	local translated_modules=$(translate_ci_paths "$modules")
 	
-	log_info "🧪 Running E2E tests in browser container..."
+	log_info "🧪 Running CI tests in browser container..."
 	local grep_flag=""
 	[ -n "$filter" ] && grep_flag="-g $filter"
 	
@@ -78,7 +78,7 @@ run_e2e() {
 
 COMMAND=$1
 if [ -z "$COMMAND" ]; then
-	echo "Usage: $0 {unit|e2e|watch} [--modules \"paths\"] [--filter \"string\"] [--watch]"
+	echo "Usage: $0 {unit|ci|watch} [--modules \"paths\"] [--filter \"string\"] [--watch]"
 	exit 1
 fi
 shift
@@ -116,8 +116,8 @@ case "$COMMAND" in
 		fi
 		;;
 	
-	e2e)
-		run_e2e "$MODULES" "$FILTER"
+	ci)
+		run_ci "$MODULES" "$FILTER"
 		;;
 
 	watch)
@@ -129,14 +129,14 @@ case "$COMMAND" in
 		log_info "Watching for changes in $WATCH_PATHS..."
 		while true; do
 			run_unit "$MODULES" "$FILTER" || true
-			run_e2e "$MODULES" "$FILTER" || true
+			run_ci "$MODULES" "$FILTER" || true
 			inotifywait -r -q -e modify,move,create,delete $WATCH_PATHS
 			echo -e "\n ${YELLOW}🔄${RESET} Change detected. Re-running...\n"
 		done
 		;;
 
 	*)
-		echo "Usage: $0 {unit|e2e|watch} [--modules \"paths\"] [--filter \"string\"] [--watch]"
+		echo "Usage: $0 {unit|ci|watch} [--modules \"paths\"] [--filter \"string\"] [--watch]"
 		exit 1
 		;;
 esac

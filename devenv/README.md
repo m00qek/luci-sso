@@ -9,14 +9,14 @@ The environment is split into two distinct **suites** (Docker Compose projects).
 ### 1. Local Stack (`DOCKER_SUITE=local`)
 *   **Purpose:** Manual development, hot-reloading code, and interactive debugging.
 *   **Ports:** Maps services to `localhost` (e.g., 8443, 5556).
-*   **Commands:** `make up`, `make down`, `make shell`.
+*   **Commands:** `make local-up`, `make local-down`, `make local-shell`.
 
-### 2. E2E Stack (`DOCKER_SUITE=e2e`)
-*   **Purpose:** Automated browser testing.
-*   **Isolation:** Uses internal DNS names (e.g., `luci.luci-sso.test`) and does not map ports to the host to avoid conflicts with the Local stack.
-*   **Commands:** `make e2e-up`, `make e2e-test`, `make e2e-down`.
+### 2. CI Stack (`DOCKER_SUITE=ci`)
+*   **Purpose:** Automated browser testing and CI simulation.
+*   **Isolation:** Uses internal DNS names (e.g., `luci.luci-sso.test`) and does not map ports to the host.
+*   **Commands:** `make up`, `make down`, `make test`, `make ps`.
 
-> **Note on Concurrency:** You **CAN** have the Local stack running while you execute E2E tests. However, you **CANNOT** run `make e2e-up` twice simultaneously.
+> **Note on Concurrency:** You **CAN** have the Local stack running while you execute CI tests. However, you **CANNOT** run `make up` twice simultaneously.
 
 ## 🌐 Accessing Services
 
@@ -24,7 +24,7 @@ The environment is designed to work via `localhost` using specific ports. All TL
 
 | Service | Local URL | Description |
 | :--- | :--- | :--- |
-| **LuCI** | [https://localhost:8443](https://localhost:8443) | The target OpenWrt web interface. |
+| **OpenWrt** | [https://localhost:8443](https://localhost:8443) | The target OpenWrt web interface (LuCI). |
 | **Mock IdP** | [https://localhost:5556](https://localhost:5556) | The OIDC Identity Provider. |
 
 ## 🧪 Manual Testing & Debugging
@@ -45,14 +45,14 @@ The Mock IdP stores its runtime state (including generated signing keys) in:
 ### 3. Log Inspection
 To follow logs for a specific component:
 ```bash
-docker logs -f local-idp   # Mock IdP logs (Node.js)
-docker logs -f local-luci  # uhttpd and ucode logs
+docker logs -f local-idp     # Mock IdP logs (Node.js)
+docker logs -f local-openwrt # uhttpd and ucode logs
 ```
 
 ### 4. Interactive Shell
 If you need to inspect the LuCI state (UCI configs, UBUS) directly:
 ```bash
-make shell CONTAINER=luci
+make local-shell
 ```
 
 ## 🔐 PKI & Trust
@@ -60,7 +60,7 @@ make shell CONTAINER=luci
 The `pki` service automatically generates a development CA and per-service certificates on startup.
 *   **CA Certificate:** Located at `devenv/.pki/CA.crt`.
 *   **Trust:** To avoid browser TLS warnings, you can manually import `CA.crt` into your browser's trust store.
-*   **Reset:** To regenerate all certificates, run `make down` and delete the `devenv/.pki` directory.
+*   **Reset:** To regenerate all certificates, run `make local-down` and delete the `devenv/.pki` directory.
 
 ## 🛠 Troubleshooting
 

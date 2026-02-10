@@ -66,11 +66,11 @@ services:
       retries: 10
       start_period: 5s
 
-  luci:
-    container_name: ${DOCKER_SUITE}-luci
+  openwrt:
+    container_name: ${DOCKER_SUITE}-openwrt
     stop_grace_period: 0s
     build:
-      context: ./services/luci
+      context: ./services/openwrt
       args:
         SDK_ARCH: ${SDK_ARCH}
         SDK_VERSION: ${SDK_VERSION}
@@ -93,12 +93,12 @@ services:
       - ./.pki/${FQDN_LUCI}.key:/etc/uhttpd.key:ro
 
       # Unified Start Scripts
-      - ./services/luci/start.sh:/usr/local/bin/start.sh:ro
-      - ./services/luci/setup-uci.sh:/usr/local/bin/setup-uci.sh:ro
+      - ./services/openwrt/start.sh:/usr/local/bin/start.sh:ro
+      - ./services/openwrt/setup-uci.sh:/usr/local/bin/setup-uci.sh:ro
       - ./base-startup.sh:/usr/local/bin/base-startup.sh:ro
 
       # Static Configs
-      - ./services/luci/board.json:/etc/board.json.init:ro
+      - ./services/openwrt/board.json:/etc/board.json.init:ro
 
       # Project Code
       - ../files/usr/share/ucode/luci_sso:/usr/share/ucode/luci_sso:ro

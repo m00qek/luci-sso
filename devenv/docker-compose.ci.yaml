@@ -3,7 +3,7 @@ services:
     environment:
       - ISSUER=https://${FQDN_IDP}
 
-  luci:
+  openwrt:
     environment:
       - REDIRECT_URL=https://${FQDN_LUCI}
       - ISSUER_URL=https://${FQDN_IDP}
@@ -42,5 +42,5 @@ services:
         condition: service_completed_successfully
       idp:
         condition: service_healthy
-      luci:
+      openwrt:
         condition: service_healthy

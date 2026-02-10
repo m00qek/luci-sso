@@ -45,64 +45,54 @@ COMPOSE_FLAGS = -p $(DOCKER_SUITE) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEV
 SUITE_IS_RUNNING = $(shell docker compose $(COMPOSE_FLAGS) ps -q 2>/dev/null)
 
 # --- 3. PUBLIC INTERFACE ---
-.PHONY: up e2e-up shell run e2e-shell e2e-run down e2e-down ps e2e-ps
-.PHONY: build-images e2e-build-images compile unit-test e2e-test test package sync-headers
+.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests
+.PHONY: local-up local-down local-ps local-shell local-run
 
 # Sentinel file tracks the last successful build
 SENTINEL := $(PROJECT_ROOT)/bin/lib/.built
 
 # Wrappers sets the context and calls the implementation
-up: DOCKER_SUITE = local
-up: .up
+local-up: DOCKER_SUITE = local
+local-up: .up
 
-build-images: DOCKER_SUITE = local
+local-down: DOCKER_SUITE = local
+local-down: .down
+
+local-run: DOCKER_SUITE = local
+local-run: .run
+
+local-shell: DOCKER_SUITE = local
+local-shell: .shell
+
+build-images: DOCKER_SUITE = ci
 build-images: .build-images
 
-e2e-build-images: DOCKER_SUITE = e2e
-e2e-build-images: .build-images
+up: DOCKER_SUITE = ci
+up: .up
 
-down: DOCKER_SUITE = local
+down: DOCKER_SUITE = ci
 down: .down
 
-ps: DOCKER_SUITE = local
+ps: DOCKER_SUITE = ci
 ps: .ps
 
-shell: DOCKER_SUITE = local
+shell: DOCKER_SUITE = ci
 shell: .shell
 
-run: DOCKER_SUITE = local
+run: DOCKER_SUITE = ci
 run: .run
 
-unit-test: DOCKER_SUITE = e2e
+unit-test: DOCKER_SUITE = ci
 unit-test: .unit-test
 
-e2e-test: DOCKER_SUITE = e2e
-e2e-test: .e2e-test
-
-test: unit-test e2e-test
+e2e-test: DOCKER_SUITE = ci
+e2e-test: .ci-test
 
 # Watcher: Run tests automatically on change
-watch-tests: DOCKER_SUITE = e2e
+watch-tests: DOCKER_SUITE = ci
 watch-tests: .watch-tests
 
-# E2E Variants
-e2e-up: DOCKER_SUITE = e2e
-e2e-up: .up
-
-e2e-shell: DOCKER_SUITE = e2e
-e2e-shell: .shell
-
-e2e-down: DOCKER_SUITE = e2e
-e2e-down: .down
-
-e2e-ps: DOCKER_SUITE = e2e
-e2e-ps: .ps
-
-unit-test: DOCKER_SUITE = e2e
-unit-test: .unit-test
-
-e2e-test: DOCKER_SUITE = e2e
-e2e-test: .e2e-test
+test: unit-test e2e-test
 
 VAR ?= ""
 print-env: 
@@ -115,7 +105,7 @@ define VALIDATE_SUITE_RUNNING
 	@if [ -z "$(SUITE_IS_RUNNING)" ]; then \
 		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."; \
 		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"; \
-		echo -e "\n      make $(if $(filter e2e,$(DOCKER_SUITE)),e2e-,)up"; \
+		echo -e "\n      make $(DOCKER_SUITE)-up"; \
 		exit 1; \
 	fi
 endef
@@ -124,9 +114,9 @@ endef
 	$(VALIDATE_SUITE_RUNNING)
 	@$(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
-.e2e-test:
+.ci-test:
 	$(VALIDATE_SUITE_RUNNING)
-	@$(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
+	@$(DEVENV_DIR)/scripts/test.sh ci --modules "$(MODULES)" --filter "$(FILTER)"
 
 .watch-tests:
 	$(VALIDATE_SUITE_RUNNING)
@@ -159,7 +149,7 @@ endef
 .ps:
 	@docker compose $(COMPOSE_FLAGS) ps
 
-CONTAINER ?= luci
+CONTAINER ?= openwrt
 
 .shell:
 	$(VALIDATE_SUITE_RUNNING)
