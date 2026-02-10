@@ -104,7 +104,7 @@ function handle_logout(io, config, request) {
 			sep = '&';
 		}
 		
-		let post_logout = "https://" + (request.env.HTTP_HOST || "localhost") + "/";
+		let post_logout = replace(config.redirect_uri, /^(https:\/\/[^\/]+).*/, "$1/");
 		logout_url += `${sep}post_logout_redirect_uri=${lucihttp.urlencode(post_logout, 1)}`;
 	}
 

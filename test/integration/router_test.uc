@@ -315,7 +315,7 @@ test('Router: Logout - OIDC RP-Initiated Logout', () => {
 		assert_eq(res.status, 302);
 		assert(index(res.headers["Location"], "https://idp.com/logout") == 0, "Should redirect to IdP logout");
 		assert(index(res.headers["Location"], "id_token_hint=mock-id-token") != -1, "Should include id_token_hint");
-		assert(index(res.headers["Location"], "post_logout_redirect_uri=https%3A%2F%2Frouter.lan%2F") != -1, "Should include post_logout_redirect_uri");
+		assert(match(res.headers["Location"], /post_logout_redirect_uri=https%3A%2F%2Frouter%2F(&|$)/), "Should include EXACT post_logout_redirect_uri");
 	});
 
 	assert(data.called("ubus", "session", "get"), "Should have retrieved session for id_token_hint");

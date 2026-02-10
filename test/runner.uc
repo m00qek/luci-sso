@@ -48,6 +48,7 @@ const logic_files = [
 	"unit.web_logic_test",
 	"unit.security_logic_test",
 	"unit.security_logic_test_extra",
+	"unit.logout_security_test",
 	"unit.fuzz_logic_test",
 	"unit.https_enforcement_test"
 ];
