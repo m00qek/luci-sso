@@ -10,7 +10,7 @@ services:
 
   # The Browser is ONLY needed for E2E
   browser:
-    container_name: ${DOCKER_SUITE}-browser
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-browser
     stop_grace_period: 0s
     build:
       context: ./services/browser

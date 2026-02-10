@@ -7,7 +7,7 @@ set -e
 # --- CONFIGURATION ---
 BASE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 DEVENV_DIR="$BASE_DIR/devenv"
-COMPOSE_FLAGS="-p ci -f docker-compose.yaml -f docker-compose.ci.yaml"
+# COMPOSE_FLAGS MUST be passed from the environment (Makefile)
 
 # Colors
 RED='\033[1;31m'

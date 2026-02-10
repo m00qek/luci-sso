@@ -1,6 +1,6 @@
 services:
   pki:
-    container_name: ${DOCKER_SUITE}-pki
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-pki
     build:
       context: ./services/pki
       args:
@@ -18,7 +18,7 @@ services:
     command: /bin/sh /usr/local/bin/gensecrets.sh
 
   idp:
-    container_name: ${DOCKER_SUITE}-idp
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-idp
     build:
       context: ./services/idp
       args:
@@ -67,12 +67,12 @@ services:
       start_period: 5s
 
   openwrt:
-    container_name: ${DOCKER_SUITE}-openwrt
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-openwrt
     stop_grace_period: 0s
     build:
       context: ./services/openwrt
       args:
-        SDK_ARCH: ${SDK_ARCH}
+        SDK_ARCH: ${ROOTFS_ARCH}
         SDK_VERSION: ${SDK_VERSION}
         PKG_DEPENDS: "${PKG_DEPENDS}"
     networks:
@@ -86,6 +86,7 @@ services:
       - FQDN_IDP=${FQDN_IDP}
       - FQDN_LUCI=${FQDN_LUCI}
       - CRYPTO_LIB=${CRYPTO_LIB}
+      - SDK_ARCH=${SDK_ARCH}
     volumes:
       # Certificates
       - ./.pki/CA.crt:/etc/ssl/certs/CA.crt:ro
@@ -105,7 +106,7 @@ services:
       - ../files/www/cgi-bin/luci-sso:/www/cgi-bin/luci-sso:ro
       - ../files/www/luci-static/resources/luci-sso-login.js:/www/luci-static/resources/luci-sso-login.js:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
-      - ../bin/lib/${CRYPTO_LIB}/luci_sso/native.so:/usr/lib/ucode/luci_sso/native.so:ro
+      - ../bin/lib/${SDK_ARCH}/${CRYPTO_LIB}/luci_sso/native.so:/usr/lib/ucode/luci_sso/native.so:ro
       - ../test:/usr/share/luci-sso/test:ro
     labels:
       cert.fqdn: "${FQDN_LUCI}"
@@ -123,7 +124,7 @@ services:
       start_period: 5s
 
   sdk:
-    container_name: ${DOCKER_SUITE}-sdk
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-sdk
     build:
       context: ./services/sdk
       args:
@@ -137,6 +138,7 @@ services:
     user: buildbot
     environment:
       - CRYPTO_LIB=${CRYPTO_LIB}
+      - SDK_ARCH=${SDK_ARCH}
 
 networks:
   lucisso-net:

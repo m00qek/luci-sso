@@ -111,11 +111,13 @@ The system implements full session synchronization during logout to prevent "Loc
 
 ## 9. Development Orchestration
 
-### The "Builder-as-a-Service" Pattern
+### The "Builder-as-a-Service" Pattern (Authoritative SDK Model)
 To avoid massive build times and environment drift, the project uses a dedicated `sdk` service within Docker Compose.
+*   **Architecture Authority:** The environment MUST prioritize `SDK_ARCH` as the source of truth for builds. 
+*   **Generic Target Strategy:** For the beta phase, the project utilizes "Generic" instruction sets (e.g., `aarch64_generic`) to ensure IPKs are portable across all boards within a CPU family.
 *   **Encapsulation:** All OpenWrt SDK logic (feeds, cross-compilation, packaging) is contained within the `sdk` container.
 *   **Source of Truth:** The `devenv/Makefile` dynamically parses dependencies from the root `Makefile`, ensuring the dev environment always matches the production recipe.
-*   **Incremental Builds:** A host-side sentinel (`bin/lib/.built`) tracks changes to `src/*.c`, triggering the SDK compiler only when native code is modified.
+*   **Incremental Builds:** A host-side sentinel (`bin/lib/${SDK_ARCH}/.built-${CRYPTO_LIB}`) tracks changes to `src/*.c`, triggering the SDK compiler only when native code is modified.
 
 ### Layered Environment
 1.  **PKI Service:** Generates a local Dev CA and per-service TLS certificates (ECC P-256).

@@ -18,7 +18,14 @@ export PKI_CURVE := prime256v1
 export NODE_VERSION := 25
 export ALPINE_VERSION := 3.23
 export SDK_VERSION := 24.10.5
-export SDK_ARCH    := x86-64
+
+# Architecture Resolution (Authoritative SDK Model)
+# 1. Determine SDK_ARCH (Manual override > Host detection)
+export SDK_ARCH ?= $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host)
+
+# 2. Derive ROOTFS_ARCH from SDK_ARCH
+export ROOTFS_ARCH := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh $(SDK_ARCH))
+
 export CRYPTO_LIB  ?= mbedtls
 
 # Dynamic Dependency Parsing from root Makefile
@@ -39,7 +46,8 @@ export DOCKER_SUITE ?= local
 
 # Lazy variables (=) evaluated at runtime
 export RESOLVED_DOCKER_COMPOSE = $(DEVENV_DIR)/.resolved.docker-compose.$(DOCKER_SUITE).yaml
-COMPOSE_FLAGS = -p $(DOCKER_SUITE) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
+# Use SDK_ARCH in project name to ensure isolated containers per architecture
+COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
 
 # Helper: Returns container ID if any service in the suite is running
 SUITE_IS_RUNNING = $(shell docker compose $(COMPOSE_FLAGS) ps -q 2>/dev/null)
@@ -48,8 +56,8 @@ SUITE_IS_RUNNING = $(shell docker compose $(COMPOSE_FLAGS) ps -q 2>/dev/null)
 .PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests
 .PHONY: local-up local-down local-ps local-shell local-run
 
-# Sentinel file tracks the last successful build
-SENTINEL := $(PROJECT_ROOT)/bin/lib/.built
+# Sentinel file tracks the last successful build for a specific arch/crypto combo
+SENTINEL := $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/.built-$(CRYPTO_LIB)
 
 # Wrappers sets the context and calls the implementation
 local-up: DOCKER_SUITE = local
@@ -105,22 +113,22 @@ define VALIDATE_SUITE_RUNNING
 	@if [ -z "$(SUITE_IS_RUNNING)" ]; then \
 		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."; \
 		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"; \
-		echo -e "\n      make $(DOCKER_SUITE)-up"; \
+		echo -e "\n      make up"; \
 		exit 1; \
 	fi
 endef
 
 .unit-test:
 	$(VALIDATE_SUITE_RUNNING)
-	@$(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
 .ci-test:
 	$(VALIDATE_SUITE_RUNNING)
-	@$(DEVENV_DIR)/scripts/test.sh ci --modules "$(MODULES)" --filter "$(FILTER)"
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh ci --modules "$(MODULES)" --filter "$(FILTER)"
 
 .watch-tests:
 	$(VALIDATE_SUITE_RUNNING)
-	@$(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
 .build-images:
 	@echo -e " $(BLUE)🔨$(RESET) Building images for '$(DOCKER_SUITE)'..."
@@ -171,11 +179,12 @@ sync-headers:
 compile: $(SENTINEL)
 
 $(SENTINEL): $(wildcard $(PROJECT_ROOT)/src/*.c) $(wildcard $(PROJECT_ROOT)/src/*.h) $(PROJECT_ROOT)/src/CMakeLists.txt
-	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(CRYPTO_LIB)..."
-	@mkdir -p $(PROJECT_ROOT)/bin/lib
+	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(SDK_ARCH)/$(CRYPTO_LIB)..."
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
 	@touch $(SENTINEL)
 
 package:
-	@echo -e " $(BLUE)📦$(RESET) Building IPK package..."
+	@echo -e " $(BLUE)📦$(RESET) Building IPK package for $(SDK_ARCH)..."
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/packages
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh package

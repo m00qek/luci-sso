@@ -55,6 +55,32 @@ If you need to inspect the LuCI state (UCI configs, UBUS) directly:
 make local-shell
 ```
 
+## 🏗️ Multi-Architecture Support
+
+The environment follows an **Authoritative SDK** model. You define the SDK you want to build with, and the environment automatically selects a compatible Rootfs for metadata mapping.
+
+### Beta Limitation: Build vs. Test
+*   **Cross-Compilation (Supported):** You can build IPKs for any architecture (e.g., `make package SDK_ARCH=aarch64_generic`).
+*   **Local Testing (Host-Only):** Running the full environment (`make up`) is currently restricted to your host's native architecture. Cross-architecture emulation is not supported in the beta phase.
+
+### Architecture Support Matrix
+
+| SDK Architecture (`SDK_ARCH`) | Runtime Rootfs (`ROOTFS_ARCH`) | Compatible Hardware Examples |
+| :--- | :--- | :--- |
+| **`x86-64`** | `x86-64` | Proxmox VMs, Intel NUC, PC Engines APU |
+| **`aarch64_generic`** | `aarch64_generic` | Raspberry Pi 4/5, Yuncore AX835, NanoPi R4S |
+
+*   **Variables:**
+    *   `SDK_ARCH`: The build authority (must match a tag in `ghcr.io/openwrt/sdk`).
+    *   `ROOTFS_ARCH`: The runtime target (derived automatically from `SDK_ARCH`).
+*   **Auto-detection:** The `Makefile` automatically detects your host architecture and selects the matching `SDK_ARCH` for testing.
+*   **Artifact Segregation:** Binaries are stored in `bin/lib/${SDK_ARCH}/${CRYPTO_LIB}/`.
+*   **Manual Override (Building Only):**
+    Force a specific SDK for packaging:
+    ```bash
+    make package SDK_ARCH=aarch64_generic
+    ```
+
 ## 🔐 PKI & Trust
 
 The `pki` service automatically generates a development CA and per-service certificates on startup.
@@ -64,5 +90,5 @@ The `pki` service automatically generates a development CA and per-service certi
 
 ## 🛠 Troubleshooting
 
-*   **Permission Denied on `bin/`:** Ensure the `bin/` directory is owned by your host user. If Docker created it as root, run `sudo chown -R $USER:$USER bin/`.
+*   **Permission Denied on `bin/`:** The `Makefile` is designed to create the necessary subdirectories (e.g., `bin/lib/${SDK_ARCH}`) on the host before starting Docker. If you manually deleted `bin/` and encounter issues, ensure your host user has write permissions to the project root. If Docker still creates a directory as root, run `sudo chown -R $USER:$USER bin/`.
 *   **Port Conflicts:** If ports 8443 or 5556 are in use, you can override them in `devenv/Makefile` or via environment variables.
