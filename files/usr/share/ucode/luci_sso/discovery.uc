@@ -105,7 +105,7 @@ export function discover(io, issuer, options) {
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
-		io.log("error", `Discovery JSON parse error: ${res.details} (Data: ${res.raw_fragment}...)`);
+		io.log("error", `Discovery JSON parse error: ${res.details}`);
 		return { ok: false, error: "INVALID_DISCOVERY_DOC" };
 	}
 	let config = res.data;
@@ -177,7 +177,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok || type(res.data.keys) != "array") {
-		io.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"} (Data: ${res.raw_fragment}...)`);
+		io.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"}`);
 		return { ok: false, error: "INVALID_JWKS_FORMAT" };
 	}
 	let jwks = res.data;

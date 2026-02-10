@@ -66,7 +66,9 @@
             e.preventDefault();
             ssoBtn.disabled = true;
             ssoBtn.textContent = 'Redirecting...';
-            window.location.href = '/cgi-bin/luci-sso';
+            
+            // Absolute redirect to preserve scheme/host
+            window.location.href = window.location.protocol + '//' + window.location.host + '/cgi-bin/luci-sso';
         };
 
         // 4. Inject

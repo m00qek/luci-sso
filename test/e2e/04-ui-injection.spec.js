@@ -126,23 +126,35 @@ test.describe('UI: Login Button Injection', () => {
   });
 
   test('Logic: Redirect on Click', async ({ page }) => {
-    await page.setContent(`
-      <div class="cbi-page-actions">
-        <button class="cbi-button-positive">Log in</button>
-      </div>
-    `);
+    // Mock the login page itself to have a proper HTTPS origin
+    const mockUrl = 'https://luci.luci-sso.test/mock-login';
+    await page.route(mockUrl, route => {
+      route.fulfill({
+        contentType: 'text/html',
+        body: `
+          <div class="cbi-page-actions">
+            <button class="cbi-button-positive">Log in</button>
+          </div>
+        `
+      });
+    });
+
+    await page.goto(mockUrl);
     await page.addScriptTag({ path: scriptPath });
 
     const ssoBtn = page.locator('#luci-sso-login-btn');
     
-    // Disable navigation to keep the page stable
-    await page.route('**/cgi-bin/luci-sso', (route) => route.abort());
+    // Set up interception for the redirect target
+    let redirected = false;
+    await page.route('**/cgi-bin/luci-sso', route => {
+      redirected = true;
+      route.fulfill({ status: 200, body: 'Intercepted' });
+    });
 
     await ssoBtn.click();
     
-    // Verify script feedback state
-    await expect(ssoBtn).toBeDisabled();
-    await expect(ssoBtn).toHaveText('Redirecting...');
+    // Verify redirection happened via network layer
+    await expect.poll(() => redirected).toBe(true);
   });
 
   test('Integration: Real LuCI Login Page Detection', async ({ page }) => {
