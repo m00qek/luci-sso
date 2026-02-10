@@ -38,3 +38,20 @@ test('UBUS: Logic - get_session handle invalid SID', () => {
 		assert_eq(res.error, "INVALID_SID");
 	});
 });
+
+test('UBUS: Security - create_session generates 256-bit CSRF token (B3)', () => {
+	let factory = mock.create().with_ubus({
+		"session:login": { ubus_rpc_session: "new-sid" },
+		"session:set": (args) => {
+			let token = args.values.token;
+			// 256 bits = 32 bytes. Base64URL encoding 32 bytes = 43 chars
+			assert(length(token) >= 43, "CSRF token MUST be at least 256 bits (43+ chars)");
+			return {};
+		}
+	});
+
+	factory.with_env({}, (io) => {
+		let res = ubus.create_session(io, "root", "p", "user@test.com", "at", "rt", "it");
+		assert(res.ok);
+	});
+});

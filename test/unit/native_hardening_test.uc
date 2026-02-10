@@ -49,3 +49,20 @@ test('Native: Random - Persistent DRBG (N1)', () => {
     assert(length(r1) == 32);
     assert(r1 != r2, "Random results should be unique");
 });
+
+test('Native: Security - Reject oversized inputs (B4)', () => {
+    // 17KB exceeds the 16KB MAX_INPUT_SIZE
+    let large_str = "";
+    for (let i = 0; i < 17000; i++) large_str += "A";
+    
+    let dummy_key = "PEM";
+    let dummy_sig = "SIG";
+    
+    // verify_rs256(msg, sig, key)
+    assert(native.verify_rs256(large_str, dummy_sig, dummy_key) === false, "Should reject oversized message");
+    assert(native.verify_rs256(dummy_sig, large_str, dummy_key) === false, "Should reject oversized signature");
+    assert(native.verify_rs256(dummy_sig, dummy_sig, large_str) === false, "Should reject oversized key");
+
+    // verify_es256(msg, sig, key)
+    assert(native.verify_es256(large_str, dummy_sig, dummy_key) === false, "Should reject oversized message (EC)");
+});

@@ -15,6 +15,8 @@
 
 static psa_status_t _psa_init_status = PSA_ERROR_BAD_STATE;
 
+#define MAX_INPUT_SIZE 16384 // 16 KB
+
 static int ecdsa_raw_to_der_robust(const unsigned char *raw, size_t raw_len, 
                                  unsigned char *buf, size_t buf_len,
                                  unsigned char **out_der_ptr, size_t *out_der_len) {
@@ -75,6 +77,10 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	size_t sig_len = ucv_string_length(v_sig);
 	const char *key_pem = ucv_string_get(v_key);
 	size_t key_len = ucv_string_length(v_key);
+
+	if (msg_len > MAX_INPUT_SIZE || sig_len > MAX_INPUT_SIZE || key_len > MAX_INPUT_SIZE) {
+		return ucv_boolean_new(false);
+	}
 
 	mbedtls_pk_context pk;
 	mbedtls_pk_init(&pk);

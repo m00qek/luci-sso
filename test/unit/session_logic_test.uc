@@ -44,6 +44,8 @@ test('Session: Logic - Enforce clock tolerance boundaries', () => {
 	factory.with_env({}, (io) => {
 		let handshake = {
 			state: "s",
+			nonce: "n",
+			code_verifier: "verifier-verifier-verifier-verifier-verifier-verifier",
 			iat: now - 500,
 			exp: now - 100
 		};

@@ -83,6 +83,10 @@ export function load(io) {
 		});
 	});
 
+	if (length(user_mappings) == 0) {
+		die("CONFIG_ERROR: No valid user mappings found in /etc/config/luci-sso");
+	}
+
 	return {
 		issuer_url: oidc_cfg.issuer_url,
 		internal_issuer_url: oidc_cfg.internal_issuer_url || oidc_cfg.issuer_url,

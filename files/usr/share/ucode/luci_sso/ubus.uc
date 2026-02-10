@@ -34,9 +34,9 @@ export function create_session(io, username, password, oidc_email, access_token,
 	}
 
 	let sid = login_res.ubus_rpc_session;
-
-	// 2. Generate a random CSRF token (required by LuCI for write actions)
-	let csrf_token = crypto.b64url_encode(crypto.random(16));
+	
+	// B3: Generate a 256-bit random CSRF token (required by LuCI for write actions)
+	let csrf_token = crypto.b64url_encode(crypto.random(32));
 
 	// 3. Authorize and tag the session
 	io.ubus_call("session", "set", {

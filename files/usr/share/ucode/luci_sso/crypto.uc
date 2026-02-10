@@ -15,9 +15,10 @@ export const safe_json = encoding.safe_json;
 
 /**
  * Constant-time string comparison to prevent timing attacks.
- * NOTE: This implementation leaks string length via early return.
+ * 
+ * ⚠️ SECURITY WARNING: This implementation leaks string LENGTH via early return.
  * It MUST ONLY be used for comparing fixed-length cryptographic values
- * (e.g. hashes, nonces) where the length is not a secret.
+ * where the length is PUBLIC INFORMATION (e.g., hashes, nonces).
  */
 export function constant_time_eq(a, b) {
 	if (type(a) != "string" || type(b) != "string") return false;
@@ -178,16 +179,19 @@ export function verify_jwt(token, pubkey, options) {
 	let clock_tolerance = options.clock_tolerance;
 	let now = options.now;
 
-	if (type(payload.exp) == "int" && payload.exp < (now - clock_tolerance)) {
-		return { ok: false, error: "TOKEN_EXPIRED" };
+	if (payload.exp != null) {
+		if (type(payload.exp) != "int") return { ok: false, error: "INVALID_EXP_CLAIM" };
+		if (payload.exp < (now - clock_tolerance)) return { ok: false, error: "TOKEN_EXPIRED" };
 	}
 	
-	if (type(payload.nbf) == "int" && payload.nbf > (now + clock_tolerance)) {
-		return { ok: false, error: "TOKEN_NOT_YET_VALID" };
+	if (payload.nbf != null) {
+		if (type(payload.nbf) != "int") return { ok: false, error: "INVALID_NBF_CLAIM" };
+		if (payload.nbf > (now + clock_tolerance)) return { ok: false, error: "TOKEN_NOT_YET_VALID" };
 	}
 
-	if (type(payload.iat) == "int" && payload.iat > (now + clock_tolerance)) {
-		return { ok: false, error: "TOKEN_ISSUED_IN_FUTURE" };
+	if (payload.iat != null) {
+		if (type(payload.iat) != "int") return { ok: false, error: "INVALID_IAT_CLAIM" };
+		if (payload.iat > (now + clock_tolerance)) return { ok: false, error: "TOKEN_ISSUED_IN_FUTURE" };
 	}
 
 	if (options.iss && payload.iss !== options.iss) {

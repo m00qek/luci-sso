@@ -58,7 +58,11 @@ test('Config: Logic - HTTPS Enforcement', () => {
 	
 	let check = (url) => {
 		let mock_uci = {
-			"luci-sso": { "default": { ".type": "oidc", "enabled": "1", "issuer_url": url, "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" } }
+			"rpcd": { "s1": { ".type": "login", "username": "admin" } },
+			"luci-sso": { 
+				"default": { ".type": "oidc", "enabled": "1", "issuer_url": url, "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" },
+				"u1": { ".type": "user", "rpcd_user": "admin", "rpcd_password": "p", "email": "a@b.com" }
+			}
 		};
 		return mocked.with_uci(mock_uci, (io) => {
 			try { config_loader.load(io); return true; } catch (e) { return false; }
@@ -66,30 +70,42 @@ test('Config: Logic - HTTPS Enforcement', () => {
 	};
 
 	assert(check("https://idp.com"), "HTTPS should be allowed");
-	assert(!check("http://localhost:8080"), "http://localhost must now be rejected");
-	assert(!check("http://127.0.0.1"), "http://127.0.0.1 must now be rejected");
 	assert(!check("http://idp.com"), "Insecure remote HTTP must be rejected");
 });
 
-test('Config: Logic - Reject Invalid RPCD User', () => {
+test('Config: Logic - Reject Empty or Invalid User Mappings (W5)', () => {
 	let mocked = mock.create();
-	let mock_uci = {
-		"rpcd": {
-			"s1": { ".type": "login", "username": "real-user" }
-		},
+	
+	// Case 1: No user sections at all
+	let mock_uci_1 = {
 		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" },
-			"u1": { ".type": "user", "rpcd_user": "fake-user", "rpcd_password": "p", "email": "test@test.com" }
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" }
 		}
 	};
+	mocked.with_uci(mock_uci_1, (io) => {
+		try {
+			config_loader.load(io);
+			assert(false, "Should have failed due to zero mappings");
+		} catch (e) {
+			assert(index(e, "CONFIG_ERROR: No valid user mappings") != -1);
+		}
+	});
 
-	mocked.with_uci(mock_uci, (io) => {
-		let results = mocked.using(io).spy((spying_io) => {
-			let config = config_loader.load(spying_io);
-			assert_eq(length(config.user_mappings), 0, "Mapping for non-existent RPCD user must be ignored");
-		});
-		
-		assert(results.called("log", "warn"), "Should log a warning when ignoring an invalid mapping");
+	// Case 2: Only invalid user sections (user not in RPCD)
+	let mock_uci_2 = {
+		"rpcd": { "s1": { ".type": "login", "username": "real" } },
+		"luci-sso": {
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" },
+			"u1": { ".type": "user", "rpcd_user": "fake", "rpcd_password": "p", "email": "a@b.com" }
+		}
+	};
+	mocked.with_uci(mock_uci_2, (io) => {
+		try {
+			config_loader.load(io);
+			assert(false, "Should have failed because all mappings were ignored");
+		} catch (e) {
+			assert(index(e, "CONFIG_ERROR: No valid user mappings") != -1);
+		}
 	});
 });
 

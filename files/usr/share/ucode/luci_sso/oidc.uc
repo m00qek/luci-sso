@@ -192,10 +192,10 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 	}
 
 	// B1 & W2: Enforce mandatory exp and iat claims (OIDC Core 1.0 §2)
-	if (type(payload.exp) != "int") {
+	if (payload.exp == null) {
 		return { ok: false, error: "MISSING_EXP_CLAIM" };
 	}
-	if (type(payload.iat) != "int") {
+	if (payload.iat == null) {
 		return { ok: false, error: "MISSING_IAT_CLAIM" };
 	}
 

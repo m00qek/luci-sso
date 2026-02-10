@@ -30,6 +30,7 @@ The project strictly follows the pattern of keeping business logic (OIDC, Sessio
 ### Minimal C Surface
 C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfssl`). 
 *   **Why:** Reduces the security audit surface and simplifies cross-compilation. Logic stays in memory-safe ucode.
+*   **Hardening:** To prevent buffer overflow and resource exhaustion attacks, the native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
 
 ---
 
@@ -88,7 +89,7 @@ Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not
 ### Logic & Session Injection
 Upon a successful OIDC handshake, the service:
 1.  Performs a standard `ubus session login` using a "template" system user (e.g., `root`).
-2.  Generates a random **CSRF Token**.
+2.  Generates a random **256-bit CSRF Token**.
 3.  Injects the OIDC user's identity and the CSRF token into the session via `ubus session set`.
 4.  Redirects the user to the LuCI dashboard.
 

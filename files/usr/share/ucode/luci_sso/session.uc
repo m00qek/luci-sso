@@ -210,6 +210,20 @@ export function verify_state(io, handle, clock_tolerance) {
 	}
 	let data = res.data;
 
+	// B2: Validate mandatory handshake fields on load
+	if (!data.code_verifier || type(data.code_verifier) != "string" || length(data.code_verifier) < 43) {
+		io.log("error", `Handshake state missing or invalid PKCE verifier [session_id: ${session_id}]`);
+		return { ok: false, error: "STATE_CORRUPTED" };
+	}
+	if (!data.state || type(data.state) != "string") {
+		io.log("error", `Handshake state missing state parameter [session_id: ${session_id}]`);
+		return { ok: false, error: "STATE_CORRUPTED" };
+	}
+	if (!data.nonce || type(data.nonce) != "string") {
+		io.log("error", `Handshake state missing nonce [session_id: ${session_id}]`);
+		return { ok: false, error: "STATE_CORRUPTED" };
+	}
+
 	let now = io.time();
 
 	if (data.exp && data.exp < (now - clock_tolerance)) {

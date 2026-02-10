@@ -13,6 +13,8 @@
 #include <wolfssl/wolfcrypt/asn.h>
 #include <wolfssl/wolfcrypt/error-crypt.h>
 
+#define MAX_INPUT_SIZE 16384 // 16 KB
+
 static WC_RNG _global_rng;
 static int _rng_initialized = 0;
 
@@ -89,6 +91,10 @@ static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	const unsigned char *key_pem = (const unsigned char *)ucv_string_get(v_key);
 	size_t key_len = ucv_string_length(v_key);
 
+	if (msg_len > MAX_INPUT_SIZE || sig_len > MAX_INPUT_SIZE || key_len > MAX_INPUT_SIZE) {
+		return ucv_boolean_new(false);
+	}
+
 	// Hash the message
 	unsigned char hash[WC_SHA256_DIGEST_SIZE];
 	if (wc_Sha256Hash(msg, msg_len, hash) != 0) return ucv_boolean_new(false);
@@ -140,6 +146,10 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 	size_t raw_sig_len = ucv_string_length(v_sig);
 	const unsigned char *key_pem = (const unsigned char *)ucv_string_get(v_key);
 	size_t key_len = ucv_string_length(v_key);
+
+	if (msg_len > MAX_INPUT_SIZE || sig_len > MAX_INPUT_SIZE || key_len > MAX_INPUT_SIZE) {
+		return ucv_boolean_new(false);
+	}
 
 	if (raw_sig_len != 64) return ucv_boolean_new(false);
 
