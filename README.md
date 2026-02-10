@@ -121,8 +121,11 @@ config user
 ```
 
 ### 3. Apply Changes
+Configuration changes take effect immediately for new login attempts. No service restart is required.
+
+If you edited the file using `uci set` commands, remember to commit:
 ```bash
-/etc/init.d/luci-sso restart
+uci commit luci-sso
 ```
 
 ---
