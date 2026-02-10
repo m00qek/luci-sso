@@ -137,7 +137,8 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 					router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
 				});
 
-			assert(data.called("write_file", cache_path), "Should have updated the cache file");
+			assert(data.called("rename"), "Should have used atomic rename for cache update");
+			assert_eq(io_stale.read_file(cache_path), sprintf("%J", { keys: [ f.ANCHOR_JWK ], cached_at: 1516239022 }), "Cache file should be updated with new data");
 		});
 	});
 });

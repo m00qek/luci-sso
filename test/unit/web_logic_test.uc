@@ -55,3 +55,15 @@ test('Web: Security - Prevent XSS in Redirect Location', () => {
 		assert(index(body, 'alert(&quot;XSS&quot;)') >= 0 || index(body, 'alert(&#x27;XSS&#x27;)') >= 0, "Location MUST be HTML escaped in body");
 	});
 });
+
+test('Web: Security - Emission of hardened security headers', () => {
+	let res = { status: 200, body: "OK" };
+	mock.create().spy((io) => {
+		web.render(io, res);
+		let out = io.__state__.stdout_buf;
+		
+		assert(index(out, "Content-Security-Policy:") >= 0, "MISSING CSP HEADER");
+		assert(index(out, "X-Content-Type-Options: nosniff") >= 0, "MISSING nosniff HEADER");
+		assert(index(out, "X-Frame-Options: DENY") >= 0, "MISSING Frame-Options HEADER");
+	});
+});

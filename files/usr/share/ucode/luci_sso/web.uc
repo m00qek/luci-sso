@@ -143,13 +143,18 @@ export function render(io, res) {
 	let headers = res.headers || {};
 	let body = res.body || "";
 
+	// Defense-in-Depth: Strict Content Security Policy
+	headers["Content-Security-Policy"] = "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; frame-ancestors 'none';";
+	headers["X-Content-Type-Options"] = "nosniff";
+	headers["X-Frame-Options"] = "DENY";
+
 	if (res.status == 302) {
 		headers["Status"] = "302 Found";
 		headers["Content-Type"] = "text/html";
 		
 		let loc = headers["Location"] || "";
 		let escaped_loc = html_escape(loc);
-		body = '<html><head><script>window.location.href="' + escaped_loc + '";</script></head>';
+		body = '<html><head><meta http-equiv="refresh" content="0;url=' + escaped_loc + '"></head>';
 		body += '<body><p>Redirecting to <a href="' + escaped_loc + '">' + escaped_loc + '</a>...</p></body></html>\n';
 	} else if (res.status == 401) {
 		headers["Status"] = "401 Unauthorized";

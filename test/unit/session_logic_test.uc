@@ -162,3 +162,17 @@ test('Session: Logic - Secret Key Lock Collision Fallback', () => {
 		assert_eq(length(res.data), 32, "Should fallback to temporary random key on collision failure");
 	});
 });
+
+test('Session: Logic - Explicit state consumption (Cleanup)', () => {
+	let factory = mock.create();
+	factory.with_env({}, (io) => {
+		let state_res = session.create_state(io);
+		let handle = state_res.data.token;
+		let path = `/var/run/luci-sso/handshake_${handle}.json`;
+		
+		assert(io.read_file(path), "Handshake file should exist");
+		
+		session.consume_state(io, handle);
+		assert(!io.read_file(path), "Handshake file should have been deleted");
+	});
+});

@@ -151,6 +151,23 @@ export function create_state(io) {
 };
 
 /**
+ * Explicitly consumes (deletes) a handshake state.
+ * Used for cleanup on terminal auth failures.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} handle - Opaque handshake handle
+ */
+export function consume_state(io, handle) {
+	if (!handle || type(handle) != "string") return;
+	if (!match(handle, /^[A-Za-z0-9_-]+$/)) return;
+
+	let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
+	try {
+		io.remove(path);
+	} catch (e) {}
+};
+
+/**
  * Verifies and consumes a handshake state handle.
  * 
  * @param {object} io - I/O provider

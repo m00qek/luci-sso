@@ -56,14 +56,22 @@ function _read_cache(io, path, ttl) {
 }
 
 /**
- * Writes data to cache with a timestamp.
+ * Writes data to cache with a timestamp (Atomic).
  * @private
  */
 function _write_cache(io, path, data) {
 	try {
 		let cache_data = { ...data, cached_at: io.time() };
-		io.write_file(path, sprintf("%J", cache_data));
-	} catch (e) {}
+		let tmp_path = `${path}.${crypto.b64url_encode(crypto.random(8))}.tmp`;
+		
+		if (io.write_file(tmp_path, sprintf("%J", cache_data))) {
+			if (!io.rename(tmp_path, path)) {
+				io.remove(tmp_path);
+			}
+		}
+	} catch (e) {
+		io.log("error", `Cache write failure: ${e}`);
+	}
 }
 
 /**

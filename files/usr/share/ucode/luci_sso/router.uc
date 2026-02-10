@@ -223,7 +223,10 @@ function handle_callback(io, config, request, policy) {
 	let session_id = handshake.id;
 
 	let oauth_res = complete_oauth_flow(io, config, code, handshake, policy);
-	if (!oauth_res.ok) return error_response(oauth_res.error, oauth_res.status);
+	if (!oauth_res.ok) {
+		session.consume_state(io, handshake.token);
+		return error_response(oauth_res.error, oauth_res.status);
+	}
 	let user_data = oauth_res.data;
 	let access_token = oauth_res.access_token; // From complete_oauth_flow
 	let refresh_token = oauth_res.refresh_token;
@@ -231,12 +234,16 @@ function handle_callback(io, config, request, policy) {
 
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
+		session.consume_state(io, handshake.token);
 		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] not found in mapping whitelist [session_id: ${session_id}]`);
 		return error_response("USER_NOT_AUTHORIZED", 403);
 	}
 
 	let final_res = create_session_response(io, mapping, user_data.email, access_token, refresh_token, id_token);
-	if (!final_res.ok) return error_response(final_res.error, final_res.status);
+	if (!final_res.ok) {
+		session.consume_state(io, handshake.token);
+		return error_response(final_res.error, final_res.status);
+	}
 
 	io.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to rpcd_user=${mapping.rpcd_user})`);
 
