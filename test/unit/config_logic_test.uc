@@ -40,7 +40,7 @@ test('Config: Logic - Normalization (Email list vs string)', () => {
 	let mock_uci = {
 		"rpcd": { "s1": { ".type": "login", "username": "u1" }, "s2": { ".type": "login", "username": "u2" } },
 		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300" },
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s" },
 			"m1": { ".type": "user", "rpcd_user": "u1", "rpcd_password": "p", "email": "single@test.com" },
 			"m2": { ".type": "user", "rpcd_user": "u2", "rpcd_password": "p", "email": ["a@b.com", "c@d.com"] }
 		}
@@ -58,7 +58,7 @@ test('Config: Logic - HTTPS Enforcement', () => {
 	
 	let check = (url) => {
 		let mock_uci = {
-			"luci-sso": { "default": { ".type": "oidc", "enabled": "1", "issuer_url": url, "clock_tolerance": "300" } }
+			"luci-sso": { "default": { ".type": "oidc", "enabled": "1", "issuer_url": url, "clock_tolerance": "300", "client_id": "c", "client_secret": "s" } }
 		};
 		return mocked.with_uci(mock_uci, (io) => {
 			try { config_loader.load(io); return true; } catch (e) { return false; }
@@ -78,7 +78,7 @@ test('Config: Logic - Reject Invalid RPCD User', () => {
 			"s1": { ".type": "login", "username": "real-user" }
 		},
 		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300" },
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s" },
 			"u1": { ".type": "user", "rpcd_user": "fake-user", "rpcd_password": "p", "email": "test@test.com" }
 		}
 	};
@@ -116,7 +116,7 @@ test('Config: Logic - Reject Missing Issuer URL', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "clock_tolerance": "300" }
+			"default": { ".type": "oidc", "enabled": "1", "clock_tolerance": "300", "client_id": "c", "client_secret": "s" }
 		}
 	};
 	mocked.with_uci(mock_uci, (io) => {
@@ -128,10 +128,34 @@ test('Config: Logic - Reject Missing Clock Tolerance', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com" }
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "client_id": "c", "client_secret": "s" }
 		}
 	};
 	mocked.with_uci(mock_uci, (io) => {
+		assert_throws(() => config_loader.load(io));
+	});
+});
+
+test('Config: Logic - Reject Missing Mandatory OIDC Fields', () => {
+	let mocked = mock.create();
+	
+	// 1. Missing client_id
+	let mock_uci_1 = {
+		"luci-sso": {
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_secret": "s" }
+		}
+	};
+	mocked.with_uci(mock_uci_1, (io) => {
+		assert_throws(() => config_loader.load(io));
+	});
+
+	// 2. Missing client_secret
+	let mock_uci_2 = {
+		"luci-sso": {
+			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c" }
+		}
+	};
+	mocked.with_uci(mock_uci_2, (io) => {
 		assert_throws(() => config_loader.load(io));
 	});
 });

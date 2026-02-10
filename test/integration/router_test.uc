@@ -28,11 +28,12 @@ const MOCK_DISC_DOC = {
 	jwks_uri: "https://idp.com/jwks"
 };
 
-function mock_request(path, query, cookies) {
+function mock_request(path, query, cookies, env) {
 	return {
 		path: path || "/",
 		query: query || {},
-		cookies: cookies || {}
+		cookies: cookies || {},
+		env: env || {}
 	};
 }
 
@@ -185,7 +186,7 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 		// We manually implement the safe_id logic here to avoid module resolution issues in the test script
 		let hash_bin = crypto.sha256(access_token);
 		let token_id = "";
-		for (let i = 0; i < 4; i++) token_id += sprintf("%02x", ord(hash_bin, i));
+		for (let i = 0; i < 8; i++) token_id += sprintf("%02x", ord(hash_bin, i));
 		
 		factory.using(io)
 			.with_files({
@@ -292,12 +293,46 @@ test('Router: Security - Access token is consumed EVEN IF verification fails (Fa
 	});
 });
 
-test('Router: Logout - Session destruction', () => {
-	let factory = mock.create().with_ubus({ "session:destroy": {} });
+test('Router: Logout - OIDC RP-Initiated Logout', () => {
+	let DISC_WITH_LOGOUT = { 
+		...MOCK_DISC_DOC, 
+		end_session_endpoint: "https://idp.com/logout" 
+	};
+	let factory = mock.create()
+		.with_ubus({ 
+			"session:get": (args) => ({ values: { oidc_id_token: "mock-id-token" } }),
+			"session:destroy": {} 
+		})
+		.with_responses({
+			"https://idp.com/.well-known/openid-configuration": { status: 200, body: DISC_WITH_LOGOUT }
+		});
+
+	let data = factory.spy((io) => {
+		let req = mock_request("/logout", {}, { "sysauth": "session-12345" }, { HTTP_HOST: "router.lan" });
+		let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
+		
+		assert_eq(res.status, 302);
+		assert(index(res.headers["Location"], "https://idp.com/logout") == 0, "Should redirect to IdP logout");
+		assert(index(res.headers["Location"], "id_token_hint=mock-id-token") != -1, "Should include id_token_hint");
+		assert(index(res.headers["Location"], "post_logout_redirect_uri=https%3A%2F%2Frouter.lan%2F") != -1, "Should include post_logout_redirect_uri");
+	});
+
+	assert(data.called("ubus", "session", "get"), "Should have retrieved session for id_token_hint");
+	assert(data.called("ubus", "session", "destroy"), "Should have destroyed local session");
+});
+
+test('Router: Logout - Fallback to local logout', () => {
+	let factory = mock.create()
+		.with_ubus({ "session:destroy": {} })
+		.with_responses({
+			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC }
+		});
+
 	let data = factory.spy((io) => {
 		let req = mock_request("/logout", {}, { "sysauth": "session-12345" });
 		let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
 		assert_eq(res.status, 302);
+		assert_eq(res.headers["Location"], "/");
 	});
 	assert(data.called("ubus", "session", "destroy"));
 });

@@ -696,6 +696,20 @@ if (type(clock_tolerance) != "int") {
 }
 ```
 
+### 6. URL Encoding
+**Status: MANDATORY FLAGS**
+When using `lucihttp.urlencode()`, you MUST pass `1` as the second argument if the string contains characters like `/` or `:` (e.g., URLs). Failing to do so MUST be avoided as it results in unencoded characters which can break OIDC redirects.
+
+**✅ CORRECT:**
+```javascript
+let enc = lucihttp.urlencode(url, 1);
+```
+
+**❌ INCORRECT:**
+```javascript
+let enc = lucihttp.urlencode(url);
+```
+
 ---
 
 ## Module Organization

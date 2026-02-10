@@ -76,6 +76,17 @@ test('Crypto: Plumbing - PKCE Primitives', () => {
     assert(pair.verifier && pair.challenge);
 });
 
+test('Crypto: Plumbing - Correlation ID Stability (safe_id)', () => {
+    let token = "sensitive-token-data-1234567890";
+    let id = crypto.safe_id(token);
+    assert_eq(length(id), 16, "Correlation ID MUST be 16 characters (64 bits)");
+    assert(match(id, /^[0-9a-f]+$/), "Correlation ID MUST be hex encoded");
+    
+    assert_eq(id, crypto.safe_id(token), "Correlation ID MUST be deterministic");
+    assert_eq(crypto.safe_id(null), "[INVALID]");
+    assert_eq(crypto.safe_id("short"), "[INVALID]");
+});
+
 // =============================================================================
 // Tier 1: Torture Tests (Plumbing Stability)
 // =============================================================================

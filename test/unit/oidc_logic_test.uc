@@ -359,7 +359,252 @@ test('OIDC: Discovery - Immutable Cache (No Pollution)', () => {
 		assert(res1.ok);
 		res1.data.token_endpoint = "http://EVIL";
 		
-		let res2 = oidc.discover(io, issuer);
-		assert_eq(res2.data.token_endpoint, issuer + "/token", "Cache must not be polluted");
-	});
-});
+				let res2 = oidc.discover(io, issuer);
+		
+				assert_eq(res2.data.token_endpoint, issuer + "/token", "Cache must not be polluted");
+		
+			});
+		
+		});
+		
+		
+		
+		test('OIDC: Discovery - Handle insecure end_session_endpoint', () => {
+		
+		
+		
+			let factory = mock.create();
+		
+		
+		
+			let disc = { 
+		
+		
+		
+				issuer: "https://idp.com", 
+		
+		
+		
+				authorization_endpoint: "https://idp.com/auth",
+		
+		
+		
+				token_endpoint: "https://idp.com/token",
+		
+		
+		
+				jwks_uri: "https://idp.com/jwks",
+		
+		
+		
+				end_session_endpoint: "http://insecure.com/logout"
+		
+		
+		
+			};
+		
+		
+		
+			
+		
+		
+		
+			factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { status: 200, body: disc } }, (io) => {
+		
+		
+		
+				let res = oidc.discover(io, "https://idp.com");
+		
+		
+		
+				assert(res.ok);
+		
+		
+		
+				assert(!res.data.end_session_endpoint, "Insecure end_session_endpoint MUST be removed");
+		
+		
+		
+			});
+		
+		
+		
+		});
+		
+		
+		
+		
+		
+		
+		
+		test('OIDC: Encoding - Parameter Torture Test', () => {
+		
+		
+		
+			let factory = mock.create();
+		
+		
+		
+			let complex_config = {
+		
+		
+		
+				...f.MOCK_CONFIG,
+		
+		
+		
+				client_id: "app & user",
+		
+		
+		
+				redirect_uri: "https://router.lan/callback?param=1&other=2"
+		
+		
+		
+			};
+		
+		
+		
+			let params = {
+		
+		
+		
+				state: "state with spaces & symbols #1",
+		
+		
+		
+				nonce: "nonce+plus",
+		
+		
+		
+				code_challenge: "challenge/slash"
+		
+		
+		
+			};
+		
+		
+		
+		
+		
+		
+		
+			// 1. Verify Authorization URL Encoding
+		
+		
+		
+			let url = oidc.get_auth_url(null, complex_config, f.MOCK_DISCOVERY, params);
+		
+		
+		
+			
+		
+		
+		
+			assert(index(url, "client_id=app%20%26%20user") != -1, "client_id must be encoded");
+		
+		
+		
+			assert(index(url, "redirect_uri=https%3A%2F%2Frouter.lan%2Fcallback%3Fparam%3D1%26other%3D2") != -1, "redirect_uri must be fully encoded");
+		
+		
+		
+			assert(index(url, "state=state%20with%20spaces%20%26%20symbols%20%231") != -1, "state must be encoded");
+		
+		
+		
+		
+		
+		
+		
+			// 2. Verify Token Exchange Body Encoding
+		
+		
+		
+			let data = factory.spy((io) => {
+		
+		
+		
+				factory.using(io).with_responses({
+		
+		
+		
+					[f.MOCK_DISCOVERY.token_endpoint]: { status: 200, body: {} }
+		
+		
+		
+				}, (io_http) => {
+		
+		
+		
+					oidc.exchange_code(io_http, complex_config, f.MOCK_DISCOVERY, "code & space", "verifier/slash-that-is-at-least-43-chars-long-!!!", "s1");
+		
+		
+		
+				});
+		
+		
+		
+			});
+		
+		
+		
+		
+		
+		
+		
+			let post_call = null;
+		
+		
+		
+			for (let entry in data.all()) {
+		
+		
+		
+				if (entry.type == "http_post") {
+		
+		
+		
+					post_call = entry;
+		
+		
+		
+					break;
+		
+		
+		
+				}
+		
+		
+		
+			}
+		
+		
+		
+		
+		
+		
+		
+			assert(post_call, "Should have made an HTTP POST call");
+		
+		
+		
+			let body = post_call.args[1].body;
+		
+		
+		
+			assert(index(body, "code=code%20%26%20space") != -1, "code in body must be encoded");
+		
+		
+		
+			assert(index(body, "code_verifier=verifier%2Fslash-that-is-at-least-43-chars-long-!!!") != -1, "verifier in body must be encoded");
+		
+		
+		
+		});
+		
+		
+		
+		
+		
+		

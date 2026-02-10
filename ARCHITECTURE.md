@@ -82,7 +82,19 @@ By creating a valid UBUS session and setting the `sysauth` cookies, modern LuCI 
 
 ---
 
-## 7. Testing Tiers
+## 7. Session Termination (Logout)
+
+The system implements full session synchronization during logout to prevent "Local Logout" confusion.
+
+### RP-Initiated Logout
+*   **Enforcement:** When the user accesses `/logout`, the system MUST perform OIDC Discovery to locate the IdP's `end_session_endpoint`.
+*   **Protocol:** If the endpoint is available, the User Agent MUST be redirected there with an `id_token_hint` (retrieved from the UBUS session) and a `post_logout_redirect_uri`.
+*   **Cleanup:** The local UBUS session MUST be destroyed and session cookies (`sysauth`, `sysauth_https`) MUST be cleared BEFORE the redirect occurs.
+*   **Reasoning:** This ensures that the user's session is terminated both on the router and at the Identity Provider, preventing subsequent silent logins.
+
+---
+
+## 8. Testing Tiers
 
 | Tier | Scope | Goal |
 | :--- | :--- | :--- |

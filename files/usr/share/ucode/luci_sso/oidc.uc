@@ -5,10 +5,10 @@ import * as crypto from 'luci_sso.crypto';
 // --- Internal Helpers ---
 
 /**
- * Decodes JSON safely.
+ * Decodes JSON safely and logs errors.
  * @private
  */
-function safe_json_parse(data) {
+function safe_json_parse(io, data) {
 	let raw = data;
 	if (type(data) == "object" && type(data.read) == "function") {
 		raw = data.read();
@@ -19,6 +19,9 @@ function safe_json_parse(data) {
 	try {
 		return json(raw);
 	} catch (e) {
+		if (io) {
+			io.log("warn", `JSON parse error: ${e} (Data: ${substr(raw, 0, 64)}...)`);
+		}
 		return null;
 	}
 }
@@ -41,7 +44,7 @@ function _read_cache(io, path, ttl) {
 		let content = io.read_file(path);
 		if (!content) return null;
 
-		let data = safe_json_parse(content);
+		let data = safe_json_parse(io, content);
 		if (!data || !data.cached_at) return null;
 
 		if ((io.time() - data.cached_at) > ttl) return null;
@@ -109,7 +112,7 @@ export function discover(io, issuer, options) {
 		return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
 	}
 
-	let config = safe_json_parse(response.body);
+	let config = safe_json_parse(io, response.body);
 	if (!config) {
 		io.log("error", `Invalid discovery document format from [id: ${issuer_id}]`);
 		return { ok: false, error: "INVALID_DISCOVERY_DOC" };
@@ -136,6 +139,12 @@ export function discover(io, issuer, options) {
 		if (!_is_https(config[field])) {
 			return { ok: false, error: "INSECURE_ENDPOINT", details: field };
 		}
+	}
+
+	// OPTIONAL: RP-Initiated Logout support (RFC 7522 / OIDC)
+	if (config.end_session_endpoint && !_is_https(config.end_session_endpoint)) {
+		io.log("warn", `Insecure end_session_endpoint ignored from [id: ${issuer_id}]`);
+		delete config.end_session_endpoint;
 	}
 
 	_write_cache(io, cache_path, config);
@@ -174,7 +183,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 		return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
 	}
 
-	let jwks = safe_json_parse(response.body);
+	let jwks = safe_json_parse(io, response.body);
 	if (!jwks || type(jwks.keys) != "array") {
 		io.log("error", `Invalid JWKS format from [id: ${uri_id}]`);
 		return { ok: false, error: "INVALID_JWKS_FORMAT" };
@@ -221,7 +230,7 @@ export function get_auth_url(io, config, discovery, params) {
 	let sep = (index(url, '?') == -1) ? '?' : '&';
 	for (let k, v in query) {
 		if (v == null) continue;
-		url += `${sep}${k}=${lucihttp.urlencode(v)}`;
+		url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
 		sep = '&';
 	}
 	return url;
@@ -231,7 +240,6 @@ export function get_auth_url(io, config, discovery, params) {
  * Exchanges authorization code for tokens.
  */
 export function exchange_code(io, config, discovery, code, verifier, session_id) {
-
 	if (!_is_https(discovery.token_endpoint)) return { ok: false, error: "INSECURE_TOKEN_ENDPOINT" };
 
 	// Audit logging for PKCE usage (Blocker #2)
@@ -256,7 +264,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 	let sep = "";
 	for (let k, v in body) {
 		if (v == null) continue;
-		encoded_body += `${sep}${k}=${lucihttp.urlencode(v)}`;
+		encoded_body += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
 		sep = "&";
 	}
 
@@ -271,7 +279,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 		return { ok: false, error: "NETWORK_ERROR" };
 	}
 	if (response.status != 200) {
-		let err_data = safe_json_parse(response.body);
+		let err_data = safe_json_parse(io, response.body);
 		if (err_data && err_data.error == "invalid_grant") {
 			io.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
 			return { ok: false, error: "OIDC_INVALID_GRANT" };
@@ -280,7 +288,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 		return { ok: false, error: "TOKEN_EXCHANGE_FAILED", details: response.status };
 	}
 
-	let tokens = safe_json_parse(response.body);
+	let tokens = safe_json_parse(io, response.body);
 	if (!tokens) {
 		io.log("error", `Invalid JSON response in token exchange${sid_ctx}`);
 		return { ok: false, error: "INVALID_JSON" };
@@ -294,6 +302,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 /**
  * Verifies ID Token and matches nonce.
  * 
+ * @param {object} [io] - Optional I/O provider for logging
  * @param {object} tokens - Token response {id_token, access_token}
  * @param {array} keys - JWK keyset
  * @param {object} config - UCI configuration
@@ -302,16 +311,38 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
  * @param {number} now - Current timestamp
  * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
  */
-export function verify_id_token(tokens, keys, config, handshake, discovery, now, policy) {
-	if (!tokens.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
+export function verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy) {
+	// Support both (io, tokens, ...) and (tokens, keys, ...) for backward compatibility
+	let provider = io;
+	let t = tokens;
+	let k = keys;
+	let c = config;
+	let h = handshake;
+	let d = discovery;
+	let n = now;
+	let p_arg = policy;
+
+	if (type(io) == "object" && !io.log) {
+		// First arg is tokens
+		provider = null;
+		t = io;
+		k = tokens;
+		c = keys;
+		h = config;
+		d = handshake;
+		n = discovery;
+		p_arg = now;
+	}
+
+	if (!t.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
 
 	// 1. Policy Enforcement (Second Dimension)
 	// Hardcoded safe defaults for production.
 	const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
-	let p = policy || DEFAULT_POLICY;
+	let p = p_arg || DEFAULT_POLICY;
 
-	let parts = split(tokens.id_token, ".");
-	let header = safe_json_parse(crypto.b64url_decode(parts[0]));
+	let parts = split(t.id_token, ".");
+	let header = safe_json_parse(provider, crypto.b64url_decode(parts[0]));
 	if (!header) return { ok: false, error: "INVALID_JWT_HEADER" };
 
 	// BLOCKER: Enforce algorithm whitelist from policy
@@ -326,7 +357,7 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 		return { ok: false, error: "UNSUPPORTED_ALGORITHM", details: header.alg };
 	}
 
-	let jwk_res = find_jwk(keys, header.kid);
+	let jwk_res = find_jwk(k, header.kid);
 	if (!jwk_res.ok) return jwk_res;
 
 	let pem_res = crypto.jwk_to_pem(jwk_res.data);
@@ -335,19 +366,19 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 	// MANDATORY Claims Check: 
 	// The issuer in the token MUST match the discovery document, 
 	// AND the discovery document MUST match our configured expectation.
-	if (discovery.issuer != config.issuer_url) {
-		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", details: `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}` };
+	if (d.issuer != c.issuer_url) {
+		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", details: `Expected ${c.issuer_url}, IdP claimed ${d.issuer}` };
 	}
 
 	let validation_opts = { 
 		alg: header.alg,
-		now: now,
-		clock_tolerance: config.clock_tolerance,
-		iss: config.issuer_url,
-		aud: config.client_id
+		now: n,
+		clock_tolerance: c.clock_tolerance,
+		iss: c.issuer_url,
+		aud: c.client_id
 	};
 
-	let result = crypto.verify_jwt(tokens.id_token, pem_res.data, validation_opts);
+	let result = crypto.verify_jwt(t.id_token, pem_res.data, validation_opts);
 	if (!result.ok) return result;
 
 	let payload = result.data;
@@ -358,30 +389,30 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 	}
 
 	// 3.1 Nonce Check (Blocker #3: Mandatory)
-	if (!handshake.nonce || !payload.nonce) {
+	if (!h.nonce || !payload.nonce) {
 		return { ok: false, error: "MISSING_NONCE" };
 	}
-	if (payload.nonce != handshake.nonce) {
+	if (payload.nonce != h.nonce) {
 		return { ok: false, error: "NONCE_MISMATCH" };
 	}
 
 	// 3.2 Authorized Party Check (Blocker #5 in 1770661209: Universal AZP)
 	// If the azp claim is present, it MUST match our client_id to prevent Confused Deputy attacks.
-	if (payload.azp && payload.azp !== config.client_id) {
+	if (payload.azp && payload.azp !== c.client_id) {
 		return { ok: false, error: "AZP_MISMATCH" };
 	}
 
 	// 3.3 Access Token Hash Check (Blocker #7 in 1770661270: Binding)
 	// Per OIDC Core 3.1.3.3: If at_hash is present, it MUST match the access_token.
 	// PARANOID MODE: We enforce that both MUST be present to ensure cryptographic binding.
-	if (!tokens.access_token) {
+	if (!t.access_token) {
 		return { ok: false, error: "MISSING_ACCESS_TOKEN" };
 	}
 	if (!payload.at_hash) {
 		return { ok: false, error: "MISSING_AT_HASH" };
 	}
 
-	let full_hash = crypto.sha256(tokens.access_token);
+	let full_hash = crypto.sha256(t.access_token);
 	if (!full_hash) return { ok: false, error: "CRYPTO_ERROR" };
 
 	// OIDC Core 1.0 Section 3.1.3.6: at_hash is the left-most half 

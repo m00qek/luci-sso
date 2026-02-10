@@ -61,13 +61,24 @@ function b64url_to_b64(str) {
 // --- JSON Helpers ---
 
 /**
- * Decodes JSON safely.
+ * Decodes JSON safely and optionally logs errors.
  * @private
  */
-function safe_json(str) {
+function safe_json(io, str) {
+	// Support both safe_json(str) and safe_json(io, str)
+	let raw = str;
+	let provider = io;
+	if (type(io) == "string") {
+		raw = io;
+		provider = null;
+	}
+
 	try {
-		return json(str);
+		return json(raw);
 	} catch (e) {
+		if (provider) {
+			provider.log("warn", `JSON parse error: ${e} (Data: ${substr(raw, 0, 64)}...)`);
+		}
 		return null;
 	}
 }
@@ -162,7 +173,7 @@ export function verify_jws(token, secret) {
 	// 1. Decode and Validate Header
 	let header_json = b64url_decode(parts[0]);
 	if (!header_json) return { ok: false, error: "INVALID_HEADER_ENCODING" };
-	let header = safe_json(header_json);
+	let header = safe_json(null, header_json);
 	if (!header || header.alg != "HS256") {
 		return { ok: false, error: "UNSUPPORTED_ALGORITHM", details: header ? header.alg : "missing" };
 	}
@@ -180,7 +191,7 @@ export function verify_jws(token, secret) {
 	// 3. Decode Payload
 	let payload_json = b64url_decode(parts[1]);
 	if (!payload_json) return { ok: false, error: "INVALID_PAYLOAD_ENCODING" };
-	let payload = safe_json(payload_json);
+	let payload = safe_json(null, payload_json);
 	if (!payload) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
 
 	return { ok: true, data: payload };
@@ -210,7 +221,7 @@ export function verify_jwt(token, pubkey, options) {
 	// 1. Decode and Validate Header
 	let header_json = b64url_decode(parts[0]);
 	if (!header_json) return { ok: false, error: "INVALID_HEADER_ENCODING" };
-	let header = safe_json(header_json);
+	let header = safe_json(null, header_json);
 	if (!header || !header.alg) return { ok: false, error: "INVALID_HEADER_JSON" };
 
 	// 2. Decode and Validate Payload Encoding (Fail Fast)
@@ -244,7 +255,7 @@ export function verify_jwt(token, pubkey, options) {
 	if (!valid) return { ok: false, error: "INVALID_SIGNATURE" };
 
 	// 5. Decode Payload JSON
-	let payload = safe_json(payload_json);
+	let payload = safe_json(null, payload_json);
 	if (!payload) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
 
 	// 6. Claims Validation
@@ -389,53 +400,48 @@ export function jwk_to_pem(jwk) {
 	}
 	
 		return { ok: false, error: "UNSUPPORTED_KTY" };
-	
-	};
-	
-	
-	
-	/**
-	
-	 * Converts a sensitive token or handle into a safe, redacted correlation ID.
-	
-	 * Uses the first 8 hex characters of the SHA256 hash.
-	
-	 * 
-	
-	 * @param {string} token - The sensitive token or handle.
-	
-	 * @returns {string} - The 8-character safe ID, or '[INVALID]'.
-	
-	 */
-	
-	export function safe_id(token) {
-	
-		if (!token || type(token) != "string" || length(token) < 8) {
-	
-			return "[INVALID]";
-	
-		}
-	
-		
-	
-		let hash_bin = native.sha256(token);
-	
-		if (!hash_bin) return "[ERROR]";
-	
-		
-	
-		let hex = "";
-	
-		for (let i = 0; i < 4; i++) {
-	
-			hex += sprintf("%02x", ord(hash_bin, i));
-	
-		}
-	
-		
-	
-		return hex;
-	
-	};
-	
-	
+};
+
+/**
+
+ * Converts a sensitive token or handle into a safe, redacted correlation ID.
+
+ * Uses the first 16 hex characters of the SHA256 hash.
+
+ * 
+
+ * @param {string} token - The sensitive token or handle.
+
+ * @returns {string} - The 16-character safe ID, or '[INVALID]'.
+
+ */
+
+export function safe_id(token) {
+
+	if (!token || type(token) != "string" || length(token) < 8) {
+
+		return "[INVALID]";
+
+	}
+
+
+
+	let hash_bin = native.sha256(token);
+
+	if (!hash_bin) return "[ERROR]";
+
+
+
+	let hex = "";
+
+	for (let i = 0; i < 8; i++) {
+
+		hex += sprintf("%02x", ord(hash_bin, i));
+
+	}
+
+
+
+	return hex;
+
+};

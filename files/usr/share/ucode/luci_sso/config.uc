@@ -40,6 +40,10 @@ export function load(io) {
 		die("CONFIG_ERROR: issuer_url must use HTTPS");
 	}
 
+	if (!oidc_cfg.client_id || !oidc_cfg.client_secret) {
+		die("CONFIG_ERROR: client_id and client_secret are mandatory");
+	}
+
 	if (oidc_cfg.clock_tolerance == null || oidc_cfg.clock_tolerance == "") {
 		die("CONFIG_ERROR: clock_tolerance option is mandatory");
 	}

@@ -13,9 +13,10 @@ import * as crypto from 'luci_sso.crypto';
  * @param {string} oidc_email - The real user's email for tagging
  * @param {string} access_token - OIDC access token to persist
  * @param {string} refresh_token - OIDC refresh token to persist
+ * @param {string} id_token - OIDC ID token to persist (for logout)
  * @returns {object} - Result Object {ok, data/error}
  */
-export function create_session(io, username, password, oidc_email, access_token, refresh_token) {
+export function create_session(io, username, password, oidc_email, access_token, refresh_token, id_token) {
 	if (type(io.ubus_call) != "function") {
 		die("CONTRACT_VIOLATION: ubus.create_session requires io.ubus_call");
 	}
@@ -45,6 +46,7 @@ export function create_session(io, username, password, oidc_email, access_token,
 			oidc_user: oidc_email,
 			oidc_access_token: access_token,
 			oidc_refresh_token: refresh_token,
+			oidc_id_token: id_token,
 			token: csrf_token 
 		}
 	});
@@ -52,6 +54,25 @@ export function create_session(io, username, password, oidc_email, access_token,
 	io.log("info", `Successful SSO login for [oidc_id: ${crypto.safe_id(oidc_email)}] mapped to system user ${username}`);
 
 	return { ok: true, data: sid };
+};
+
+/**
+ * Retrieves session data from UBUS.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} sid - UBUS session ID
+ * @returns {object} - Result Object {ok, data/error}
+ */
+export function get_session(io, sid) {
+	if (type(io.ubus_call) != "function") return { ok: false, error: "UBUS_UNAVAILABLE" };
+	if (!sid || type(sid) != "string") return { ok: false, error: "INVALID_SID" };
+
+	let res = io.ubus_call("session", "get", { ubus_rpc_session: sid });
+	if (!res || type(res.values) != "object") {
+		return { ok: false, error: "SESSION_NOT_FOUND" };
+	}
+
+	return { ok: true, data: res.values };
 };
 
 const TOKEN_REGISTRY_DIR = "/var/run/luci-sso/tokens";

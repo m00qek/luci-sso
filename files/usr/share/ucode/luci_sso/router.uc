@@ -2,6 +2,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
+import * as lucihttp from 'lucihttp';
 
 /**
  * Creates a response object.
@@ -125,7 +126,7 @@ function complete_oauth_flow(io, config, code, handshake, policy) {
 		return { ok: false, error: "JWKS_FETCH_FAILED", status: 500 };
 	}
 
-	let verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
+	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
 	
 	// Key Rotation / Stale Cache Recovery: (Warning #8 in 1770660561)
 	// We only retry if:
@@ -149,7 +150,7 @@ function complete_oauth_flow(io, config, code, handshake, policy) {
 			io.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
 			jwks_res = oidc.fetch_jwks(io, discovery.jwks_uri, { force: true });
 			if (jwks_res.ok) {
-				verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
+				verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery, io.time(), policy);
 			}
 		}
 	}
@@ -165,7 +166,8 @@ function complete_oauth_flow(io, config, code, handshake, policy) {
 		ok: true, 
 		data: verify_res.data, 
 		access_token: tokens.access_token,
-		refresh_token: tokens.refresh_token
+		refresh_token: tokens.refresh_token,
+		id_token: tokens.id_token
 	};
 }
 
@@ -187,8 +189,8 @@ function find_user_mapping(io, config, email) {
  * Creates the final application session and response.
  * @private
  */
-function create_session_response(io, mapping, oidc_email, access_token, refresh_token) {
-	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, oidc_email, access_token, refresh_token);
+function create_session_response(io, mapping, oidc_email, access_token, refresh_token, id_token) {
+	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, oidc_email, access_token, refresh_token, id_token);
 	if (!ubus_res.ok) {
 		return { ok: false, error: "UBUS_LOGIN_FAILED", status: 500 };
 	}
@@ -224,6 +226,7 @@ function handle_callback(io, config, request, policy) {
 	let user_data = oauth_res.data;
 	let access_token = oauth_res.access_token; // From complete_oauth_flow
 	let refresh_token = oauth_res.refresh_token;
+	let id_token = oauth_res.id_token;
 
 	let mapping = find_user_mapping(io, config, user_data.email);
 	if (!mapping) {
@@ -231,7 +234,7 @@ function handle_callback(io, config, request, policy) {
 		return error_response("USER_NOT_AUTHORIZED", 403);
 	}
 
-	let final_res = create_session_response(io, mapping, user_data.email, access_token, refresh_token);
+	let final_res = create_session_response(io, mapping, user_data.email, access_token, refresh_token, id_token);
 	if (!final_res.ok) return error_response(final_res.error, final_res.status);
 
 	io.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to rpcd_user=${mapping.rpcd_user})`);
@@ -243,16 +246,42 @@ function handle_callback(io, config, request, policy) {
  * Handles the logout request.
  * @private
  */
-function handle_logout(io, request) {
+function handle_logout(io, config, request) {
 	let cookies = request.cookies || {};
 	let sid = cookies.sysauth_https || cookies.sysauth;
+	let id_token_hint = null;
 
 	if (sid) {
+		let session_res = ubus.get_session(io, sid);
+		if (session_res.ok) {
+			id_token_hint = session_res.data.oidc_id_token;
+		}
 		ubus.destroy_session(io, sid);
 	}
 
+	let logout_url = "/";
+
+	// OIDC RP-Initiated Logout:
+	// If we have an IdP logout endpoint, redirect there to terminate the SSO session.
+	let disc_res = oidc.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
+	if (disc_res.ok && disc_res.data.end_session_endpoint) {
+		let end_session = disc_res.data.end_session_endpoint;
+		let sep = (index(end_session, '?') == -1) ? '?' : '&';
+		
+		logout_url = end_session;
+		if (id_token_hint) {
+			logout_url += `${sep}id_token_hint=${lucihttp.urlencode(id_token_hint, 1)}`;
+			sep = '&';
+		}
+		
+		// Optional: post_logout_redirect_uri.
+		// We use the root of the site.
+		let post_logout = "https://" + (request.env.HTTP_HOST || "localhost") + "/";
+		logout_url += `${sep}post_logout_redirect_uri=${lucihttp.urlencode(post_logout, 1)}`;
+	}
+
 	return response(302, {
-		"Location": "/",
+		"Location": logout_url,
 		"Set-Cookie": [
 			"sysauth_https=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
 			"sysauth=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
@@ -284,7 +313,7 @@ export function handle(io, config, request, policy) {
 	} else if (path == "/callback") {
 		return handle_callback(io, config, request, policy);
 	} else if (path == "/logout") {
-		return handle_logout(io, request);
+		return handle_logout(io, config, request);
 	}
 
 	return error_response("Not Found", 404);

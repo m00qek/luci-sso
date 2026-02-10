@@ -105,13 +105,16 @@ function _out(io, headers, body) {
  * Extracts and parses the request context from the CGI environment.
  * 
  * @param {object} io - I/O provider
- * @returns {object} - {path, query, cookies}
+ * @returns {object} - {path, query, cookies, env}
  */
 export function request(io) {
 	return {
 		path: safe_getenv(io, "PATH_INFO") || "/",
 		query: parse_params(safe_getenv(io, "QUERY_STRING")),
-		cookies: parse_cookies(safe_getenv(io, "HTTP_COOKIE"))
+		cookies: parse_cookies(safe_getenv(io, "HTTP_COOKIE")),
+		env: {
+			HTTP_HOST: safe_getenv(io, "HTTP_HOST")
+		}
 	};
 };
 
