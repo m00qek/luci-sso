@@ -102,7 +102,7 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	}
 
 	int ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, out_len, sig, sig_len);
-	memset(hash, 0, sizeof(hash)); // Defense-in-depth
+	mbedtls_platform_zeroize(hash, sizeof(hash)); // Defense-in-depth (PSA standard)
 	mbedtls_pk_free(&pk);
 
 	return ucv_boolean_new(ret == 0);
@@ -152,7 +152,7 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
 	}
 
 	int ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, out_len, der_sig, der_sig_len);
-	memset(hash, 0, sizeof(hash)); // Defense-in-depth
+	mbedtls_platform_zeroize(hash, sizeof(hash)); // Defense-in-depth (PSA standard)
 	mbedtls_pk_free(&pk);
 
 	return ucv_boolean_new(ret == 0);

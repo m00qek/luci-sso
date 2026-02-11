@@ -131,7 +131,7 @@ static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	}
 
 	int res = wc_RsaSSL_Verify(sig, sig_len, hash, WC_SHA256_DIGEST_SIZE, &key);
-	memset(hash, 0, sizeof(hash)); // Defense-in-depth
+	ForceZero(hash, sizeof(hash)); // Defense-in-depth
 	wc_FreeRsaKey(&key);
 
 	return ucv_boolean_new(res >= 0);
@@ -178,12 +178,12 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 	int verify_res = 0;
 	// raw_sig is R|S (64 bytes). WolfSSL wc_ecc_verify_hash expects this.
 	if (wc_ecc_verify_hash(raw_sig, raw_sig_len, hash, WC_SHA256_DIGEST_SIZE, &verify_res, &key) != 0) {
-		memset(hash, 0, sizeof(hash));
+		ForceZero(hash, sizeof(hash));
 		wc_ecc_free(&key);
 		return ucv_boolean_new(false);
 	}
 
-	memset(hash, 0, sizeof(hash)); // Defense-in-depth
+	ForceZero(hash, sizeof(hash)); // Defense-in-depth
 	wc_ecc_free(&key);
 	return ucv_boolean_new(verify_res == 1);
 }

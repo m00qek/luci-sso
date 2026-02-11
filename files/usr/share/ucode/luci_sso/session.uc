@@ -5,6 +5,7 @@ const SECRET_KEY_PATH = "/etc/luci-sso/secret.key";
 const SESSION_DURATION = 3600;
 const HANDSHAKE_DURATION = 300;
 const HANDSHAKE_DIR = "/var/run/luci-sso";
+const REAP_GRACE_PERIOD = 60;
 
 /**
  * Removes handshake files older than the duration.
@@ -23,7 +24,7 @@ export function reap_stale_handshakes(io, clock_tolerance) {
 			let path = `${HANDSHAKE_DIR}/${f}`;
 			let st = io.stat(path);
 			// Use a slightly larger grace period than duration + tolerance
-			if (st && st.mtime && (now - st.mtime) > (HANDSHAKE_DURATION + clock_tolerance + 60)) {
+			if (st && st.mtime && (now - st.mtime) > (HANDSHAKE_DURATION + clock_tolerance + REAP_GRACE_PERIOD)) {
 				try { io.remove(path); } catch (e) {}
 			}
 		}

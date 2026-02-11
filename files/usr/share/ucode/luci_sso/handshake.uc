@@ -74,7 +74,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	// Create a shallow copy to avoid mutating the cached object
 	let discovery_doc = { ...disc_res.data };
 
-	// Backchannel Override: The Router must talk to the IdP via the internal network
+	// Back-Channel Override: The Router must talk to the IdP via the internal network
 	if (config.internal_issuer_url != config.issuer_url) {
 		discovery_doc.token_endpoint = replace(discovery_doc.token_endpoint, config.issuer_url, config.internal_issuer_url);
 		discovery_doc.jwks_uri = replace(discovery_doc.jwks_uri, config.issuer_url, config.internal_issuer_url);
