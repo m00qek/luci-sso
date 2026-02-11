@@ -6,7 +6,7 @@
 >
 > While this codebase is passing 100+ unit/compliance tests, it is currently distributed as source. You must build the `.ipk` package for your specific router architecture using the included Dockerized toolchain.
 
----
+<img width="1119" height="588" alt="image" src="https://github.com/user-attachments/assets/cbe996a7-fc25-4f63-bd91-0d57dddcab75" />
 
 ## 📖 Overview
 
