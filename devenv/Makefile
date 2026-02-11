@@ -120,7 +120,7 @@ define VALIDATE_SUITE_RUNNING
 endef
 
 .unit-test:
-	$(VALIDATE_SUITE_RUNNING)
+	#	$(VALIDATE_SUITE_RUNNING)
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
