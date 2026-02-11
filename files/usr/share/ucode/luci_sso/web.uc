@@ -162,17 +162,17 @@ export function render(io, res) {
  * @private
  */
 const ERROR_MAP = {
-	"STATE_NOT_FOUND": "Your session has expired or is invalid. Please try logging in again.",
-	"STATE_CORRUPTED": "Authentication failed due to a system error. Please try again.",
-	"STATE_SAVE_FAILED": "Internal server error: Could not initialize authentication.",
-	"OIDC_DISCOVERY_FAILED": "Could not connect to the Identity Provider.",
-	"TOKEN_EXCHANGE_FAILED": "Failed to exchange authorization code for tokens.",
-	"OIDC_INVALID_GRANT": "The authorization code is expired or has already been used. Please try logging in again.",
-	"ID_TOKEN_VERIFICATION_FAILED": "The identity token provided by the IdP is invalid.",
-	"USER_NOT_AUTHORIZED": "Your account is not authorized to access this device.",
-	"AUTH_FAILED": "Authentication failed. Please try logging in again.",
-	"NETWORK_ERROR": "A network error occurred while communicating with the IdP.",
-	"INSECURE_ENDPOINT": "The IdP provided an insecure endpoint. Connection aborted for security."
+	"STATE_NOT_FOUND": "Your session has expired or is invalid. You MUST try logging in again.",
+	"STATE_CORRUPTED": "Authentication failed due to a system error. You MUST contact your administrator.",
+	"STATE_SAVE_FAILED": "Internal server error: Could not initialize authentication. You MUST contact your administrator.",
+	"OIDC_DISCOVERY_FAILED": "Could not connect to the Identity Provider. Contact your administrator.",
+	"TOKEN_EXCHANGE_FAILED": "Failed to exchange authorization code for tokens. Contact your administrator.",
+	"OIDC_INVALID_GRANT": "The authorization code is expired or has already been used. You MUST try logging in again.",
+	"ID_TOKEN_VERIFICATION_FAILED": "The identity token provided by the IdP is invalid. You MUST contact your administrator.",
+	"USER_NOT_AUTHORIZED": "Your account is not authorized to access this device. You MUST contact your administrator.",
+	"AUTH_FAILED": "Authentication failed. You MUST try logging in again.",
+	"NETWORK_ERROR": "A network error occurred while communicating with the IdP. Contact your administrator.",
+	"INSECURE_ENDPOINT": "The IdP provided an insecure endpoint. Connection aborted for security. You MUST contact your administrator."
 };
 
 /**
