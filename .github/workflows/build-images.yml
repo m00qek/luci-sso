@@ -4,13 +4,13 @@ on:
   push:
     branches: [main, master, ci]
     paths:
-      - 'devenv/**'
-      - 'Makefile'
-      - '.github/workflows/build-images.yml'
+      - "devenv/**"
+      - "Makefile"
+      - ".github/workflows/build-images.yml"
   workflow_dispatch:
     inputs:
       force_rebuild:
-        description: 'Force rebuild of all images'
+        description: "Force rebuild of all images"
         type: boolean
         default: false
 
@@ -42,55 +42,55 @@ jobs:
           NODE_V=$(make -s --no-print-directory -C devenv print-env VAR=NODE_VERSION | xargs)
           ALPINE_V=$(make -s --no-print-directory -C devenv print-env VAR=ALPINE_VERSION | xargs)
           ARCH="x86-64"
-          
+
           echo "pkg_depends=$DEPENDS" >> $GITHUB_OUTPUT
           echo "sdk_version=$VERSION" >> $GITHUB_OUTPUT
           echo "sdk_arch=$ARCH" >> $GITHUB_OUTPUT
           echo "node_version=$NODE_V" >> $GITHUB_OUTPUT
           echo "alpine_version=$ALPINE_V" >> $GITHUB_OUTPUT
-          
+
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "repo_owner=$OWNER" >> $GITHUB_OUTPUT
 
-  build-core:
-    name: Build Core Images
-    needs: metadata
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    strategy:
-      matrix:
-        service: [openwrt] # Temporarily removed 'sdk' to save resources
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and Push
-        uses: docker/build-push-action@v5
-        with:
-          context: ./devenv/services/${{ matrix.service }}
-          file: devenv/services/${{ matrix.service }}/Dockerfile
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:latest
-            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:${{ needs.metadata.outputs.sdk_arch }}-${{ needs.metadata.outputs.sdk_version }}
-          build-args: |
-            SDK_ARCH=${{ needs.metadata.outputs.sdk_arch }}
-            SDK_VERSION=${{ needs.metadata.outputs.sdk_version }}
-            PKG_DEPENDS=${{ needs.metadata.outputs.pkg_depends }}
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+  #  build-core:
+  #    name: Build Core Images
+  #    needs: metadata
+  #    runs-on: ubuntu-latest
+  #    permissions:
+  #      contents: read
+  #      packages: write
+  #    strategy:
+  #      matrix:
+  #        service: [openwrt] # Temporarily removed 'sdk' to save resources
+  #    steps:
+  #      - name: Checkout
+  #        uses: actions/checkout@v4
+  #
+  #      - name: Set up Docker Buildx
+  #        uses: docker/setup-buildx-action@v3
+  #
+  #      - name: Log in to the Container registry
+  #        uses: docker/login-action@v3
+  #        with:
+  #          registry: ${{ env.REGISTRY }}
+  #          username: ${{ github.actor }}
+  #          password: ${{ secrets.GITHUB_TOKEN }}
+  #
+  #      - name: Build and Push
+  #        uses: docker/build-push-action@v5
+  #        with:
+  #          context: ./devenv/services/${{ matrix.service }}
+  #          file: devenv/services/${{ matrix.service }}/Dockerfile
+  #          push: true
+  #          tags: |
+  #            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:latest
+  #            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:${{ needs.metadata.outputs.sdk_arch }}-${{ needs.metadata.outputs.sdk_version }}
+  #          build-args: |
+  #            SDK_ARCH=${{ needs.metadata.outputs.sdk_arch }}
+  #            SDK_VERSION=${{ needs.metadata.outputs.sdk_version }}
+  #            PKG_DEPENDS=${{ needs.metadata.outputs.pkg_depends }}
+  #          cache-from: type=gha,scope=${{ matrix.service }}
+  #          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   build-helpers:
     name: Build Helper Images
@@ -102,10 +102,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - service: idp
-            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
-          - service: browser
-            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+          #          - service: idp
+          #            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+          #          - service: browser
+          #            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
           - service: pki
             tag_suffix: alpine${{ needs.metadata.outputs.alpine_version }}
     steps:
