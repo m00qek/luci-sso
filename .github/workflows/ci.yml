@@ -29,47 +29,51 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      #      - name: Get Project Variables
-      #        id: vars
-      #        run: |
-      #          VERSION=$(make -s -C devenv print-env VAR=SDK_VERSION)
-      #          NODE_V=$(make -s -C devenv print-env VAR=NODE_VERSION)
-      #          ALPINE_V=$(make -s -C devenv print-env VAR=ALPINE_VERSION)
-      #          ARCH="x86-64"
-      #          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-      #
-      #          echo "sdk_version=$VERSION" >> $GITHUB_OUTPUT
-      #          echo "sdk_arch=$ARCH" >> $GITHUB_OUTPUT
-      #          echo "node_tag=node${NODE_V}-alpine${ALPINE_V}" >> $GITHUB_OUTPUT
-      #          echo "alpine_tag=alpine${ALPINE_V}" >> $GITHUB_OUTPUT
-      #          echo "repo_owner=$OWNER" >> $GITHUB_OUTPUT
-      #
-      #      - name: Log in to the Container registry
-      #        uses: docker/login-action@v3
-      #        with:
-      #          registry: ${{ env.REGISTRY }}
-      #          username: ${{ github.actor }}
-      #          password: ${{ secrets.GITHUB_TOKEN }}
-      #
-      #      - name: Warm Docker Cache (Pull Images)
-      #        run: |
-      #          IMAGE_BASE="${{ env.REGISTRY }}/${{ steps.vars.outputs.repo_owner }}/luci-sso"
-      #          SDK_TAG="${{ steps.vars.outputs.sdk_arch }}-${{ steps.vars.outputs.sdk_version }}"
-      #          NODE_TAG="${{ steps.vars.outputs.node_tag }}"
-      #          ALPINE_TAG="${{ steps.vars.outputs.alpine_tag }}"
-      #
-      #          docker pull $IMAGE_BASE-sdk:$SDK_TAG
-      #          docker pull $IMAGE_BASE-openwrt:$SDK_TAG
-      #          docker pull $IMAGE_BASE-idp:$NODE_TAG
-      #          docker pull $IMAGE_BASE-browser:$NODE_TAG
-      #          docker pull $IMAGE_BASE-pki:$ALPINE_TAG
-      #
-      #          # Tag them locally to match exactly what docker-compose expects
-      #          docker tag $IMAGE_BASE-sdk:$SDK_TAG luci-sso-sdk:$SDK_TAG
-      #          docker tag $IMAGE_BASE-openwrt:$SDK_TAG luci-sso-openwrt:$SDK_TAG
-      #          docker tag $IMAGE_BASE-idp:$NODE_TAG luci-sso-idp:$NODE_TAG
-      #          docker tag $IMAGE_BASE-browser:$NODE_TAG luci-sso-browser:$NODE_TAG
-      #          docker tag $IMAGE_BASE-pki:$ALPINE_TAG luci-sso-pki:$ALPINE_TAG
+      - name: Get Project Variables
+        id: vars
+        run: |
+          # Use --no-print-directory and xargs to ensure perfectly clean strings
+          VERSION=$(make -s --no-print-directory -C devenv print-env VAR=SDK_VERSION | xargs)
+          NODE_V=$(make -s --no-print-directory -C devenv print-env VAR=NODE_VERSION | xargs)
+          ALPINE_V=$(make -s --no-print-directory -C devenv print-env VAR=ALPINE_VERSION | xargs)
+          ARCH="x86-64"
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          
+          echo "sdk_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "sdk_arch=$ARCH" >> $GITHUB_OUTPUT
+          echo "node_tag=node${NODE_V}-alpine${ALPINE_V}" >> $GITHUB_OUTPUT
+          echo "alpine_tag=alpine${ALPINE_V}" >> $GITHUB_OUTPUT
+          echo "repo_owner=$OWNER" >> $GITHUB_OUTPUT
+          
+          # Export to ENV to ensure ALL subsequent make calls use the same project identity
+          echo "SDK_ARCH=$ARCH" >> $GITHUB_ENV
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Warm Docker Cache (Pull Images)
+        run: |
+          IMAGE_BASE="${{ env.REGISTRY }}/${{ steps.vars.outputs.repo_owner }}/luci-sso"
+          SDK_TAG="${{ steps.vars.outputs.sdk_arch }}-${{ steps.vars.outputs.sdk_version }}"
+          NODE_TAG="${{ steps.vars.outputs.node_tag }}"
+          ALPINE_TAG="${{ steps.vars.outputs.alpine_tag }}"
+          
+          # Only pull if they exist to prevent workflow failure if factory hasn't run
+          docker pull $IMAGE_BASE-openwrt:$SDK_TAG || true
+          docker pull $IMAGE_BASE-idp:$NODE_TAG || true
+          docker pull $IMAGE_BASE-browser:$NODE_TAG || true
+          docker pull $IMAGE_BASE-pki:$ALPINE_TAG || true
+          
+          # Tag them locally to match exactly what docker-compose expects
+          # Note: We skip SDK here as it is temporarily disabled in the Factory
+          docker tag $IMAGE_BASE-openwrt:$SDK_TAG luci-sso-openwrt:$SDK_TAG || true
+          docker tag $IMAGE_BASE-idp:$NODE_TAG luci-sso-idp:$NODE_TAG || true
+          docker tag $IMAGE_BASE-browser:$NODE_TAG luci-sso-browser:$NODE_TAG || true
+          docker tag $IMAGE_BASE-pki:$ALPINE_TAG luci-sso-pki:$ALPINE_TAG || true
 
       - name: Start Environment
         run: make -sC devenv up DETACHED=true

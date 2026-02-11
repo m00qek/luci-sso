@@ -105,7 +105,7 @@ jobs:
           - service: idp
             tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
           - service: browser
-            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
           - service: pki
             tag_suffix: alpine${{ needs.metadata.outputs.alpine_version }}
     steps:
