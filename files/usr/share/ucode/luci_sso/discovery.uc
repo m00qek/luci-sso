@@ -77,7 +77,7 @@ export function discover(io, issuer, options) {
 
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(issuer, "discovery");
-	let ttl = options.ttl || 3600;
+	let ttl = options.ttl || 86400; // 24 hours default (production standard)
 
 	let cached = _read_cache(io, cache_path, ttl);
 	if (cached && cached.issuer == issuer) {

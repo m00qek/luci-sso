@@ -40,6 +40,13 @@ C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfs
 
 One of the most critical architectural decisions is the explicit support for environments where the **Browser** and the **Router** have different network paths to the Identity Provider (IdP).
 
+### Metadata Caching Strategy
+To reduce network overhead and ensure resilience against transient IdP outages, the system implements a robust file-based caching strategy:
+*   **Discovery Documents:** Cached for **24 hours** by default.
+*   **JWK Sets:** Cached for **24 hours** by default.
+*   **Atomic Updates:** All cache updates use atomic POSIX `rename` to prevent partial reads by concurrent processes.
+*   **Forced Refresh:** The system MUST trigger a forced cache refresh if a cryptographic operation fails due to an unknown Key ID (`kid`), ensuring automatic recovery from IdP key rotations.
+
 ---
 
 ## 3. Strict HTTPS Policy
