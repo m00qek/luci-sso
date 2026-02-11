@@ -7,7 +7,20 @@ const scriptPath = '/app/luci-sso-login.js';
 
 test.describe('UI: Login Button Injection', () => {
 
+  test.beforeEach(async ({ page }) => {
+    // Mock the enabled check globally for these tests
+    await page.route('**/cgi-bin/luci-sso?action=enabled', route => {
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ enabled: true })
+      });
+    });
+  });
+
   test('Logic: Static Button Detection', async ({ page }) => {
+    // Navigate to a real origin so that page.route works
+    await page.goto('https://luci.luci-sso.test/mock-ui-test');
+    
     // Simulate a standard LuCI login page structure
     await page.setContent(`
       <div class="cbi-page-actions">
@@ -29,6 +42,7 @@ test.describe('UI: Login Button Injection', () => {
   });
 
   test('Logic: Dynamic Injection via MutationObserver', async ({ page }) => {
+    await page.goto('https://luci.luci-sso.test/mock-ui-test');
     // Start with a blank page and script loaded
     await page.setContent('<div></div>');
     await page.addScriptTag({ path: scriptPath });
@@ -49,6 +63,7 @@ test.describe('UI: Login Button Injection', () => {
   });
 
   test('Logic: Re-rendering Resilience (Auto-recovery)', async ({ page }) => {
+    await page.goto('https://luci.luci-sso.test/mock-ui-test');
     await page.setContent(`
       <div class="cbi-page-actions">
         <button class="cbi-button-positive">Log in</button>
@@ -71,6 +86,7 @@ test.describe('UI: Login Button Injection', () => {
     const languages = ['Anmelden', 'Login', 'Sign in'];
     
     for (const lang of languages) {
+      await page.goto('https://luci.luci-sso.test/mock-ui-test');
       await page.setContent(`
         <div>
           <button class="cbi-button-positive">${lang}</button>
@@ -86,6 +102,7 @@ test.describe('UI: Login Button Injection', () => {
   });
 
   test('Logic: Prevent Double Injection', async ({ page }) => {
+    await page.goto('https://luci.luci-sso.test/mock-ui-test');
     await page.setContent(`
       <div class="cbi-page-actions">
         <button class="cbi-button-positive">Log in</button>
@@ -103,6 +120,7 @@ test.describe('UI: Login Button Injection', () => {
   });
 
   test('Logic: Correct Styling Enforcement', async ({ page }) => {
+    await page.goto('https://luci.luci-sso.test/mock-ui-test');
     await page.setContent(`
       <div class="cbi-page-actions">
         <button class="cbi-button-positive">Log in</button>

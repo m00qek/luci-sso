@@ -162,3 +162,24 @@ test('oidc: security - reject UserInfo sub mismatch', () => {
 		assert_eq(res.data.sub, "EVIL-USER");
 	});
 });
+
+test('oidc: security - enforce RFC 7636 PKCE verifier length (43-128 chars)', () => {
+	let factory = mock.create();
+	
+	// Case 1: Too short (< 43)
+	factory.with_responses({}, (io) => {
+		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "too-short");
+		assert(!res.ok);
+		assert_eq(res.error, "INVALID_PKCE_VERIFIER");
+	});
+
+	// Case 2: Too long (> 128)
+	let long_verifier = "";
+	for (let i = 0; i < 129; i++) long_verifier += "a";
+	factory.with_responses({}, (io) => {
+		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", long_verifier);
+		assert(!res.ok);
+		assert_eq(res.error, "INVALID_PKCE_VERIFIER");
+	});
+});
+

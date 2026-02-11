@@ -228,7 +228,7 @@ export function verify_state(io, handle, clock_tolerance) {
 	let data = res.data;
 
 	// B2: Validate mandatory handshake fields on load
-	if (!data.code_verifier || type(data.code_verifier) != "string" || length(data.code_verifier) < 43) {
+	if (!data.code_verifier || type(data.code_verifier) != "string" || length(data.code_verifier) < 43 || length(data.code_verifier) > 128) {
 		io.log("error", `Handshake state missing or invalid PKCE verifier [session_id: ${session_id}]`);
 		return { ok: false, error: "STATE_CORRUPTED" };
 	}

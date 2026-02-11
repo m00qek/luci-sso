@@ -78,8 +78,8 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 	let sid_ctx = session_id ? ` [session_id: ${session_id}]` : "";
 	io.log("info", `Initiating token exchange${sid_ctx} with PKCE verifier (len: ${length(verifier)})`);
 
-	if (type(verifier) != "string" || length(verifier) < 43) {
-		io.log("error", `Rejected token exchange${sid_ctx}: PKCE verifier too short`);
+	if (type(verifier) != "string" || length(verifier) < 43 || length(verifier) > 128) {
+		io.log("error", `Rejected token exchange${sid_ctx}: PKCE verifier length out of bounds`);
 		return { ok: false, error: "INVALID_PKCE_VERIFIER" };
 	}
 
