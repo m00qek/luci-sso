@@ -14,10 +14,6 @@ on:
       - ".gitignore"
       - "LICENSE"
 
-env:
-  REGISTRY: ghcr.io
-  DOCKER_SUITE: ci
-
 jobs:
   test:
     name: Run Verification Suite
