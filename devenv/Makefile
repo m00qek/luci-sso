@@ -120,14 +120,17 @@ endef
 
 .unit-test:
 	$(VALIDATE_SUITE_RUNNING)
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
 .ci-test:
 	$(VALIDATE_SUITE_RUNNING)
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh ci --modules "$(MODULES)" --filter "$(FILTER)"
 
 .watch-tests:
 	$(VALIDATE_SUITE_RUNNING)
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
 .build-images:

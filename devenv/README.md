@@ -93,3 +93,7 @@ The `pki` service automatically generates a development CA and per-service certi
 
 *   **Permission Denied on `bin/`:** The `Makefile` is designed to create the necessary subdirectories (e.g., `bin/lib/${SDK_ARCH}`) on the host before starting Docker. If you manually deleted `bin/` and encounter issues, ensure your host user has write permissions to the project root. If Docker still creates a directory as root, run `sudo chown -R $USER:$USER bin/`.
 *   **Port Conflicts:** If ports 8443 or 5556 are in use, you can override them in `devenv/Makefile` or via environment variables.
+*   **`native.so` is a directory:** If you see an error like `Error loading shared library ... native.so: Is a directory`, it means the environment was started before the native components were compiled. Docker automatically creates a directory when a volume source file is missing. To fix this:
+    1.  Stop the environment: `make down` (or `make local-down`)
+    2.  Compile the components: `make compile`
+    3.  Restart the environment: `make up` (or `make local-up`)
