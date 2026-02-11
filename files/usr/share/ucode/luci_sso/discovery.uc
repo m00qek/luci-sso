@@ -118,7 +118,7 @@ export function discover(io, issuer, options) {
 	if (config.issuer && config.issuer != issuer) {
 		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${crypto.safe_id(config.issuer)}]`);
 		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", 
-			 details: `Requested ${issuer}, got ${config.issuer}` };
+			 details: `Expected issuer_id ${issuer_id}` };
 	}
 
 	io.log("info", `Discovery successful for [id: ${issuer_id}]`);

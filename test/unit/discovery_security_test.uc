@@ -48,3 +48,29 @@ test('discovery: security - prevent cache poisoning on missing required fields',
             assert(!cache_written, "Cache MUST NOT be written for incomplete discovery doc");
         });
 });
+
+test('discovery: security - ensure sanitized logging on issuer mismatch (W4)', () => {
+    let issuer = "https://trusted.idp";
+    let evil_issuer = "https://evil.com/path?malicious=true";
+    let evil_doc = { ...f.MOCK_DISCOVERY, issuer: evil_issuer };
+
+    let data = mock.create()
+        .with_responses({
+            [`${issuer}/.well-known/openid-configuration`]: { status: 200, body: evil_doc }
+        })
+        .spy((io) => {
+            discovery.discover(io, issuer);
+        });
+
+    // Verify raw evil_issuer is NOT in logs
+    let history = data.all();
+    let log_found = false;
+    for (let entry in history) {
+        if (entry.type == "log") {
+            log_found = true;
+            let msg = entry.args[1];
+            assert(index(msg, evil_issuer) == -1, "Raw malicious issuer MUST NOT be logged");
+        }
+    }
+    assert(log_found, "Mismatch error should have been logged");
+});
