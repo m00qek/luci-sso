@@ -80,7 +80,7 @@ jobs:
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./devenv/services/${{ matrix.service }}
           file: devenv/services/${{ matrix.service }}/Dockerfile
           push: true
           tags: |
@@ -120,7 +120,7 @@ jobs:
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ./devenv/services/${{ matrix.service }}
           file: devenv/services/${{ matrix.service }}/Dockerfile
           push: true
           tags: |
