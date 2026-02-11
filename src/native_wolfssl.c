@@ -15,6 +15,13 @@
 
 #define MAX_INPUT_SIZE 16384 // 16 KB
 
+#define VALIDATE_INPUT_SIZES(msg_len, sig_len, key_len) \
+	do { \
+		if ((msg_len) > MAX_INPUT_SIZE || (sig_len) > MAX_INPUT_SIZE || (key_len) > MAX_INPUT_SIZE) { \
+			return ucv_boolean_new(false); \
+		} \
+	} while(0)
+
 static WC_RNG _global_rng;
 static int _rng_initialized = 0;
 
@@ -91,9 +98,7 @@ static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	const unsigned char *key_pem = (const unsigned char *)ucv_string_get(v_key);
 	size_t key_len = ucv_string_length(v_key);
 
-	if (msg_len > MAX_INPUT_SIZE || sig_len > MAX_INPUT_SIZE || key_len > MAX_INPUT_SIZE) {
-		return ucv_boolean_new(false);
-	}
+	VALIDATE_INPUT_SIZES(msg_len, sig_len, key_len);
 
 	// Hash the message
 	unsigned char hash[WC_SHA256_DIGEST_SIZE];
@@ -126,6 +131,7 @@ static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	}
 
 	int res = wc_RsaSSL_Verify(sig, sig_len, hash, WC_SHA256_DIGEST_SIZE, &key);
+	memset(hash, 0, sizeof(hash)); // Defense-in-depth
 	wc_FreeRsaKey(&key);
 
 	return ucv_boolean_new(res >= 0);
@@ -144,14 +150,11 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 	size_t msg_len = ucv_string_length(v_msg);
 	const unsigned char *raw_sig = (const unsigned char *)ucv_string_get(v_sig);
 	size_t raw_sig_len = ucv_string_length(v_sig);
-	const unsigned char *key_pem = (const unsigned char *)ucv_string_get(v_key);
+	const char *key_pem = ucv_string_get(v_key);
 	size_t key_len = ucv_string_length(v_key);
 
-	if (msg_len > MAX_INPUT_SIZE || sig_len > MAX_INPUT_SIZE || key_len > MAX_INPUT_SIZE) {
-		return ucv_boolean_new(false);
-	}
-
 	if (raw_sig_len != 64) return ucv_boolean_new(false);
+	VALIDATE_INPUT_SIZES(msg_len, raw_sig_len, key_len);
 
 	unsigned char hash[WC_SHA256_DIGEST_SIZE];
 	if (wc_Sha256Hash(msg, msg_len, hash) != 0) return ucv_boolean_new(false);
@@ -175,10 +178,12 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 	int verify_res = 0;
 	// raw_sig is R|S (64 bytes). WolfSSL wc_ecc_verify_hash expects this.
 	if (wc_ecc_verify_hash(raw_sig, raw_sig_len, hash, WC_SHA256_DIGEST_SIZE, &verify_res, &key) != 0) {
+		memset(hash, 0, sizeof(hash));
 		wc_ecc_free(&key);
 		return ucv_boolean_new(false);
 	}
 
+	memset(hash, 0, sizeof(hash)); // Defense-in-depth
 	wc_ecc_free(&key);
 	return ucv_boolean_new(verify_res == 1);
 }

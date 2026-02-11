@@ -17,6 +17,13 @@ static psa_status_t _psa_init_status = PSA_ERROR_BAD_STATE;
 
 #define MAX_INPUT_SIZE 16384 // 16 KB
 
+#define VALIDATE_INPUT_SIZES(msg_len, sig_len, key_len) \
+	do { \
+		if ((msg_len) > MAX_INPUT_SIZE || (sig_len) > MAX_INPUT_SIZE || (key_len) > MAX_INPUT_SIZE) { \
+			return ucv_boolean_new(false); \
+		} \
+	} while(0)
+
 static int ecdsa_raw_to_der_robust(const unsigned char *raw, size_t raw_len, 
                                  unsigned char *buf, size_t buf_len,
                                  unsigned char **out_der_ptr, size_t *out_der_len) {
@@ -78,9 +85,7 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	const char *key_pem = ucv_string_get(v_key);
 	size_t key_len = ucv_string_length(v_key);
 
-	if (msg_len > MAX_INPUT_SIZE || sig_len > MAX_INPUT_SIZE || key_len > MAX_INPUT_SIZE) {
-		return ucv_boolean_new(false);
-	}
+	VALIDATE_INPUT_SIZES(msg_len, sig_len, key_len);
 
 	mbedtls_pk_context pk;
 	mbedtls_pk_init(&pk);
@@ -97,6 +102,7 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	}
 
 	int ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, out_len, sig, sig_len);
+	memset(hash, 0, sizeof(hash)); // Defense-in-depth
 	mbedtls_pk_free(&pk);
 
 	return ucv_boolean_new(ret == 0);
@@ -121,6 +127,7 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
 	size_t key_len = ucv_string_length(v_key);
 
 	if (raw_sig_len != 64) return ucv_boolean_new(false);
+	VALIDATE_INPUT_SIZES(msg_len, raw_sig_len, key_len);
 
 	unsigned char der_buf[128]; 
 	unsigned char *der_sig = NULL;
@@ -145,6 +152,7 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
 	}
 
 	int ret = mbedtls_pk_verify(&pk, MBEDTLS_MD_SHA256, hash, out_len, der_sig, der_sig_len);
+	memset(hash, 0, sizeof(hash)); // Defense-in-depth
 	mbedtls_pk_free(&pk);
 
 	return ucv_boolean_new(ret == 0);

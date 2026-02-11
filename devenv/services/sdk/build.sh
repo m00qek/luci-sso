@@ -15,7 +15,8 @@ compile)
   [ -f .config ] || make defconfig
 
   # Build the specific package
-  make package/$PKG_NAME/compile -j$(nproc) QUICK=1 CHECK_KEY=0 IGNORE_ERRORS=m
+  [ "$VERBOSE" = "1" ] && V_FLAG="V=s" || V_FLAG=""
+  make package/$PKG_NAME/compile -j$(nproc) $V_FLAG QUICK=1 CHECK_KEY=0 IGNORE_ERRORS=m
 
   # Copy the .so to artifacts
   cp -v build_dir/target-*/$PKG_NAME-*/.pkgdir/$PKG_NAME-crypto-$CRYPTO_LIB/usr/lib/ucode/luci_sso/native.so \
