@@ -39,7 +39,10 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Start Environment
-        run: make -sC devenv up DETACHED=true
+        run: make -sC devenv local-up DETACHED=true
+
+      - name: PS
+        run: docker compose ps
 
       - name: Compile
         run: make -sC devenv compile
