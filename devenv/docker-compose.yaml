@@ -1,6 +1,7 @@
 services:
   pki:
     container_name: ${DOCKER_SUITE}-${SDK_ARCH}-pki
+    image: ${DOCKER_NAMESPACE}/luci-sso-pki:alpine${ALPINE_VERSION}
     build:
       context: ./services/pki
       args:
@@ -19,6 +20,7 @@ services:
 
   idp:
     container_name: ${DOCKER_SUITE}-${SDK_ARCH}-idp
+    image: ${DOCKER_NAMESPACE}/luci-sso-idp:node${NODE_VERSION}-alpine${ALPINE_VERSION}
     build:
       context: ./services/idp
       args:
@@ -68,6 +70,7 @@ services:
 
   openwrt:
     container_name: ${DOCKER_SUITE}-${SDK_ARCH}-openwrt
+    image: ${DOCKER_NAMESPACE}/luci-sso-openwrt:${SDK_ARCH}-${SDK_VERSION}
     stop_grace_period: 0s
     build:
       context: ./services/openwrt
@@ -125,6 +128,7 @@ services:
 
   sdk:
     container_name: ${DOCKER_SUITE}-${SDK_ARCH}-sdk
+    image: ${DOCKER_NAMESPACE}/luci-sso-sdk:${SDK_ARCH}-${SDK_VERSION}
     build:
       context: ./services/sdk
       args:

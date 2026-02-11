@@ -43,6 +43,7 @@ export PORT_LUCI := 8443
 # --- 2. DYNAMIC SUITE CONFIG ---
 # Default to local if not set
 export DOCKER_SUITE ?= local
+export DOCKER_NAMESPACE := ghcr.io/m00qek
 
 # Lazy variables (=) evaluated at runtime
 export RESOLVED_DOCKER_COMPOSE = $(DEVENV_DIR)/.resolved.docker-compose.$(DOCKER_SUITE).yaml
@@ -149,7 +150,9 @@ endef
 	docker compose $(COMPOSE_FLAGS) config > $(RESOLVED_DOCKER_COMPOSE)
 	
 	@echo -e " $(GREEN)🚀$(RESET) Starting '$(DOCKER_SUITE)' environment..."
-	docker compose $(COMPOSE_FLAGS) up --remove-orphans
+	@UP_FLAGS="--remove-orphans"; \
+	if [ "$(DETACHED)" = "true" ]; then UP_FLAGS="$$UP_FLAGS -d"; fi; \
+	docker compose $(COMPOSE_FLAGS) up $$UP_FLAGS
 	
 	@echo -e " $(GREEN)✨$(RESET) Done!$(RESET)"
 
