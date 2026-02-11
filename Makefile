@@ -25,6 +25,10 @@ define Package/$(PKG_NAME)/description
 	dependencies.
 endef
 
+define Package/$(PKG_NAME)/conffiles
+/etc/config/luci-sso
+endef
+
 define Package/$(PKG_NAME)-crypto-mbedtls
   SECTION:=utils
   CATEGORY:=Utilities
