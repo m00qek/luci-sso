@@ -36,12 +36,12 @@ jobs:
       - name: Get Project Variables
         id: vars
         run: |
-          # Use the existing print-env interface from devenv/Makefile
-          DEPENDS=$(make -s -C devenv print-env VAR=PKG_DEPENDS)
-          VERSION=$(make -s -C devenv print-env VAR=SDK_VERSION)
-          NODE_V=$(make -s -C devenv print-env VAR=NODE_VERSION)
-          ALPINE_V=$(make -s -C devenv print-env VAR=ALPINE_VERSION)
-          ARCH="x86-64" # Restricted to x86-64 as requested
+          # Use --no-print-directory and xargs to ensure perfectly clean strings
+          DEPENDS=$(make -s --no-print-directory -C devenv print-env VAR=PKG_DEPENDS | xargs)
+          VERSION=$(make -s --no-print-directory -C devenv print-env VAR=SDK_VERSION | xargs)
+          NODE_V=$(make -s --no-print-directory -C devenv print-env VAR=NODE_VERSION | xargs)
+          ALPINE_V=$(make -s --no-print-directory -C devenv print-env VAR=ALPINE_VERSION | xargs)
+          ARCH="x86-64"
           
           echo "pkg_depends=$DEPENDS" >> $GITHUB_OUTPUT
           echo "sdk_version=$VERSION" >> $GITHUB_OUTPUT
@@ -49,7 +49,6 @@ jobs:
           echo "node_version=$NODE_V" >> $GITHUB_OUTPUT
           echo "alpine_version=$ALPINE_V" >> $GITHUB_OUTPUT
           
-          # Lowercase repo owner for Docker compatibility
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           echo "repo_owner=$OWNER" >> $GITHUB_OUTPUT
 
@@ -62,7 +61,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [sdk, openwrt]
+        service: [openwrt] # Temporarily removed 'sdk' to save resources
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -90,8 +89,8 @@ jobs:
             SDK_ARCH=${{ needs.metadata.outputs.sdk_arch }}
             SDK_VERSION=${{ needs.metadata.outputs.sdk_version }}
             PKG_DEPENDS=${{ needs.metadata.outputs.pkg_depends }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   build-helpers:
     name: Build Helper Images
@@ -106,7 +105,7 @@ jobs:
           - service: idp
             tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
           - service: browser
-            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
           - service: pki
             tag_suffix: alpine${{ needs.metadata.outputs.alpine_version }}
     steps:
@@ -135,5 +134,5 @@ jobs:
           build-args: |
             NODE_VERSION=${{ needs.metadata.outputs.node_version }}
             ALPINE_VERSION=${{ needs.metadata.outputs.alpine_version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}

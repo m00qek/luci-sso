@@ -2,7 +2,7 @@ name: CI (Consumer)
 
 on:
   push:
-    branches: [main, master, ci]
+    branches: [main, master]
     paths-ignore:
       - "**.md"
       - ".gitignore"
