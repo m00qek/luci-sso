@@ -41,6 +41,9 @@ jobs:
       - name: Start Environment
         run: make -sC devenv up DETACHED=true
 
+      - name: Compile
+        run: make -sC devenv compile
+
       - name: Run Unit Tests
         run: make -sC devenv unit-test
 
