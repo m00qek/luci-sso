@@ -387,17 +387,19 @@ test('OIDC: Encoding - Parameter Torture Test', () => {
 		redirect_uri: "https://router.lan/callback?param=1&other=2"
 	};
 	let params = {
-		state: "state with spaces & symbols #1",
-		nonce: "nonce+plus",
+		state: "state with spaces & symbols #1_long_enough",
+		nonce: "nonce+plus+long+enough+for+validation",
 		code_challenge: "challenge/slash"
 	};
 
 	// 1. Verify Authorization URL Encoding
-	let url = oidc.get_auth_url(null, complex_config, f.MOCK_DISCOVERY, params);
+	let res = oidc.get_auth_url(null, complex_config, f.MOCK_DISCOVERY, params);
+	assert(res.ok, "get_auth_url should succeed");
+	let url = res.data;
 	
 	assert(index(url, "client_id=app%20%26%20user") != -1, "client_id must be encoded");
 	assert(index(url, "redirect_uri=https%3A%2F%2Frouter.lan%2Fcallback%3Fparam%3D1%26other%3D2") != -1, "redirect_uri must be fully encoded");
-	assert(index(url, "state=state%20with%20spaces%20%26%20symbols%20%231") != -1, "state must be encoded");
+	assert(index(url, "state=state%20with%20spaces%20%26%20symbols%20%231_long_enough") != -1, "state must be encoded");
 
 	// 2. Verify Token Exchange Body Encoding
 	let data = factory.spy((io) => {

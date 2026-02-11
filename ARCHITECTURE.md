@@ -30,7 +30,9 @@ The project strictly follows the pattern of keeping business logic (OIDC, Sessio
 ### Minimal C Surface
 C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfssl`). 
 *   **Why:** Reduces the security audit surface and simplifies cross-compilation. Logic stays in memory-safe ucode.
-*   **Hardening:** To prevent buffer overflow and resource exhaustion attacks, the native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
+*   **Hardening:** To prevent buffer overflow and resource exhaustion attacks:
+    *   The native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
+    *   HTTP response bodies are limited to **256 KB** at the ucode I/O layer to prevent memory exhaustion.
 
 ---
 
@@ -57,6 +59,7 @@ To ensure transport security, the project enforces an exclusively HTTPS-based OI
     *   **Registry Constraints:** Access tokens are tracked for a **24-hour window**. Tokens with a lifetime exceeding 24 hours SHOULD NOT be used, as they may be re-playable after the registry is reaped.
     *   **Collision Probability:** The token registry uses a **64-bit** safe ID (16-hex-char). Collision probability reaches 50% at ~2^32 tokens, which is considered acceptable for the intended embedded scale.
 *   **Algorithm Enforcement:** The system implements a **Two-Dimensional Config** (Security Policy). By default, it MUST ONLY accept asymmetric signatures (RS256, ES256). Symmetric algorithms (HS256) are strictly forbidden in production to prevent "Algorithm Confusion" attacks.
+*   **Authorization Parameters:** Mandatory enforcement of **`state`** (CSRF, min 16 chars), **`nonce`** (Replay, min 16 chars), and **`code_challenge`** (PKCE) during authorization URL generation.
 *   **Claims Validation:** Mandatory verification of **`exp` (Expiry)**, **`iat` (Issued At)**, `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party). Missing mandatory claims result in immediate rejection.
 
 ---

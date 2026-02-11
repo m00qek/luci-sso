@@ -174,12 +174,13 @@ export function initiate(io, config) {
 	if (!handshake_res.ok) return handshake_res;
 	let handshake = handshake_res.data;
 
-	let url = oidc.get_auth_url(io, config, disc_res.data, handshake);
+	let url_res = oidc.get_auth_url(io, config, disc_res.data, handshake);
+	if (!url_res.ok) return url_res;
 
 	return {
 		ok: true,
 		data: {
-			url: url,
+			url: url_res.data,
 			token: handshake.token
 		}
 	};

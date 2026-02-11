@@ -36,6 +36,17 @@ export const find_jwk = discovery.find_jwk;
  * Generates the authorization URL.
  */
 export function get_auth_url(io, config, discovery_doc, params) {
+	// BLOCKER FIX: Enforce mandatory CSRF protection (B1)
+	if (!params.state || type(params.state) != "string" || length(params.state) < 16) {
+		return { ok: false, error: "MISSING_STATE_PARAMETER" };
+	}
+	if (!params.nonce || type(params.nonce) != "string" || length(params.nonce) < 16) {
+		return { ok: false, error: "MISSING_NONCE_PARAMETER" };
+	}
+	if (!params.code_challenge || type(params.code_challenge) != "string") {
+		return { ok: false, error: "MISSING_PKCE_CHALLENGE" };
+	}
+
 	let query = {
 		response_type: "code",
 		client_id: config.client_id,
@@ -54,7 +65,7 @@ export function get_auth_url(io, config, discovery_doc, params) {
 		url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
 		sep = '&';
 	}
-	return url;
+	return { ok: true, data: url };
 };
 
 /**

@@ -1,6 +1,8 @@
 import { test, assert, assert_eq } from 'testing';
 import * as session from 'luci_sso.session';
+import * as oidc from 'luci_sso.oidc';
 import * as mock from 'mock';
+import * as f from 'unit.tier2_fixtures';
 
 test('Session: Handshake - Atomic consumption ensures integrity', () => {
 	let data = mock.create().with_files({}).spy((io) => {
@@ -63,5 +65,37 @@ test('Session: Handshake - Filesystem error fails closed', () => {
 			assert(!res_fs.ok, "Should fail when rename is impossible");
 			assert_eq(res_fs.error, "STATE_NOT_FOUND");
 		});
+	});
+});
+
+test('Security: Reject authorization URL generation without state (B1)', () => {
+	mock.create().with_responses({}, (io) => {
+		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { nonce: "n1234567890123456", code_challenge: "cc1" });
+		assert(type(res) == "object" && !res.ok, "MUST return error object if state is missing");
+		assert_eq(res.error, "MISSING_STATE_PARAMETER");
+	});
+});
+
+test('Security: Reject authorization URL generation with weak state (B1)', () => {
+	mock.create().with_responses({}, (io) => {
+		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "short", nonce: "n1234567890123456", code_challenge: "cc1" });
+		assert(!res.ok, "MUST reject short state");
+		assert_eq(res.error, "MISSING_STATE_PARAMETER");
+	});
+});
+
+test('Security: Reject authorization URL generation without nonce (B1)', () => {
+	mock.create().with_responses({}, (io) => {
+		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "s1234567890123456", code_challenge: "cc1" });
+		assert(!res.ok, "MUST reject missing nonce");
+		assert_eq(res.error, "MISSING_NONCE_PARAMETER");
+	});
+});
+
+test('Security: Reject authorization URL generation without PKCE challenge (B1)', () => {
+	mock.create().with_responses({}, (io) => {
+		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "s1234567890123456", nonce: "n1234567890123456" });
+		assert(!res.ok, "MUST reject missing PKCE challenge");
+		assert_eq(res.error, "MISSING_PKCE_CHALLENGE");
 	});
 });
