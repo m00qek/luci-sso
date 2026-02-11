@@ -40,7 +40,7 @@ function build_provider(state) {
 		// Private state handle for inheritance
 		__state__: state,
 
-		time: trackable("time", () => state.now),
+		time: trackable("time", () => state.now++),
 		
 		read_file: trackable("read_file", (path) => state.files[path]),
 		

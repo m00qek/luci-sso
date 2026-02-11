@@ -83,8 +83,25 @@ export function get_secret_key(io) {
 			// 3. ALWAYS release the lock
 			try { io.remove(lock_path); } catch (e) {}
 		} else {
-			// 4. Lock held by another: Re-read to see if it's finished
-			key = io.read_file(SECRET_KEY_PATH);
+			// 4. BLOCKER FIX: Retry with backoff if lock is held (B2)
+			let retries = 0;
+			const max_retries = 5;
+
+			while (retries < max_retries) {
+				// Wait for a clock tick (at least 1 second in production)
+				let start = io.time();
+				while (io.time() == start) { /* busy wait */ }
+
+				try {
+					key = io.read_file(SECRET_KEY_PATH);
+				} catch (e) {
+					// File still missing or unreadable
+				}
+
+				if (key && length(key) > 0) break;
+				retries++;
+			}
+
 			if (!key || length(key) == 0) {
 				// FAIL: Do not fallback to random key (avoids transient session invalidation)
 				return { ok: false, error: "SYSTEM_KEY_UNAVAILABLE" };

@@ -2,6 +2,7 @@ import { test, assert, assert_eq } from 'testing';
 import * as router from 'luci_sso.router';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
+import * as encoding from 'luci_sso.encoding';
 import * as mock from 'mock';
 import * as f from 'integration.fixtures';
 
@@ -138,7 +139,11 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 				});
 
 			assert(data.called("rename"), "Should have used atomic rename for cache update");
-			assert_eq(io_stale.read_file(cache_path), sprintf("%J", { keys: [ f.ANCHOR_JWK ], cached_at: 1516239022 }), "Cache file should be updated with new data");
+			let cache_content = io_stale.read_file(cache_path);
+			let cache_res = encoding.safe_json(cache_content);
+			assert(cache_res.ok, "Cache should be valid JSON");
+			assert_eq(cache_res.data.keys[0].kid, f.ANCHOR_JWK.kid, "JWKS keys should be updated");
+			assert(cache_res.data.cached_at >= 1516239022, "Cache timestamp should be updated");
 		});
 	});
 });

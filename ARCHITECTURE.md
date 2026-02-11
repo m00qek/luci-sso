@@ -138,3 +138,13 @@ To avoid massive build times and environment drift, the project uses a dedicated
 2.  **IdP Service:** A Node.js Mock Identity Provider for OIDC flow testing.
 3.  **LuCI Service:** The target OpenWrt runtime, mounting local project files for "hot-reload" development.
 4.  **Browser Service:** A Playwright-enabled container for automated E2E testing.
+
+---
+
+## 9. Secret Key Management
+
+The system uses a 256-bit symmetric key for signing local session tokens.
+*   **Bootstrapping:** The key is generated automatically on first boot.
+*   **Concurrency:** To prevent race conditions during the initial generation, the system utilizes a directory-based lock (`.lock`). 
+*   **Resilience:** If a process finds the lock held by another, it implements a **retry loop with exponential backoff** to ensure it consumes the newly generated key rather than failing or falling back to a transient secret (which would invalidate subsequent session checks).
+*   **Atomicity:** The key is written to a temporary file and moved into place using atomic `rename` to ensure filesystem consistency.
