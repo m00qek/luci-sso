@@ -230,6 +230,10 @@ export function verify_jwt(token, pubkey, options) {
  */
 export function random(len) {
 	if (type(len) != "int" && len != null) die("CONTRACT_VIOLATION: random expects integer length");
+	
+	// TESTING HOOK: Allow simulating CSPRNG failure
+	if (global.TESTING_RANDOM_FAIL) return null;
+
 	return native.random(len || 32);
 };
 

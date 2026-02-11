@@ -35,8 +35,17 @@ export function create_session(io, username, password, oidc_email, access_token,
 
 	let sid = login_res.ubus_rpc_session;
 	
-	// B3: Generate a 256-bit random CSRF token (required by LuCI for write actions)
-	let csrf_token = crypto.b64url_encode(crypto.random(32));
+	// BLOCKER FIX: Validate CSPRNG output (B3)
+	let csrf_random = crypto.random(32);
+	if (!csrf_random || type(csrf_random) != "string" || length(csrf_random) != 32) {
+		io.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
+		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
+	}
+	let csrf_token = crypto.b64url_encode(csrf_random);
+	if (!csrf_token || type(csrf_token) != "string" || length(csrf_token) < 32) {
+		io.log("error", "CRITICAL: CSRF token encoding failure");
+		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
+	}
 
 	// 3. Authorize and tag the session
 	io.ubus_call("session", "set", {

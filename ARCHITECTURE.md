@@ -93,6 +93,7 @@ Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not
 Upon a successful OIDC handshake, the service:
 1.  Performs a standard `ubus session login` using a "template" system user (e.g., `root`).
 2.  Generates a random **256-bit CSRF Token**.
+    *   **Entropy Validation:** The system MUST explicitly validate that the CSPRNG successfully produced 32 bytes of high-entropy data before proceeding with session creation.
 3.  Injects the OIDC user's identity and the CSRF token into the session via `ubus session set`.
 4.  Redirects the user to the LuCI dashboard.
 

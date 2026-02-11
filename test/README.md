@@ -38,6 +38,7 @@ make e2e-test
 The project includes specialized security tests beyond basic coverage:
 - **Authorization Parameter Validation**: Verifies mandatory presence and strength of `state`, `nonce`, and `code_challenge` during URL generation.
 - **Secret Key Bootstrap Resilience**: Verifies that the system correctly retries and recovers from race conditions during first-boot key generation.
+- **CSRF Entropy Validation**: Verifies that session creation fails safely if the CSPRNG fails to produce entropy for the CSRF token.
 - **PII Redaction (Logs)**: Verifies that raw emails or names NEVER leak into `io.log` during session operations.
 - **at_hash Torture**: Verifies byte-safe calculation of token hashes using binary-sensitive sequences (e.g., `0xC2`) to prevent character boundary errors.
 - **Fail-Safe Consumption**: Verifies that access tokens are consumed in the replay registry even if ID token verification fails.

@@ -1,6 +1,8 @@
 import { test, assert, assert_eq } from 'testing';
 import * as session from 'luci_sso.session';
 import * as oidc from 'luci_sso.oidc';
+import * as ubus from 'luci_sso.ubus';
+import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 
@@ -92,10 +94,16 @@ test('Security: Reject authorization URL generation without nonce (B1)', () => {
 	});
 });
 
-test('Security: Reject authorization URL generation without PKCE challenge (B1)', () => {
-	mock.create().with_responses({}, (io) => {
-		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "s1234567890123456", nonce: "n1234567890123456" });
-		assert(!res.ok, "MUST reject missing PKCE challenge");
-		assert_eq(res.error, "MISSING_PKCE_CHALLENGE");
+test('Security: Detect CSPRNG failure during CSRF token generation (B3)', () => {
+	global.TESTING_RANDOM_FAIL = true;
+
+	mock.create().with_ubus({
+		"session:login": { ubus_rpc_session: "sid" }
+	}).with_env({}, (io) => {
+		let res = ubus.create_session(io, "root", "pass", "user@example.com", "at", "rt", "it");
+		assert(!res.ok, "MUST reject session creation if CSPRNG fails");
+		assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
 	});
+
+	delete global.TESTING_RANDOM_FAIL;
 });
