@@ -3,6 +3,17 @@
  */
 
 /**
+ * Checks if the SSO service is enabled in UCI.
+ * @param {object} io - I/O provider
+ * @returns {boolean}
+ */
+export function is_enabled(io) {
+	let cursor = io.uci_cursor();
+	let enabled = cursor.get("luci-sso", "default", "enabled");
+	return (enabled === '1');
+};
+
+/**
  * Loads the OIDC and User configuration from UCI.
  * Cross-references with /etc/config/rpcd to ensure mapped users exist.
  * 
@@ -10,6 +21,10 @@
  * @returns {object} - The validated configuration object
  */
 export function load(io) {
+	if (!is_enabled(io)) {
+		die("DISABLED");
+	}
+
 	let cursor = io.uci_cursor();
 
 	// 1. Load RPCD users to build a validation set
@@ -24,10 +39,6 @@ export function load(io) {
 	let oidc_cfg = cursor.get_all("luci-sso", "default");
 	if (!oidc_cfg || oidc_cfg[".type"] !== "oidc") {
 		die("CONFIG_ERROR: OIDC section 'default' missing in /etc/config/luci-sso");
-	}
-
-	if (oidc_cfg.enabled !== '1') {
-		die("DISABLED");
 	}
 
 	// 2.1 HTTPS Enforcement

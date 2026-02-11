@@ -74,6 +74,29 @@ test('Router: Bootstrap - Automatic secret key generation', () => {
 	assert_eq(length(final_key), 32, "Secret key should be 32 bytes");
 });
 
+test('Router: ?action=enabled returns correct JSON', () => {
+	let factory = mock.create();
+	let request = mock_request("/", { action: "enabled" });
+
+	// Enabled case
+	factory.with_uci({
+		"luci-sso": { "default": { ".type": "oidc", enabled: "1" } }
+	}, (io) => {
+		let res = router.handle(io, MOCK_CONFIG, request, TEST_POLICY);
+		assert_eq(res.status, 200);
+		assert_eq(res.body, '{"enabled": true}');
+		assert_eq(res.headers["Content-Type"], "application/json");
+	});
+
+	// Disabled case
+	factory.with_uci({
+		"luci-sso": { "default": { ".type": "oidc", enabled: "0" } }
+	}, (io) => {
+		let res = router.handle(io, MOCK_CONFIG, request, TEST_POLICY);
+		assert_eq(res.body, '{"enabled": false}');
+	});
+});
+
 test('Router: Callback - Successful authentication and UBUS login', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {

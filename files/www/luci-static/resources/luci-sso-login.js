@@ -107,8 +107,20 @@
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+        document.addEventListener('DOMContentLoaded', function() {
+            fetch('/cgi-bin/luci-sso?action=enabled')
+                .then(function(r) { return r.json(); })
+                .then(function(data) {
+                    if (data && data.enabled) init();
+                })
+                .catch(function(e) { console.error("LuCI SSO: Failed to check enabled status", e); });
+        });
     } else {
-        init();
+        fetch('/cgi-bin/luci-sso?action=enabled')
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.enabled) init();
+            })
+            .catch(function(e) { console.error("LuCI SSO: Failed to check enabled status", e); });
     }
 })();

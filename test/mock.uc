@@ -151,6 +151,13 @@ function build_provider(state) {
 		
 		uci_cursor: () => {
 			return {
+				get: function(pkg, sec, opt) {
+					let p = state.uci[pkg];
+					if (type(p) != "object") return null;
+					let s = p[sec];
+					if (type(s) != "object") return null;
+					return s[opt];
+				},
 				get_all: function(pkg, sec) {
 					let p = state.uci[pkg];
 					if (type(p) == "object") return p[sec];

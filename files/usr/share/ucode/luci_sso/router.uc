@@ -5,6 +5,7 @@ import * as ubus from 'luci_sso.ubus';
 import * as lucihttp from 'lucihttp';
 import * as discovery from 'luci_sso.discovery';
 import * as handshake from 'luci_sso.handshake';
+import * as config_mod from 'luci_sso.config';
 
 /**
  * Main CGI Router for luci-sso.
@@ -127,6 +128,10 @@ export function handle(io, config, request, policy) {
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
 
 	if (path == "/") {
+		let query = request.query || {};
+		if (query.action == "enabled") {
+			return response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', config_mod.is_enabled(io) ? "true" : "false"));
+		}
 		return handle_login(io, config);
 	} else if (path == "/callback") {
 		return handle_callback(io, config, request, policy);

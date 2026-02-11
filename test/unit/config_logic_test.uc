@@ -128,6 +128,35 @@ test('config: logic - handle missing config', () => {
 	});
 });
 
+test('config: logic - is_enabled reflects UCI state', () => {
+	let factory = mock.create();
+	
+	// Enabled
+	let uci_enabled = {
+		"luci-sso": {
+			"default": { ".type": "oidc", enabled: "1" }
+		}
+	};
+	factory.with_uci(uci_enabled, (io) => {
+		assert(config_loader.is_enabled(io), "Should be enabled");
+	});
+
+	// Disabled
+	let uci_disabled = {
+		"luci-sso": {
+			"default": { ".type": "oidc", enabled: "0" }
+		}
+	};
+	factory.with_uci(uci_disabled, (io) => {
+		assert(!config_loader.is_enabled(io), "Should be disabled");
+	});
+
+	// Missing section
+	factory.with_uci({}, (io) => {
+		assert(!config_loader.is_enabled(io), "Should be disabled if missing");
+	});
+});
+
 test('config: logic - reject missing issuer URL', () => {
 	let mocked = mock.create();
 	let mock_uci = {
