@@ -197,6 +197,13 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 
 	let payload = result.data;
 
+	// Log claim names for debugging (Security: names only, no values)
+	let claim_names = [];
+	for (let k, v in payload) {
+		push(claim_names, k);
+	}
+	io.log("info", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
+
 	// 3. OIDC Mandatory Claims Check
 	if (!payload.sub) {
 		return { ok: false, error: "MISSING_SUB_CLAIM" };
@@ -249,4 +256,47 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	};
 
 	return { ok: true, data: user_data };
+};
+
+/**
+ * Fetches user claims from the UserInfo endpoint.
+ * 
+ * @param {object} io - I/O provider
+ * @param {string} endpoint - UserInfo URL
+ * @param {string} access_token - OAuth2 Access Token
+ * @returns {object} - Result Object {ok, data: {sub, email, ...}}
+ */
+export function fetch_userinfo(io, endpoint, access_token) {
+	if (!_is_https(endpoint)) return { ok: false, error: "INSECURE_USERINFO_ENDPOINT" };
+	if (!access_token) return { ok: false, error: "MISSING_ACCESS_TOKEN" };
+
+	io.log("info", "Fetching supplemental claims from UserInfo endpoint");
+
+	let response = io.http_get(endpoint, {
+		headers: { "Authorization": `Bearer ${access_token}` },
+		verify: true
+	});
+
+	if (!response || response.error) {
+		io.log("warn", `UserInfo fetch network error: ${response?.error || "no response"}`);
+		return { ok: false, error: "NETWORK_ERROR" };
+	}
+	if (response.status != 200) {
+		io.log("warn", `UserInfo fetch HTTP ${response.status}`);
+		return { ok: false, error: "USERINFO_FETCH_FAILED", details: response.status };
+	}
+
+	let res = encoding.safe_json(response.body);
+	if (!res.ok) {
+		io.log("error", `UserInfo JSON parse error: ${res.details}`);
+		return { ok: false, error: "INVALID_JSON" };
+	}
+
+	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2)
+	if (!res.data.sub) {
+		io.log("error", "UserInfo response missing mandatory 'sub' claim");
+		return { ok: false, error: "MISSING_SUB_CLAIM" };
+	}
+
+	return { ok: true, data: res.data };
 };

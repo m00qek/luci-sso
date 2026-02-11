@@ -47,6 +47,12 @@ To reduce network overhead and ensure resilience against transient IdP outages, 
 *   **Atomic Updates:** All cache updates use atomic POSIX `rename` to prevent partial reads by concurrent processes.
 *   **Forced Refresh:** The system MUST trigger a forced cache refresh if a cryptographic operation fails due to an unknown Key ID (`kid`), ensuring automatic recovery from IdP key rotations.
 
+### UserInfo Supplementation (Thin Token Support)
+To ensure compatibility with OIDC-compliant providers that utilize "Thin" ID Tokens (e.g., Authelia), the system MUST support claim supplementation via the UserInfo endpoint:
+*   **Trigger:** If the mandatory `email` claim is missing from the verified ID Token, the system SHOULD attempt to fetch it from the `userinfo_endpoint`.
+*   **Authentication:** The fetch MUST be performed using the `access_token` as a Bearer token over an encrypted (HTTPS) back-channel.
+*   **Security Bound:** The `sub` claim returned by the UserInfo endpoint MUST match the `sub` claim from the cryptographically verified ID Token. Any mismatch MUST result in immediate session termination.
+
 ---
 
 ## 3. Strict HTTPS Policy

@@ -143,11 +143,30 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		};
 	}
 
-	io.log("info", `ID Token successfully validated for [sub_id: ${crypto.safe_id(verify_res.data.sub)}] [session_id: ${session_id}]`);
+	let user_data = verify_res.data;
+
+	// FALLBACK: If email is missing from ID Token, try UserInfo endpoint (OIDC §5.3)
+	if (!user_data.email && discovery_doc.userinfo_endpoint) {
+		let ui_res = oidc.fetch_userinfo(io, discovery_doc.userinfo_endpoint, tokens.access_token);
+		if (ui_res.ok) {
+			// SECURITY: sub MUST match (OIDC Core §5.3.2)
+			if (ui_res.data.sub != user_data.sub) {
+				io.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
+				return { ok: false, error: "IDENTITY_MISMATCH", status: 403 };
+			}
+			user_data.email = ui_res.data.email;
+			user_data.name = user_data.name || ui_res.data.name;
+			io.log("info", `Claims successfully supplemented via UserInfo [session_id: ${session_id}]`);
+		} else {
+			io.log("warn", `UserInfo fallback failed [session_id: ${session_id}]: ${ui_res.error}`);
+		}
+	}
+
+	io.log("info", `ID Token successfully validated for [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}]`);
 
 	return { 
 		ok: true, 
-		data: verify_res.data, 
+		data: user_data, 
 		access_token: tokens.access_token,
 		refresh_token: tokens.refresh_token,
 		id_token: tokens.id_token

@@ -133,6 +133,12 @@ export function discover(io, issuer, options) {
 		}
 	}
 
+	// OPTIONAL: UserInfo endpoint (RFC 6749 / OIDC)
+	if (config.userinfo_endpoint && !_is_https(config.userinfo_endpoint)) {
+		io.log("warn", `Insecure userinfo_endpoint ignored from [id: ${issuer_id}]`);
+		delete config.userinfo_endpoint;
+	}
+
 	// OPTIONAL: RP-Initiated Logout support (RFC 7522 / OIDC)
 	if (config.end_session_endpoint && !_is_https(config.end_session_endpoint)) {
 		io.log("warn", `Insecure end_session_endpoint ignored from [id: ${issuer_id}]`);

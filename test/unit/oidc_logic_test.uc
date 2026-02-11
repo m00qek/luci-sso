@@ -420,6 +420,32 @@ test('oidc: encoding - parameter torture test', () => {
 
 	assert(post_call, "Should have made an HTTP POST call");
 	let body = post_call.args[1].body;
-	assert(index(body, "code=code%20%26%20space") != -1, "code in body must be encoded");
-	assert(index(body, "code_verifier=verifier%2Fslash-that-is-at-least-43-chars-long-!!!") != -1, "verifier in body must be encoded");
-});
+				assert(index(body, "code=code%20%26%20space") != -1, "code in body must be encoded");
+				assert(index(body, "code_verifier=verifier%2Fslash-that-is-at-least-43-chars-long-!!!") != -1, "verifier in body must be encoded");
+			});
+			
+			test('oidc: userinfo - successful fetch', () => {
+				let endpoint = "https://trusted.idp/userinfo";
+				let at = "access-token-123";
+				let mock_res = { sub: "user-123", email: "user@example.com" };
+			
+				mock.create().with_responses({
+					[endpoint]: { status: 200, body: mock_res }
+				}, (io) => {
+					let res = oidc.fetch_userinfo(io, endpoint, at);
+					assert(res.ok);
+					assert_eq(res.data.email, "user@example.com");
+				});
+			});
+			
+			test('oidc: userinfo - reject missing sub claim', () => {
+				let endpoint = "https://trusted.idp/userinfo";
+				mock.create().with_responses({
+					[endpoint]: { status: 200, body: { email: "no-sub@example.com" } }
+				}, (io) => {
+					let res = oidc.fetch_userinfo(io, endpoint, "at");
+					assert(!res.ok);
+					assert_eq(res.error, "MISSING_SUB_CLAIM");
+				});
+			});
+			

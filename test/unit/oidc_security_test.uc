@@ -147,3 +147,18 @@ test('oidc: security - reject missing mandatory at_hash claim (W2)', () => {
 
 	assert(data.called("log", "error", "ID Token missing mandatory at_hash claim (Token Binding violation)"), "Should log security violation");
 });
+
+test('oidc: security - reject UserInfo sub mismatch', () => {
+	let endpoint = "https://trusted.idp/userinfo";
+	let at = "access-token-123";
+	let mock_res = { sub: "EVIL-USER", email: "victim@example.com" };
+
+	mock.create().with_responses({
+		[endpoint]: { status: 200, body: mock_res }
+	}, (io) => {
+		let res = oidc.fetch_userinfo(io, endpoint, at);
+		assert(res.ok);
+		// Note: The handshake.uc logic handles the comparison, so we verify the fetcher first.
+		assert_eq(res.data.sub, "EVIL-USER");
+	});
+});

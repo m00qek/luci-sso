@@ -13,6 +13,7 @@ export const MOCK_DISCOVERY = {
     issuer: "https://trusted.idp",
     authorization_endpoint: "https://trusted.idp/auth",
     token_endpoint: "https://trusted.idp/token",
+    userinfo_endpoint: "https://trusted.idp/userinfo",
     jwks_uri: "https://trusted.idp/jwks"
 };
 
