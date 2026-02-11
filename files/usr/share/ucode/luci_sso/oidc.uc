@@ -251,7 +251,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 
 	let user_data = {
 		sub: payload.sub,
-		email: payload.email || payload.sub,
+		email: payload.email,
 		name: payload.name
 	};
 
@@ -292,11 +292,20 @@ export function fetch_userinfo(io, endpoint, access_token) {
 		return { ok: false, error: "INVALID_JSON" };
 	}
 
+	let payload = res.data;
+
+	// Log claim names for debugging (Security: names only, no values)
+	let claim_names = [];
+	for (let k, v in payload) {
+		push(claim_names, k);
+	}
+	io.log("info", `UserInfo claims received: ${join(", ", claim_names)}`);
+
 	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2)
-	if (!res.data.sub) {
+	if (!payload.sub) {
 		io.log("error", "UserInfo response missing mandatory 'sub' claim");
 		return { ok: false, error: "MISSING_SUB_CLAIM" };
 	}
 
-	return { ok: true, data: res.data };
+	return { ok: true, data: payload };
 };

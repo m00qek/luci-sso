@@ -34,13 +34,17 @@ export function create() {
 			log.syslog(priority, msg);
 		},
 
-		http_get: function(url) {
+		http_get: function(url, opts) {
 			// MANDATORY: HTTPS only (Blocker #6)
 			if (substr(url, 0, 8) !== "https://") {
 				this.log("error", `Security violation: Blocked insecure HTTP GET to ${url}`);
 				return { error: "HTTPS_REQUIRED" };
 			}
-			let res = secure_http.request('GET', url, { timeout: 10000 });
+			let headers = (opts && opts.headers) ? opts.headers : {};
+			let res = secure_http.request('GET', url, { 
+				timeout: 10000,
+				headers: headers
+			});
 			if (res.error) {
 				this.log("error", `HTTPS GET failed for ${url}: ${res.error}`);
 				return { error: "NETWORK_ERROR" };

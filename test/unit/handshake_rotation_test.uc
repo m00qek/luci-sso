@@ -48,6 +48,7 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
             // Create ID token matching the generated nonce
             let payload = { 
                 ...f.MOCK_CLAIMS,
+                email: "user-123",
                 nonce: s_data.nonce,
                 at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16))
             };
