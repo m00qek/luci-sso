@@ -62,8 +62,8 @@ test('crypto: plumbing - JWK to secret (OCT/symmetric)', () => {
 });
 
 test('crypto: plumbing - token size enforcement', () => {
-    let too_big = "";
-    for (let i = 0; i < 1700; i++) too_big += "1234567890"; 
+    let too_big = "1234567890";
+    for (let i = 0; i < 11; i++) too_big += too_big; // 10 * 2^11 = 20,480 (> 16,384)
     assert_eq(crypto.verify_jwt(too_big, "key", { alg: "RS256", now: 123, clock_tolerance: 300 }).error, "TOKEN_TOO_LARGE");
 });
 
