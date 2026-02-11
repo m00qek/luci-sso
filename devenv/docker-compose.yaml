@@ -4,6 +4,10 @@ services:
     image: ${DOCKER_NAMESPACE}/luci-sso-pki:alpine${ALPINE_VERSION}
     build:
       context: ./services/pki
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
       args:
         ALPINE_VERSION: ${ALPINE_VERSION}
     volumes:
@@ -23,6 +27,10 @@ services:
     image: ${DOCKER_NAMESPACE}/luci-sso-idp:node${NODE_VERSION}-alpine${ALPINE_VERSION}
     build:
       context: ./services/idp
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
       args:
         NODE_VERSION: ${NODE_VERSION}
         ALPINE_VERSION: ${ALPINE_VERSION}
@@ -74,6 +82,10 @@ services:
     stop_grace_period: 0s
     build:
       context: ./services/openwrt
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
       args:
         SDK_ARCH: ${ROOTFS_ARCH}
         SDK_VERSION: ${SDK_VERSION}
@@ -131,6 +143,10 @@ services:
     image: ${DOCKER_NAMESPACE}/luci-sso-sdk:${SDK_ARCH}-${SDK_VERSION}
     build:
       context: ./services/sdk
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
       args:
         SDK_ARCH: ${SDK_ARCH}
         SDK_VERSION: ${SDK_VERSION}

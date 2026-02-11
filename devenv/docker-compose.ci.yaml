@@ -15,6 +15,10 @@ services:
     stop_grace_period: 0s
     build:
       context: ./services/browser
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
       args:
         NODE_VERSION: ${NODE_VERSION}
         ALPINE_VERSION: ${ALPINE_VERSION}
