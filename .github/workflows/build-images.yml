@@ -61,7 +61,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [openwrt] # Temporarily removed 'sdk' to save resources
+        service: [openwrt sdk]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
