@@ -109,7 +109,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		return { ok: false, error: "JWKS_FETCH_FAILED", status: 500 };
 	}
 
-	let verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
+	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
 	
 	// Key Rotation Recovery
 	if (!verify_res.ok) {
@@ -128,7 +128,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 			io.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
 			jwks_res = discovery.fetch_jwks(io, discovery_doc.jwks_uri, { force: true });
 			if (jwks_res.ok) {
-				verify_res = oidc.verify_id_token(tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
+				verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
 			}
 		}
 	}

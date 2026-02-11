@@ -143,7 +143,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
  * @param {number} now - Current timestamp
  * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
  */
-export function verify_id_token(tokens, keys, config, handshake, discovery, now, policy) {
+export function verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy) {
 	if (!tokens.id_token) return { ok: false, error: "MISSING_ID_TOKEN" };
 
 	// 1. Policy Enforcement (Second Dimension)
@@ -228,6 +228,7 @@ export function verify_id_token(tokens, keys, config, handshake, discovery, now,
 		return { ok: false, error: "MISSING_ACCESS_TOKEN" };
 	}
 	if (!payload.at_hash) {
+		io.log("error", "ID Token missing mandatory at_hash claim (Token Binding violation)");
 		return { ok: false, error: "MISSING_AT_HASH" };
 	}
 

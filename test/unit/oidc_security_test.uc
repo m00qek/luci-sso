@@ -26,7 +26,7 @@ test('OIDC: Security - Reject HS256 Algorithm Confusion (Reflective Trust)', () 
 	mock.create().with_env({}, (io) => {
 		// BLOCKER: Here we do NOT pass TEST_POLICY, so it uses the production DEFAULT_POLICY (RS256/ES256)
 		// This verifies the production fix.
-		let res = oidc.verify_id_token(tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500);
+		let res = oidc.verify_id_token(io, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500);
 		
 		assert(!res.ok, "Should NOT accept HS256 token in OIDC flow");
 		assert_eq(res.error, "UNSUPPORTED_ALGORITHM");
@@ -102,7 +102,7 @@ test('OIDC: Security - Reject invalid at_hash', () => {
 	let keys = [{ kty: "oct", kid: "dummy", k: crypto.b64url_encode(secret) }];
 
 	mock.create().with_responses({}, (io) => {
-		let res = oidc.verify_id_token(tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
+		let res = oidc.verify_id_token(io, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
 		assert(!res.ok, "Should reject invalid at_hash");
 		assert_eq(res.error, "AT_HASH_MISMATCH");
 	});
@@ -117,7 +117,7 @@ test('OIDC: Security - Reject missing mandatory claims (exp, iat)', () => {
 	let t_no_exp = { id_token: crypto.sign_jws(p_no_exp, secret), access_token: "a" };
 
 	mock.create().with_responses({}, (io) => {
-		let res = oidc.verify_id_token(t_no_exp, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
+		let res = oidc.verify_id_token(io, t_no_exp, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
 		assert(!res.ok, "Should reject ID token missing 'exp' claim");
 		assert_eq(res.error, "MISSING_EXP_CLAIM");
 	});
@@ -127,8 +127,23 @@ test('OIDC: Security - Reject missing mandatory claims (exp, iat)', () => {
 	let t_no_iat = { id_token: crypto.sign_jws(p_no_iat, secret), access_token: "a" };
 
 	mock.create().with_responses({}, (io) => {
-		let res = oidc.verify_id_token(t_no_iat, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
+		let res = oidc.verify_id_token(io, t_no_iat, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
 		assert(!res.ok, "Should reject ID token missing 'iat' claim");
 		assert_eq(res.error, "MISSING_IAT_CLAIM");
 	});
+});
+
+test('OIDC: Security - Reject missing mandatory at_hash claim (W2)', () => {
+	let secret = f.MOCK_CONFIG.client_secret;
+	let keys = [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(secret) }];
+	let payload = { ...f.MOCK_CLAIMS, at_hash: null, nonce: "n1", sub: "u1" };
+	let tokens = { id_token: crypto.sign_jws(payload, secret), access_token: "at123" };
+
+	let data = mock.create().spy((io) => {
+		let res = oidc.verify_id_token(io, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 1500, TEST_POLICY);
+		assert(!res.ok, "Should reject ID token missing 'at_hash' claim");
+		assert_eq(res.error, "MISSING_AT_HASH");
+	});
+
+	assert(data.called("log", "error", "ID Token missing mandatory at_hash claim (Token Binding violation)"), "Should log security violation");
 });
