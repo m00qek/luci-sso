@@ -102,7 +102,13 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [idp, browser, pki]
+        include:
+          - service: idp
+            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+          - service: browser
+            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+          - service: pki
+            tag_suffix: alpine${{ needs.metadata.outputs.alpine_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -125,7 +131,7 @@ jobs:
           push: true
           tags: |
             ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:latest
-            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:${{ matrix.tag_suffix }}
           build-args: |
             NODE_VERSION=${{ needs.metadata.outputs.node_version }}
             ALPINE_VERSION=${{ needs.metadata.outputs.alpine_version }}
