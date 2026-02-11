@@ -150,7 +150,7 @@ endef
 	docker compose $(COMPOSE_FLAGS) config > $(RESOLVED_DOCKER_COMPOSE)
 	
 	@echo -e " $(GREEN)🚀$(RESET) Starting '$(DOCKER_SUITE)' environment..."
-	@UP_FLAGS="--remove-orphans --build"; \
+	@UP_FLAGS="--remove-orphans"; \
 	if [ "$(DETACHED)" = "true" ]; then UP_FLAGS="$$UP_FLAGS -d"; fi; \
 	docker compose $(COMPOSE_FLAGS) up $$UP_FLAGS
 	
