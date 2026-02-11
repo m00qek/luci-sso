@@ -252,9 +252,12 @@ static uc_value_t *uc_mbedtls_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
 	const unsigned char *e = (const unsigned char *)ucv_string_get(v_e);
 	size_t e_len = ucv_string_length(v_e);
 
-	// Security: Reject exponents that are: Empty, Even, or Less than 3
+	// Security: Reject exponents that are: Empty, Even, or Not exactly 65537 (RFC 4871)
 	if (e_len == 0 || (e[e_len - 1] & 1) == 0) return NULL;
-	if (e_len == 1 && e[0] < 3) return NULL;
+	
+	// Fast check for e == 65537 (0x010001)
+	// We only support the standard F4 exponent for safety.
+	if (e_len != 3 || e[0] != 0x01 || e[1] != 0x00 || e[2] != 0x01) return NULL;
 
 	mbedtls_pk_context pk;
 	mbedtls_pk_init(&pk);

@@ -125,3 +125,18 @@ test('native: compliance - random number generator', () => {
 	assert_eq(length(r1), 32, "Must return requested length");
 	assert(r1 != r2, "Subsequent calls must be unique");
 });
+
+test('native: compliance - RSA reject small public exponents (e < 65537)', () => {
+	// RSA Key with e=3 (unsafe)
+	let n_b64 = "ALrjS_Z_X_unsafe_modulus_placeholder_";
+	
+	// e=3 is 0x03 (1 byte)
+	let e3_b64 = "Aw";
+	let res = native.jwk_rsa_to_pem(n_b64, e3_b64);
+	assert(res === null, "Should return null (reject) for RSA e=3");
+
+	// e=65535 is 0x00FFFF (unsafe)
+	let e65535_b64 = "AP__";
+	res = native.jwk_rsa_to_pem(n_b64, e65535_b64);
+	assert(res === null, "Should return null (reject) for RSA e=65535");
+});
