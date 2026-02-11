@@ -3,7 +3,7 @@ import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 
-test('Logout: Security - Robust origin extraction for post_logout_redirect_uri', () => {
+test('logout: security - robust origin extraction for post_logout_redirect_uri', () => {
     const cases = [
         {
             redirect: "https://trusted-router.local/cgi-bin/luci-sso/callback",

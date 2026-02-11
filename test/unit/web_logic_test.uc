@@ -2,7 +2,7 @@ import { test, assert, assert_eq } from 'testing';
 import * as web from 'luci_sso.web';
 import * as mock from 'mock';
 
-test('Web: Rendering - Standardized error prevents internal leakage', () => {
+test('web: rendering - standardized error prevents internal leakage', () => {
 	mock.create().spy((io) => {
 		web.render_error(io, "STATE_CORRUPTED", 401);
 		let out = io.__state__.stdout_buf;
@@ -21,19 +21,19 @@ test('Web: Rendering - Standardized error prevents internal leakage', () => {
 	});
 });
 
-test('Web: Parsing - Standard cookie format', () => {
+test('web: parsing - standard cookie format', () => {
 	let c = web.parse_cookies("foo=bar; baz=qux");
 	assert_eq(c.foo, "bar");
 	assert_eq(c.baz, "qux");
 });
 
-test('Web: Parsing - Standard query parameters', () => {
+test('web: parsing - standard query parameters', () => {
 	let p = web.parse_params("a=1&b=2%203");
 	assert_eq(p.a, "1");
 	assert_eq(p.b, "2 3");
 });
 
-test('Web: Security - Prevent XSS in Redirect Location', () => {
+test('web: security - prevent XSS in redirect location', () => {
 	let malicious_loc = 'javascript:alert("XSS")//"><img src=x onerror=alert(1)>';
 	let res = {
 		status: 302,
@@ -56,7 +56,7 @@ test('Web: Security - Prevent XSS in Redirect Location', () => {
 	});
 });
 
-test('Web: Security - Emission of hardened security headers', () => {
+test('web: security - emission of hardened security headers', () => {
 	let res = { status: 200, body: "OK" };
 	mock.create().spy((io) => {
 		web.render(io, res);

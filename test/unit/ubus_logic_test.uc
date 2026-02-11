@@ -2,7 +2,7 @@ import { test, assert, assert_eq } from 'testing';
 import * as ubus from 'luci_sso.ubus';
 import * as mock from 'mock';
 
-test('UBUS: Logic - get_session success', () => {
+test('ubus: logic - get_session success', () => {
 	let factory = mock.create().with_ubus({
 		"session:get": (args) => {
 			assert_eq(args.ubus_rpc_session, "sid-123");
@@ -18,7 +18,7 @@ test('UBUS: Logic - get_session success', () => {
 	});
 });
 
-test('UBUS: Logic - get_session handle missing session', () => {
+test('ubus: logic - get_session handle missing session', () => {
 	let factory = mock.create().with_ubus({
 		"session:get": (args) => null
 	});
@@ -30,7 +30,7 @@ test('UBUS: Logic - get_session handle missing session', () => {
 	});
 });
 
-test('UBUS: Logic - get_session handle invalid SID', () => {
+test('ubus: logic - get_session handle invalid SID', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		let res = ubus.get_session(io, null);
@@ -39,7 +39,7 @@ test('UBUS: Logic - get_session handle invalid SID', () => {
 	});
 });
 
-test('UBUS: Security - create_session generates 256-bit CSRF token (B3)', () => {
+test('ubus: security - create_session generates 256-bit CSRF token (B3)', () => {
 	let factory = mock.create().with_ubus({
 		"session:login": { ubus_rpc_session: "new-sid" },
 		"session:set": (args) => {

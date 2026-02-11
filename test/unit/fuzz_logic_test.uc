@@ -5,7 +5,7 @@ import * as crypto from 'luci_sso.crypto';
 // Tier 2: Fuzz & Robustness Logic
 // =============================================================================
 
-test('Fuzz: Logic - Base64URL Consistency', () => {
+test('fuzz: logic - Base64URL consistency', () => {
 	let cases = [
 		"",
 		"foobar",
@@ -23,7 +23,7 @@ test('Fuzz: Logic - Base64URL Consistency', () => {
 	}
 });
 
-test('Fuzz: Logic - Large Input Stability', () => {
+test('fuzz: logic - large input stability', () => {
     // 16KB limit check
 	let large = "";
 	for (let i = 0; i < 1024; i++) {
@@ -34,7 +34,7 @@ test('Fuzz: Logic - Large Input Stability', () => {
 	assert_eq(length(decoded), 16384, "Should successfully roundtrip 16KB");
 });
 
-test('Fuzz: Logic - Bit Flipping Resistance', () => {
+test('fuzz: logic - bit flipping resistance', () => {
 	let secret = "secret";
 	let token = crypto.sign_jws({foo: "bar"}, secret);
 	let parts = split(token, ".");
@@ -54,7 +54,7 @@ test('Fuzz: Logic - Bit Flipping Resistance', () => {
 	assert_eq(result.error, "INVALID_SIGNATURE", "Bit flipping must invalidate signature");
 });
 
-test('Fuzz: Logic - Header Injection Resistance', () => {
+test('fuzz: logic - header injection resistance', () => {
 	let secret = "secret";
 	let payload = { foo: "bar" };
 	let header = { alg: "HS256", typ: "JWT", malicious_extra: "ignore-me" }; 

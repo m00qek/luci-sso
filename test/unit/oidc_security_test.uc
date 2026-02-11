@@ -6,7 +6,7 @@ import * as f from 'unit.tier2_fixtures';
 
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256", "HS256"] };
 
-test('OIDC: Security - Reject HS256 Algorithm Confusion (Reflective Trust)', () => {
+test('oidc: security - reject HS256 algorithm confusion', () => {
 	// 1. Setup malicious HS256 token signed with a string key
 	let header = { alg: "HS256", typ: "JWT", kid: "key1" };
 	let payload = { 
@@ -33,7 +33,7 @@ test('OIDC: Security - Reject HS256 Algorithm Confusion (Reflective Trust)', () 
 	});
 });
 
-test('OIDC: Security - Reject insecure token endpoint', () => {
+test('oidc: security - reject insecure token endpoint', () => {
 	let insecure_disc = { ...f.MOCK_DISCOVERY, token_endpoint: "http://insecure.com/token" };
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, insecure_disc, "code", "verifier-is-long-enough-to-pass-basic-check-123");
@@ -42,7 +42,7 @@ test('OIDC: Security - Reject insecure token endpoint', () => {
 	});
 });
 
-test('OIDC: Security - Handle network failure during exchange', () => {
+test('oidc: security - handle network failure during exchange', () => {
 	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: { error: "TLS_VERIFY_FAILED" }
 	}, (io) => {
@@ -52,7 +52,7 @@ test('OIDC: Security - Handle network failure during exchange', () => {
 	});
 });
 
-test('OIDC: Security - Reject insecure issuer URL', () => {
+test('oidc: security - reject insecure issuer URL', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.discover(io, "http://insecure.idp");
 		assert(!res.ok);
@@ -60,7 +60,7 @@ test('OIDC: Security - Reject insecure issuer URL', () => {
 	});
 });
 
-test('OIDC: Security - Reject insecure internal issuer URL', () => {
+test('oidc: security - reject insecure internal issuer URL', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.discover(io, "https://secure.idp", { internal_issuer_url: "http://insecure.local" });
 		assert(!res.ok);
@@ -68,7 +68,7 @@ test('OIDC: Security - Reject insecure internal issuer URL', () => {
 	});
 });
 
-test('OIDC: Security - Reject discovery document with insecure endpoints', () => {
+test('oidc: security - reject discovery document with insecure endpoints', () => {
 	let evil_disc = { 
 		...f.MOCK_DISCOVERY, 
 		jwks_uri: "http://insecure.idp/jwks" 
@@ -83,7 +83,7 @@ test('OIDC: Security - Reject discovery document with insecure endpoints', () =>
 	});
 });
 
-test('OIDC: Security - Reject invalid at_hash', () => {
+test('oidc: security - reject invalid at_hash', () => {
 	let access_token = "access-token-123";
 	let secret = f.MOCK_CONFIG.client_secret;
 	
@@ -108,7 +108,7 @@ test('OIDC: Security - Reject invalid at_hash', () => {
 	});
 });
 
-test('OIDC: Security - Reject missing mandatory claims (exp, iat)', () => {
+test('oidc: security - reject missing mandatory claims', () => {
 	let secret = f.MOCK_CONFIG.client_secret;
 	let keys = [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(secret) }];
 
@@ -133,7 +133,7 @@ test('OIDC: Security - Reject missing mandatory claims (exp, iat)', () => {
 	});
 });
 
-test('OIDC: Security - Reject missing mandatory at_hash claim (W2)', () => {
+test('oidc: security - reject missing mandatory at_hash claim (W2)', () => {
 	let secret = f.MOCK_CONFIG.client_secret;
 	let keys = [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(secret) }];
 	let payload = { ...f.MOCK_CLAIMS, at_hash: null, nonce: "n1", sub: "u1" };

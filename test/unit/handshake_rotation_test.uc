@@ -5,7 +5,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 
-test('Handshake: Recovery - Handle JWKS key rotation with automatic retry', () => {
+test('handshake: recovery - handle JWKS key rotation with automatic retry', () => {
     let access_token = "access-token-123";
     let secret = f.MOCK_CONFIG.client_secret;
     

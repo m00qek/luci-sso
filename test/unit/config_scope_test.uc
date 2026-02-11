@@ -2,7 +2,7 @@ import { test, assert, assert_eq } from '../testing.uc';
 import * as config from 'luci_sso.config';
 import * as mock from 'mock';
 
-test('Config: Scope - Load custom scope from UCI', () => {
+test('config: scope - load custom scope from UCI', () => {
     let mock_uci = {
         "luci-sso": {
             "default": {
@@ -28,7 +28,7 @@ test('Config: Scope - Load custom scope from UCI', () => {
         });
 });
 
-test('Config: Scope - Handle missing scope (defaulting to undefined in config object)', () => {
+test('config: scope - handle missing scope', () => {
     let mock_uci = {
         "luci-sso": {
             "default": {

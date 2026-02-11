@@ -2,7 +2,7 @@ import { test, assert, assert_eq } from '../testing.uc';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 
-test('Session: Race Condition - Should fail instead of falling back to random key when lock is held', () => {
+test('session: race condition - should fail instead of falling back to random key when lock is held', () => {
 	const lock_path = "/etc/luci-sso/secret.key.lock";
 	mock.create()
 		.with_files({
@@ -19,7 +19,7 @@ test('Session: Race Condition - Should fail instead of falling back to random ke
 		});
 });
 
-test('Security: Secret key bootstrap retries and succeeds if file appears (B2)', () => {
+test('security: secret key bootstrap retries and succeeds if file appears (B2)', () => {
 	let read_attempts = 0;
 	const mock_factory = mock.create().with_files({
 		"/etc/luci-sso/secret.key.lock": { ".type": "directory" }
@@ -43,7 +43,7 @@ test('Security: Secret key bootstrap retries and succeeds if file appears (B2)',
 	});
 });
 
-test('Security: Secret key bootstrap fails after maximum retries (B2)', () => {
+test('security: secret key bootstrap fails after maximum retries (B2)', () => {
 	let read_attempts = 0;
 	const mock_factory = mock.create().with_files({
 		"/etc/luci-sso/secret.key.lock": { ".type": "directory" }

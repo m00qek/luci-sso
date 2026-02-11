@@ -6,7 +6,7 @@ import * as mock from 'mock';
 // Tier 2: Configuration Logic (Platinum Suite)
 // =============================================================================
 
-test('Config: Logic - Successful Load & RPCD Sync', () => {
+test('config: logic - successful load & RPCD sync', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"rpcd": {
@@ -35,7 +35,7 @@ test('Config: Logic - Successful Load & RPCD Sync', () => {
 	});
 });
 
-test('Config: Logic - Normalization (Email list vs string)', () => {
+test('config: logic - normalization (email list vs string)', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"rpcd": { "s1": { ".type": "login", "username": "u1" }, "s2": { ".type": "login", "username": "u2" } },
@@ -53,7 +53,7 @@ test('Config: Logic - Normalization (Email list vs string)', () => {
 	});
 });
 
-test('Config: Logic - HTTPS Enforcement', () => {
+test('config: logic - HTTPS enforcement', () => {
 	let mocked = mock.create();
 	
 	let check = (url) => {
@@ -73,7 +73,7 @@ test('Config: Logic - HTTPS Enforcement', () => {
 	assert(!check("http://idp.com"), "Insecure remote HTTP must be rejected");
 });
 
-test('Config: Logic - Reject Empty or Invalid User Mappings (W5)', () => {
+test('config: logic - reject empty or invalid user mappings (W5)', () => {
 	let mocked = mock.create();
 	
 	// Case 1: No user sections at all
@@ -109,7 +109,7 @@ test('Config: Logic - Reject Empty or Invalid User Mappings (W5)', () => {
 	});
 });
 
-test('Config: Logic - Handle Disabled State', () => {
+test('config: logic - handle disabled state', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -121,14 +121,14 @@ test('Config: Logic - Handle Disabled State', () => {
 	});
 });
 
-test('Config: Logic - Handle Missing Config', () => {
+test('config: logic - handle missing config', () => {
 	let mocked = mock.create();
 	mocked.with_uci({}, (io) => {
 		assert_throws(() => config_loader.load(io));
 	});
 });
 
-test('Config: Logic - Reject Missing Issuer URL', () => {
+test('config: logic - reject missing issuer URL', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -140,7 +140,7 @@ test('Config: Logic - Reject Missing Issuer URL', () => {
 	});
 });
 
-test('Config: Logic - Reject Missing Clock Tolerance', () => {
+test('config: logic - reject missing clock tolerance', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -152,7 +152,7 @@ test('Config: Logic - Reject Missing Clock Tolerance', () => {
 	});
 });
 
-test('Config: Logic - Reject Missing Mandatory OIDC Fields', () => {
+test('config: logic - reject missing mandatory OIDC fields', () => {
 	let mocked = mock.create();
 	
 	// 1. Missing client_id
@@ -176,7 +176,7 @@ test('Config: Logic - Reject Missing Mandatory OIDC Fields', () => {
 	});
 });
 
-test('Config: Logic - Reject Insecure Redirect URI', () => {
+test('config: logic - reject insecure redirect URI', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {

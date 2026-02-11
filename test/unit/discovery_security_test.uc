@@ -3,7 +3,7 @@ import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 
-test('Discovery: Security - Prevent cache poisoning on issuer mismatch (B5)', () => {
+test('discovery: security - prevent cache poisoning on issuer mismatch (B5)', () => {
     let issuer = "https://trusted.idp";
     let cache_path = `/var/run/luci-sso/oidc-discovery-extracted_later.json`;
     
@@ -29,7 +29,7 @@ test('Discovery: Security - Prevent cache poisoning on issuer mismatch (B5)', ()
         });
 });
 
-test('Discovery: Security - Prevent cache poisoning on missing required fields', () => {
+test('discovery: security - prevent cache poisoning on missing required fields', () => {
     let issuer = "https://trusted.idp";
     let broken_doc = { issuer: issuer }; // Missing everything else
 

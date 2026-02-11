@@ -8,7 +8,7 @@ import * as mock from 'mock';
 // Tier 2: Security Enforcement Logic
 // =============================================================================
 
-test('Security: JWT - Reject alg: none', () => {
+test('security: JWT - reject alg: none', () => {
 	let none_header = crypto.b64url_encode(sprintf("%J", { alg: "none", typ: "JWT" }));
 	let payload = crypto.b64url_encode(sprintf("%J", { sub: "admin" }));
 	let token = none_header + "." + payload + ".";
@@ -22,7 +22,7 @@ test('Security: JWT - Reject alg: none', () => {
 	assert_eq(res.error, "UNSUPPORTED_ALGORITHM");
 });
 
-test('Security: JWT - Reject Stripped Signature', () => {
+test('security: JWT - reject stripped signature', () => {
     let header = crypto.b64url_encode(sprintf("%J", { alg: "HS256" }));
     let payload = crypto.b64url_encode(sprintf("%J", { sub: "admin" }));
     let stripped = header + "." + payload + ".";
@@ -31,7 +31,7 @@ test('Security: JWT - Reject Stripped Signature', () => {
     assert_eq(res.error, "INVALID_SIGNATURE_ENCODING");
 });
 
-test('Security: JWT - Payload Integrity', () => {
+test('security: JWT - payload integrity', () => {
 	let secret = "secret";
 	let good_token = crypto.sign_jws({foo: "bar"}, secret);
 	let parts = split(good_token, ".");
@@ -44,7 +44,7 @@ test('Security: JWT - Payload Integrity', () => {
 	assert_eq(res.error, "INVALID_SIGNATURE", "Tampering must invalidate HMAC signature");
 });
 
-test('Security: PII - Ensure logs never contain raw identifiers (Email/@)', () => {
+test('security: PII - ensure logs never contain raw identifiers', () => {
 	let factory = mock.create();
 	let user_data = {
 		sub: "123456789",
@@ -72,7 +72,7 @@ test('Security: PII - Ensure logs never contain raw identifiers (Email/@)', () =
 	}
 });
 
-test('Security: Token Registry - Cleanup of stale tokens', () => {
+test('security: token registry - cleanup of stale tokens', () => {
 	let factory = mock.create();
 	let now = 1516239022;
 	let old_token_path = "/var/run/luci-sso/tokens/old-id";

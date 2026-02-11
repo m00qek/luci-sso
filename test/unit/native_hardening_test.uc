@@ -1,7 +1,7 @@
 import * as native from 'luci_sso.native';
 import { assert, test } from '../testing.uc';
 
-test('Native: RSA Hardening - Reject invalid exponents (N2)', () => {
+test('native: RSA hardening - reject invalid exponents (N2)', () => {
     // n is 1024-bit RSA modulus (minimal but valid for test)
     let n = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
     
@@ -21,7 +21,7 @@ test('Native: RSA Hardening - Reject invalid exponents (N2)', () => {
     }
 });
 
-test('Native: RSA Hardening - Accept valid exponents', () => {
+test('native: RSA hardening - accept valid exponents', () => {
     let n = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
     
     let cases = [
@@ -41,7 +41,7 @@ test('Native: RSA Hardening - Accept valid exponents', () => {
     }
 });
 
-test('Native: Random - Persistent DRBG (N1)', () => {
+test('native: random - persistent DRBG (N1)', () => {
     // We can't easily prove it's persistent from here, 
     // but we can verify it still works and produces entropy.
     let r1 = native.random(32);
@@ -50,7 +50,7 @@ test('Native: Random - Persistent DRBG (N1)', () => {
     assert(r1 != r2, "Random results should be unique");
 });
 
-test('Native: Security - Reject oversized inputs (B4)', () => {
+test('native: security - reject oversized inputs (B4)', () => {
     // 17KB exceeds the 16KB MAX_INPUT_SIZE
     let large_str = "";
     for (let i = 0; i < 17000; i++) large_str += "A";

@@ -3,7 +3,7 @@ import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 
-test('Session: Logic - Handshake lifecycle (Creation, Validation, Atomic Consumption)', () => {
+test('session: logic - handshake lifecycle (creation, validation, atomic consumption)', () => {
 	let factory = mock.create();
 	
 	factory.with_env({}, (io) => {
@@ -25,7 +25,7 @@ test('Session: Logic - Handshake lifecycle (Creation, Validation, Atomic Consump
 	});
 });
 
-test('Session: Logic - Handle corrupted handshake files', () => {
+test('session: logic - handle corrupted handshake files', () => {
 	let factory = mock.create();
 	let handle = "corrupted-handle";
 	let path = `/var/run/luci-sso/handshake_${handle}.json`;
@@ -37,7 +37,7 @@ test('Session: Logic - Handle corrupted handshake files', () => {
 	});
 });
 
-test('Session: Logic - Enforce clock tolerance boundaries', () => {
+test('session: logic - enforce clock tolerance boundaries', () => {
 	let factory = mock.create();
 	let now = 1516239022;
 	
@@ -59,7 +59,7 @@ test('Session: Logic - Enforce clock tolerance boundaries', () => {
 	});
 });
 
-test('Session: Logic - Reject malformed state handles', () => {
+test('session: logic - reject malformed state handles', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		let res = session.verify_state(io, "../evil", 300);
@@ -67,7 +67,7 @@ test('Session: Logic - Reject malformed state handles', () => {
 	});
 });
 
-test('Session: Logic - Concurrent verify_state race rejection', () => {
+test('session: logic - concurrent verify_state race rejection', () => {
 	let factory = mock.create();
 	let handle = "race-handle";
 	let path = `/var/run/luci-sso/handshake_${handle}.json`;
@@ -84,7 +84,7 @@ test('Session: Logic - Concurrent verify_state race rejection', () => {
 	});
 });
 
-test('Session: Logic - Cleanup of abandoned handshakes', () => {
+test('session: logic - cleanup of abandoned handshakes', () => {
 	let factory = mock.create();
 	let now = 1516239022;
 	let old_path = "/var/run/luci-sso/handshake_old.json";
@@ -110,7 +110,7 @@ test('Session: Logic - Cleanup of abandoned handshakes', () => {
 	});
 });
 
-test('Session: Logic - Secret Key Persistence (Atomic Race Resilience)', () => {
+test('session: logic - secret key persistence (atomic race resilience)', () => {
 	let factory = mock.create();
 	let key_path = "/etc/luci-sso/secret.key";
 
@@ -123,7 +123,7 @@ test('Session: Logic - Secret Key Persistence (Atomic Race Resilience)', () => {
 	});
 });
 
-test('Session: Logic - Read-only FS Resilience', () => {
+test('session: logic - read-only FS resilience', () => {
 	let factory = mock.create().with_read_only();
 	factory.with_env({}, (io) => {
 		// Should FAIL if it cannot persist the key
@@ -133,7 +133,7 @@ test('Session: Logic - Read-only FS Resilience', () => {
 	});
 });
 
-test('Session: Logic - Secret Key Lock Collision Fallback', () => {
+test('session: logic - secret key lock collision fallback', () => {
 	let factory = mock.create();
 	let key_path = "/etc/luci-sso/secret.key";
 
@@ -166,7 +166,7 @@ test('Session: Logic - Secret Key Lock Collision Fallback', () => {
 	});
 });
 
-test('Session: Logic - Explicit state consumption (Cleanup)', () => {
+test('session: logic - explicit state consumption (cleanup)', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);

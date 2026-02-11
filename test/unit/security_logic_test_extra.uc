@@ -6,7 +6,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 
-test('Session: Handshake - Atomic consumption ensures integrity', () => {
+test('session: handshake - atomic consumption ensures integrity', () => {
 	let data = mock.create().with_files({}).spy((io) => {
 		let res = session.create_state(io);
 		let handle = res.data.token;
@@ -16,7 +16,7 @@ test('Session: Handshake - Atomic consumption ensures integrity', () => {
 	assert(data.called("rename"), "Should have used rename for atomicity");
 });
 
-test('Session: Handshake - State is single-use only', () => {
+test('session: handshake - state is single-use only', () => {
 	mock.create().with_files({}, (io) => {
 		// 1. Create a state
 		let res = session.create_state(io);
@@ -37,7 +37,7 @@ test('Session: Handshake - State is single-use only', () => {
 	});
 });
 
-test('Session: Handshake - Traversal attempts are rejected', () => {
+test('session: handshake - traversal attempts are rejected', () => {
 	mock.create().with_files({}, (io) => {
 		let res = session.verify_state(io, "../../../etc/passwd", 0);
 		assert(!res.ok, "Should reject traversal attempt");
@@ -45,7 +45,7 @@ test('Session: Handshake - Traversal attempts are rejected', () => {
 	});
 });
 
-test('Session: Handshake - Malformed JSON fails closed', () => {
+test('session: handshake - malformed JSON fails closed', () => {
 	const handle = "malformed_handle";
 	const path = `/var/run/luci-sso/handshake_${handle}.json`;
 
@@ -56,7 +56,7 @@ test('Session: Handshake - Malformed JSON fails closed', () => {
 	});
 });
 
-test('Session: Handshake - Filesystem error fails closed', () => {
+test('session: handshake - filesystem error fails closed', () => {
 	mock.create().with_files({}, (io) => {
 		let res = session.create_state(io);
 		let handle = res.data.token;
@@ -70,7 +70,7 @@ test('Session: Handshake - Filesystem error fails closed', () => {
 	});
 });
 
-test('Security: Reject authorization URL generation without state (B1)', () => {
+test('security: reject authorization URL generation without state (B1)', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { nonce: "n1234567890123456", code_challenge: "cc1" });
 		assert(type(res) == "object" && !res.ok, "MUST return error object if state is missing");
@@ -78,7 +78,7 @@ test('Security: Reject authorization URL generation without state (B1)', () => {
 	});
 });
 
-test('Security: Reject authorization URL generation with weak state (B1)', () => {
+test('security: reject authorization URL generation with weak state (B1)', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "short", nonce: "n1234567890123456", code_challenge: "cc1" });
 		assert(!res.ok, "MUST reject short state");
@@ -86,7 +86,7 @@ test('Security: Reject authorization URL generation with weak state (B1)', () =>
 	});
 });
 
-test('Security: Reject authorization URL generation without nonce (B1)', () => {
+test('security: reject authorization URL generation without nonce (B1)', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "s1234567890123456", code_challenge: "cc1" });
 		assert(!res.ok, "MUST reject missing nonce");
@@ -94,7 +94,7 @@ test('Security: Reject authorization URL generation without nonce (B1)', () => {
 	});
 });
 
-test('Security: Detect CSPRNG failure during CSRF token generation (B3)', () => {
+test('security: detect CSPRNG failure during CSRF token generation (B3)', () => {
 	global.TESTING_RANDOM_FAIL = true;
 
 	mock.create().with_ubus({

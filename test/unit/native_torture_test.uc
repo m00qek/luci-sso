@@ -1,7 +1,7 @@
 import { test, assert, assert_eq } from 'testing';
 import * as native from 'luci_sso.native';
 
-test('Native: Torture - SHA256 Boundary Inputs', () => {
+test('native: torture - SHA256 boundary inputs', () => {
     assert(native.sha256(""), "Should handle empty string");
     
     let large = "1234567890";
@@ -11,13 +11,13 @@ test('Native: Torture - SHA256 Boundary Inputs', () => {
     assert(native.sha256(large), "Should handle large input without crash");
 });
 
-test('Native: Torture - HMAC-SHA256 Invalid Inputs', () => {
+test('native: torture - HMAC-SHA256 invalid inputs', () => {
     assert_eq(native.hmac_sha256(null, "msg"), null);
     assert_eq(native.hmac_sha256("key", null), null);
     assert_eq(native.hmac_sha256(123, "msg"), null);
 });
 
-test('Native: Torture - Asymmetric Malformed PEM', () => {
+test('native: torture - asymmetric malformed PEM', () => {
     let msg = "test";
     let sig = "garbage-sig";
     let bad_pem = "-----BEGIN PUBLIC KEY-----\nNOT-A-KEY\n-----END PUBLIC KEY-----";
@@ -26,19 +26,19 @@ test('Native: Torture - Asymmetric Malformed PEM', () => {
     assert_eq(native.verify_es256(msg, sig, bad_pem), false, "Malformed EC PEM must fail gracefully");
 });
 
-test('Native: Torture - ES256 Invalid Signature Length', () => {
+test('native: torture - ES256 invalid signature length', () => {
     let key = "-----BEGIN PUBLIC KEY-----\n..."; 
     assert_eq(native.verify_es256("msg", "short", key), false, "Must reject short EC signatures");
 });
 
-test('Native: Torture - Insecure RSA Exponents', () => {
+test('native: torture - insecure RSA exponents', () => {
     // e = 0 or e = 1 are mathematically invalid/insecure for RSA
     // Native should return null/false for these.
     assert_eq(native.jwk_rsa_to_pem("n-bin", "\x00"), null, "Must reject exponent 0");
     assert_eq(native.jwk_rsa_to_pem("n-bin", "\x01"), null, "Must reject exponent 1");
 });
 
-test('Native: Torture - Oversized Parameter Buffers', () => {
+test('native: torture - oversized parameter buffers', () => {
     let huge = "A";
     for (let i = 0; i < 14; i++) huge += huge; // ~16KB
     
@@ -47,7 +47,7 @@ test('Native: Torture - Oversized Parameter Buffers', () => {
     assert_eq(native.jwk_ec_p256_to_pem(huge, huge), null, "Reject oversized EC coordinates");
 });
 
-test('Native: Torture - Random Boundary Lengths', () => {
+test('native: torture - random boundary lengths', () => {
     assert_eq(native.random(0), null, "Zero length should return null");
     assert_eq(native.random(-1), null, "Negative length should return null");
     assert_eq(native.random(5000), null, "Oversized request should return null");

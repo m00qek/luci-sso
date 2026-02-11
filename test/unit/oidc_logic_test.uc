@@ -13,7 +13,7 @@ const TEST_POLICY = { allowed_algs: ["RS256", "ES256", "HS256"] };
 // Tier 2: OIDC Business Logic (Platinum Refactor)
 // =============================================================================
 
-test('OIDC: Discovery - Successful Fetch & Schema', () => {
+test('oidc: discovery - successful fetch & schema', () => {
 	let issuer = "https://trusted.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	
@@ -24,7 +24,7 @@ test('OIDC: Discovery - Successful Fetch & Schema', () => {
 	});
 });
 
-test('OIDC: Discovery - Handle Non-JSON Response', () => {
+test('oidc: discovery - handle non-JSON response', () => {
 	let issuer = "https://broken.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	
@@ -35,7 +35,7 @@ test('OIDC: Discovery - Handle Non-JSON Response', () => {
 	});
 });
 
-test('OIDC: Discovery - Reject Issuer Mismatch', () => {
+test('oidc: discovery - reject issuer mismatch', () => {
 	let issuer = "https://trusted.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	let evil_doc = { ...f.MOCK_DISCOVERY, issuer: "https://evil.idp" };
@@ -47,7 +47,7 @@ test('OIDC: Discovery - Reject Issuer Mismatch', () => {
 	});
 });
 
-test('OIDC: Discovery - Reject document missing issuer field', () => {
+test('oidc: discovery - reject document missing issuer field', () => {
 	let issuer = "https://trusted.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	let bad_doc = { ...f.MOCK_DISCOVERY };
@@ -60,7 +60,7 @@ test('OIDC: Discovery - Reject document missing issuer field', () => {
 	});
 });
 
-test('OIDC: Discovery - Cache Robustness & TTL', () => {
+test('oidc: discovery - cache robustness & TTL', () => {
 	let issuer = "https://trusted.idp";
 	let cache_path = "/var/run/luci-sso/oidc-cache-test.json";
 	let url = issuer + "/.well-known/openid-configuration";
@@ -80,7 +80,7 @@ test('OIDC: Discovery - Cache Robustness & TTL', () => {
 	});
 });
 
-test('OIDC: Token - Successful Exchange', () => {
+test('oidc: token - successful exchange', () => {
 	mock.create().with_responses({
 		[f.MOCK_DISCOVERY.token_endpoint]: {
 			status: 200,
@@ -92,7 +92,7 @@ test('OIDC: Token - Successful Exchange', () => {
 	});
 });
 
-test('OIDC: Token - Handle IdP Errors (401/400)', () => {
+test('oidc: token - handle IdP errors (401/400)', () => {
 	let v = "a-very-long-and-secure-verifier-that-is-at-least-43-chars-long";
 	// 1. Unauthorized (401)
 	mock.create().with_responses({
@@ -122,7 +122,7 @@ test('OIDC: Token - Handle IdP Errors (401/400)', () => {
 	});
 });
 
-test('OIDC: ID Token - Support Multi-Audience Arrays', () => {
+test('oidc: ID token - support multi-audience arrays', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	let at = "mock-at";
 	let full_hash = crypto.sha256(at);
@@ -152,7 +152,7 @@ test('OIDC: ID Token - Support Multi-Audience Arrays', () => {
 	});
 });
 
-test('OIDC: ID Token - Support AZP Claim', () => {
+test('oidc: ID token - support AZP claim', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	let at = "mock-at";
 	let full_hash = crypto.sha256(at);
@@ -180,7 +180,7 @@ test('OIDC: ID Token - Support AZP Claim', () => {
 	});
 });
 
-test('OIDC: ID Token - Reject Expired ID Token', () => {
+test('oidc: ID token - reject expired ID token', () => {
 	let payload = { ...f.MOCK_CLAIMS, exp: 1500 }; 
 	let token = h.generate_id_token(payload, SECRET);
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
@@ -191,7 +191,7 @@ test('OIDC: ID Token - Reject Expired ID Token', () => {
 	});
 });
 
-test('OIDC: ID Token - Enforce Nonce Matching', () => {
+test('oidc: ID token - enforce nonce matching', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	let at = "mock-at";
 	let full_hash = crypto.sha256(at);
@@ -224,7 +224,7 @@ test('OIDC: ID Token - Enforce Nonce Matching', () => {
 	});
 });
 
-test('OIDC: ID Token - Handle Binary Garbage', () => {
+test('oidc: ID token - handle binary garbage', () => {
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
 	mock.create().with_env({}, (io) => {
@@ -236,7 +236,7 @@ test('OIDC: ID Token - Handle Binary Garbage', () => {
 	});
 });
 
-test('OIDC: JWKS - Successful Fetch, Cache & TTL', () => {
+test('oidc: JWKS - successful fetch, cache & TTL', () => {
 	let jwks_uri = "https://trusted.idp/jwks";
 	let cache_path = "/var/run/luci-sso/jwks-cache-test.json";
 	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
@@ -253,7 +253,7 @@ test('OIDC: JWKS - Successful Fetch, Cache & TTL', () => {
 	});
 });
 
-test('OIDC: JWKS - Handle Corrupted Cache', () => {
+test('oidc: JWKS - handle corrupted cache', () => {
 	let jwks_uri = "https://trusted.idp/jwks";
 	let cache_path = "/var/run/luci-sso/jwks-corrupt.json";
 	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
@@ -267,7 +267,7 @@ test('OIDC: JWKS - Handle Corrupted Cache', () => {
 	});
 });
 
-test('OIDC: Token - Enforce PKCE Verifier Length', () => {
+test('oidc: token - enforce PKCE verifier length', () => {
 	mock.create().with_responses({}, (io) => {
 		// 1. Weak verifier
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "code", "weak");
@@ -288,7 +288,7 @@ test('OIDC: Token - Enforce PKCE Verifier Length', () => {
 	});
 });
 
-test('OIDC: ID Token - at_hash validation ensures token binding', () => {
+test('oidc: ID token - at_hash validation ensures token binding', () => {
 	let access_token = "valid-access-token-123";
 	let keys = [ { kty: "oct", k: crypto.b64url_encode(SECRET) } ];
 	
@@ -321,7 +321,7 @@ test('OIDC: ID Token - at_hash validation ensures token binding', () => {
 	});
 });
 
-test('OIDC: ID Token - at_hash validation byte-safety torture', () => {
+test('oidc: ID token - at_hash validation byte-safety torture', () => {
 	// "at-hash-torture-input-1" produces a SHA256 hash starting with 0xc2
 	// 0xc2 is the first byte of a multi-byte UTF-8 sequence. 
 	// If substr() is used on the raw string, it might try to parse it as UTF-8.
@@ -342,7 +342,7 @@ test('OIDC: ID Token - at_hash validation byte-safety torture', () => {
 	});
 });
 
-test('OIDC: Discovery - Immutable Cache (No Pollution)', () => {
+test('oidc: discovery - immutable cache (no pollution)', () => {
 	let issuer = "https://public.idp";
 	let url = issuer + "/.well-known/openid-configuration";
 	let mock_disc = { 
@@ -362,7 +362,7 @@ test('OIDC: Discovery - Immutable Cache (No Pollution)', () => {
 	});
 });
 
-test('OIDC: Discovery - Handle insecure end_session_endpoint', () => {
+test('oidc: discovery - handle insecure end_session_endpoint', () => {
 	let factory = mock.create();
 	let disc = { 
 		issuer: "https://idp.com", 
@@ -379,7 +379,7 @@ test('OIDC: Discovery - Handle insecure end_session_endpoint', () => {
 	});
 });
 
-test('OIDC: Encoding - Parameter Torture Test', () => {
+test('oidc: encoding - parameter torture test', () => {
 	let factory = mock.create();
 	let complex_config = {
 		...f.MOCK_CONFIG,

@@ -3,7 +3,7 @@ import * as oidc from 'luci_sso.oidc';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 
-test('OIDC: Security - Reject massive discovery response (DoS Protection)', () => {
+test('oidc: security - reject massive discovery response (DoS protection)', () => {
     // Generate a response slightly larger than 256KB
     let massive_body = { ...f.MOCK_DISCOVERY, garbage: "" };
     for (let i = 0; i < 30000; i++) massive_body.garbage += "1234567890"; // ~300KB

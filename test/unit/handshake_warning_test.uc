@@ -4,7 +4,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 
-test('Handshake: Warning - Log warning for long-lived access tokens (W2)', () => {
+test('handshake: warning - log warning for long-lived access tokens (W2)', () => {
     let now = 1516239022;
     // Lifetime = 25 hours (90000 seconds) > 24 hours (86400)
     let payload = { iat: now, exp: now + 90000 };
@@ -57,7 +57,7 @@ test('Handshake: Warning - Log warning for long-lived access tokens (W2)', () =>
         });
 });
 
-test('Handshake: Warning - Silent for opaque or short-lived tokens', () => {
+test('handshake: warning - silent for opaque or short-lived tokens', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
         internal_issuer_url: f.MOCK_CONFIG.issuer_url,

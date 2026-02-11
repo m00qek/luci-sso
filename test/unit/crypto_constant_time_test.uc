@@ -1,27 +1,27 @@
 import { constant_time_eq } from 'luci_sso.crypto';
 import { assert, test } from '../testing.uc';
 
-test('constant_time_eq: identical strings', () => {
+test('crypto: constant_time_eq - identical strings', () => {
     assert(constant_time_eq('hello', 'hello'), 'Should return true for identical strings');
 });
 
-test('constant_time_eq: different strings of same length', () => {
+test('crypto: constant_time_eq - different strings of same length', () => {
     assert(!constant_time_eq('hello', 'world'), 'Should return false for different strings of same length');
 });
 
-test('constant_time_eq: different strings of different length', () => {
+test('crypto: constant_time_eq - different strings of different length', () => {
     assert(!constant_time_eq('hello', 'helloo'), 'Should return false for different lengths');
 });
 
-test('constant_time_eq: empty strings', () => {
+test('crypto: constant_time_eq - empty strings', () => {
     assert(constant_time_eq('', ''), 'Should return true for empty strings');
 });
 
-test('constant_time_eq: single byte difference', () => {
+test('crypto: constant_time_eq - single byte difference', () => {
     assert(!constant_time_eq('abcde', 'abfde'), 'Should return false for single byte difference');
 });
 
-test('constant_time_eq: null/undefined/non-string inputs', () => {
+test('crypto: constant_time_eq - null/undefined/non-string inputs', () => {
     assert(!constant_time_eq(null, 'test'), 'Should return false for null first arg');
     assert(!constant_time_eq('test', null), 'Should return false for null second arg');
     assert(!constant_time_eq(undefined, undefined), 'Should return false for undefined');
@@ -29,7 +29,7 @@ test('constant_time_eq: null/undefined/non-string inputs', () => {
     assert(!constant_time_eq({foo: 'bar'}, 'baz'), 'Should return false for object');
 });
 
-test('constant_time_eq: binary strings', () => {
+test('crypto: constant_time_eq - binary strings', () => {
     let a = '\x00\x01\x02\xFF';
     let b = '\x00\x01\x02\xFF';
     let c = '\x00\x01\x02\xFE';
@@ -37,13 +37,13 @@ test('constant_time_eq: binary strings', () => {
     assert(!constant_time_eq(a, c), 'Should return false for differing binary strings');
 });
 
-test('constant_time_eq: multi-value / array inputs (simulating URL param collision)', () => {
+test('crypto: constant_time_eq - multi-value / array inputs', () => {
     let trusted = "correct_state_123";
     let untrusted_array = ["correct_state_123", "malicious_injection"];
     assert(!constant_time_eq(untrusted_array, trusted), 'Should return false when input is an array (fail-closed)');
 });
 
-test('constant_time_eq: very long strings', () => {
+test('crypto: constant_time_eq - very long strings', () => {
     // 64KB is sufficient for a "long" string in this context
     let long_a = "";
     for (let i = 0; i < 1024; i++) long_a += "1234567890ABCDEF1234567890ABCDEF"; // 32 * 1024 = 32KB
