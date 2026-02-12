@@ -138,12 +138,22 @@ export function create_state(io) {
 	
 	try {
 		let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
-		if (!io.write_file(path, sprintf("%J", data))) {
+		let tmp_path = `${path}.tmp`;
+
+		if (!io.write_file(tmp_path, sprintf("%J", data))) {
 			let err = io.fserror();
-			io.log("error", `Failed to save handshake state: ${err}`);
+			io.log("error", `Failed to save handshake state (write): ${err}`);
 			return { ok: false, error: "STATE_SAVE_FAILED", details: err };
 		}
-		io.chmod(path, 0600);
+
+		io.chmod(tmp_path, 0600);
+
+		if (!io.rename(tmp_path, path)) {
+			let err = io.fserror();
+			io.log("error", `Failed to save handshake state (rename): ${err}`);
+			try { io.remove(tmp_path); } catch (e) {}
+			return { ok: false, error: "STATE_SAVE_FAILED", details: err };
+		}
 	} catch (e) {
 		io.log("error", `Failed to save handshake state: ${e}`);
 		return { ok: false, error: "STATE_SAVE_FAILED" };

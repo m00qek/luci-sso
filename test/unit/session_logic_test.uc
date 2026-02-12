@@ -179,3 +179,38 @@ test('session: logic - explicit state consumption (cleanup)', () => {
 		assert(!io.read_file(path), "Handshake file should have been deleted");
 	});
 });
+
+test('session: logic - atomic handshake state creation', () => {
+	let factory = mock.create();
+	
+	let history = factory.with_env({}).spy((io) => {
+		let res = session.create_state(io);
+		assert(res.ok, `create_state failed: ${res.error}`);
+	});
+
+	let operations = history.all();
+
+	// Find the write operation
+	let write_op = null;
+	let write_idx = -1;
+	for (let i = 0; i < length(operations); i++) {
+		if (operations[i].type == "write_file") {
+			write_op = operations[i];
+			write_idx = i;
+			break;
+		}
+	}
+
+	assert(write_op, `Should have performed a write_file operation. Ops: ${sprintf("%J", operations)}`);
+	assert(index(write_op.args[0], ".tmp") > 0, `Should write to temporary file first. Got: ${write_op.args[0]}`);
+
+	let chmod_op = operations[write_idx + 1];
+	assert(chmod_op && chmod_op.type == "chmod", "Should have performed chmod after write");
+	assert_eq(chmod_op.args[0], write_op.args[0], "chmod should target the tmp file");
+	assert_eq(chmod_op.args[1], 0600, "chmod should set 0600");
+
+	let rename_op = operations[write_idx + 2];
+	assert(rename_op && rename_op.type == "rename", "Should have performed rename after chmod");
+	assert_eq(rename_op.args[0], write_op.args[0], "rename should move from the tmp file");
+	assert(index(rename_op.args[1], ".tmp") == -1, `Target path should not be temporary. Got: ${rename_op.args[1]}`);
+});
