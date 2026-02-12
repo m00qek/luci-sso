@@ -167,7 +167,8 @@ function build_provider(state) {
 					let p = state.uci[pkg];
 					if (type(p) != "object") return;
 					for (let section_name in p) {
-						let section = p[section_name];
+						let section = { ...p[section_name] };
+						section[".name"] = section_name;
 						if (section[".type"] === type_name) cb(section);
 					}
 				}

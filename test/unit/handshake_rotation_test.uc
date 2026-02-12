@@ -14,8 +14,8 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
         ...f.MOCK_CONFIG,
         internal_issuer_url: f.MOCK_CONFIG.issuer_url,
         redirect_uri: "https://r/c",
-        user_mappings: [
-            { rpcd_user: "root", rpcd_password: "p", emails: ["user-123"] }
+        roles: [
+            { name: "r1", emails: ["user-123"], read: ["*"], write: ["*"] }
         ]
     };
 
@@ -32,12 +32,12 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
         .with_uci({
             "luci-sso": {
                 "default": { ...test_config, ".type": "oidc", "enabled": "1" },
-                "user1": { ".type": "user", "rpcd_user": "root", "rpcd_password": "p", "email": ["user-123"] }
-            },
-            "rpcd": { "root": { ".type": "login", "username": "root" } }
+                "r1": { ".type": "role", "email": ["user-123"], "read": ["*"], "write": ["*"] }
+            }
         })
         .with_ubus({
-            "session:login": { "ubus_rpc_session": "s123" },
+            "session:create": { "ubus_rpc_session": "s123" },
+            "session:grant": {},
             "session:set": {}
         })
         .spy((io) => {

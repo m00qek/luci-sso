@@ -14,8 +14,7 @@ export function is_enabled(io) {
 };
 
 /**
- * Loads the OIDC and User configuration from UCI.
- * Cross-references with /etc/config/rpcd to ensure mapped users exist.
+ * Loads the OIDC and Role configuration from UCI.
  * 
  * @param {object} io - I/O provider
  * @returns {object} - The validated configuration object
@@ -27,21 +26,13 @@ export function load(io) {
 
 	let cursor = io.uci_cursor();
 
-	// 1. Load RPCD users to build a validation set
-	let valid_rpcd_users = {};
-	cursor.foreach("rpcd", "login", (s) => {
-		if (s.username) {
-			valid_rpcd_users[s.username] = true;
-		}
-	});
-
-	// 2. Load OIDC Provider Settings
+	// 1. Load OIDC Provider Settings
 	let oidc_cfg = cursor.get_all("luci-sso", "default");
 	if (!oidc_cfg || oidc_cfg[".type"] !== "oidc") {
 		die("CONFIG_ERROR: OIDC section 'default' missing in /etc/config/luci-sso");
 	}
 
-	// 2.1 HTTPS Enforcement
+	// 1.1 HTTPS Enforcement
 	let issuer = oidc_cfg.issuer_url;
 	if (!issuer) {
 		die("CONFIG_ERROR: issuer_url is mandatory");
@@ -68,34 +59,30 @@ export function load(io) {
 		die("CONFIG_ERROR: clock_tolerance must be an integer");
 	}
 
-	// 3. Load and Validate User Whitelists
-	let user_mappings = [];
-	cursor.foreach("luci-sso", "user", (s) => {
-		let rpcd_user = s.rpcd_user;
+	// 2. Load and Validate Roles
+	let roles = [];
+	cursor.foreach("luci-sso", "role", (s) => {
 		let emails = (type(s.email) == "array") ? s.email : (s.email ? [ s.email ] : []);
+		let groups = (type(s.group) == "array") ? s.group : (s.group ? [ s.group ] : []);
+		let read = (type(s.read) == "array") ? s.read : (s.read ? [ s.read ] : []);
+		let write = (type(s.write) == "array") ? s.write : (s.write ? [ s.write ] : []);
 
-		if (!rpcd_user || !s.rpcd_password || length(emails) == 0) {
-			if (rpcd_user) {
-				io.log("warn", `Ignoring mapping for '${rpcd_user}': missing password or email list`);
-			}
+		if (length(emails) == 0 && length(groups) == 0) {
+			io.log("warn", `Ignoring role '${s[".name"]}': missing email or group list`);
 			return;
 		}
 
-		// Validation: Does this user exist in rpcd?
-		if (!valid_rpcd_users[rpcd_user]) {
-			io.log("warn", `Ignoring mapping for '${rpcd_user}': user not found in /etc/config/rpcd`);
-			return;
-		}
-
-		push(user_mappings, {
-			rpcd_user: rpcd_user,
-			rpcd_password: s.rpcd_password,
-			emails: emails
+		push(roles, {
+			name: s[".name"],
+			emails: emails,
+			groups: groups,
+			read: read,
+			write: write
 		});
 	});
 
-	if (length(user_mappings) == 0) {
-		die("CONFIG_ERROR: No valid user mappings found in /etc/config/luci-sso");
+	if (length(roles) == 0) {
+		die("CONFIG_ERROR: No valid roles found in /etc/config/luci-sso");
 	}
 
 	return {
@@ -106,6 +93,67 @@ export function load(io) {
 		redirect_uri: oidc_cfg.redirect_uri,
 		scope: oidc_cfg.scope,
 		clock_tolerance: clock_tolerance,
-		user_mappings: user_mappings
+		roles: roles
 	};
+};
+
+/**
+ * Maps OIDC user claims to matched permissions (read/write lists).
+ * 
+ * @param {object} config - The loaded config
+ * @param {object} claims - OIDC ID Token claims (email, groups, etc)
+ * @returns {object} - { read: [], write: [], role_name: "..." }
+ */
+export function find_roles_for_user(config, claims) {
+	let perms = { read: [], write: [], role_name: null };
+	let email = claims.email;
+	let groups = (type(claims.groups) == "array") ? claims.groups : [];
+
+	for (let role in config.roles) {
+		let matched = false;
+
+		// Match email
+		if (email) {
+			for (let e in role.emails) {
+				if (e == email) {
+					matched = true;
+					break;
+				}
+			}
+		}
+
+		// Match groups
+		if (!matched && length(groups) > 0) {
+			for (let g_claim in groups) {
+				for (let g_role in role.groups) {
+					if (g_claim == g_role) {
+						matched = true;
+						break;
+					}
+				}
+				if (matched) break;
+			}
+		}
+
+		if (matched) {
+			// Merge permissions with deduplication
+			for (let r in role.read) {
+				let exists = false;
+				for (let pr in perms.read) { if (pr == r) { exists = true; break; } }
+				if (!exists) push(perms.read, r);
+			}
+			for (let w in role.write) {
+				let exists = false;
+				for (let pw in perms.write) { if (pw == w) { exists = true; break; } }
+				if (!exists) push(perms.write, w);
+			}
+			
+			// Use the first matched role name as identity
+			if (!perms.role_name) {
+				perms.role_name = role.name;
+			}
+		}
+	}
+
+	return perms;
 };

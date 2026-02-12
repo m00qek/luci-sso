@@ -39,9 +39,11 @@ test('ubus: logic - get_session handle invalid SID', () => {
 	});
 });
 
-test('ubus: security - create_session generates 256-bit CSRF token (B3)', () => {
+test('ubus: security - create_passwordless_session generates 256-bit CSRF token (B3)', () => {
+	let grants = [];
 	let factory = mock.create().with_ubus({
-		"session:login": { ubus_rpc_session: "new-sid" },
+		"session:create": { ubus_rpc_session: "new-sid" },
+		"session:grant": (args) => { push(grants, args); return {}; },
 		"session:set": (args) => {
 			let token = args.values.token;
 			// 256 bits = 32 bytes. Base64URL encoding 32 bytes = 43 chars
@@ -51,7 +53,28 @@ test('ubus: security - create_session generates 256-bit CSRF token (B3)', () => 
 	});
 
 	factory.with_env({}, (io) => {
-		let res = ubus.create_session(io, "root", "p", "user@test.com", "at", "rt", "it");
+		let res = ubus.create_passwordless_session(io, "root", { read: ["luci-mod-network"], write: [] }, "user@test.com", "at", "rt", "it");
 		assert(res.ok);
+		assert_eq(length(grants), 1);
+		assert_eq(grants[0].scope, "access-group");
+	});
+});
+
+test('ubus: logic - create_passwordless_session admin wildcard', () => {
+	let grants = [];
+	let factory = mock.create().with_ubus({
+		"session:create": { ubus_rpc_session: "sid" },
+		"session:grant": (args) => { push(grants, args); return {}; },
+		"session:set": () => ({})
+	});
+
+	factory.with_env({}, (io) => {
+		ubus.create_passwordless_session(io, "root", { read: ["*"], write: ["*"] }, "a@b.com", "at", "rt", "it");
+		
+		let scopes = map(grants, (g) => g.scope);
+		assert(index(scopes, "ubus") != -1);
+		assert(index(scopes, "uci") != -1);
+		assert(index(scopes, "file") != -1);
+		assert(index(scopes, "cgi-io") != -1);
 	});
 });

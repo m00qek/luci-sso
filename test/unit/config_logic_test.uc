@@ -6,109 +6,86 @@ import * as mock from 'mock';
 // Tier 2: Configuration Logic (Platinum Suite)
 // =============================================================================
 
-test('config: logic - successful load & RPCD sync', () => {
-	let mocked = mock.create();
-	let mock_uci = {
-		"rpcd": {
-			"s1": { ".type": "login", "username": "admin" }
-		},
-		"luci-sso": {
-			"default": { 
-				".type": "oidc", 
-				"enabled": "1", 
-				"issuer_url": "https://idp.com",
-				"client_id": "c1",
-				"client_secret": "s1",
-				"redirect_uri": "https://r1",
-				"clock_tolerance": "300"
-			},
-			"u1": { ".type": "user", "rpcd_user": "admin", "rpcd_password": "p1", "email": "admin@test.com" }
-		}
-	};
+test('config: logic - successful load', () => {
+        let mocked = mock.create();
+        let mock_uci = {
+                "luci-sso": {
+                        "default": { 
+                                ".type": "oidc", 
+                                "enabled": "1", 
+                                "issuer_url": "https://idp.com",
+                                "client_id": "c1",
+                                "client_secret": "s1",
+                                "redirect_uri": "https://r1/callback",
+                                "clock_tolerance": "300"
+                        },
+                        "r1": { ".type": "role", "email": "admin@test.com", "read": ["*"], "write": ["*"] }
+                }
+        };
 
-	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
-		assert(config, "Should return configuration object");
-		assert_eq(config.issuer_url, "https://idp.com");
-		assert_eq(config.clock_tolerance, 300);
-		assert_eq(config.user_mappings[0].rpcd_user, "admin");
-	});
+        mocked.with_uci(mock_uci, (io) => {
+                let config = config_loader.load(io);
+                assert(config, "Should return configuration object");
+                assert_eq(config.issuer_url, "https://idp.com");
+                assert_eq(config.clock_tolerance, 300);
+                assert_eq(config.roles[0].name, "r1");
+        });
 });
 
 test('config: logic - normalization (email list vs string)', () => {
-	let mocked = mock.create();
-	let mock_uci = {
-		"rpcd": { "s1": { ".type": "login", "username": "u1" }, "s2": { ".type": "login", "username": "u2" } },
-		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" },
-			"m1": { ".type": "user", "rpcd_user": "u1", "rpcd_password": "p", "email": "single@test.com" },
-			"m2": { ".type": "user", "rpcd_user": "u2", "rpcd_password": "p", "email": ["a@b.com", "c@d.com"] }
-		}
-	};
+        let mocked = mock.create();
+        let mock_uci = {
+                "luci-sso": {
+                        "default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r/callback" },
+                        "r1": { ".type": "role", "email": "single@test.com", "read": ["*"], "write": [] },
+                        "r2": { ".type": "role", "email": ["a@b.com", "c@d.com"], "read": ["*"], "write": [] }
+                }
+        };
 
-	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
-		assert_eq(type(config.user_mappings[0].emails), "array", "Single email should be wrapped in array");
-		assert_eq(length(config.user_mappings[1].emails), 2, "Multiple emails should remain an array");
-	});
+        mocked.with_uci(mock_uci, (io) => {
+                let config = config_loader.load(io);
+                assert_eq(type(config.roles[0].emails), "array", "Single email should be wrapped in array");
+                assert_eq(length(config.roles[1].emails), 2, "Multiple emails should remain an array");
+        });
 });
 
 test('config: logic - HTTPS enforcement', () => {
-	let mocked = mock.create();
-	
-	let check = (url) => {
-		let mock_uci = {
-			"rpcd": { "s1": { ".type": "login", "username": "admin" } },
-			"luci-sso": { 
-				"default": { ".type": "oidc", "enabled": "1", "issuer_url": url, "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" },
-				"u1": { ".type": "user", "rpcd_user": "admin", "rpcd_password": "p", "email": "a@b.com" }
-			}
-		};
-		return mocked.with_uci(mock_uci, (io) => {
-			try { config_loader.load(io); return true; } catch (e) { return false; }
-		});
-	};
+        let mocked = mock.create();
 
-	assert(check("https://idp.com"), "HTTPS should be allowed");
-	assert(!check("http://idp.com"), "Insecure remote HTTP must be rejected");
+        let check = (url) => {
+                let mock_uci = {
+                        "luci-sso": { 
+                                "default": { ".type": "oidc", "enabled": "1", "issuer_url": url, "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r/callback" },
+                                "r1": { ".type": "role", "email": "a@b.com", "read": ["*"], "write": [] }
+                        }
+                };
+                return mocked.with_uci(mock_uci, (io) => {
+                        try { config_loader.load(io); return true; } catch (e) { return false; }
+                });
+        };
+
+        assert(check("https://idp.com"), "HTTPS should be allowed");
+        assert(!check("http://idp.com"), "Insecure remote HTTP must be rejected");
 });
 
-test('config: logic - reject empty or invalid user mappings (W5)', () => {
-	let mocked = mock.create();
-	
-	// Case 1: No user sections at all
-	let mock_uci_1 = {
-		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" }
-		}
-	};
-	mocked.with_uci(mock_uci_1, (io) => {
-		try {
-			config_loader.load(io);
-			assert(false, "Should have failed due to zero mappings");
-		} catch (e) {
-			assert(index(e, "CONFIG_ERROR: No valid user mappings") != -1);
-		}
-	});
+test('config: logic - reject empty or invalid roles', () => {
+        let mocked = mock.create();
 
-	// Case 2: Only invalid user sections (user not in RPCD)
-	let mock_uci_2 = {
-		"rpcd": { "s1": { ".type": "login", "username": "real" } },
-		"luci-sso": {
-			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" },
-			"u1": { ".type": "user", "rpcd_user": "fake", "rpcd_password": "p", "email": "a@b.com" }
-		}
-	};
-	mocked.with_uci(mock_uci_2, (io) => {
-		try {
-			config_loader.load(io);
-			assert(false, "Should have failed because all mappings were ignored");
-		} catch (e) {
-			assert(index(e, "CONFIG_ERROR: No valid user mappings") != -1);
-		}
-	});
+        // Case 1: No role sections at all
+        let mock_uci_1 = {
+                "luci-sso": {
+                        "default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r/callback" }
+                }
+        };
+        mocked.with_uci(mock_uci_1, (io) => {
+                try {
+                        config_loader.load(io);
+                        assert(false, "Should have failed due to zero roles");
+                } catch (e) {
+                        assert(index(e, "CONFIG_ERROR: No valid roles") != -1);
+                }
+        });
 });
-
 test('config: logic - handle disabled state', () => {
 	let mocked = mock.create();
 	let mock_uci = {

@@ -8,7 +8,7 @@ config oidc 'default'
 	option scope 'openid profile email'
 	option clock_tolerance '300'
 
-config user
+config role 'admin'
 	list email 'admin@example.com'
-	option rpcd_user 'root'
-	option rpcd_password 'REPLACE_ME'
+	list read '*'
+	list write '*'

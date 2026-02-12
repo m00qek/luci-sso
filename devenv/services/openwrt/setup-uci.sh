@@ -46,10 +46,11 @@ uci -q set luci-sso.default.client_secret="secret-key-123"
 uci -q set luci-sso.default.scope="openid profile email"
 uci -q set luci-sso.default.clock_tolerance="300"
 
-uci -q add luci-sso user
-uci -q set luci-sso.@user[0].rpcd_user="root"
-uci -q set luci-sso.@user[0].rpcd_password="admin"
-uci -q add_list luci-sso.@user[0].email="admin@example.com"
+uci -q add luci-sso role
+uci -q set luci-sso.@role[0]=role
+uci -q add_list luci-sso.@role[0].email="admin@example.com"
+uci -q add_list luci-sso.@role[0].read="*"
+uci -q add_list luci-sso.@role[0].write="*"
 
 uci commit luci-sso
 

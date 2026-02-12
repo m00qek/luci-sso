@@ -17,8 +17,8 @@ const MOCK_CONFIG = {
 	redirect_uri: "https://router/callback",
 	alg: "RS256",
 	clock_tolerance: 300,
-	user_mappings: [
-		{ rpcd_user: "system_admin", rpcd_password: "p1", emails: ["1234567890"] }
+	roles: [
+		{ name: "system_admin", emails: ["1234567890"], read: ["*"], write: ["*"] }
 	]
 };
 
@@ -115,7 +115,11 @@ test('Router: Callback - Successful authentication and UBUS login', () => {
 				"https://idp.com/token": { status: 200, body: { access_token: "at", refresh_token: "rt", id_token: id_token } },
 				"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
 			})
-			.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "session-for-" + args.username }) })
+			.with_ubus({ 
+				"session:create": (args) => ({ ubus_rpc_session: "session-for-root" }),
+				"session:grant": {},
+				"session:set": {}
+			})
 			.spy((spying_io) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 				let res = router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
@@ -123,7 +127,7 @@ test('Router: Callback - Successful authentication and UBUS login', () => {
 				assert_eq(res.headers["Location"], "/cgi-bin/luci/");
 			});
 
-		assert(data.called("ubus", "session", "login"), "Should have called ubus login");
+		assert(data.called("ubus", "session", "create"), "Should have called ubus create");
 		let found_set = false;
 		for (let entry in data.all()) {
 			if (entry.type == "ubus" && entry.args[1] == "set") {
@@ -155,7 +159,11 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 					"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
 					"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
 				})
-				.with_ubus({ "session:login": (args) => ({ ubus_rpc_session: "s" }) })
+				.with_ubus({ 
+					"session:create": (args) => ({ ubus_rpc_session: "s" }),
+					"session:grant": {},
+					"session:set": {}
+				})
 				.spy((spying_io) => {
 					let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 					router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
@@ -188,7 +196,7 @@ test('Router: Callback - Reject non-whitelisted users', () => {
 			"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
 		}, (io_http) => {
 			let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
-			let res = router.handle(io_http, { ...MOCK_CONFIG, user_mappings: [] }, req, TEST_POLICY);
+			let res = router.handle(io_http, { ...MOCK_CONFIG, roles: [] }, req, TEST_POLICY);
 			assert_eq(res.status, 403, "Should return Forbidden for non-whitelisted user");
 			assert_eq(res.code, "USER_NOT_AUTHORIZED");
 		});

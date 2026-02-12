@@ -5,49 +5,116 @@ import * as crypto from 'luci_sso.crypto';
  */
 
 /**
- * Creates a real LuCI system session via UBUS.
+ * Internal helper to grant all LuCI access groups to a session.
+ * Scans /usr/share/rpcd/acl.d/ for luci-* patterns.
+ * @private
+ */
+function _grant_all_luci_acls(io, sid) {
+	let acl_dir = "/usr/share/rpcd/acl.d";
+	let files = io.lsdir(acl_dir);
+	if (!files) return;
+
+	for (let f in files) {
+		if (!match(f, /\.json$/)) continue;
+
+		let content = io.read_file(`${acl_dir}/${f}`);
+		if (!content) continue;
+
+		// Simple regex to find "luci-..." strings that are used as keys
+		// This matches what gen_session.sh does
+		let groups = [];
+		let matches = match(content, /"luci-[^"]+"/g);
+		if (matches) {
+			for (let m in matches) {
+				// Strip quotes
+				let g = substr(m[0], 1, length(m[0]) - 2);
+				push(groups, g);
+			}
+		}
+
+		if (length(groups) > 0) {
+			io.ubus_call("session", "grant", {
+				ubus_rpc_session: sid,
+				scope: "access-group",
+				objects: map(groups, (g) => [g, "read"]),
+			});
+			io.ubus_call("session", "grant", {
+				ubus_rpc_session: sid,
+				scope: "access-group",
+				objects: map(groups, (g) => [g, "write"]),
+			});
+		}
+	}
+}
+
+/**
+ * Creates a real LuCI system session via UBUS WITHOUT a password.
  * 
- * @param {object} io - I/O provider (must have ubus_call and log)
- * @param {string} username - RPCD username
- * @param {string} password - RPCD password
+ * @param {object} io - I/O provider
+ * @param {string} username - Target system username (e.g. root)
+ * @param {object} perms - Permissions object { read: [], write: [] }
  * @param {string} oidc_email - The real user's email for tagging
  * @param {string} access_token - OIDC access token to persist
  * @param {string} refresh_token - OIDC refresh token to persist
  * @param {string} id_token - OIDC ID token to persist (for logout)
  * @returns {object} - Result Object {ok, data/error}
  */
-export function create_session(io, username, password, oidc_email, access_token, refresh_token, id_token) {
+export function create_passwordless_session(io, username, perms, oidc_email, access_token, refresh_token, id_token) {
 	if (type(io.ubus_call) != "function") {
-		die("CONTRACT_VIOLATION: ubus.create_session requires io.ubus_call");
+		die("CONTRACT_VIOLATION: ubus.create_passwordless_session requires io.ubus_call");
 	}
 
-	// 1. Perform standard login to get ACLs
-	let login_res = io.ubus_call("session", "login", {
-		username: username,
-		password: password,
-		timeout: 3600
-	});
-
-	if (!login_res || !login_res.ubus_rpc_session) {
-		io.log("error", `UBUS login failed for template user '${username}'`);
-		return { ok: false, error: "UBUS_LOGIN_FAILED" };
+	// 1. Create a raw session
+	let create_res = io.ubus_call("session", "create", { timeout: 3600 });
+	if (!create_res || !create_res.ubus_rpc_session) {
+		io.log("error", "UBUS session creation failed");
+		return { ok: false, error: "UBUS_SESSION_FAILED" };
 	}
 
-	let sid = login_res.ubus_rpc_session;
-	
-	// BLOCKER FIX: Validate CSPRNG output (B3)
+	let sid = create_res.ubus_rpc_session;
+
+	// 2. Grant Permissions
+	let grant_perm = (scope, obj, func) => {
+		io.ubus_call("session", "grant", {
+			ubus_rpc_session: sid,
+			scope: scope,
+			objects: [[obj, func]]
+		});
+	};
+
+	let is_admin = false;
+	for (let r in perms.read) { if (r == "*") { is_admin = true; break; } }
+	if (!is_admin) {
+		for (let w in perms.write) { if (w == "*") { is_admin = true; break; } }
+	}
+
+	// If wildcard is detected, we grant full internal access and skip granular access-groups
+	if (is_admin) {
+		grant_perm("ubus", "*", "*");
+		grant_perm("uci", "*", "*");
+		grant_perm("file", "*", "*");
+		grant_perm("cgi-io", "*", "*");
+		
+		// LuCI specific: Expand and grant all known access-groups
+		_grant_all_luci_acls(io, sid);
+	} else {
+		for (let r in perms.read) {
+			grant_perm("access-group", r, "read");
+		}
+		for (let w in perms.write) {
+			grant_perm("access-group", w, "write");
+		}
+	}
+
+	// 3. Generate CSRF token
 	let csrf_random = crypto.random(32);
-	if (!csrf_random || type(csrf_random) != "string" || length(csrf_random) != 32) {
-		io.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
+	if (!csrf_random || length(csrf_random) != 32) {
+		io.log("error", "CRITICAL: CSPRNG failure");
 		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
 	}
 	let csrf_token = crypto.b64url_encode(csrf_random);
-	if (!csrf_token || type(csrf_token) != "string" || length(csrf_token) < 32) {
-		io.log("error", "CRITICAL: CSRF token encoding failure");
-		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
-	}
 
-	// 3. Authorize and tag the session
+	// 4. Set session variables
 	io.ubus_call("session", "set", {
 		ubus_rpc_session: sid,
 		values: { 
@@ -60,7 +127,7 @@ export function create_session(io, username, password, oidc_email, access_token,
 		}
 	});
 
-	io.log("info", `Successful SSO login for [oidc_id: ${crypto.safe_id(oidc_email)}] mapped to system user ${username}`);
+	io.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(oidc_email)}] mapped to ${username}`);
 
 	return { ok: true, data: sid };
 };

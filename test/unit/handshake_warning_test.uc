@@ -14,14 +14,18 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
         ...f.MOCK_CONFIG,
         internal_issuer_url: f.MOCK_CONFIG.issuer_url,
         redirect_uri: "https://r/c",
-        user_mappings: [{ rpcd_user: "root", rpcd_password: "p", emails: ["user-123"] }]
+        roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
     };
 
     let tokens = { access_token: long_lived_token, id_token: "mock.id.token" };
 
     mock.create()
         .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
-        .with_ubus({ "session:login": { "ubus_rpc_session": "s1" }, "session:set": {} })
+        .with_ubus({ 
+            "session:create": { "ubus_rpc_session": "s1" }, 
+            "session:grant": {},
+            "session:set": {} 
+        })
         .spy((io) => {
             // Setup minimal environment
             let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123" };
@@ -62,7 +66,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
         ...f.MOCK_CONFIG,
         internal_issuer_url: f.MOCK_CONFIG.issuer_url,
         redirect_uri: "https://r/c",
-        user_mappings: [{ rpcd_user: "root", rpcd_password: "p", emails: ["user-123"] }]
+        roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
     };
 
     let cases = [
@@ -73,7 +77,11 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
     for (let c in cases) {
         mock.create()
             .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
-            .with_ubus({ "session:login": { "ubus_rpc_session": "s1" }, "session:set": {} })
+            .with_ubus({ 
+                "session:create": { "ubus_rpc_session": "s1" }, 
+                "session:grant": {},
+                "session:set": {} 
+            })
             .spy((io) => {
                 let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123" };
                 let id_token = crypto.sign_jws(id_payload, f.MOCK_CONFIG.client_secret);

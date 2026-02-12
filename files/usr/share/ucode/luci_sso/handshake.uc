@@ -6,26 +6,12 @@ import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
 import * as discovery from 'luci_sso.discovery';
 
+import * as config_mod from 'luci_sso.config';
+
 /**
  * Orchestration logic for the OIDC Login Handshake.
  * Bridges the gap between raw OIDC protocol and LuCI session management.
  */
-
-/**
- * Searches the user mapping whitelist for a matching email.
- * Pure logic (no I/O).
- * @private
- */
-function _find_user_mapping(config, email) {
-	if (!config.user_mappings || !email) return null;
-	let target = lc(email);
-	for (let mapping in config.user_mappings) {
-		for (let allowed in mapping.emails) {
-			if (lc(allowed) == target) return mapping;
-		}
-	}
-	return null;
-}
 
 /**
  * Validates the raw callback request and extracts query/handshake.
@@ -235,20 +221,30 @@ export function authenticate(io, config, request, policy) {
 	}
 
 	let user_data = oauth_res.data;
-	let mapping = _find_user_mapping(config, user_data.email);
-	if (!mapping) {
+	let perms = config_mod.find_roles_for_user(config, user_data);
+	
+	if (length(perms.read) == 0 && length(perms.write) == 0) {
 		session.consume_state(io, state_token);
-		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] not found in mapping whitelist [session_id: ${session_id}]`);
+		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] matched no roles [session_id: ${session_id}]`);
 		return { ok: false, error: "USER_NOT_AUTHORIZED", status: 403 };
 	}
 
-	let ubus_res = ubus.create_session(io, mapping.rpcd_user, mapping.rpcd_password, user_data.email, oauth_res.access_token, oauth_res.refresh_token, oauth_res.id_token);
+	let ubus_res = ubus.create_passwordless_session(
+		io, 
+		perms.role_name, 
+		perms, 
+		user_data.email, 
+		oauth_res.access_token, 
+		oauth_res.refresh_token, 
+		oauth_res.id_token
+	);
+	
 	if (!ubus_res.ok) {
 		session.consume_state(io, state_token);
 		return { ok: false, error: "UBUS_LOGIN_FAILED", status: 500 };
 	}
 
-	io.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to rpcd_user=${mapping.rpcd_user})`);
+	io.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to role=${perms.role_name})`);
 
 	return {
 		ok: true,

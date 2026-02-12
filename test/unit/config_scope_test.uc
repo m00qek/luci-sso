@@ -15,9 +15,8 @@ test('config: scope - load custom scope from UCI', () => {
                 "clock_tolerance": "300",
                 "scope": "openid email custom_scope"
             },
-            "u1": { ".type": "user", "rpcd_user": "root", "rpcd_password": "p", "email": "a@b.com" }
-        },
-        "rpcd": { "s1": { ".type": "login", "username": "root" } }
+            "r1": { ".type": "role", "email": "a@b.com", "read": ["*"], "write": [] }
+        }
     };
 
     mock.create()
@@ -40,9 +39,8 @@ test('config: scope - handle missing scope', () => {
                 "redirect_uri": "https://router/callback",
                 "clock_tolerance": "300"
             },
-            "u1": { ".type": "user", "rpcd_user": "root", "rpcd_password": "p", "email": "a@b.com" }
-        },
-        "rpcd": { "s1": { ".type": "login", "username": "root" } }
+            "r1": { ".type": "role", "email": "a@b.com", "read": ["*"], "write": [] }
+        }
     };
 
     mock.create()
