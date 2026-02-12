@@ -56,3 +56,9 @@ test('crypto: constant_time_eq - very long strings', () => {
     assert(!constant_time_eq(long_a, long_c), 'Should handle different lengths (long)');
     assert(!constant_time_eq(long_a, long_d), 'Should handle long strings with single byte diff at end');
 });
+
+test('crypto: constant_time_eq - length leakage prevention logic', () => {
+    assert(!constant_time_eq('abc', 'abcd'), 'Should return false for prefix match with different length');
+    assert(!constant_time_eq('abcd', 'abc'), 'Should return false for suffix match with different length');
+    assert(!constant_time_eq('a', 'b'), 'Should return false for different single bytes');
+});

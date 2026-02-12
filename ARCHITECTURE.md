@@ -33,6 +33,7 @@ C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfs
 *   **Hardening:** To prevent buffer overflow and resource exhaustion attacks:
     *   The native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
     *   HTTP response bodies are limited to **256 KB** at the ucode I/O layer to prevent memory exhaustion.
+*   **Constant-Time Comparisons:** All sensitive comparisons (e.g., state, nonce, signatures, at_hash) MUST use `constant_time_eq`. This function is designed to avoid early returns on length or content mismatch to mitigate timing side-channels.
 
 ---
 

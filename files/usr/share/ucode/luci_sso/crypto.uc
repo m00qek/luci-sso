@@ -16,19 +16,25 @@ export const safe_json = encoding.safe_json;
 /**
  * Constant-time string comparison to prevent timing attacks.
  * 
- * ⚠️ SECURITY WARNING: This implementation leaks string LENGTH via early return.
- * It MUST ONLY be used for comparing fixed-length cryptographic values
- * where the length is PUBLIC INFORMATION (e.g., hashes, nonces).
+ * This implementation avoids early returns on length mismatch or content
+ * difference to mitigate timing side-channels.
  */
 export function constant_time_eq(a, b) {
 	if (type(a) != "string" || type(b) != "string") return false;
+	
 	let len_a = length(a);
-	if (len_a != length(b)) return false;
-
-	let res = 0;
+	let len_b = length(b);
+	let res = (len_a ^ len_b);
+	
+	// We iterate based on the length of the first string (usually the untrusted input).
+	// This ensures that for a given input length, the execution time is constant
+	// regardless of the secret's content or length.
 	for (let i = 0; i < len_a; i++) {
-		res |= (ord(a, i) ^ ord(b, i));
+		let char_a = ord(a, i);
+		let char_b = ord(b, i % (len_b || 1));
+		res |= (char_a ^ char_b);
 	}
+	
 	return (res == 0);
 };
 
