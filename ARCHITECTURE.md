@@ -41,11 +41,11 @@ C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfs
 One of the most critical architectural decisions is the explicit support for environments where the **Browser** and the **Router** have different network paths to the Identity Provider (IdP).
 
 ### Metadata Caching Strategy
-To reduce network overhead and ensure resilience against transient IdP outages, the system implements a robust file-based caching strategy:
-*   **Discovery Documents:** Cached for **24 hours** by default.
-*   **JWK Sets:** Cached for **24 hours** by default.
-*   **Atomic Updates:** All cache updates use atomic POSIX `rename` to prevent partial reads by concurrent processes.
-*   **Forced Refresh:** The system MUST trigger a forced cache refresh if a cryptographic operation fails due to an unknown Key ID (`kid`), ensuring automatic recovery from IdP key rotations.
+To reduce network overhead and ensure resilience against transient IdP outages, the system MUST implement a file-based caching strategy:
+*   **Discovery Documents:** SHOULD be cached for **24 hours**.
+*   **JWK Sets:** SHOULD be cached for **24 hours**.
+*   **Atomic Updates:** All cache updates MUST use atomic POSIX `rename`.
+*   **Forced Refresh:** The system MUST trigger a forced cache refresh if a cryptographic operation fails due to an unknown Key ID (`kid`).
 
 ### UserInfo Supplementation (Thin Token Support)
 To ensure compatibility with OIDC-compliant providers that utilize "Thin" ID Tokens (e.g., Authelia), the system MUST support claim supplementation via the UserInfo endpoint:
@@ -57,23 +57,20 @@ To ensure compatibility with OIDC-compliant providers that utilize "Thin" ID Tok
 
 ## 3. Strict HTTPS Policy
 
-To ensure transport security, the project enforces an exclusively HTTPS-based OIDC flow.
+The system MUST enforce an exclusively HTTPS-based OIDC flow to ensure transport security.
 
 ### Front-channel (Browser ↔ IdP)
 *   **Enforcement:** The `issuer_url` MUST use the `https://` scheme.
-*   **Reasoning:** Prevents leakage of Authorization Codes over insecure networks and ensures compatibility with `Secure` cookie flags.
 
 ### Back-channel (Router ↔ IdP)
-*   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS. Any configured `internal_issuer_url` must also use TLS.
-*   **Verification:** The logic explicitly passes `verify: true` to the I/O provider. The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
-*   **DoS Protection:** To prevent memory exhaustion attacks, the system enforces a **256 KB** maximum size limit on all incoming HTTP response bodies.
-*   **Token Binding:** The system enforces `at_hash` validation **unconditionally** for all flows (even where OIDC Core 1.0 makes it optional) to prevent token substitution attacks. Calculation MUST be performed using byte-safe extraction to prevent UTF-8 boundary errors.
-*   **Replay Protection:** Handshake states are consumed using atomic POSIX `rename`. The system enforces **strict one-time use**; any race condition or replay attempt results in immediate state invalidation. OIDC Access Tokens are registered in a local registry **immediately after exchange and BEFORE verification** (Fail-Safe consumption) to prevent brute-force signature or padding attacks.
-    *   **Registry Constraints:** Access tokens are tracked for a **24-hour window**. Tokens with a lifetime exceeding 24 hours SHOULD NOT be used, as they may be re-playable after the registry is reaped.
-    *   **Collision Probability:** The token registry uses a **64-bit** safe ID (16-hex-char). Collision probability reaches 50% at ~2^32 tokens, which is considered acceptable for the intended embedded scale.
-*   **Algorithm Enforcement:** The system implements a **Two-Dimensional Config** (Security Policy). By default, it MUST ONLY accept asymmetric signatures (RS256, ES256). Symmetric algorithms (HS256) are strictly forbidden in production to prevent "Algorithm Confusion" attacks.
-*   **Authorization Parameters:** Mandatory enforcement of **`state`** (CSRF, min 16 chars), **`nonce`** (Replay, min 16 chars), and **`code_challenge`** (PKCE) during authorization URL generation.
-*   **Claims Validation:** Mandatory verification of **`exp` (Expiry)**, **`iat` (Issued At)**, `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party). Missing mandatory claims result in immediate rejection.
+*   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS.
+*   **Verification:** The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
+*   **DoS Protection:** The system MUST enforce a **256 KB** maximum size limit on all incoming HTTP response bodies.
+*   **Token Binding:** The system MUST enforce `at_hash` validation for all flows.
+*   **Replay Protection:** Handshake states MUST be consumed using atomic POSIX `rename` for strict one-time use. OIDC Access Tokens MUST be registered in a local registry immediately after exchange and BEFORE verification.
+*   **Algorithm Enforcement:** The system MUST ONLY accept asymmetric signatures (RS256, ES256) in production. Symmetric algorithms (HS256) MUST NOT be accepted.
+*   **Authorization Parameters:** Authorization URL generation MUST enforce the presence of `state` (min 16 chars), `nonce` (min 16 chars), and `code_challenge` (PKCE).
+*   **Claims Validation:** The system MUST verify `exp` (Expiry), `iat` (Issued At), `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party).
 
 ---
 
@@ -100,15 +97,24 @@ Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not
 
 ---
 
-## 6. UBUS Integration
+## 6. UBUS Integration & Virtual Identity
 
-### Logic & Session Injection
-Upon a successful OIDC handshake, the service:
-1.  Performs a standard `ubus session login` using a "template" system user (e.g., `root`).
-2.  Generates a random **256-bit CSRF Token**.
-    *   **Entropy Validation:** The system MUST explicitly validate that the CSPRNG successfully produced 32 bytes of high-entropy data before proceeding with session creation.
-3.  Injects the OIDC user's identity and the CSRF token into the session via `ubus session set`.
-4.  Redirects the user to the LuCI dashboard.
+The system implements a **Zero-Knowledge Credential Model**. The router does not store or require local POSIX passwords for OIDC-authenticated users.
+
+### Virtual Identity Labeling
+Upon a successful OIDC handshake, the system determines the user's identity based on matched UCI roles:
+*   **Identity Mapping:** The `username` field in the LuCI session is set to the name of the first matched `config role` (e.g., `parents`, `admin`).
+*   **Virtual Context:** This identity exists purely within the UBUS session state and does not require a corresponding account in `/etc/passwd`.
+
+### Dynamic Grant Injection (Elevation)
+Instead of inheriting permissions from a template user, the service programmatically constructs the session's authority:
+1.  **Raw Creation:** Calls `session create` to obtain a fresh, unprivileged UBUS session ID (SID).
+2.  **RBAC Mapping:** Maps OIDC claims (`email`, `groups`) to UCI roles. Multiple roles are merged using a logical OR.
+3.  **Deduplicated Grants:** Calls `session grant` for each matched `access-group` defined in the roles.
+4.  **Admin Wildcard Expansion:** If a role contains a wildcard (`*`), the system MUST:
+    *   Grant full access to `ubus`, `uci`, `file`, and `cgi-io` scopes.
+    *   Dynamically scan `/usr/share/rpcd/acl.d/` and grant ALL discovered `luci-*` access groups to ensure UI menu visibility.
+5.  **Session Tagging:** Generates a random **256-bit CSRF Token** (CSPRNG validated) and injects OIDC metadata via `session set`.
 
 ### Modern CSRF Synchronization
 By creating a valid UBUS session and setting the `sysauth` cookies, modern LuCI (JS) automatically fetches the CSRF token from the session state on the first authenticated request, closing the loop between the OIDC flow and LuCI's write protection.

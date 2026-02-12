@@ -45,8 +45,15 @@ The Mock IdP stores its runtime state (including generated signing keys) in:
 ### 3. Log Inspection
 To follow logs for a specific component:
 ```bash
-docker logs -f local-idp     # Mock IdP logs (Node.js)
-docker logs -f local-openwrt # uhttpd and ucode logs
+docker logs -f ci-x86-64-idp     # Mock IdP logs (Node.js)
+docker exec ci-x86-64-openwrt logread -f # Follow system logs
+```
+
+Typical successful login trace:
+```text
+user.info luci-sso: OIDC callback received
+user.info luci-sso: Token exchange successful
+user.info luci-sso: Successful Passwordless SSO login for [oidc_id: ...] mapped to role=admin
 ```
 
 ### 4. Interactive Shell

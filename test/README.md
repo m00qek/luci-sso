@@ -28,14 +28,17 @@ make e2e-test
 | :--- | :--- | :--- | :--- | :--- |
 | **0** | **Backend Compliance** | ucode | C Native Modules | Verify cryptographic primitives (SHA, HMAC, ECC) against test vectors. |
 | **1** | **Plumbing** | ucode | `crypto.uc` | Verify the ucode-to-C binding layer. |
-| **2** | **Business Logic** | ucode | `oidc.uc`, `session.uc` | **Core Logic.** Verify OIDC state machines and validation (Offline). |
-| **3** | **Integration** | ucode | CGI + UBUS | Verify system wiring, HTTP headers, and UBUS session creation. |
-| **4** | **Meta** | ucode | `mock.uc` | Verify the test harness itself ensures the mocks behave correctly. |
+| **2** | **Business Logic** | ucode | `oidc.uc`, `session.uc`, `config.uc` | **Core Logic.** Verify OIDC state machines, role mapping, and permission deduplication. |
+| **3** | **Integration** | ucode | CGI + UBUS | Verify system wiring, HTTP headers, and dynamic UBUS session elevation. |
+| **4** | **Meta** | ucode | `mock.uc` | Verify the test harness itself ensures the mocks behave correctly (including UCI section names). |
 | **E2E** | **Full Stack** | **JavaScript** | Browser ↔ IdP ↔ Router | Verify the end-to-end user experience using Playwright. |
 
 ### Hardened Security Validation
 
 The project includes specialized security tests beyond basic coverage:
+- **RBAC Mapping & Priority**: Verifies that user claims are correctly mapped to roles and that the first matched role name is used as the identity label.
+- **Permission Deduplication**: Verifies that merging multiple roles results in a unique set of ACL grants.
+- **Dynamic Grant Elevation**: Verifies that administrative roles triggers the dynamic scan of `/usr/share/rpcd/acl.d/` for full UI visibility.
 - **Authorization Parameter Validation**: Verifies mandatory presence and strength of `state`, `nonce`, and `code_challenge` during URL generation.
 - **Secret Key Bootstrap Resilience**: Verifies that the system correctly retries and recovers from race conditions during first-boot key generation.
 - **CSRF Entropy Validation**: Verifies that session creation fails safely if the CSPRNG fails to produce entropy for the CSRF token.
@@ -52,10 +55,9 @@ The project includes specialized security tests beyond basic coverage:
 
 ## 3. Testing Philosophy
 
-1.  **Functional Core, Imperative Shell**: Most logic lives in pure modules (`crypto.uc`, `oidc.uc`) that take an injectable `io` provider.
-2.  **Temporal Isolation**: Tests must never leak state. Every mock reality exists only for the duration of a closure.
-3.  **Minimal Mock Context**: **Mandatory Principle.** An `io` provider must contain *only* the mocks strictly required by the function under test. Do not provide a "fat" mock handle just because it is convenient.
-4.  **Minimal State Capture**: The mock only records interactions when wrapped in a `spy()` block. This prevents memory leaks and ensures no 'ghost data' leaks between tests.
+1.  **Temporal Isolation:** Tests MUST NOT leak state. Every mock reality SHALL exist only for the duration of a closure.
+2.  **Minimal Mock Context:** An `io` provider MUST contain ONLY the mocks strictly required by the function under test.
+3.  **Minimal State Capture:** Mocks SHOULD only record interactions when wrapped in a `spy()` block to prevent memory exhaustion and "ghost data" leaks.
 
 ## 2. Assertion Hierarchy (Stability Rules)
 

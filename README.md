@@ -10,7 +10,10 @@
 
 ## 📖 Overview
 
-`luci-sso` replaces the standard LuCI password prompt with an **OpenID Connect (OIDC)** flow. This allows you to log into your router using your existing identity provider (Keycloak, Authentik, Google, Azure AD, etc.).
+`luci-sso` replaces the standard LuCI password prompt with an **OpenID Connect (OIDC)** flow.
+
+### Terminology
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document are to be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
 
 ### Why use this?
 *   **Security First:** Full PKCE (S256) support, Strict HTTPS enforcement, Anti-Replay protection, and Token Binding.
@@ -108,16 +111,22 @@ config oidc 'default'
     # Standard scopes
     option scope 'openid profile email'
 
-# Map OIDC Users to System Accounts
-config user
+# Map OIDC Users to Roles
+config role 'admin'
     # The OIDC email(s) allowed to login
     list email 'admin@example.com'
     
-    # The OpenWrt system user to log them in as (usually root)
-    option rpcd_user 'root'
-    
-    # The system password for that user (Required for ubus session creation)
-    option rpcd_password 'YOUR_ROOT_PASSWORD'
+    # Granular ACL mapping (Use list for multiple groups)
+    # Use '*' for full administrative access
+    list read '*'
+    list write '*'
+
+config role 'parents'
+    list email 'father@example.com'
+    list email 'mother@example.com'
+    list read 'luci-mod-status'
+    list read 'luci-mod-network'
+    list write 'luci-mod-network-config'
 ```
 
 ### 3. Apply Changes

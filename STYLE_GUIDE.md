@@ -29,7 +29,8 @@ This guide evolves with the project. When you find inconsistencies or have quest
 ## Table of Contents
 
 1. [Philosophy](#philosophy)
-2. [Architecture Principles](#architecture-principles)
+2. [Terminology](#terminology)
+3. [Architecture Principles](#architecture-principles)
 3. [Error Handling](#error-handling)
 4. [Testing Standards](#testing-standards)
 5. [ucode Style](#ucode-style)
@@ -46,11 +47,11 @@ This guide evolves with the project. When you find inconsistencies or have quest
 
 ### Core Tenets
 
-1. **Security First** - All authentication/authorization code must be paranoid
-2. **Minimal Dependencies** - Keep the footprint small for embedded systems
-3. **Testability** - All code must be unit-testable without a real IdP
-4. **OpenWrt Native** - Follow OpenWrt/ucode conventions, not Node.js patterns
-5. **Explicit Over Implicit** - Code should be obvious, not clever
+1. **Security First** - All authentication/authorization code MUST be paranoid.
+2. **Minimal Dependencies** - The footprint SHALL remain small for embedded systems.
+3. **Testability** - All logic MUST be unit-testable without a real IdP.
+4. **OpenWrt Native** - Code MUST follow OpenWrt/ucode conventions, NOT Node.js patterns.
+5. **Explicit Over Implicit** - Code SHOULD be obvious, not clever.
 
 ### Design Goals
 
@@ -61,11 +62,17 @@ This guide evolves with the project. When you find inconsistencies or have quest
 
 ---
 
+## Terminology
+
+The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document and all other project documentation are to be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
+
+---
+
 ## Architecture Principles
 
 ### 1. Dependency Injection for I/O
 
-**ALWAYS** use dependency injection for I/O operations to enable testing.
+Developers MUST use dependency injection for all I/O operations to enable offline verification.
 
 **✅ CORRECT:**
 
@@ -102,7 +109,9 @@ export function discover(issuer, options) {
 
 ### 2. What Belongs in IO Object
 
-**DO include (non-deterministic, external state):**
+Methods representing non-deterministic or external state MUST be part of the `io` provider.
+
+**MANDATORY Scopes (External State):**
 
 ```javascript
 let io = {
@@ -154,34 +163,20 @@ export function verify(tokens, config, policy) {
 
 ### 4. Minimal C Code
 
-**Crypto operations ONLY in C.** Everything else in ucode.
+Cryptographic operations SHALL be implemented in C. Higher-level business logic MUST remain in ucode.
 
-**C code should contain:**
-- ✅ Cryptographic primitives (RSA/EC verification, HMAC, random)
-- ✅ Performance-critical code (if profiling shows bottleneck)
-- ❌ Business logic (OAuth2 flows, session management)
-- ❌ String manipulation (JSON parsing, URL building)
-- ❌ I/O operations (HTTP requests, file access)
+**C code SHALL contain:**
+- Cryptographic primitives (RSA/EC verification, HMAC, CSPRNG).
+- Performance-critical code (if profiling identifies a bottleneck).
 
-**Rationale:**
-- C code is harder to test, audit, and modify
-- ucode is "good enough" for 99% of operations
-- Smaller C surface = fewer security vulnerabilities
+**C code MUST NOT contain:**
+- Business logic (OAuth2 state machines, role merging).
+- String manipulation or JSON parsing.
+- Direct I/O operations (HTTP or File access).
 
----
+### 5. Backend Abstraction
 
-### 4. Backend Abstraction
-
-**Crypto backends are swappable** (mbedtls, wolfssl).
-
-All backend-specific code goes in:
-- `src/native_mbedtls.c`
-- `src/native_wolfssl.c`
-
-Wrapper layer exposes uniform API:
-- `files/usr/share/ucode/luci_sso/crypto.uc` imports `luci_sso.native`
-
-**Never** import backend directly:
+Cryptographic backends MUST be swappable. Code MUST NOT import a backend directly (e.g. `native_mbedtls`). All logic MUST utilize the `luci_sso.native` wrapper.
 
 ```javascript
 // ❌ INCORRECT
@@ -304,10 +299,10 @@ Tests are not just validation—they are:
 
 ### Test Requirements
 
-1. **Every exported function MUST have tests**
-2. **Every error path MUST have a test**
-3. **Security-critical code MUST have attack tests** (see `test/unit/security_test.uc`)
-4. **Tests MUST be runnable offline** (no real network calls)
+1. **Mandatory Coverage:** Every exported function MUST have unit tests.
+2. **Failure Verification:** Every error path MUST be verified by a corresponding test case.
+3. **Attack Simulation:** Security-critical code MUST have specialized attack tests.
+4. **Offline Purity:** All tests MUST be runnable offline without external network dependencies.
 
 ### Test Structure
 
@@ -433,55 +428,18 @@ function helper_function(arg) {
 
 ### Variable Declarations
 
-```javascript
-// ALWAYS use let (never var)
-let x = 1;
-let name = "value";
-
-// Constants: UPPERCASE for true constants
-const SECRET_KEY_PATH = "/etc/luci-sso/secret.key";
-const SESSION_DURATION = 3600;
-
-// Multi-word names: snake_case (OpenWrt convention)
-let session_token = create_session();
-let discovery_url = issuer + "/.well-known";
-
-// NOT camelCase (that's JavaScript, not OpenWrt)
-// ❌ let sessionToken = ...
-// ❌ let discoveryUrl = ...
-```
-
----
+- **Mandatory Let:** All variables MUST be declared using `let` (never `var`).
+- **Constants:** TRUE constants MUST use `UPPERCASE` naming.
+- **Naming Convention:** All other variables and functions MUST use `snake_case`.
 
 ### String Formatting
 
-```javascript
-// Template literals for interpolation
-let url = `${base_url}/path?param=${value}`;
-
-// Quote style: Double quotes (OpenWrt convention)
-let message = "Hello, world";
-
-// Exception: Single quotes for nested strings
-let json = '{"key": "value"}';
-```
-
----
+- **Interpolation:** Logic SHOULD use template literals for string building.
+- **Quotes:** Double quotes MUST be used for standard strings.
 
 ### Imports
 
-```javascript
-// Import order:
-// 1. Standard library
-// 2. External dependencies
-// 3. Internal modules (luci_sso.*)
-
-import * as fs from 'fs';
-import * as uclient from 'uclient';
-
-import * as crypto from 'luci_sso.crypto';
-import * as session from 'luci_sso.session';
-```
+- **Ordering:** Imports MUST follow the order: Standard Library, External Dependencies, Internal Modules.
 
 ---
 
@@ -802,103 +760,19 @@ export function pkce_pair(len) {
 
 ### 1. Constant-Time Operations
 
-**ALWAYS use constant-time comparison for secrets:**
-
-```javascript
-// ✅ CORRECT
-function constant_time_eq(a, b) {
-	if (length(a) != length(b)) return false;
-	
-	let result = 0;
-	for (let i = 0; i < length(a); i++) {
-		result |= ord(a, i) ^ ord(b, i);
-	}
-	return result == 0;
-}
-
-// ❌ INCORRECT (timing attack vulnerable)
-if (signature == expected_signature) {
-	// ...
-}
-```
-
----
+Logic MUST use constant-time comparison for all secrets and signatures to prevent timing oracles.
 
 ### 2. Cryptographic Randomness
 
-**ALWAYS use crypto RNG, never predictable sources:**
-
-```javascript
-// ✅ CORRECT
-let state = crypto.b64url_encode(crypto.random(16));
-
-// ❌ INCORRECT (predictable!)
-let state = sprintf("%d", time());
-```
-
----
+All random values MUST be sourced from a CSPRNG (e.g. `crypto.random`). Predictable sources like `time()` MUST NOT be used for security parameters.
 
 ### 3. Input Validation
 
-**Validate ALL external inputs:**
+The system MUST validate all external inputs. Contract violations MUST trigger `die()`, while runtime data errors MUST return a Result Object.
 
-```javascript
-export function verify_jwt(token, pubkey, options) {
-	// 1. Contract Bugs (Programming errors) -> die()
-	if (type(token) != "string")
-		die("CONTRACT_VIOLATION: token must be string");
-	if (type(options) != "object")
-		die("CONTRACT_VIOLATION: options must be object");
-	
-	// 2. Runtime Realities (Invalid data) -> return { ok: false }
-	let parts = split(token, ".");
-	if (length(parts) != 3)
-		return { ok: false, error: "MALFORMED_JWT" };
-	
-	// Validate algorithm
-	if (!options.alg)
-		return { ok: false, error: "MISSING_ALGORITHM" };
-	
-	let header = decode_header(parts[0]);
-	if (header.alg != options.alg)
-		return { ok: false, error: "ALGORITHM_MISMATCH" };
-	
-	// ...
-};
-```
+### 4. Fail-Safe Execution Order (Consumption First)
 
----
-
-### 4. Fail Securely
-
-**On any doubt, REJECT:**
-
-```javascript
-// ✅ CORRECT
-if (signature_valid && !expired && issuer_match) {
-	return payload;
-}
-die("INVALID_TOKEN");  // Reject by default
-
-// ❌ INCORRECT
-if (!signature_valid || expired || !issuer_match) {
-	die("INVALID_TOKEN");
-}
-return payload;  // Accept if no explicit rejection
-```
-
----
-
-### 5. Fail-Safe Execution Order (Consumption First)
-
-**ALWAYS** register/consume a token or secret **BEFORE** performing computationally expensive or potentially failing verification.
-
-```javascript
-// ✅ CORRECT
-let tokens = exchange_code(code);
-register_token(tokens.access_token); // Fail-Safe: Consumed even if verify fails
-verify_id_token(tokens.id_token);
-```
+State handles and access tokens MUST be registered or consumed BEFORE performing expensive verification operations.
 
 **Rationale:** Prevents brute-force signature or padding attacks by ensuring an attacker only gets one attempt per token.
 
@@ -922,23 +796,7 @@ log("ID token present: " + (id_token ? "yes" : "no"));
 
 ### 6. Algorithm Whitelisting
 
-**Only support S256 for PKCE:**
-
-```javascript
-// ✅ CORRECT (S256 only)
-let params = {
-	code_challenge: pkce.challenge,
-	code_challenge_method: "S256"  // Hardcoded
-};
-
-// ❌ INCORRECT (allowing 'plain' is a security risk)
-let params = {
-	code_challenge: pkce.challenge,
-	code_challenge_method: options.method || "plain"
-};
-```
-
-**Rationale:** RFC 7636 recommends S256 as mandatory. The `plain` method offers no security against interception attacks.
+The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be implemented or accepted.
 
 ---
 
@@ -1141,8 +999,10 @@ If you find inconsistencies or have suggestions:
 |------|------|-------------|
 | **Error Handling** | Exceptions for most errors, result objects for fine-grained control | Code review |
 | **I/O Abstraction** | Always inject `io` object for testability | Code review |
+| **Virtual Identity** | Use OIDC role name as session label, no local passwords | Security review |
 | **C Code** | Crypto primitives only, everything else in ucode | Architecture review |
 | **PKCE** | S256 only, no `plain` method support | Security review |
+| **RBAC Merging** | Aggregate role permissions using logical OR with deduplication | Logic review |
 | **Indentation** | Tabs (OpenWrt standard) | Consistency review |
 | **Naming** | snake_case for variables/functions | Style review |
 | **Exports** | Trailing semicolon on `export` statements | Syntax requirement |
