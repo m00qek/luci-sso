@@ -299,12 +299,12 @@ test('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
 	});
 });
 
-test('Router: Security - Access token is consumed EVEN IF verification fails (Fail-Safe)', () => {
+test('Router: Security - Access token is NOT registered if verification fails (DoS prevention)', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
-		let access_token = "FAIL_SAFE_TOKEN";
+		let access_token = "DO_NOT_REGISTER_ME";
 		
 		// 1. Setup response with INVALID ID token (wrong signature)
 		factory.using(io).with_responses({
@@ -318,14 +318,29 @@ test('Router: Security - Access token is consumed EVEN IF verification fails (Fa
 			let res1 = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
 			assert_eq(res1.status, 401, "Should fail verification");
 
-			// SECOND attempt should fail with AUTH_FAILED (Replay) because the token was consumed!
-			// We need a fresh handshake for the second attempt
-			let state_res2 = session.create_state(io_http);
-			let req2 = mock_request("/callback", { code: "c2", state: state_res2.data.state }, { "__Host-luci_sso_state": state_res2.data.token });
+			// 2. Verify that the token was NOT registered by attempting a DIFFERENT handshake
+			// with the SAME access token. If it was registered, it would return 403 (Replay).
+			// If NOT registered, it should proceed past replay check and fail later.
 			
-			let res2 = router.handle(io_http, MOCK_CONFIG, req2, TEST_POLICY);
-			assert_eq(res2.status, 403, "Should fail with REPLAY even if first attempt failed verification");
-			assert_eq(res2.code, "AUTH_FAILED");
+			// We'll mock the IdP to return the SAME access token again for a new code.
+			let state_res2 = session.create_state(io_http);
+			let handshake2 = state_res2.data;
+			
+			let factory_replay = factory.using(io_http).with_responses({
+				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+				"https://idp.com/token": { status: 200, body: { access_token: access_token, id_token: "invalid.jwt.sig" } },
+				"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+			});
+
+			factory_replay.with_env({}, (io_replay) => {
+				let req2 = mock_request("/callback", { code: "c2", state: handshake2.state }, { "__Host-luci_sso_state": handshake2.token });
+				let res2 = router.handle(io_replay, MOCK_CONFIG, req2, TEST_POLICY);
+				
+				// It should FAIL with 401 (Verification Failed) again, NOT 403 (Replay Detected).
+				// This proves the token wasn't persisted in the registry after the first failure.
+				assert_eq(res2.status, 401, "Should fail verification again (NOT replay) because token wasn't registered");
+				assert(res2.code != "AUTH_FAILED", "Should NOT fail with replay error");
+			});
 		});
 	});
 });

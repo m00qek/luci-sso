@@ -69,7 +69,7 @@ The system MUST enforce an exclusively HTTPS-based OIDC flow to ensure transport
 *   **Verification:** The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
 *   **DoS Protection:** The system MUST enforce a **256 KB** maximum size limit on all incoming HTTP response bodies.
 *   **Token Binding:** The system MUST enforce `at_hash` validation for all flows.
-*   **Replay Protection:** Handshake states MUST be consumed using atomic POSIX `rename` for strict one-time use. OIDC Access Tokens MUST be registered in a local registry immediately after exchange and BEFORE verification.
+*   **Replay Protection:** Handshake states MUST be consumed using atomic POSIX `rename` for strict one-time use. OIDC Access Tokens MUST be registered in a local registry immediately AFTER successful cryptographic verification of the ID Token to prevent DoS attacks using unverified tokens.
 *   **Algorithm Enforcement:** The system MUST ONLY accept asymmetric signatures (RS256, ES256) in production. Symmetric algorithms (HS256) MUST NOT be accepted.
 *   **Authorization Parameters:** Authorization URL generation MUST enforce the presence of `state` (min 16 chars), `nonce` (min 16 chars), and `code_challenge` (PKCE).
 *   **Claims Validation:** The system MUST verify `exp` (Expiry), `iat` (Issued At), `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party).
