@@ -147,3 +147,21 @@ export function safe_json(data) {
 		};
 	}
 };
+
+/**
+ * Normalizes a URL for comparison.
+ * Lowercases the scheme/host and removes trailing slashes.
+ * 
+ * @param {string} url - The URL to normalize
+ * @returns {string} - Normalized URL
+ */
+export function normalize_url(url) {
+	if (type(url) != "string") return "";
+	
+	let res = lc(url);
+	// Remove trailing slashes
+	while (substr(res, -1) == "/") {
+		res = substr(res, 0, length(res) - 1);
+	}
+	return res;
+};

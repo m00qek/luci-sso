@@ -63,6 +63,7 @@ The system MUST enforce an exclusively HTTPS-based OIDC flow to ensure transport
 
 ### Front-channel (Browser ↔ IdP)
 *   **Enforcement:** The `issuer_url` MUST use the `https://` scheme.
+*   **Normalization:** All issuer URL comparisons MUST use normalized forms (lowercase scheme/host, no trailing slashes) to ensure interoperability across various IdP implementations.
 
 ### Back-channel (Router ↔ IdP)
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS.

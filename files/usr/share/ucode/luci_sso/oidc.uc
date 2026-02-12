@@ -176,7 +176,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	if (!pem_res.ok) return pem_res;
 
 	// MANDATORY Claims Check
-	if (discovery.issuer != config.issuer_url) {
+	if (encoding.normalize_url(discovery.issuer) != encoding.normalize_url(config.issuer_url)) {
 		return { 
 			ok: false, 
 			error: "DISCOVERY_ISSUER_MISMATCH", 
