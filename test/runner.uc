@@ -18,7 +18,8 @@ if (modules_str) {
 const backend_files = [
 	"unit.native_compliance_test",
 	"unit.native_torture_test",
-	"unit.native_hardening_test"
+	"unit.native_hardening_test",
+	"unit.native_compliance_test_extra"
 ];
 
 for (let mod in backend_files) {

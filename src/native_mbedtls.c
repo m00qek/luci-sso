@@ -89,7 +89,14 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
 
 	mbedtls_pk_context pk;
 	mbedtls_pk_init(&pk);
-	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, key_len + 1) != 0) {
+	/* MbedTLS requires NUL terminator for PEM, but not for DER.
+	 * ucode strings are always NUL-terminated in the underlying buffer. */
+	size_t parse_len = key_len;
+	if (key_len > 10 && memcmp(key_pem, "-----BEGIN", 10) == 0) {
+		parse_len++;
+	}
+
+	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, parse_len) != 0) {
 		mbedtls_pk_free(&pk);
 		return ucv_boolean_new(false);
 	}
@@ -139,7 +146,14 @@ static uc_value_t *uc_mbedtls_verify_es256(uc_vm_t *vm, size_t nargs) {
 
 	mbedtls_pk_context pk;
 	mbedtls_pk_init(&pk);
-	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, key_len + 1) != 0) {
+	/* MbedTLS requires NUL terminator for PEM, but not for DER.
+	 * ucode strings are always NUL-terminated in the underlying buffer. */
+	size_t parse_len = key_len;
+	if (key_len > 10 && memcmp(key_pem, "-----BEGIN", 10) == 0) {
+		parse_len++;
+	}
+
+	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, parse_len) != 0) {
 		mbedtls_pk_free(&pk);
 		return ucv_boolean_new(false);
 	}
