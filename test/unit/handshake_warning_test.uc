@@ -3,6 +3,7 @@ import * as handshake from 'luci_sso.handshake';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
+import * as h from 'unit.helpers';
 
 test('handshake: warning - log warning for long-lived access tokens (W2)', () => {
     let now = 1516239022;
@@ -17,7 +18,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
         roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
     };
 
-    let tokens = { access_token: long_lived_token, id_token: "mock.id.token" };
+    let tokens = { access_token: long_lived_token, id_token: "" };
 
     mock.create()
         .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
@@ -28,7 +29,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
         })
         .spy((io) => {
             io.http_get = (url) => {
-                if (index(url, "jwks") != -1) return { status: 200, body: { read: () => sprintf("%J", { keys: [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(f.MOCK_CONFIG.client_secret) }] }) } };
+                if (index(url, "jwks") != -1) return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
                 return { status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } };
             };
 
@@ -41,8 +42,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
             // Setup minimal environment
             let at_hash = crypto.b64url_encode(substr(crypto.sha256(tokens.access_token), 0, 16));
             let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_val, at_hash: at_hash };
-            let id_token = crypto.sign_jws(id_payload, f.MOCK_CONFIG.client_secret);
-            tokens.id_token = id_token;
+            tokens.id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
 
             io.http_post = (url) => ({ status: 200, body: { read: () => sprintf("%J", tokens) } });
 
@@ -53,7 +53,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
                 env: { HTTPS: "on" }
             };
 
-            let auth_res = handshake.authenticate(io, test_config, request, { allowed_algs: ["HS256"] });
+            let auth_res = handshake.authenticate(io, test_config, request);
             assert(auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
 
             // Manual iteration check
@@ -92,7 +92,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
             })
             .spy((io) => {
                 io.http_get = (url) => {
-                    if (index(url, "jwks") != -1) return { status: 200, body: { read: () => sprintf("%J", { keys: [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(f.MOCK_CONFIG.client_secret) }] }) } };
+                    if (index(url, "jwks") != -1) return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
                     return { status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } };
                 };
 
@@ -104,8 +104,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
 
                 let at_hash = crypto.b64url_encode(substr(crypto.sha256(tokens.access_token), 0, 16));
                 let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_val, at_hash: at_hash };
-                let id_token = crypto.sign_jws(id_payload, f.MOCK_CONFIG.client_secret);
-                tokens.id_token = id_token;
+                tokens.id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
                 
                 io.http_post = (url) => ({ status: 200, body: { read: () => sprintf("%J", tokens) } });
 
@@ -116,7 +115,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
                     env: { HTTPS: "on" }
                 };
 
-                let auth_res = handshake.authenticate(io, test_config, request, { allowed_algs: ["HS256"] });
+                let auth_res = handshake.authenticate(io, test_config, request);
                 assert(auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
 
                 let found = false;

@@ -4,7 +4,11 @@ import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
 
-const TEST_POLICY = { allowed_algs: ["RS256", "ES256", "HS256"] };
+import * as h from 'unit.helpers';
+
+const PRIVKEY = f.MOCK_PRIVKEY;
+const JWKS = { keys: [ f.MOCK_JWK ] };
+const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
 test('oidc: security - reject HS256 algorithm confusion', () => {
 	// 1. Setup malicious HS256 token signed with a string key
@@ -85,7 +89,6 @@ test('oidc: security - reject discovery document with insecure endpoints', () =>
 
 test('oidc: security - reject invalid at_hash', () => {
 	let access_token = "access-token-123";
-	let secret = f.MOCK_CONFIG.client_secret;
 	
 	let payload = { 
 		iss: f.MOCK_CONFIG.issuer_url, 
@@ -97,9 +100,9 @@ test('oidc: security - reject invalid at_hash', () => {
 		at_hash: "wrong_hash_!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 	};
 	
-	let token = crypto.sign_jws(payload, secret);
+	let token = h.generate_id_token(payload, PRIVKEY, "RS256");
 	let tokens = { id_token: token, access_token: access_token };
-	let keys = [{ kty: "oct", kid: "dummy", k: crypto.b64url_encode(secret) }];
+	let keys = JWKS.keys;
 
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.verify_id_token(io, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
@@ -109,12 +112,11 @@ test('oidc: security - reject invalid at_hash', () => {
 });
 
 test('oidc: security - reject missing mandatory claims', () => {
-	let secret = f.MOCK_CONFIG.client_secret;
-	let keys = [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(secret) }];
+	let keys = JWKS.keys;
 
 	// Case 1: Missing exp
 	let p_no_exp = { ...f.MOCK_CLAIMS, exp: null, nonce: "n1", sub: "u1", iat: 100 };
-	let t_no_exp = { id_token: crypto.sign_jws(p_no_exp, secret), access_token: "a" };
+	let t_no_exp = { id_token: h.generate_id_token(p_no_exp, PRIVKEY, "RS256"), access_token: "a" };
 
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.verify_id_token(io, t_no_exp, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
@@ -124,7 +126,7 @@ test('oidc: security - reject missing mandatory claims', () => {
 
 	// Case 2: Missing iat
 	let p_no_iat = { ...f.MOCK_CLAIMS, iat: null, nonce: "n1", sub: "u1" };
-	let t_no_iat = { id_token: crypto.sign_jws(p_no_iat, secret), access_token: "a" };
+	let t_no_iat = { id_token: h.generate_id_token(p_no_iat, PRIVKEY, "RS256"), access_token: "a" };
 
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.verify_id_token(io, t_no_iat, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
@@ -134,10 +136,9 @@ test('oidc: security - reject missing mandatory claims', () => {
 });
 
 test('oidc: security - reject missing mandatory at_hash claim (W2)', () => {
-	let secret = f.MOCK_CONFIG.client_secret;
-	let keys = [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(secret) }];
+	let keys = JWKS.keys;
 	let payload = { ...f.MOCK_CLAIMS, at_hash: null, nonce: "n1", sub: "u1" };
-	let tokens = { id_token: crypto.sign_jws(payload, secret), access_token: "at123" };
+	let tokens = { id_token: h.generate_id_token(payload, PRIVKEY, "RS256"), access_token: "at123" };
 
 	let data = mock.create().spy((io) => {
 		let res = oidc.verify_id_token(io, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 1500, TEST_POLICY);

@@ -101,3 +101,9 @@ export const EC_256_LOW_BIT = {
 	pub: EC_256.pub,
     sig_hex: "df41996e470c5117ab3849a79065afe180126ffad08a3d599705539366e3c2c764629c6fa4482dfe0b516694dc7b890b28de9cfdacd6a98a62100d55f49f0738"
 };
+
+export const EC_256_PRIV = "-----BEGIN EC PRIVATE KEY-----\n" +
+	"MHcCAQEEIInS/6XNoDRZ6reZIDPhZunZfRTguDRSkTMZfXQZ6NoBoAoGCCqGSM49\n" +
+	"AwEHoUQDQgAELKSZQ954ztU8Nmg+PZDfFmi/8XNZf4Xap9aATkxlnM4UHtEi57z/\n" +
+	"ok0143yBgwv5uABqmsv2D834CoYkBeNX+w==\n" +
+	"-----END EC PRIVATE KEY-----";

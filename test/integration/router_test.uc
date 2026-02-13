@@ -5,24 +5,24 @@ import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
 import * as mock from 'mock';
 import * as f from 'integration.fixtures';
+import * as tf from 'unit.tier2_fixtures';
+import * as h from 'unit.helpers';
 
 const TEST_SECRET = "integration-test-secret-32-bytes!!!";
-const TEST_POLICY = { allowed_algs: ["RS256", "ES256", "HS256"] };
+const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
 const MOCK_CONFIG = {
+	...tf.MOCK_CONFIG,
 	issuer_url: "https://idp.com",
 	internal_issuer_url: "https://idp.com",
-	client_id: "luci-app",
-	client_secret: "secret123",
 	redirect_uri: "https://router/callback",
-	alg: "RS256",
-	clock_tolerance: 300,
 	roles: [
-		{ name: "system_admin", emails: ["1234567890"], read: ["*"], write: ["*"] }
+		{ name: "system_admin", emails: ["user-123"], read: ["*"], write: ["*"] }
 	]
 };
 
 const MOCK_DISC_DOC = { 
+	...tf.MOCK_DISCOVERY,
 	issuer: "https://idp.com", 
 	authorization_endpoint: "https://idp.com/auth",
 	token_endpoint: "https://idp.com/token",
@@ -103,17 +103,16 @@ test('Router: Callback - Successful authentication and UBUS login', () => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
 		
-		let full_hash = crypto.sha256("at");
-		let left_half = "";
-		for (let i = 0; i < 16; i++) left_half += chr(ord(full_hash, i));
-		let at_hash = crypto.b64url_encode(left_half);
-		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
+		let at = "mock-access-token-123456";
+		let at_hash = crypto.b64url_encode(substr(crypto.sha256(at), 0, 16));
+		let payload = { ...tf.MOCK_CLAIMS, iss: "https://idp.com", email: "user-123", nonce: handshake.nonce, at_hash: at_hash };
+		let id_token = h.generate_id_token(payload, tf.MOCK_PRIVKEY, "RS256");
 
 		let data = factory.using(io)
 			.with_responses({
 				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-				"https://idp.com/token": { status: 200, body: { access_token: "at", refresh_token: "rt", id_token: id_token } },
-				"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+				"https://idp.com/token": { status: 200, body: { access_token: at, refresh_token: "rt", id_token: id_token } },
+				"https://idp.com/jwks": { status: 200, body: { keys: [ tf.MOCK_JWK ] } }
 			})
 			.with_ubus({ 
 				"session:create": (args) => ({ ubus_rpc_session: "session-for-root" }),
@@ -129,10 +128,14 @@ test('Router: Callback - Successful authentication and UBUS login', () => {
 
 		assert(data.called("ubus", "session", "create"), "Should have called ubus create");
 		let found_set = false;
-		for (let entry in data.all()) {
+		let ops = data.all();
+		for (let entry in ops) {
 			if (entry.type == "ubus" && entry.args[1] == "set") {
-				if (entry.args[2].values.oidc_access_token == "at") found_set = true;
+				if (entry.args[2].values.oidc_access_token == at) found_set = true;
 			}
+		}
+		if (!found_set) {
+			print("UBUS History: " + sprintf("%J", ops));
 		}
 		assert(found_set, "Tokens must be persisted in UBUS session");
 	});
@@ -143,21 +146,22 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
-		let full_hash = crypto.sha256("at");
-		let left_half = "";
-		for (let i = 0; i < 16; i++) left_half += chr(ord(full_hash, i));
-		let at_hash = crypto.b64url_encode(left_half);
-		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
+		
+		let at = "mock-at";
+		let at_hash = crypto.b64url_encode(substr(crypto.sha256(at), 0, 16));
+		let payload = { ...tf.MOCK_CLAIMS, iss: "https://idp.com", nonce: handshake.nonce, at_hash: at_hash };
+		payload.kid = tf.ROTATION_NEW_JWK.kid;
+		let id_token = h.generate_id_token(payload, tf.ROTATION_NEW_PRIVKEY, "RS256");
 
 		let cache_path = "/var/run/luci-sso/oidc-jwks-wv5enLcGYIn8PiwhdkeXzhVPct86Lf3q.json";
-		let stale_jwks = { keys: [ { kid: "anchor-key", kty: "oct", k: "d3Jvbmc" } ], cached_at: io.time() };
+		let stale_jwks = { keys: [ tf.MOCK_JWK ], cached_at: io.time() };
 
 		factory.using(io).with_files({ [cache_path]: sprintf("%J", stale_jwks) }, (io_stale) => {
 			let data = factory.using(io_stale)
 				.with_responses({
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
 					"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
-					"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+					"https://idp.com/jwks": { status: 200, body: { keys: [ tf.ROTATION_NEW_JWK ] } }
 				})
 				.with_ubus({ 
 					"session:create": (args) => ({ ubus_rpc_session: "s" }),
@@ -173,7 +177,7 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 			let cache_content = io_stale.read_file(cache_path);
 			let cache_res = encoding.safe_json(cache_content);
 			assert(cache_res.ok, "Cache should be valid JSON");
-			assert_eq(cache_res.data.keys[0].kid, f.ANCHOR_JWK.kid, "JWKS keys should be updated");
+			assert_eq(cache_res.data.keys[0].kid, tf.ROTATION_NEW_JWK.kid, "JWKS keys should be updated");
 			assert(cache_res.data.cached_at >= 1516239022, "Cache timestamp should be updated");
 		});
 	});
@@ -184,16 +188,15 @@ test('Router: Callback - Reject non-whitelisted users', () => {
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
 		let handshake = state_res.data;
-		let full_hash = crypto.sha256("at");
-		let left_half = "";
-		for (let i = 0; i < 16; i++) left_half += chr(ord(full_hash, i));
-		let at_hash = crypto.b64url_encode(left_half);
-		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "unknown", io.time(), handshake.nonce, at_hash);
+		
+		let at = "mock-at";
+		let at_hash = crypto.b64url_encode(substr(crypto.sha256(at), 0, 16));
+		let id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", sub: "unknown", nonce: handshake.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 		factory.using(io).with_responses({
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
-			"https://idp.com/token": { status: 200, body: { access_token: "at", id_token: id_token } },
-			"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+			"https://idp.com/token": { status: 200, body: { access_token: at, id_token: id_token } },
+			"https://idp.com/jwks": { status: 200, body: { keys: [ tf.MOCK_JWK ] } }
 		}, (io_http) => {
 			let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 			let res = router.handle(io_http, { ...MOCK_CONFIG, roles: [] }, req, TEST_POLICY);
@@ -213,11 +216,8 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 		let handshake = state_res.data;
 		let access_token = "ALREADY_USED";
 		
-		let full_hash = crypto.sha256(access_token);
-		let left_half = "";
-		for (let i = 0; i < 16; i++) left_half += chr(ord(full_hash, i));
-		let at_hash = crypto.b64url_encode(left_half);
-		let id_token = f.sign_anchor_token(crypto, "https://idp.com", "1234567890", io.time(), handshake.nonce, at_hash);
+		let at_hash = crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16));
+		let id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", nonce: handshake.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 		// PRE-REGISTER the token to simulate replay
 		// We manually implement the safe_id logic here to avoid module resolution issues in the test script
@@ -232,7 +232,7 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 			.with_responses({
 				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
 				"https://idp.com/token": { status: 200, body: { access_token: access_token, id_token: id_token } },
-				"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+				"https://idp.com/jwks": { status: 200, body: { keys: [ tf.MOCK_JWK ] } }
 			})
 			.with_ubus({ "session:list": {} })
 			.spy((spying_io) => {

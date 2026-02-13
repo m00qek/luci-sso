@@ -9,7 +9,7 @@ RUN mkdir -p /var/lock && \
 
 # DEV dependencies
 RUN opkg install --force-reinstall \
-  rpcd uhttpd luci-ssl luci-mod-admin-full luci-light inotifywait
+  rpcd uhttpd luci-ssl luci-mod-admin-full luci-light inotifywait openssl-util
 
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh

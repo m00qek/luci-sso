@@ -2,6 +2,8 @@ import { test, assert, assert_eq, assert_throws } from 'testing';
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 import * as f from 'unit.tier1_fixtures';
+import * as f2 from 'unit.tier2_fixtures';
+import * as h from 'unit.helpers';
 
 // =============================================================================
 // Tier 1: Cryptographic Plumbing (Platinum Standard)
@@ -21,14 +23,17 @@ test('crypto: plumbing - JWK set lookup', () => {
 });
 
 test('crypto: plumbing - clock tolerance boundary math', () => {
-    let secret = "tolerance-test-secret-1234567890123456";
+    let privkey = f2.MOCK_PRIVKEY;
+    let pubkey = crypto.jwk_to_pem(f2.MOCK_JWK).data;
     let clock_tolerance = 300;
-    let payload_ok = { exp: 1000 };
-    let token_ok = crypto.sign_jws(payload_ok, secret);
     
-    assert(crypto.verify_jwt(token_ok, secret, { alg: "HS256", now: 1299, clock_tolerance: clock_tolerance }).ok);
+    // 1. Success case
+    let payload_ok = { ...f2.MOCK_CLAIMS, exp: 1000 };
+    let token_ok = h.generate_id_token(payload_ok, privkey, "RS256");
+    assert(crypto.verify_jwt(token_ok, pubkey, { alg: "RS256", now: 1299, clock_tolerance: clock_tolerance }).ok);
     
-    let res = crypto.verify_jwt(token_ok, secret, { alg: "HS256", now: 1301, clock_tolerance: clock_tolerance });
+    // 2. Failure case (expired)
+    let res = crypto.verify_jwt(token_ok, pubkey, { alg: "RS256", now: 1301, clock_tolerance: clock_tolerance });
     assert_eq(res.error, "TOKEN_EXPIRED");
 });
 

@@ -4,6 +4,7 @@ import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'unit.tier2_fixtures';
+import * as h from 'unit.helpers';
 
 test('handshake: recovery - handle JWKS key rotation with automatic retry', () => {
     let access_token = "access-token-123";
@@ -21,9 +22,8 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
 
     // 2. Setup stateful mock responses
     let jwks_uri = f.MOCK_DISCOVERY.jwks_uri;
-    // Keys MUST have valid Base64URL encoded 'k' for octet keys
-    let old_jwks = { keys: [{ kty: "oct", kid: "key_old", k: crypto.b64url_encode("old-stale-secret-123") }] };
-    let new_jwks = { keys: [{ kty: "oct", kid: "HS256", k: crypto.b64url_encode(secret) }] }; 
+    let old_jwks = { keys: [ f.MOCK_JWK ] };
+    let new_jwks = { keys: [ f.ROTATION_NEW_JWK ] }; 
 
     let call_count = 0;
     
@@ -41,20 +41,6 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
             "session:set": {}
         })
         .spy((io) => {
-            // Create a valid handshake state
-            let state_res = session.create_state(io);
-            let s_data = state_res.data;
-
-            // Create ID token matching the generated nonce
-            let payload = { 
-                ...f.MOCK_CLAIMS,
-                email: "user-123",
-                nonce: s_data.nonce,
-                at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16))
-            };
-            let token = crypto.sign_jws(payload, secret);
-            let tokens = { access_token: access_token, id_token: token };
-
             io.http_get = (url) => {
                 let data = null;
                 if (url == f.MOCK_DISCOVERY.issuer + "/.well-known/openid-configuration") {
@@ -66,6 +52,25 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
                 if (data) return { status: 200, body: { read: () => sprintf("%J", data) } };
                 return { status: 404, body: { read: () => "" } };
             };
+
+            // Create a valid handshake state
+            let state_res = session.create_state(io);
+            if (!state_res.ok) {
+                print("create_state failed: " + state_res.error + " " + (state_res.details || ""));
+                assert(false);
+            }
+            let s_data = state_res.data;
+
+            // Create ID token matching the generated nonce
+            let payload = { 
+                ...f.MOCK_CLAIMS,
+                email: "user-123",
+                nonce: s_data.nonce,
+                at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16))
+            };
+            payload.kid = f.ROTATION_NEW_JWK.kid;
+            let token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256");
+            let tokens = { access_token: access_token, id_token: token };
 
             io.http_post = (url) => ({ 
                 status: 200, 
@@ -80,7 +85,7 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
             };
 
             // This should trigger the rotation recovery path
-            let res = handshake.authenticate(io, test_config, request, { allowed_algs: ["HS256"] });
+            let res = handshake.authenticate(io, test_config, request);
             
             assert(res.ok, `Handshake should succeed after JWKS retry (Error: ${res.error}, Details: ${res.details})`);
             assert_eq(call_count, 2, "JWKS should have been fetched exactly twice (initial + forced refresh)");
