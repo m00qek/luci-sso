@@ -62,8 +62,19 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 
 	// Back-Channel Override: The Router must talk to the IdP via the internal network
 	if (config.internal_issuer_url != config.issuer_url) {
-		discovery_doc.token_endpoint = replace(discovery_doc.token_endpoint, config.issuer_url, config.internal_issuer_url);
-		discovery_doc.jwks_uri = replace(discovery_doc.jwks_uri, config.issuer_url, config.internal_issuer_url);
+		let replace_origin = (url, old_origin, new_origin) => {
+			if (type(url) != "string") return url;
+			if (substr(url, 0, length(old_origin)) == old_origin) {
+				return new_origin + substr(url, length(old_origin));
+			}
+			return url;
+		};
+
+		discovery_doc.token_endpoint = replace_origin(discovery_doc.token_endpoint, config.issuer_url, config.internal_issuer_url);
+		discovery_doc.jwks_uri = replace_origin(discovery_doc.jwks_uri, config.issuer_url, config.internal_issuer_url);
+		if (discovery_doc.userinfo_endpoint) {
+			discovery_doc.userinfo_endpoint = replace_origin(discovery_doc.userinfo_endpoint, config.issuer_url, config.internal_issuer_url);
+		}
 	}
 
 	let exchange_res = oidc.exchange_code(io, config, discovery_doc, code, handshake.code_verifier, session_id);
@@ -118,7 +129,8 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		let ui_res = oidc.fetch_userinfo(io, discovery_doc.userinfo_endpoint, tokens.access_token);
 		if (ui_res.ok) {
 			// SECURITY: sub MUST match (OIDC Core §5.3.2)
-			if (ui_res.data.sub != user_data.sub) {
+			// MANDATORY: Use constant-time comparison for identity binding
+			if (!crypto.constant_time_eq(ui_res.data.sub, user_data.sub)) {
 				io.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
 				return { ok: false, error: "IDENTITY_MISMATCH", status: 403 };
 			}

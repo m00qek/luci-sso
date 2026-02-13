@@ -151,6 +151,7 @@ export function safe_json(data) {
 /**
  * Normalizes a URL for comparison.
  * Lowercases the scheme/host and removes trailing slashes.
+ * Per RFC 3986, the path component is case-sensitive.
  * 
  * @param {string} url - The URL to normalize
  * @returns {string} - Normalized URL
@@ -158,7 +159,12 @@ export function safe_json(data) {
 export function normalize_url(url) {
 	if (type(url) != "string") return "";
 	
-	let res = lc(url);
+	let res = url;
+	let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
+	if (m) {
+		res = lc(m[1]) + lc(m[2]) + m[3];
+	}
+
 	// Remove trailing slashes
 	while (substr(res, -1) == "/") {
 		res = substr(res, 0, length(res) - 1);

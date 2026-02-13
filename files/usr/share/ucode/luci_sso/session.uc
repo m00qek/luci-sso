@@ -268,14 +268,24 @@ export function verify_state(io, handle, clock_tolerance) {
 		return { ok: false, error: "STATE_CORRUPTED" };
 	}
 
+	// W5: Enforce mandatory exp and iat claims
+	if (data.exp == null || type(data.exp) != "int") {
+		io.log("error", `Handshake state missing or invalid 'exp' [session_id: ${session_id}]`);
+		return { ok: false, error: "STATE_CORRUPTED" };
+	}
+	if (data.iat == null || type(data.iat) != "int") {
+		io.log("error", `Handshake state missing or invalid 'iat' [session_id: ${session_id}]`);
+		return { ok: false, error: "STATE_CORRUPTED" };
+	}
+
 	let now = io.time();
 
-	if (data.exp && data.exp < (now - clock_tolerance)) {
+	if (data.exp < (now - clock_tolerance)) {
 		io.log("warn", `Handshake state expired [session_id: ${session_id}]`);
 		return { ok: false, error: "HANDSHAKE_EXPIRED" };
 	}
 
-	if (data.iat && data.iat > (now + clock_tolerance)) {
+	if (data.iat > (now + clock_tolerance)) {
 		io.log("warn", `Handshake state not yet valid [session_id: ${session_id}]`);
 		return { ok: false, error: "HANDSHAKE_NOT_YET_VALID" };
 	}

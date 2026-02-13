@@ -56,17 +56,17 @@ static uc_value_t *uc_wolfssl_hmac_sha256(uc_vm_t *vm, size_t nargs) {
 
 	if (wc_HmacSetKey(&hmac, WC_SHA256, key, key_len) != 0) return NULL;
 	if (wc_HmacUpdate(&hmac, msg, msg_len) != 0) {
-		memset(&hmac, 0, sizeof(hmac));
+		ForceZero(&hmac, sizeof(hmac));
 		return NULL;
 	}
 	if (wc_HmacFinal(&hmac, mac) != 0) {
-		memset(&hmac, 0, sizeof(hmac));
+		ForceZero(&hmac, sizeof(hmac));
 		return NULL;
 	}
 
 	uc_value_t *res = ucv_string_new_length((const char *)mac, WC_SHA256_DIGEST_SIZE);
-	memset(&hmac, 0, sizeof(hmac));
-	memset(mac, 0, sizeof(mac));
+	ForceZero(&hmac, sizeof(hmac));
+	ForceZero(mac, sizeof(mac));
 	return res;
 }
 

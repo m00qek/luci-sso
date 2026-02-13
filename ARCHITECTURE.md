@@ -50,8 +50,12 @@ To reduce network overhead and ensure resilience against transient IdP outages, 
 *   **Resilience Fallback:** If a network fetch for discovery or JWKS fails, the system MUST attempt to load the existing (stale) cache as a fallback of last resort. This ensures device accessibility during upstream downtime.
 *   **Forced Refresh:** The system MUST trigger a forced cache refresh if a cryptographic operation fails due to an unknown Key ID (`kid`).
 
-### UserInfo Supplementation (Thin Token Support)
-To ensure compatibility with OIDC-compliant providers that utilize "Thin" ID Tokens (e.g., Authelia), the system MUST support claim supplementation via the UserInfo endpoint:
+### User-Agent vs. Router Networking (Split-Horizon)
+In many deployments, the **Browser** accesses the IdP via a public URL (e.g., `https://auth.com`), while the **Router** MUST access it via an internal URL (e.g., `https://10.0.0.5`). 
+*   **Logical vs. Physical:** The `issuer_url` serves as the logical OIDC identifier. The `internal_issuer_url` serves as the physical network fetch address.
+*   **Origin Replacement:** When overriding IdP endpoints (token, jwks, userinfo) for the back-channel, the system MUST ONLY replace the **origin** (scheme + host + port) of the URL.
+*   **Path Integrity:** Simple string replacement is strictly FORBIDDEN as it may corrupt path components if the issuer URL appears as a substring (e.g., in Keycloak realm paths).
+*   **Security Bound:** The `issuer` claim in the discovery document and the `iss` claim in the ID Token MUST always match the logical `issuer_url`, regardless of the network path used to fetch them.
 *   **Trigger:** If the mandatory `email` claim is missing from the verified ID Token, the system SHOULD attempt to fetch it from the `userinfo_endpoint`.
 *   **Authentication:** The fetch MUST be performed using the `access_token` as a Bearer token over an encrypted (HTTPS) back-channel.
 *   **Security Bound:** The `sub` claim returned by the UserInfo endpoint MUST match the `sub` claim from the cryptographically verified ID Token. Any mismatch MUST result in immediate session termination.
