@@ -130,7 +130,8 @@ test('oidc: ID token - support multi-audience arrays', () => {
 	let ah = crypto.b64url_encode(substr(full_hash, 0, 16));
 	
 	// 1. Success: Correct ID in array
-	let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], at_hash: ah };
+	// RFC 7519: If aud is array, azp is mandatory.
+	let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], azp: f.MOCK_CONFIG.client_id, at_hash: ah };
 	let token = h.generate_id_token(payload, PRIVKEY, "RS256");
 	mock.create().with_env({}, (io) => {
 		assert(oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY).ok);
@@ -421,32 +422,62 @@ test('oidc: encoding - parameter torture test', () => {
 
 	assert(post_call, "Should have made an HTTP POST call");
 	let body = post_call.args[1].body;
-				assert(index(body, "code=code%20%26%20space") != -1, "code in body must be encoded");
-				assert(index(body, "code_verifier=verifier%2Fslash-that-is-at-least-43-chars-long-!!!") != -1, "verifier in body must be encoded");
-			});
-			
-			test('oidc: userinfo - successful fetch', () => {
-				let endpoint = "https://trusted.idp/userinfo";
-				let at = "access-token-123";
-				let mock_res = { sub: "user-123", email: "user@example.com" };
-			
-				mock.create().with_responses({
-					[endpoint]: { status: 200, body: mock_res }
-				}, (io) => {
-					let res = oidc.fetch_userinfo(io, endpoint, at);
-					assert(res.ok);
-					assert_eq(res.data.email, "user@example.com");
-				});
-			});
-			
-			test('oidc: userinfo - reject missing sub claim', () => {
-				let endpoint = "https://trusted.idp/userinfo";
-				mock.create().with_responses({
-					[endpoint]: { status: 200, body: { email: "no-sub@example.com" } }
-				}, (io) => {
-					let res = oidc.fetch_userinfo(io, endpoint, "at");
-					assert(!res.ok);
-					assert_eq(res.error, "MISSING_SUB_CLAIM");
-				});
-			});
-			
+	assert(index(body, "code=code%20%26%20space") != -1, "code in body must be encoded");
+	assert(index(body, "code_verifier=verifier%2Fslash-that-is-at-least-43-chars-long-!!!") != -1, "verifier in body must be encoded");
+});
+
+test('oidc: userinfo - successful fetch', () => {
+	let endpoint = "https://trusted.idp/userinfo";
+	let at = "access-token-123";
+	let mock_res = { sub: "user-123", email: "user@example.com" };
+
+	mock.create().with_responses({
+		[endpoint]: { status: 200, body: mock_res }
+	}, (io) => {
+		let res = oidc.fetch_userinfo(io, endpoint, at);
+		assert(res.ok);
+		assert_eq(res.data.email, "user@example.com");
+	});
+});
+
+test('oidc: userinfo - reject missing sub claim', () => {
+	let endpoint = "https://trusted.idp/userinfo";
+	mock.create().with_responses({
+		[endpoint]: { status: 200, body: { email: "no-sub@example.com" } }
+	}, (io) => {
+		let res = oidc.fetch_userinfo(io, endpoint, "at");
+		assert(!res.ok);
+		assert_eq(res.error, "MISSING_SUB_CLAIM");
+	});
+});
+
+test('oidc: ID token - enforce azp when aud is array (Blocker 1771006966)', () => {
+	let keys = JWKS.keys;
+	let at = "mock-at";
+	let full_hash = crypto.sha256(at);
+	let ah = crypto.b64url_encode(substr(full_hash, 0, 16));
+	
+	// Create a payload with multiple audiences but NO authorized party (azp)
+	// RFC 7519 Section 3.1.3.7: If aud is array, azp is MANDATORY.
+	let payload = { 
+		...f.MOCK_CLAIMS, 
+		aud: [ f.MOCK_CONFIG.client_id, "other-service" ], 
+		at_hash: ah 
+	};
+	// Ensure azp is undefined
+	delete payload.azp;
+
+	let token = h.generate_id_token(payload, PRIVKEY, "RS256");
+
+	mock.create().with_env({}, (io) => {
+		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		
+		// This Assertion MUST FAIL until the fix is implemented.
+		// Current behavior: Returns OK (vulnerable)
+		// Expected behavior: Returns error "MISSING_AZP"
+		assert(!res.ok, "Should fail verification when aud is array but azp is missing");
+		if (!res.ok) {
+			assert_eq(res.error, "MISSING_AZP_CLAIM");
+		}
+	});
+});

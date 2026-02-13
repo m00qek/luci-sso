@@ -227,6 +227,9 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	}
 
 	// 3.2 Authorized Party Check
+	if (type(payload.aud) == "array" && !payload.azp) {
+		return { ok: false, error: "MISSING_AZP_CLAIM" };
+	}
 	if (payload.azp && payload.azp !== config.client_id) {
 		return { ok: false, error: "AZP_MISMATCH", details: `Expected ${config.client_id}, got ${payload.azp}` };
 	}
