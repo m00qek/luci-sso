@@ -24,6 +24,13 @@
 		} \
 	} while(0)
 
+static void secure_memzero(void *p, size_t len)
+{
+	if (p == NULL || len == 0) return;
+	volatile unsigned char *vp = (volatile unsigned char *)p;
+	while (len--) *vp++ = 0;
+}
+
 static WC_RNG _global_rng;
 static int _rng_initialized = 0;
 
@@ -56,17 +63,17 @@ static uc_value_t *uc_wolfssl_hmac_sha256(uc_vm_t *vm, size_t nargs) {
 
 	if (wc_HmacSetKey(&hmac, WC_SHA256, key, key_len) != 0) return NULL;
 	if (wc_HmacUpdate(&hmac, msg, msg_len) != 0) {
-		ForceZero(&hmac, sizeof(hmac));
+		secure_memzero(&hmac, sizeof(hmac));
 		return NULL;
 	}
 	if (wc_HmacFinal(&hmac, mac) != 0) {
-		ForceZero(&hmac, sizeof(hmac));
+		secure_memzero(&hmac, sizeof(hmac));
 		return NULL;
 	}
 
 	uc_value_t *res = ucv_string_new_length((const char *)mac, WC_SHA256_DIGEST_SIZE);
-	ForceZero(&hmac, sizeof(hmac));
-	ForceZero(mac, sizeof(mac));
+	secure_memzero(&hmac, sizeof(hmac));
+	secure_memzero(mac, sizeof(mac));
 	return res;
 }
 
@@ -89,7 +96,7 @@ static uc_value_t *uc_wolfssl_random(uc_vm_t *vm, size_t nargs) {
 	}
 
 	uc_value_t *res = ucv_string_new_length((const char *)buf, len);
-	memset(buf, 0, len);
+	secure_memzero(buf, len);
 	free(buf);
 	return res;
 }
@@ -182,19 +189,19 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 
 	// raw_sig is guaranteed to be 64 bytes (checked above)
 	if (wc_ecc_rs_raw_to_sig(raw_sig, 32, raw_sig + 32, 32, der_sig, &der_sig_len) != 0) {
-		memset(hash, 0, sizeof(hash));
+		secure_memzero(hash, sizeof(hash));
 		wc_ecc_free(&key);
 		return ucv_boolean_new(false);
 	}
 
 	int verify_res = 0;
 	if (wc_ecc_verify_hash(der_sig, der_sig_len, hash, WC_SHA256_DIGEST_SIZE, &verify_res, &key) != 0) {
-		memset(hash, 0, sizeof(hash));
+		secure_memzero(hash, sizeof(hash));
 		wc_ecc_free(&key);
 		return ucv_boolean_new(false);
 	}
 
-	memset(hash, 0, sizeof(hash)); // Defense-in-depth
+	secure_memzero(hash, sizeof(hash)); // Defense-in-depth
 	wc_ecc_free(&key);
 	return ucv_boolean_new(verify_res == 1);
 }
