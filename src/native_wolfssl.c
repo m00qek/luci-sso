@@ -55,10 +55,19 @@ static uc_value_t *uc_wolfssl_hmac_sha256(uc_vm_t *vm, size_t nargs) {
 	unsigned char mac[WC_SHA256_DIGEST_SIZE];
 
 	if (wc_HmacSetKey(&hmac, WC_SHA256, key, key_len) != 0) return NULL;
-	if (wc_HmacUpdate(&hmac, msg, msg_len) != 0) return NULL;
-	if (wc_HmacFinal(&hmac, mac) != 0) return NULL;
+	if (wc_HmacUpdate(&hmac, msg, msg_len) != 0) {
+		memset(&hmac, 0, sizeof(hmac));
+		return NULL;
+	}
+	if (wc_HmacFinal(&hmac, mac) != 0) {
+		memset(&hmac, 0, sizeof(hmac));
+		return NULL;
+	}
 
-	return ucv_string_new_length((const char *)mac, WC_SHA256_DIGEST_SIZE);
+	uc_value_t *res = ucv_string_new_length((const char *)mac, WC_SHA256_DIGEST_SIZE);
+	memset(&hmac, 0, sizeof(hmac));
+	memset(mac, 0, sizeof(mac));
+	return res;
 }
 
 static uc_value_t *uc_wolfssl_random(uc_vm_t *vm, size_t nargs) {
@@ -80,6 +89,7 @@ static uc_value_t *uc_wolfssl_random(uc_vm_t *vm, size_t nargs) {
 	}
 
 	uc_value_t *res = ucv_string_new_length((const char *)buf, len);
+	memset(buf, 0, len);
 	free(buf);
 	return res;
 }
