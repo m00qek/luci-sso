@@ -73,6 +73,13 @@ export function request(method, url, opts) {
                 data = con.read();
                 if (!data || length(data) == 0) break;
                 
+                // MANDATORY: Validate data type before concatenation (B4)
+                if (type(data) != "string") {
+                    response.error = "INVALID_DATA_TYPE";
+                    uloop.end();
+                    return;
+                }
+
                 if ((length(response.body) + length(data)) > MAX_RESPONSE_SIZE) {
                     response.error = "RESPONSE_TOO_LARGE";
                     uloop.end();

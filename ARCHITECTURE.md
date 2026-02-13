@@ -67,6 +67,7 @@ The system MUST enforce an exclusively HTTPS-based OIDC flow to ensure transport
 
 ### Back-channel (Router ↔ IdP)
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS.
+*   **Entropy Validation:** All cryptographic parameters (Secret Key, Nonce, State, CSRF tokens) MUST be sourced from a CSPRNG and explicitly validated for length and type. Any generation failure MUST result in a system halt (fail-closed) to prevent weak-key or CSRF vulnerabilities.
 *   **Verification:** The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
 *   **DoS Protection:** The system MUST enforce a **256 KB** maximum size limit on all incoming HTTP response bodies.
 *   **Token Binding:** The system MUST enforce `at_hash` validation for all flows.

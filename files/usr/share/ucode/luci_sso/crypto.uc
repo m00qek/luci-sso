@@ -228,15 +228,23 @@ export function verify_jwt(token, pubkey, options) {
  * Generates cryptographically secure random bytes.
  * 
  * @param {number} [len=32] - Number of bytes to generate
- * @returns {string} - Random binary string
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function random(len) {
-	if (type(len) != "int" && len != null) die("CONTRACT_VIOLATION: random expects integer length");
+	let byte_len = len || 32;
+	if (type(byte_len) != "int") die("CONTRACT_VIOLATION: random expects integer length");
 	
 	// TESTING HOOK: Allow simulating CSPRNG failure
-	if (global.TESTING_RANDOM_FAIL) return null;
+	let bytes = null;
+	if (!global.TESTING_RANDOM_FAIL) {
+		bytes = native.random(byte_len);
+	}
 
-	return native.random(len || 32);
+	if (!bytes || type(bytes) != "string" || length(bytes) != byte_len) {
+		return { ok: false, error: "CSPRNG_FAILURE" };
+	}
+
+	return { ok: true, data: bytes };
 };
 
 /**
@@ -260,8 +268,10 @@ export function pkce_generate_verifier(len) {
 	let byte_len = len || 43;
 	if (byte_len < 32 || byte_len > 96) die("CONTRACT_VIOLATION: PKCE verifier must be 32-96 bytes");
 	
-	let bytes = random(byte_len);
-	return b64url_encode(bytes);
+	let res = random(byte_len);
+	if (!res.ok) return null;
+
+	return b64url_encode(res.data);
 };
 
 /**
@@ -283,6 +293,8 @@ export function pkce_calculate_challenge(verifier) {
  */
 export function pkce_pair(len) {
 	let verifier = pkce_generate_verifier(len);
+	if (!verifier) return null;
+
 	let challenge = pkce_calculate_challenge(verifier);
 	return { verifier, challenge };
 };

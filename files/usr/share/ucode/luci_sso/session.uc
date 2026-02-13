@@ -71,7 +71,14 @@ export function get_secret_key(io) {
 		if (acquired) {
 			try {
 				// 2. We are the generator: Generate and Write
-				let new_key = crypto.random(32);
+				let res = crypto.random(32);
+				if (!res.ok) {
+					io.log("error", "CRITICAL: CSPRNG failure during secret key generation");
+					try { io.remove(lock_path); } catch (e) {}
+					return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
+				}
+
+				let new_key = res.data;
 				let tmp_path = SECRET_KEY_PATH + ".tmp";
 				// MANDATORY: Restricted permissions for secrets
 				io.write_file(tmp_path, new_key);
@@ -122,9 +129,18 @@ export function create_state(io) {
 	ensure_handshake_dir(io);
 
 	let pkce = crypto.pkce_pair();
-	let state = crypto.b64url_encode(crypto.random(16));
-	let nonce = crypto.b64url_encode(crypto.random(16));
-	let handle = crypto.b64url_encode(crypto.random(32));
+	let res_s = crypto.random(16);
+	let res_n = crypto.random(16);
+	let res_h = crypto.random(32);
+
+	if (!pkce || !res_s.ok || !res_n.ok || !res_h.ok) {
+		io.log("error", "CRITICAL: CSPRNG failure during handshake state generation");
+		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
+	}
+
+	let state = crypto.b64url_encode(res_s.data);
+	let nonce = crypto.b64url_encode(res_n.data);
+	let handle = crypto.b64url_encode(res_h.data);
 	let now = io.time();
 
 	let data = {

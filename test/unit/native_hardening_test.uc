@@ -1,4 +1,5 @@
 import * as native from 'luci_sso.native';
+import * as crypto from 'luci_sso.crypto';
 import { assert, test } from '../testing.uc';
 
 test('native: RSA hardening - reject invalid exponents (N2)', () => {
@@ -21,32 +22,13 @@ test('native: RSA hardening - reject invalid exponents (N2)', () => {
     }
 });
 
-test('native: RSA hardening - accept valid exponents', () => {
-    let n = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
-    
-    let cases = [
-        { name: "Odd: 3", e: "\x03" },
-        { name: "Odd: 65537", e: "\x01\x00\x01" },
-        { name: "Large Odd", e: "\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x01" }
-    ];
-
-    for (let c in cases) {
-        // Should NOT return null. It might fail actual PEM writing because 'n' is junk, 
-        // but the security check happens BEFORE the write.
-        // Actually, mbedtls_rsa_import_raw checks N and E.
-        // Let's see if our mock junk 'n' passes import.
-        
-        // If it returns null, it's either our check OR mbedtls failing.
-        // We know e=3 and e=65537 are valid.
-    }
-});
-
 test('native: random - persistent DRBG (N1)', () => {
     // We can't easily prove it's persistent from here, 
     // but we can verify it still works and produces entropy.
     let r1 = native.random(32);
     let r2 = native.random(32);
-    assert(length(r1) == 32);
+    assert(type(r1) == "string", "Native random must return a string");
+    assert(length(r1) == 32, "Native random must return requested length");
     assert(r1 != r2, "Random results should be unique");
 });
 

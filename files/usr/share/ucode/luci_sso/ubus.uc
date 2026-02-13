@@ -107,12 +107,12 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	}
 
 	// 3. Generate CSRF token
-	let csrf_random = crypto.random(32);
-	if (!csrf_random || length(csrf_random) != 32) {
-		io.log("error", "CRITICAL: CSPRNG failure");
+	let res_csrf = crypto.random(32);
+	if (!res_csrf.ok) {
+		io.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
 		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
 	}
-	let csrf_token = crypto.b64url_encode(csrf_random);
+	let csrf_token = crypto.b64url_encode(res_csrf.data);
 
 	// 4. Set session variables
 	io.ubus_call("session", "set", {

@@ -47,7 +47,13 @@ function _read_cache(io, path, ttl) {
 function _write_cache(io, path, data) {
 	try {
 		let cache_data = { ...data, cached_at: io.time() };
-		let tmp_path = `${path}.${crypto.b64url_encode(crypto.random(8))}.tmp`;
+		
+		let res = crypto.random(8);
+		if (!res.ok) {
+			io.log("error", "Cache write aborted: CSPRNG failure");
+			return;
+		}
+		let tmp_path = `${path}.${crypto.b64url_encode(res.data)}.tmp`;
 		
 		if (io.write_file(tmp_path, sprintf("%J", cache_data))) {
 			if (!io.rename(tmp_path, path)) {
