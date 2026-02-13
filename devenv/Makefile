@@ -94,7 +94,7 @@ unit-test: DOCKER_SUITE = ci
 unit-test: .unit-test
 
 e2e-test: DOCKER_SUITE = ci
-e2e-test: .ci-test
+e2e-test: .e2e-test
 
 # Watcher: Run tests automatically on change
 watch-tests: DOCKER_SUITE = ci
@@ -123,10 +123,10 @@ endef
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
-.ci-test:
+.e2e-test:
 	$(VALIDATE_SUITE_RUNNING)
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
-	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh ci --modules "$(MODULES)" --filter "$(FILTER)"
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
 
 .watch-tests:
 	$(VALIDATE_SUITE_RUNNING)

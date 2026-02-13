@@ -106,7 +106,7 @@ services:
       - ../files/www/cgi-bin/luci-sso:/www/cgi-bin/luci-sso:ro
       - ../files/www/luci-static/resources/luci-sso-login.js:/www/luci-static/resources/luci-sso-login.js:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
-      - ../bin/lib/${SDK_ARCH}/${CRYPTO_LIB}/luci_sso:/usr/lib/ucode/luci_sso:ro
+      - ../bin/lib/${SDK_ARCH}:/luci_sso/backends:ro
       - ../test:/usr/share/luci-sso/test:ro
     labels:
       cert.fqdn: "${FQDN_LUCI}"
