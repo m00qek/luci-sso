@@ -88,15 +88,18 @@ The configuration is located at `/etc/config/luci-sso`.
 ### 1. Identity Provider (IdP) Setup
 Configure your OIDC provider. You will need a **Client ID** and **Client Secret**.
 *   **Redirect URI:** `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback`
-*   **Note:** The router **MUST** be accessed via HTTPS.
+*   **Note:** The router and IdP interactions **MUST** use HTTPS.
 
 ### 2. Router Configuration
 Edit `/etc/config/luci-sso`:
 
 ```properties
 config oidc 'default'
-    option enabled '1'
+    # Must be set to '1' to activate the service
+    option enabled '0'
+
     # The URL where the router will fetch .well-known/openid-configuration
+    # MUST use https://
     option issuer_url 'https://auth.example.com/realms/homelab'
     
     # (Optional) If the router needs a different internal URL to reach the IdP
@@ -106,15 +109,21 @@ config oidc 'default'
     option client_secret 'YOUR_SECRET_HERE'
     
     # Must match exactly what is configured in your IdP
+    # MUST use https://
     option redirect_uri 'https://192.168.1.1/cgi-bin/luci-sso/callback'
     
     # Standard scopes
     option scope 'openid profile email'
 
-# Map OIDC Users to Roles
+    # Allowed clock skew in seconds for JWT validation (REQUIRED)
+    option clock_tolerance '300'
+
+# Map OIDC Users or Groups to Roles
 config role 'admin'
-    # The OIDC email(s) allowed to login
+    # Match by OIDC email(s)
     list email 'admin@example.com'
+    # Match by OIDC group(s)
+    list group 'admins'
     
     # Granular ACL mapping (Use list for multiple groups)
     # Use '*' for full administrative access
@@ -124,6 +133,7 @@ config role 'admin'
 config role 'parents'
     list email 'father@example.com'
     list email 'mother@example.com'
+    list group 'family'
     list read 'luci-mod-status'
     list read 'luci-mod-network'
     list write 'luci-mod-network-config'
