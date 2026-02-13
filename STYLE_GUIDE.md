@@ -578,6 +578,16 @@ if (ucv_type(v_key) != UC_STRING || ucv_type(v_msg) != UC_STRING) {
 
 ---
 
+### Memory Hygiene
+
+All stack or heap buffers containing sensitive cryptographic material (keys, nonces, intermediate hashes) MUST be zeroized immediately after use and before function return.
+
+**Requirements:**
+- Use `mbedtls_platform_zeroize()` for MbedTLS backends.
+- Use `ForceZero()` or `memset_s()` equivalents for other backends.
+
+---
+
 ### Documentation
 
 ```c

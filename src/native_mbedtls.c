@@ -223,6 +223,12 @@ static uc_value_t *uc_mbedtls_hmac_sha256(uc_vm_t *vm, size_t nargs) {
 
 	psa_key_id_t key_id = 0;
 	psa_status_t status = psa_import_key(&attributes, key, key_len, &key_id);
+	
+	// HARDENING: Zeroize intermediate hashed key immediately after import
+	if (key == hashed_key) {
+		mbedtls_platform_zeroize(hashed_key, sizeof(hashed_key));
+	}
+
 	if (status != PSA_SUCCESS) return NULL;
 
 	status = psa_mac_compute(key_id, PSA_ALG_HMAC(PSA_ALG_SHA_256), msg, msg_len,
