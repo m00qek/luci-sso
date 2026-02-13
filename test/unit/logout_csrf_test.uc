@@ -63,4 +63,22 @@ test('logout: security - csrf token validation', () => {
 		});
 	
 	assert(history.called("ubus", "session", "destroy"), "Session MUST be destroyed on valid logout");
+
+	// 4. Session Lookup Fails -> Should NOT call destroy (W1 fix verification)
+	history = mock.create()
+		.with_ubus({ 
+			"session:get": { error: 404 }, // Session not found
+			"session:destroy": {} 
+		})
+		.with_responses(discovery_response)
+		.spy((io) => {
+			let req = {
+				path: "/logout",
+				cookies: { sysauth: "invalid-sid" },
+				query: { stoken: "any" }
+			};
+			router.handle(io, config, req);
+		});
+	
+	assert(!history.called("ubus", "session", "destroy"), "Should NOT call destroy if session lookup failed (W1)");
 });

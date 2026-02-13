@@ -346,11 +346,17 @@ export function verify(io, token, clock_tolerance) {
 	let session = result.data;
 	let now = io.time();
 	
-	if (session.exp && session.exp < (now - clock_tolerance)) {
+	if (session.exp == null || type(session.exp) != "int") {
+		return { ok: false, error: "INVALID_SESSION" };
+	}
+	if (session.exp < (now - clock_tolerance)) {
 		return { ok: false, error: "SESSION_EXPIRED" };
 	}
 
-	if (session.iat && session.iat > (now + clock_tolerance)) {
+	if (session.iat == null || type(session.iat) != "int") {
+		return { ok: false, error: "INVALID_SESSION" };
+	}
+	if (session.iat > (now + clock_tolerance)) {
 		return { ok: false, error: "SESSION_NOT_YET_VALID" };
 	}
 	

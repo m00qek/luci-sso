@@ -74,3 +74,18 @@ test('discovery: security - ensure sanitized logging on issuer mismatch (W4)', (
     }
     assert(log_found, "Mismatch error should have been logged");
 });
+
+test('discovery: security - normalized issuer comparison (W2)', () => {
+    let issuer = "https://trusted.idp/"; // Trailing slash
+    let doc = { ...f.MOCK_DISCOVERY, issuer: "https://trusted.idp" }; // No trailing slash
+
+    mock.create()
+        .with_responses({
+            [`https://trusted.idp/.well-known/openid-configuration`]: { status: 200, body: doc }
+        })
+        .spy((io) => {
+            let res = discovery.discover(io, issuer);
+            assert(res.ok, "Should succeed with normalized comparison");
+            assert_eq(res.data.issuer, "https://trusted.idp");
+        });
+});

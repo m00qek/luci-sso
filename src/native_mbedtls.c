@@ -238,7 +238,9 @@ static uc_value_t *uc_mbedtls_hmac_sha256(uc_vm_t *vm, size_t nargs) {
 
 	if (status != PSA_SUCCESS) return NULL;
 
-	return ucv_string_new_length((const char *)mac, mac_len);
+	uc_value_t *res = ucv_string_new_length((const char *)mac, mac_len);
+	mbedtls_platform_zeroize(mac, sizeof(mac));
+	return res;
 }
 
 static uc_value_t *uc_mbedtls_random(uc_vm_t *vm, size_t nargs) {
@@ -257,6 +259,7 @@ static uc_value_t *uc_mbedtls_random(uc_vm_t *vm, size_t nargs) {
 	}
 
 	uc_value_t *res = ucv_string_new_length((const char *)buf, len);
+	mbedtls_platform_zeroize(buf, len);
 	free(buf);
 	return res;
 }

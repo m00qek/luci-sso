@@ -90,8 +90,8 @@ function handle_logout(io, config, request) {
 				return error_response("AUTH_FAILED", 403);
 			}
 			id_token_hint = session_res.data.oidc_id_token;
+			ubus.destroy_session(io, sid);
 		}
-		ubus.destroy_session(io, sid);
 	}
 
 	let logout_url = "/";
