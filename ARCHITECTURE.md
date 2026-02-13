@@ -75,7 +75,7 @@ The system MUST enforce an exclusively HTTPS-based OIDC flow to ensure transport
 *   **Replay Protection:** Handshake states MUST be consumed using atomic POSIX `rename` for strict one-time use. OIDC Access Tokens MUST be registered in a local registry immediately AFTER successful cryptographic verification of the ID Token to prevent DoS attacks using unverified tokens.
 *   **Algorithm Enforcement:** The system MUST ONLY accept asymmetric signatures (RS256, ES256) for OIDC ID Tokens. Symmetric algorithms (HS256) are strictly limited to internal session management via dedicated symmetric-only APIs. This separation prevents Algorithm Confusion attacks where a Public Key might be misused as an HMAC secret.
 *   **Authorization Parameters:** Authorization URL generation MUST enforce the presence of `state` (min 16 chars), `nonce` (min 16 chars), and `code_challenge` (PKCE).
-*   **Claims Validation:** The system MUST verify `exp` (Expiry), `iat` (Issued At), `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party).
+*   **Claims Validation:** The system MUST verify `exp` (Expiry), `iat` (Issued At), `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party). Both `exp` and `iat` MUST be present and valid to satisfy strict OIDC Core 1.0 §2 compliance and ensure robust token age validation.
 
 ---
 

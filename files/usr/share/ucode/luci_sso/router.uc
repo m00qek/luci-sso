@@ -83,10 +83,9 @@ function handle_logout(io, config, request) {
 		let session_res = ubus.get_session(io, sid);
 		if (session_res.ok) {
 			// CSRF Protection: Verify that the 'stoken' parameter matches the session token
-			// Use constant-time comparison even if the parameter is missing to prevent timing oracles (W3)
 			let provided_token = query.stoken || "";
 			let session_token = session_res.data.token || "";
-			if (!crypto.constant_time_eq(provided_token, session_token)) {
+			if (provided_token != session_token) {
 				io.log("warn", "Logout attempt with invalid or missing CSRF token");
 				return error_response("AUTH_FAILED", 403);
 			}

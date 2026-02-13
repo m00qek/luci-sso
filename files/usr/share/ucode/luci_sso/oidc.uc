@@ -210,6 +210,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	}
 
 	// B1 & W2: Enforce mandatory exp and iat claims (OIDC Core 1.0 §2)
+	// These claims MUST be present for full compliance and robust token age validation.
 	if (payload.exp == null) {
 		return { ok: false, error: "MISSING_EXP_CLAIM" };
 	}
