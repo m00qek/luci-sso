@@ -21,7 +21,7 @@ function get_cache_path(id, prefix) {
  * Reads and validates a cached object.
  * @private
  */
-function _read_cache(io, path, ttl) {
+function _read_cache(io, path, ttl, ignore_ttl) {
 	try {
 		let content = io.read_file(path);
 		if (!content) return null;
@@ -32,7 +32,7 @@ function _read_cache(io, path, ttl) {
 		let data = res.data;
 		if (!data || !data.cached_at) return null;
 
-		if ((io.time() - data.cached_at) > ttl) return null;
+		if (!ignore_ttl && (io.time() - data.cached_at) > ttl) return null;
 
 		return data;
 	} catch (e) {
@@ -100,11 +100,19 @@ export function discover(io, issuer, options) {
 	let response = io.http_get(fetch_url, { verify: true });
 	let issuer_id = crypto.safe_id(issuer);
 
-	if (!response || response.error) {
-		io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${response?.error || "no response"}`);
-		return { ok: false, error: "NETWORK_ERROR" };
-	}
-	if (response.status != 200) {
+	if (!response || response.error || response.status != 200) {
+		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
+		let stale = _read_cache(io, cache_path, ttl, true);
+		if (stale && stale.issuer == issuer) {
+			io.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
+			return { ok: true, data: stale };
+		}
+
+		if (!response || response.error) {
+			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${response?.error || "no response"}`);
+			return { ok: false, error: "NETWORK_ERROR" };
+		}
+		
 		io.log("warn", `Discovery fetch HTTP ${response.status} from [id: ${issuer_id}]`);
 		return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
 	}
@@ -178,11 +186,19 @@ export function fetch_jwks(io, jwks_uri, options) {
 	}
 
 	let response = io.http_get(jwks_uri, { verify: true });
-	if (!response || response.error) {
-		io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${response?.error || "no response"}`);
-		return { ok: false, error: "NETWORK_ERROR" };
-	}
-	if (response.status != 200) {
+	if (!response || response.error || response.status != 200) {
+		// RESILIENCE FALLBACK: Try stale cache
+		let stale = _read_cache(io, cache_path, ttl, true);
+		if (stale && type(stale.keys) == "array") {
+			io.log("warn", `Using stale JWKS cache due to network failure [id: ${uri_id}]`);
+			return { ok: true, data: stale.keys };
+		}
+
+		if (!response || response.error) {
+			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${response?.error || "no response"}`);
+			return { ok: false, error: "NETWORK_ERROR" };
+		}
+		
 		io.log("warn", `JWKS fetch HTTP ${response.status} from [id: ${uri_id}]`);
 		return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
 	}

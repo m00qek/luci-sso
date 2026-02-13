@@ -47,6 +47,7 @@ To reduce network overhead and ensure resilience against transient IdP outages, 
 *   **Discovery Documents:** SHOULD be cached for **24 hours**.
 *   **JWK Sets:** SHOULD be cached for **24 hours**.
 *   **Atomic Updates:** All cache updates MUST use atomic POSIX `rename`.
+*   **Resilience Fallback:** If a network fetch for discovery or JWKS fails, the system MUST attempt to load the existing (stale) cache as a fallback of last resort. This ensures device accessibility during upstream downtime.
 *   **Forced Refresh:** The system MUST trigger a forced cache refresh if a cryptographic operation fails due to an unknown Key ID (`kid`).
 
 ### UserInfo Supplementation (Thin Token Support)
