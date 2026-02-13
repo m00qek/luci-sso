@@ -85,7 +85,7 @@ function handle_logout(io, config, request) {
 			// CSRF Protection: Verify that the 'stoken' parameter matches the session token
 			let provided_token = query.stoken || "";
 			let session_token = session_res.data.token || "";
-			if (provided_token != session_token) {
+			if (!crypto.constant_time_eq(provided_token, session_token)) {
 				io.log("warn", "Logout attempt with invalid or missing CSRF token");
 				return error_response("AUTH_FAILED", 403);
 			}
