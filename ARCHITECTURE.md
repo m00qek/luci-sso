@@ -166,7 +166,7 @@ To avoid massive build times and environment drift, the project uses a dedicated
 
 ---
 
-## 9. Secret Key Management
+## 10. Secret Key Management
 
 The system uses a 256-bit symmetric key for signing local session tokens.
 *   **Bootstrapping:** The key is generated automatically on first boot.

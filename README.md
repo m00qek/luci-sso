@@ -103,7 +103,8 @@ config oidc 'default'
     option issuer_url 'https://auth.example.com/realms/homelab'
     
     # (Optional) If the router needs a different internal URL to reach the IdP
-    # option internal_issuer_url 'http://10.0.0.5:8080/realms/homelab'
+    # MUST use https://
+    option internal_issuer_url 'https://10.0.0.5:8443/realms/homelab'
 
     option client_id 'luci-router'
     option client_secret 'YOUR_SECRET_HERE'
@@ -119,6 +120,7 @@ config oidc 'default'
     option clock_tolerance '300'
 
 # Map OIDC Users or Groups to Roles
+# A user is assigned this role if ANY of the following match (Logical OR):
 config role 'admin'
     # Match by OIDC email(s)
     list email 'admin@example.com'

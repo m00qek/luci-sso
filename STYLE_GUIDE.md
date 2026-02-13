@@ -716,9 +716,11 @@ luci-sso/
 │   └── native_wolfssl.c   # wolfssl backend
 ├── test/
 │   ├── unit/          # Unit tests for individual modules
+│   │   ├── tier0_fixtures.uc # Minimal crypto/encoding fixtures
+│   │   ├── tier1_fixtures.uc # OIDC/JWT logic fixtures
+│   │   └── tier2_fixtures.uc # Complex handshake/session fixtures
 │   ├── integration/   # Integration tests for router and UBUS
 │   ├── e2e/           # Playwright browser tests
-│   ├── fixtures.uc    # Shared test data
 │   ├── mock.uc        # Mock I/O provider
 │   └── runner.uc      # Test harness
 └── ARCHITECTURE.md    # System architecture and security model

@@ -306,7 +306,12 @@ export const jwk_to_pem = jwk.jwk_to_pem;
 
 /**
  * Converts a sensitive token or handle into a safe, redacted correlation ID.
- * Uses the first 16 hex characters of the SHA256 hash.
+ * Uses the first 16 hex characters (64 bits) of the SHA256 hash.
+ * 
+ * NOTE: This 64-bit truncation provides a birthday collision bound of ~2^32.
+ * This is considered acceptable for correlation IDs in router logs, but MUST
+ * NOT be used for cryptographic identity or primary key indexing where
+ * collisions could lead to security vulnerabilities.
  * 
  * @param {string} token - The sensitive token or handle.
  * @returns {string} - The 16-character safe ID, or '[INVALID]'.
