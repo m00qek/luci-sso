@@ -268,11 +268,12 @@ static uc_value_t *uc_wolfssl_jwk_ec_p256_to_pem(uc_vm_t *vm, size_t nargs) {
 
 	if (wc_ecc_import_x963(point, 65, &key) != 0) {
 		wc_ecc_free(&key);
-		return NULL;
 	}
 
 	unsigned char der[1024];
-	int der_len = wc_EccKeyToDer(&key, der, sizeof(der));
+	// SECURITY: Use wc_EccPublicKeyToDer for public keys (with SPKI wrapping)
+	// to ensure correct DER structure for OIDC/JWK compliance.
+	int der_len = wc_EccPublicKeyToDer(&key, der, sizeof(der), 1);
 	wc_ecc_free(&key);
 	if (der_len < 0) return NULL;
 
