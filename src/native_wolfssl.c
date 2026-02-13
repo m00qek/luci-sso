@@ -12,6 +12,8 @@
 #include <wolfssl/wolfcrypt/ecc.h>
 #include <wolfssl/wolfcrypt/asn.h>
 #include <wolfssl/wolfcrypt/error-crypt.h>
+#include <wolfssl/wolfcrypt/misc.h>
+#include <wolfssl/wolfcrypt/signature.h>
 
 #define MAX_INPUT_SIZE 16384 // 16 KB
 
@@ -100,24 +102,10 @@ static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
 
 	VALIDATE_INPUT_SIZES(msg_len, sig_len, key_len);
 
-	// Hash the message
-	unsigned char hash[WC_SHA256_DIGEST_SIZE];
-	if (wc_Sha256Hash(msg, msg_len, hash) != 0) return ucv_boolean_new(false);
-
 	RsaKey key;
 	wc_InitRsaKey(&key, NULL);
 	
-	word32 idx = 0;
-	// WolfSSL can parse PEM directly if configured, or we use Der
-	// Most OpenWrt WolfSSL builds support PEM
-	if (wc_PubKeyPemToDer(key_pem, key_len, NULL, 0) < 0) {
-		// If it's not PEM, it might already be DER
-	}
-
-	// For simplicity and robustness, we use the high-level PKCS1v1.5 verify
-	// But first we need to load the key.
-	// Since we only have Public Key PEM, we use wc_RsaPublicKeyDecode
-	// But we need DER first.
+	// Convert PEM to DER first (WolfSSL's Decode functions usually prefer DER)
 	unsigned char der[4096];
 	int der_len = wc_PubKeyPemToDer(key_pem, key_len, der, sizeof(der));
 	if (der_len < 0) {
@@ -125,16 +113,19 @@ static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
 		return ucv_boolean_new(false);
 	}
 
+	word32 idx = 0;
 	if (wc_RsaPublicKeyDecode(der, &idx, &key, der_len) != 0) {
 		wc_FreeRsaKey(&key);
 		return ucv_boolean_new(false);
 	}
 
-	int res = wc_RsaSSL_Verify(sig, sig_len, hash, WC_SHA256_DIGEST_SIZE, &key);
-	ForceZero(hash, sizeof(hash)); // Defense-in-depth
+	int ret = wc_SignatureVerify(
+		WC_HASH_TYPE_SHA256, WC_SIGNATURE_TYPE_RSA_W_ENC,
+		msg, msg_len, sig, sig_len, &key, sizeof(key));
+
 	wc_FreeRsaKey(&key);
 
-	return ucv_boolean_new(res >= 0);
+	return ucv_boolean_new(ret == 0);
 }
 
 static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
@@ -175,15 +166,25 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 		return ucv_boolean_new(false);
 	}
 
-	int verify_res = 0;
-	// raw_sig is R|S (64 bytes). WolfSSL wc_ecc_verify_hash expects this.
-	if (wc_ecc_verify_hash(raw_sig, raw_sig_len, hash, WC_SHA256_DIGEST_SIZE, &verify_res, &key) != 0) {
-		ForceZero(hash, sizeof(hash));
+	// Convert Raw R|S to DER (WolfSSL expects DER)
+	unsigned char der_sig[ECC_MAX_SIG_SIZE];
+	word32 der_sig_len = sizeof(der_sig);
+
+	// raw_sig is guaranteed to be 64 bytes (checked above)
+	if (wc_ecc_rs_raw_to_sig(raw_sig, 32, raw_sig + 32, 32, der_sig, &der_sig_len) != 0) {
+		memset(hash, 0, sizeof(hash));
 		wc_ecc_free(&key);
 		return ucv_boolean_new(false);
 	}
 
-	ForceZero(hash, sizeof(hash)); // Defense-in-depth
+	int verify_res = 0;
+	if (wc_ecc_verify_hash(der_sig, der_sig_len, hash, WC_SHA256_DIGEST_SIZE, &verify_res, &key) != 0) {
+		memset(hash, 0, sizeof(hash));
+		wc_ecc_free(&key);
+		return ucv_boolean_new(false);
+	}
+
+	memset(hash, 0, sizeof(hash)); // Defense-in-depth
 	wc_ecc_free(&key);
 	return ucv_boolean_new(verify_res == 1);
 }
@@ -215,7 +216,7 @@ static uc_value_t *uc_wolfssl_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
 	}
 
 	unsigned char der[2048];
-	int der_len = wc_RsaKeyToDer(&key, der, sizeof(der));
+	int der_len = wc_RsaKeyToPublicDer(&key, der, sizeof(der));
 	wc_FreeRsaKey(&key);
 	if (der_len < 0) return NULL;
 
