@@ -4,11 +4,14 @@ import * as native from 'luci_sso.native';
 test('native: torture - SHA256 boundary inputs', () => {
     assert(native.sha256(""), "Should handle empty string");
     
-    let large = "1234567890";
-    for (let i = 0; i < 17; i++) {
-        large += large;
-    }
-    assert(native.sha256(large), "Should handle large input without crash");
+    // Exact 16KB boundary
+    let max_ok = "";
+    for (let i = 0; i < 16384; i++) max_ok += "A";
+    assert(native.sha256(max_ok), "Should handle 16KB input");
+
+    // Overflow boundary
+    let too_large = max_ok + "B";
+    assert(native.sha256(too_large) === null, "Should reject 16KB + 1 byte input");
 });
 
 test('native: torture - HMAC-SHA256 invalid inputs', () => {

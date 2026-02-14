@@ -24,6 +24,13 @@
 		} \
 	} while(0)
 
+#define VALIDATE_INPUT_SIZES_NULL(msg_len, sig_len, key_len) \
+	do { \
+		if ((msg_len) > MAX_INPUT_SIZE || (sig_len) > MAX_INPUT_SIZE || (key_len) > MAX_INPUT_SIZE) { \
+			return NULL; \
+		} \
+	} while(0)
+
 static void secure_memzero(void *p, size_t len)
 {
 	if (p == NULL || len == 0) return;
@@ -40,6 +47,9 @@ static uc_value_t *uc_wolfssl_sha256(uc_vm_t *vm, size_t nargs) {
 	
 	const unsigned char *input = (const unsigned char *)ucv_string_get(arg);
 	size_t input_len = ucv_string_length(arg);
+
+	VALIDATE_INPUT_SIZES_NULL(input_len, 0, 0);
+
 	unsigned char output[WC_SHA256_DIGEST_SIZE];
 
 	if (wc_Sha256Hash(input, input_len, output) != 0) return NULL;
@@ -57,6 +67,8 @@ static uc_value_t *uc_wolfssl_hmac_sha256(uc_vm_t *vm, size_t nargs) {
 	size_t key_len = ucv_string_length(v_key);
 	const unsigned char *msg = (const unsigned char *)ucv_string_get(v_msg);
 	size_t msg_len = ucv_string_length(v_msg);
+
+	VALIDATE_INPUT_SIZES_NULL(msg_len, 0, key_len);
 
 	Hmac hmac;
 	unsigned char mac[WC_SHA256_DIGEST_SIZE];

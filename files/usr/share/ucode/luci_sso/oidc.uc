@@ -107,7 +107,8 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 	});
 
 	if (!response || response.error) {
-		io.log("warn", `Token exchange network error${sid_ctx}: ${response?.error || "no response"}`);
+		let err_msg = (response && response.error) ? response.error : "no response";
+		io.log("warn", `Token exchange network error${sid_ctx}: ${err_msg}`);
 		return { ok: false, error: "NETWORK_ERROR" };
 	}
 	if (response.status != 200) {
@@ -282,7 +283,8 @@ export function fetch_userinfo(io, endpoint, access_token) {
 	});
 
 	if (!response || response.error) {
-		io.log("warn", `UserInfo fetch network error: ${response?.error || "no response"}`);
+		let err_msg = (response && response.error) ? response.error : "no response";
+		io.log("warn", `UserInfo fetch network error: ${err_msg}`);
 		return { ok: false, error: "NETWORK_ERROR" };
 	}
 	if (response.status != 200) {

@@ -47,4 +47,11 @@ test('native: security - reject oversized inputs (B4)', () => {
 
     // verify_es256(msg, sig, key)
     assert(native.verify_es256(large_str, dummy_sig, dummy_key) === false, "Should reject oversized message (EC)");
+
+    // sha256(msg)
+    assert(native.sha256(large_str) === null, "Should reject oversized message in sha256 (W7)");
+
+    // hmac_sha256(key, msg)
+    assert(native.hmac_sha256(large_str, "msg") === null, "Should reject oversized key in hmac_sha256 (W7)");
+    assert(native.hmac_sha256("key", large_str) === null, "Should reject oversized message in hmac_sha256 (W7)");
 });
