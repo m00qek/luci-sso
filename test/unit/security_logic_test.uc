@@ -95,3 +95,30 @@ test('security: token registry - cleanup of stale tokens', () => {
 		assert(index(files, "new-id") >= 0, "New token should remain");
 	});
 });
+
+test('security: handshake registry - cleanup of stale handshakes (N5)', () => {
+	let factory = mock.create();
+	let now = 1516239022;
+	let old_h_path = "/var/run/luci-sso/handshake_old.json";
+	let new_h_path = "/var/run/luci-sso/handshake_new.json";
+	let cache_file = "/var/run/luci-sso/oidc-discovery-123.json";
+
+	factory.with_files({
+		[old_h_path]: "{}",
+		[new_h_path]: "{}",
+		[cache_file]: "{}"
+	}, (io) => {
+		// Mock stat for timing
+		io.stat = (path) => {
+			if (index(path, "old") > 0) return { mtime: now - 4000 }; // > 1h
+			return { mtime: now };
+		};
+
+		session.reap_stale_handshakes(io, 60);
+		
+		let files = io.lsdir("/var/run/luci-sso");
+		assert(index(files, "handshake_old.json") == -1, "Old handshake should be reaped");
+		assert(index(files, "handshake_new.json") >= 0, "New handshake should remain");
+		assert(index(files, "oidc-discovery-123.json") >= 0, "Discovery caches should NOT be reaped by handshake reaper");
+	});
+});

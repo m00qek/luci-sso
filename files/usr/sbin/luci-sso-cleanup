@@ -4,8 +4,17 @@
 # likely expired (older than 24 hours) to prevent tmpfs exhaustion.
 
 REGISTRY="/var/run/luci-sso/tokens"
+STATES="/var/run/luci-sso"
 
 if [ -d "$REGISTRY" ]; then
+    # 1. Reap Expired Tokens (24 hours)
     # Find directories (-type d) older than 1440 minutes and remove them
     find "$REGISTRY" -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec rmdir {} + 2>/dev/null
+fi
+
+if [ -d "$STATES" ]; then
+    # 2. Reap Stale Handshakes (60 minutes)
+    # Handshakes are only valid for ~5-10 minutes. 60 minutes is safe for cleanup.
+    # We only target handshake_*.json files to avoid touching discovery/jwks caches.
+    find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json" -mmin +60 -delete 2>/dev/null
 fi
