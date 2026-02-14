@@ -6,7 +6,7 @@ config oidc 'default'
 	option client_secret 'REPLACE_ME'
 	option redirect_uri 'https://router.lan/cgi-bin/luci-sso/callback'
 	option scope 'openid profile email'
-	option clock_tolerance '300'
+	option clock_tolerance '60'
 
 config role 'admin'
 	list email 'admin@example.com'

@@ -21,14 +21,26 @@ test('logout: security - robust origin extraction for post_logout_redirect_uri',
 
     for (let c in cases) {
         let config = { ...f.MOCK_CONFIG, redirect_uri: c.redirect };
+        let sid = "session-123";
+        let stoken = "csrf-token-abc";
         let request = {
             path: "/logout",
             env: { HTTP_HOST: "evil.com" },
-            query: {},
-            cookies: {}
+            query: { stoken: stoken },
+            cookies: { sysauth_https: sid }
         };
 
         mock.create()
+            .with_ubus({
+                "session:get": (args) => {
+                    assert_eq(args.ubus_rpc_session, sid);
+                    return { values: { token: stoken, oidc_id_token: "hint" } };
+                },
+                "session:destroy": (args) => {
+                    assert_eq(args.ubus_rpc_session, sid);
+                    return {};
+                }
+            })
             .with_responses({
                 "https://trusted.idp/.well-known/openid-configuration": {
                     status: 200,

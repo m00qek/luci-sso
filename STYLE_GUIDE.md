@@ -31,19 +31,20 @@ This guide evolves with the project. When you find inconsistencies or have quest
 1. [Philosophy](#philosophy)
 2. [Terminology](#terminology)
 3. [Architecture Principles](#architecture-principles)
-3. [Error Handling](#error-handling)
-4. [Testing Standards](#testing-standards)
-5. [ucode Style](#ucode-style)
-6. [C Code Style](#c-code-style)
-7. [Module Organization](#module-organization)
-8. [Security Guidelines](#security-guidelines)
-9. [Documentation Standards](#documentation-standards)
-10. [Commit Messages](#commit-messages)
-11. [Code Review Checklist](#code-review-checklist)
+4. [Error Handling](#error-handling)
+5. [Testing Standards](#testing-standards)
+6. [ucode Style](#ucode-style)
+7. [C Code Style](#c-code-style)
+8. [Module Organization](#module-organization)
+9. [Security Guidelines](#security-guidelines)
+10. [Documentation Standards](#documentation-standards)
+11. [Commit Messages](#commit-messages)
+12. [Code Review Checklist](#code-review-checklist)
+13. [Development Workflow](#development-workflow)
 
 ---
 
-## Philosophy
+## 1. Philosophy
 
 ### Core Tenets
 
@@ -62,13 +63,13 @@ This guide evolves with the project. When you find inconsistencies or have quest
 
 ---
 
-## Terminology
+## 2. Terminology
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document and all other project documentation are to be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
 
 ---
 
-## Architecture Principles
+## 3. Architecture Principles
 
 ### 1. Dependency Injection for I/O
 
@@ -188,7 +189,7 @@ import * as native from 'luci_sso.native';
 
 ---
 
-## Error Handling
+## 4. Error Handling
 
 ### Contract Bugs vs. Runtime Realities
 
@@ -286,7 +287,7 @@ use(result.session);
 
 ---
 
-## Testing Standards
+## 5. Testing Standards
 
 ### Reference Implementation Tests
 
@@ -385,7 +386,7 @@ test('Security: Alg=none attack rejected', () => { /* ... */ });
 
 ---
 
-## ucode Style
+## 6. ucode Style
 
 ### General Formatting
 
@@ -491,7 +492,7 @@ function validate(input) {
 
 ---
 
-## C Code Style
+## 7. C Code Style
 
 ### Standards: MbedTLS 3.x / PSA Crypto
 This project exclusively uses **MbedTLS 3.x**. All new cryptographic operations MUST be implemented using the **PSA Crypto API** (`psa/crypto.h`).
@@ -692,7 +693,7 @@ let enc = lucihttp.urlencode(url);
 
 ---
 
-## Module Organization
+## 8. Module Organization
 
 ### File Structure
 
@@ -768,7 +769,7 @@ export function pkce_pair(len) {
 
 ---
 
-## Security Guidelines
+## 9. Security Guidelines
 
 ### 1. Constant-Time Operations
 
@@ -812,7 +813,7 @@ The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be imp
 
 ---
 
-## Documentation Standards
+## 10. Documentation Standards
 
 ### README.md
 
@@ -887,7 +888,7 @@ export function verify_jwt(token, pubkey, options) {
 
 ---
 
-## Commit Messages
+## 11. Commit Messages
 
 ### Format
 
@@ -942,7 +943,7 @@ More accurate naming for future P-384 support.
 
 ---
 
-## Code Review Checklist
+## 12. Code Review Checklist
 
 Before submitting PR, verify:
 
@@ -959,7 +960,7 @@ Before submitting PR, verify:
 
 ---
 
-## 12. Development Workflow
+## 13. Development Workflow
 
 ### Orchestration
 The primary entry point for development is `devenv/Makefile`, which delegates complex logic to `devenv/scripts/test.sh`.
