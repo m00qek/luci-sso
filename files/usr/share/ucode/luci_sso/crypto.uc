@@ -259,6 +259,23 @@ export function sha256(str) {
 };
 
 /**
+ * Calculates SHA256 hash and returns it as a 64-character hex digest.
+ * 
+ * @param {string} str - Data to hash
+ * @returns {string} - 64-character hex digest
+ */
+export function sha256_hex(str) {
+	let hash_bin = sha256(str);
+	if (!hash_bin) return null;
+
+	let hex = "";
+	for (let i = 0; i < length(hash_bin); i++) {
+		hex += sprintf("%02x", ord(hash_bin, i));
+	}
+	return hex;
+};
+
+/**
  * Generates a PKCE Code Verifier.
  * 
  * @param {number} [len=43] - Length of verifier

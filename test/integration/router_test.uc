@@ -220,10 +220,7 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 		let id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", nonce: handshake.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 		// PRE-REGISTER the token to simulate replay
-		// We manually implement the safe_id logic here to avoid module resolution issues in the test script
-		let hash_bin = crypto.sha256(access_token);
-		let token_id = "";
-		for (let i = 0; i < 8; i++) token_id += sprintf("%02x", ord(hash_bin, i));
+		let token_id = crypto.sha256_hex(access_token);
 		
 		factory.using(io)
 			.with_files({

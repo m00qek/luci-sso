@@ -78,3 +78,26 @@ test('ubus: logic - create_passwordless_session admin wildcard', () => {
 		assert(index(scopes, "cgi-io") != -1);
 	});
 });
+
+test('ubus: logic - register_token atomicity and full hash (B2)', () => {
+	let factory = mock.create().with_files({});
+	
+	factory.with_env({}, (io) => {
+		let token = "my-secret-token-123";
+		
+		// 1. First registration should succeed
+		assert(ubus.register_token(io, token), "First token registration must succeed");
+		
+		// 2. Verify it created a 64-character hex ID entry
+		let files = io.lsdir("/var/run/luci-sso/tokens");
+		assert(length(files) == 1, "Should have exactly one token entry");
+		assert_eq(length(files[0]), 64, "Token ID must be a full 64-character SHA-256 hex digest");
+		
+		// 3. Second registration of SAME token must fail (replay)
+		assert(!ubus.register_token(io, token), "Replayed token registration must fail");
+		
+		// 4. Registration of DIFFERENT token should succeed
+		assert(ubus.register_token(io, token + "new"), "Different token must succeed");
+		assert_eq(length(io.lsdir("/var/run/luci-sso/tokens")), 2, "Should have two entries now");
+	});
+});

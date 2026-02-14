@@ -189,8 +189,10 @@ export function register_token(io, access_token) {
 		// 1. Ensure registry exists
 		try { io.mkdir(TOKEN_REGISTRY_DIR, 0700); } catch(e) {}
 
-		// 2. Generate a unique safe ID for the token
-		let token_id = crypto.safe_id(access_token);
+		// 2. Generate a unique cryptographic ID for the token (64-char hex digest)
+		let token_id = crypto.sha256_hex(access_token);
+		if (!token_id) return false;
+		
 		let lock_path = `${TOKEN_REGISTRY_DIR}/${token_id}`;
 
 		// 3. ATOMIC: Try to create the directory. This is an atomic "test-and-set" in POSIX.
