@@ -79,19 +79,21 @@ function handle_logout(io, config, request) {
 	let sid = cookies.sysauth_https || cookies.sysauth;
 	let id_token_hint = null;
 
-	if (sid) {
-		let session_res = ubus.get_session(io, sid);
-		if (session_res.ok) {
-			// CSRF Protection: Verify that the 'stoken' parameter matches the session token
-			let provided_token = query.stoken || "";
-			let session_token = session_res.data.token || "";
-			if (!crypto.constant_time_eq(provided_token, session_token)) {
-				io.log("warn", "Logout attempt with invalid or missing CSRF token");
-				return error_response("AUTH_FAILED", 403);
-			}
-			id_token_hint = session_res.data.oidc_id_token;
-			ubus.destroy_session(io, sid);
+	if (!sid) {
+		return response(302, { "Location": "/" });
+	}
+
+	let session_res = ubus.get_session(io, sid);
+	if (session_res.ok) {
+		// CSRF Protection: Verify that the 'stoken' parameter matches the session token
+		let provided_token = query.stoken || "";
+		let session_token = session_res.data.token || "";
+		if (!crypto.constant_time_eq(provided_token, session_token)) {
+			io.log("warn", "Logout attempt with invalid or missing CSRF token");
+			return error_response("AUTH_FAILED", 403);
 		}
+		id_token_hint = session_res.data.oidc_id_token;
+		ubus.destroy_session(io, sid);
 	}
 
 	let logout_url = "/";

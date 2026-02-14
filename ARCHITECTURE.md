@@ -135,7 +135,8 @@ By creating a valid UBUS session and setting the `sysauth` cookies, modern LuCI 
 The system implements full session synchronization during logout to prevent "Local Logout" confusion.
 
 ### RP-Initiated Logout
-*   **Enforcement:** When the user accesses `/logout`, the system MUST perform OIDC Discovery to locate the IdP's `end_session_endpoint`.
+*   **Authentication:** The system MUST only perform the OIDC logout redirect if a valid local session exists. Unauthenticated logout requests MUST be redirected to the local root (`/`) to prevent open redirect vulnerabilities.
+*   **Enforcement:** When an authenticated user accesses `/logout`, the system MUST perform OIDC Discovery to locate the IdP's `end_session_endpoint`.
 *   **Protocol:** If the endpoint is available, the User Agent MUST be redirected there with an `id_token_hint` (retrieved from the UBUS session) and a `post_logout_redirect_uri`.
 *   **Cleanup:** The local UBUS session MUST be destroyed and session cookies (`sysauth`, `sysauth_https`) MUST be cleared BEFORE the redirect occurs.
 *   **Reasoning:** This ensures that the user's session is terminated both on the router and at the Identity Provider, preventing subsequent silent logins.

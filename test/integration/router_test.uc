@@ -391,8 +391,25 @@ test('Router: Logout - Fallback to local logout', () => {
 
 test('Router: Router - Handle unhandled system path', () => {
 	let factory = mock.create();
-	factory.with_env({}, (io) => {
-		let res = router.handle(io, MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
-		assert_eq(res.status, 404);
+	        factory.with_env({}, (io) => {
+	                let res = router.handle(io, MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
+	                assert_eq(res.status, 404);
+	        });
 	});
-});
+	
+	test('Router: Logout - Prevent unauthenticated redirect (W3)', () => {
+		let DISC_WITH_LOGOUT = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
+		let factory = mock.create()
+			.with_responses({
+				"https://idp.com/.well-known/openid-configuration": { status: 200, body: DISC_WITH_LOGOUT }
+			});
+	
+		factory.with_env({}, (io) => {
+			// Request with NO cookies (no sid)
+			let req = mock_request("/logout", {}, {}, { HTTP_HOST: "router.lan" });
+			let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
+			
+			assert_eq(res.status, 302);
+			assert_eq(res.headers["Location"], "/", "Should redirect to root for unauthenticated logout");
+		});
+	});
