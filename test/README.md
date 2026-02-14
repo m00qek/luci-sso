@@ -48,6 +48,7 @@ The project includes specialized security tests beyond basic coverage:
 - **Algorithm Confusion**: Verifies that symmetric `HS256` tokens are rejected in production mode.
 - **DoS Protection (Memory)**: Verifies that HTTP responses exceeding **256 KB** are aborted to prevent memory exhaustion.
 - **Native Hardening**: Verifies that the C native bridge rejects insecure RSA exponents (even or < 3) and maintains persistent DRBG state.
+- **WolfSSL Memory Safety**: Verifies that native conversion functions (e.g., `jwk_ec_p256_to_pem`) return `null` and do NOT crash on malformed inputs, preventing use-after-free vulnerabilities.
 - **JWKS Key Rotation**: Verifies the automatic recovery path and forced cache refresh when a new key ID is encountered.
 - **Constant-Time Integrity**: Verifies the `constant_time_eq` implementation against multi-value type confusion and long strings.
 

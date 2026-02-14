@@ -341,6 +341,11 @@ static uc_value_t *uc_mbedtls_jwk_ec_p256_to_pem(uc_vm_t *vm, size_t nargs) {
 		return NULL;
 	}
 
+	if (mbedtls_ecp_check_pubkey(&(ec->MBEDTLS_PRIVATE(grp)), &(ec->MBEDTLS_PRIVATE(Q))) != 0) {
+		mbedtls_pk_free(&pk);
+		return NULL;
+	}
+
 	unsigned char buf[2048];
 	memset(buf, 0, sizeof(buf));
 	if (mbedtls_pk_write_pubkey_pem(&pk, buf, sizeof(buf)) != 0) {

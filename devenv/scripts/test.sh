@@ -51,7 +51,7 @@ run_unit() {
 
   log_info "🧪 Running unit tests in openwrt container..."
   docker compose $COMPOSE_FLAGS exec openwrt \
-    sh -c "rm /usr/lib/ucode/luci_sso && ln -s '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
+    sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
   docker compose $COMPOSE_FLAGS exec -e MODULES="$(translate_unit_paths "$modules")" -e FILTER="$filter" -e VERBOSE="$VERBOSE" openwrt ucode \
     -L /usr/share/ucode \
     -L /usr/lib/ucode \
@@ -70,7 +70,7 @@ run_e2e() {
   [ -n "$filter" ] && grep_flag="-g $filter"
 
   docker compose $COMPOSE_FLAGS exec openwrt \
-    sh -c "rm /usr/lib/ucode/luci_sso && ln -s '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
+    sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
   docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test $(translate_e2e_paths "$modules") $grep_flag
 }
 
