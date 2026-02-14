@@ -20,15 +20,13 @@ function _grant_all_luci_acls(io, sid) {
 		let content = io.read_file(`${acl_dir}/${f}`);
 		if (!content) continue;
 
-		// Simple regex to find "luci-..." strings that are used as keys
-		// This matches what gen_session.sh does
+		let res = crypto.safe_json(content);
+		if (!res.ok || type(res.data) != "object") continue;
+
 		let groups = [];
-		let matches = match(content, /"luci-[^"]+"/g);
-		if (matches) {
-			for (let m in matches) {
-				// Strip quotes
-				let g = substr(m[0], 1, length(m[0]) - 2);
-				push(groups, g);
+		for (let key in keys(res.data)) {
+			if (match(key, /^luci-/)) {
+				push(groups, key);
 			}
 		}
 

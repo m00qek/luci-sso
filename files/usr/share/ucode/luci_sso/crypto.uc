@@ -18,6 +18,11 @@ export const safe_json = encoding.safe_json;
  * 
  * This implementation avoids early returns on length mismatch or content
  * difference to mitigate timing side-channels.
+ * 
+ * NOTE: True constant-time execution is impossible in an interpreted runtime 
+ * like ucode due to GC, hash-table-backed strings, and variable-time ord().
+ * This function provides a best-effort mitigation by using the XOR-accumulator 
+ * pattern and avoiding logical branching based on secret content.
  */
 export function constant_time_eq(a, b) {
 	if (type(a) != "string" || type(b) != "string") return false;

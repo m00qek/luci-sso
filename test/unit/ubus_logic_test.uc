@@ -101,3 +101,33 @@ test('ubus: logic - register_token atomicity and full hash (B2)', () => {
 		assert_eq(length(io.lsdir("/var/run/luci-sso/tokens")), 2, "Should have two entries now");
 	});
 });
+
+test('ubus: security - create_passwordless_session robust ACL parsing (N2)', () => {
+	let grants = [];
+	let factory = mock.create().with_ubus({
+		"session:create": { ubus_rpc_session: "sid" },
+		"session:grant": (args) => { push(grants, args); return {}; },
+		"session:set": () => ({})
+	}).with_files({
+		"/usr/share/rpcd/acl.d/test.json": sprintf("%J", {
+			"luci-mod-status": { "description": "Actual ACL" },
+			"non-luci": { "comment": "This has luci-fake in value but NOT in key" }
+		})
+	});
+
+	factory.with_env({}, (io) => {
+		ubus.create_passwordless_session(io, "root", { read: ["*"], write: [] }, "a@b.com", "at", "rt", "it");
+		
+		let granted_groups = [];
+		for (let g in grants) {
+			if (g.scope == "access-group") {
+				for (let obj in g.objects) {
+					push(granted_groups, obj[0]);
+				}
+			}
+		}
+		
+		assert(index(granted_groups, "luci-mod-status") != -1, "Should grant actual luci-* key");
+		assert(index(granted_groups, "luci-fake") == -1, "Should NOT grant luci-* string found in values (N2)");
+	});
+});
