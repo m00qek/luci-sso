@@ -127,3 +127,28 @@ test('crypto: torture - buffer transition stability', () => {
     let verify = crypto.verify_jws(res, secret);
     assert(verify.ok, "Plumbing should handle 16KB secrets during verification");
 });
+
+test('crypto: plumbing - issuer normalization (B3)', () => {
+    let privkey = f2.MOCK_PRIVKEY;
+    let pubkey = crypto.jwk_to_pem(f2.MOCK_JWK).data;
+    let opts = { alg: "RS256", now: 1000, clock_tolerance: 300, iss: "https://idp.com" };
+
+    // 1. Success case: Identical strings
+    let t1 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com" }, privkey, "RS256");
+    assert(crypto.verify_jwt(t1, pubkey, opts).ok, "Should pass with identical issuer strings");
+
+    // 2. Trailing slash in token (Current Failure Path for B3)
+    let t2 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com/" }, privkey, "RS256");
+    let res2 = crypto.verify_jwt(t2, pubkey, opts);
+    assert(res2.ok, "Should pass with trailing slash in token iss claim: " + (res2.error || ""));
+
+    // 3. Mixed case origin (Current Failure Path for B3)
+    let t3 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "HTTPS://IDP.COM" }, privkey, "RS256");
+    let res3 = crypto.verify_jwt(t3, pubkey, opts);
+    assert(res3.ok, "Should pass with mixed case in token iss claim: " + (res3.error || ""));
+
+    // 4. Trailing slash in config
+    let t4 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com" }, privkey, "RS256");
+    let res4 = crypto.verify_jwt(t4, pubkey, { ...opts, iss: "https://idp.com/" });
+    assert(res4.ok, "Should pass with trailing slash in config iss: " + (res4.error || ""));
+});

@@ -196,7 +196,7 @@ export function verify_jwt(token, pubkey, options) {
 		if (payload.iat > (now + clock_tolerance)) return { ok: false, error: "TOKEN_ISSUED_IN_FUTURE" };
 	}
 
-	if (options.iss && payload.iss !== options.iss) {
+	if (options.iss && encoding.normalize_url(payload.iss) !== encoding.normalize_url(options.iss)) {
 		return { ok: false, error: "ISSUER_MISMATCH" };
 	}
 
