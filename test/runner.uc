@@ -63,6 +63,7 @@ const logic_files = [
 	"unit.security_logic_test",
 	"unit.security_logic_test_extra",
 	"unit.logout_security_test",
+	"unit.logout_security_reproduction_test",
 	"unit.fuzz_logic_test",
 	"unit.https_enforcement_test",
 	"unit.dos_security_test"

@@ -73,17 +73,20 @@ function handle_logout(io, config, request) {
 	}
 
 	let session_res = ubus.get_session(io, sid);
-	if (session_res.ok) {
-		// CSRF Protection: Verify that the 'stoken' parameter matches the session token
-		let provided_token = query.stoken || "";
-		let session_token = session_res.data.token || "";
-		if (!crypto.constant_time_eq(provided_token, session_token)) {
-			io.log("warn", "Logout attempt with invalid or missing CSRF token");
-			return Result.err("AUTH_FAILED", { http_status: 403 });
-		}
-		id_token_hint = session_res.data.oidc_id_token;
-		ubus.destroy_session(io, sid);
+	if (!session_res.ok) {
+		// Session expired or invalid - treat like unauthenticated
+		return Result.ok(response(302, { "Location": "/" }));
 	}
+
+	// CSRF Protection: Verify that the 'stoken' parameter matches the session token
+	let provided_token = query.stoken || "";
+	let session_token = session_res.data.token || "";
+	if (!crypto.constant_time_eq(provided_token, session_token)) {
+		io.log("warn", "Logout attempt with invalid or missing CSRF token");
+		return Result.err("AUTH_FAILED", { http_status: 403 });
+	}
+	id_token_hint = session_res.data.oidc_id_token;
+	ubus.destroy_session(io, sid);
 
 	let logout_url = "/";
 
@@ -99,7 +102,8 @@ function handle_logout(io, config, request) {
 			sep = '&';
 		}
 		
-		let post_logout = replace(config.redirect_uri, /^(https:\/\/[^\/]+).*/, "$1/");
+		let redirect_uri = config.redirect_uri || "";
+		let post_logout = (redirect_uri != "") ? replace(redirect_uri, /^(https:\/\/[^\/]+).*/, "$1/") : "/";
 		logout_url += `${sep}post_logout_redirect_uri=${lucihttp.urlencode(post_logout, 1)}`;
 	}
 
