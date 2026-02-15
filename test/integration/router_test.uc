@@ -47,8 +47,8 @@ test('Router: Login Flow - Handle massive discovery response', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { error: "RESPONSE_TOO_LARGE" } }, (io) => {
 		let res = router.handle(io, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
-		assert_eq(res.status, 500, "Should return 500 on discovery failure");
-		assert(res.is_error);
+		assert(!res.ok, "Should fail on discovery failure");
+		assert_eq(res.details.http_status, 500, "Should return 500 status in details");
 	});
 });
 
@@ -57,8 +57,9 @@ test('Router: Login Flow - Redirect to Healthy IdP', () => {
 	let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
 	factory.with_responses(responses, (io) => {
 		let res = router.handle(io, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
-		assert_eq(res.status, 302);
-		assert(index(res.headers["Location"], "https://idp.com/auth") == 0, "Redirect MUST point to auth endpoint");
+		assert(res.ok, "Router handle should succeed");
+		assert_eq(res.data.status, 302);
+		assert(index(res.data.headers["Location"], "https://idp.com/auth") == 0, "Redirect MUST point to auth endpoint");
 	});
 });
 
@@ -84,9 +85,10 @@ test('Router: ?action=enabled returns correct JSON', () => {
 		"luci-sso": { "default": { ".type": "oidc", enabled: "1" } }
 	}, (io) => {
 		let res = router.handle(io, MOCK_CONFIG, request, TEST_POLICY);
-		assert_eq(res.status, 200);
-		assert_eq(res.body, '{"enabled": true}');
-		assert_eq(res.headers["Content-Type"], "application/json");
+		assert(res.ok);
+		assert_eq(res.data.status, 200);
+		assert_eq(res.data.body, '{"enabled": true}');
+		assert_eq(res.data.headers["Content-Type"], "application/json");
 	});
 
 	// Disabled case
@@ -94,7 +96,8 @@ test('Router: ?action=enabled returns correct JSON', () => {
 		"luci-sso": { "default": { ".type": "oidc", enabled: "0" } }
 	}, (io) => {
 		let res = router.handle(io, MOCK_CONFIG, request, TEST_POLICY);
-		assert_eq(res.body, '{"enabled": false}');
+		assert(res.ok);
+		assert_eq(res.data.body, '{"enabled": false}');
 	});
 });
 
@@ -124,8 +127,9 @@ test('Router: Callback - Successful authentication and UBUS login', () => {
 			.spy((spying_io) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 				let res = router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
-				assert_eq(res.status, 302);
-				assert_eq(res.headers["Location"], "/cgi-bin/luci/");
+				assert(res.ok);
+				assert_eq(res.data.status, 302);
+				assert_eq(res.data.headers["Location"], "/cgi-bin/luci/");
 			});
 
 		assert(data.called("ubus", "session", "create"), "Should have called ubus create");
@@ -204,8 +208,9 @@ test('Router: Callback - Reject non-whitelisted users', () => {
 		}, (io_http) => {
 			let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 			let res = router.handle(io_http, { ...MOCK_CONFIG, roles: [] }, req, TEST_POLICY);
-			assert_eq(res.status, 403, "Should return Forbidden for non-whitelisted user");
-			assert_eq(res.code, "USER_NOT_AUTHORIZED");
+			assert(!res.ok);
+			assert_eq(res.details.http_status, 403, "Should return Forbidden for non-whitelisted user");
+			assert_eq(res.error, "USER_NOT_AUTHORIZED");
 		});
 	});
 });
@@ -242,8 +247,9 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 			.spy((spying_io) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 				let res = router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
-				assert_eq(res.status, 403);
-				assert_eq(res.code, "AUTH_FAILED");
+				assert(!res.ok);
+				assert_eq(res.details.http_status, 403);
+				assert_eq(res.error, "AUTH_FAILED");
 			});
 	});
 });
@@ -264,8 +270,9 @@ test('Router: Callback - Reject state replay (handshake one-time use)', () => {
 		factory_with_responses.with_env({}, (io_exec) => { router.handle(io_exec, MOCK_CONFIG, req, TEST_POLICY); });
 		factory_with_responses.with_env({}, (io_exec) => {
 			let res = router.handle(io_exec, MOCK_CONFIG, req, TEST_POLICY);
-			assert_eq(res.status, 401);
-			assert_eq(res.code, "STATE_NOT_FOUND");
+			assert(!res.ok);
+			assert_eq(res.details.http_status, 401);
+			assert_eq(res.error, "STATE_NOT_FOUND");
 		});
 	});
 });
@@ -283,7 +290,8 @@ test('Router: Callback - Reject code replay (IdP level rejection)', () => {
 			"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } }
 		}, (io_http) => {
 			let res = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
-			assert_eq(res.code, "OIDC_INVALID_GRANT");
+			assert(!res.ok);
+			assert_eq(res.error, "OIDC_INVALID_GRANT");
 		});
 	});
 });
@@ -301,7 +309,8 @@ test('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
 			"https://idp.com/token": { status: 400, body: { error: "invalid_grant", sub_error: "pkce_mismatch" } }
 		}, (io_http) => {
 			let res = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
-			assert_eq(res.code, "OIDC_INVALID_GRANT");
+			assert(!res.ok);
+			assert_eq(res.error, "OIDC_INVALID_GRANT");
 		});
 	});
 });
@@ -324,7 +333,8 @@ test('Router: Security - Access token is NOT registered if verification fails (D
 			
 			// First attempt fails at verification
 			let res1 = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
-			assert_eq(res1.status, 401, "Should fail verification");
+			assert(!res1.ok, "Should fail verification");
+			assert_eq(res1.details.http_status, 401);
 
 			// 2. Verify that the token was NOT registered by attempting a DIFFERENT handshake
 			// with the SAME access token. If it was registered, it would return 403 (Replay).
@@ -347,8 +357,9 @@ test('Router: Security - Access token is NOT registered if verification fails (D
 				
 				// It should FAIL with 401 (Verification Failed) again, NOT 403 (Replay Detected).
 				// This proves the token wasn't persisted in the registry after the first failure.
-				assert_eq(res2.status, 401, "Should fail verification again (NOT replay) because token wasn't registered");
-				assert(res2.code != "AUTH_FAILED", "Should NOT fail with replay error");
+				assert(!res2.ok);
+				assert_eq(res2.details.http_status, 401, "Should fail verification again (NOT replay) because token wasn't registered");
+				assert(res2.error != "AUTH_FAILED", "Should NOT fail with replay error");
 			});
 		});
 	});
@@ -372,10 +383,11 @@ test('Router: Logout - OIDC RP-Initiated Logout', () => {
 		let req = mock_request("/logout", { stoken: "csrf-123" }, { "sysauth": "session-12345" }, { HTTP_HOST: "router.lan" });
 		let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
 		
-		assert_eq(res.status, 302);
-		assert(index(res.headers["Location"], "https://idp.com/logout") == 0, "Should redirect to IdP logout");
-		assert(index(res.headers["Location"], "id_token_hint=mock-id-token") != -1, "Should include id_token_hint");
-		assert(match(res.headers["Location"], /post_logout_redirect_uri=https%3A%2F%2Frouter%2F(&|$)/), "Should include EXACT post_logout_redirect_uri");
+		assert(res.ok);
+		assert_eq(res.data.status, 302);
+		assert(index(res.data.headers["Location"], "https://idp.com/logout") == 0, "Should redirect to IdP logout");
+		assert(index(res.data.headers["Location"], "id_token_hint=mock-id-token") != -1, "Should include id_token_hint");
+		assert(match(res.data.headers["Location"], /post_logout_redirect_uri=https%3A%2F%2Frouter%2F(&|$)/), "Should include EXACT post_logout_redirect_uri");
 	});
 
 	assert(data.called("ubus", "session", "get"), "Should have retrieved session for id_token_hint");
@@ -395,8 +407,9 @@ test('Router: Logout - Fallback to local logout', () => {
 	let data = factory.spy((io) => {
 		let req = mock_request("/logout", { stoken: "csrf-456" }, { "sysauth": "session-12345" });
 		let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
-		assert_eq(res.status, 302);
-		assert_eq(res.headers["Location"], "/");
+		assert(res.ok);
+		assert_eq(res.data.status, 302);
+		assert_eq(res.data.headers["Location"], "/");
 	});
 	assert(data.called("ubus", "session", "destroy"));
 });
@@ -405,7 +418,8 @@ test('Router: Router - Handle unhandled system path', () => {
 	let factory = mock.create();
 	        factory.with_env({}, (io) => {
 	                let res = router.handle(io, MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
-	                assert_eq(res.status, 404);
+					assert(!res.ok);
+	                assert_eq(res.details.http_status, 404);
 	        });
 	});
 	
@@ -421,7 +435,8 @@ test('Router: Router - Handle unhandled system path', () => {
 			let req = mock_request("/logout", {}, {}, { HTTP_HOST: "router.lan" });
 			let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
 			
-			assert_eq(res.status, 302);
-			assert_eq(res.headers["Location"], "/", "Should redirect to root for unauthenticated logout");
+			assert(res.ok);
+			assert_eq(res.data.status, 302);
+			assert_eq(res.data.headers["Location"], "/", "Should redirect to root for unauthenticated logout");
 		});
 	});

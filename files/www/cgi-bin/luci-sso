@@ -21,11 +21,12 @@ try {
 		exit(0);
 	}
 
-	const res = router.handle(io, config, res_req.data);
-	if (res && res.is_error) {
-		web_mod.render_error(io, res.code, res.status);
+	const res_router = router.handle(io, config, res_req.data);
+	if (!res_router.ok) {
+		let status = (type(res_router.details) == "object") ? res_router.details.http_status : 500;
+		web_mod.render_error(io, res_router.error, status);
 	} else {
-		web_mod.render(io, res);
+		web_mod.render(io, res_router.data);
 	}
 } catch (e) {
 	web_mod.error(io, e);

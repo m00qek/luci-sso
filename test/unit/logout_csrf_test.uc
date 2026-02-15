@@ -28,7 +28,8 @@ test('logout: security - csrf token validation', () => {
 				query: {}
 			};
 			let res = router.handle(io, config, req);
-			assert_eq(res.status, 403, "Logout without token MUST fail");
+			assert(!res.ok);
+			assert_eq(res.details.http_status, 403, "Logout without token MUST fail");
 		});
 
 	// 2. Wrong Token -> Fail (403)
@@ -42,7 +43,8 @@ test('logout: security - csrf token validation', () => {
 				query: { stoken: "wrong-token" }
 			};
 			let res = router.handle(io, config, req);
-			assert_eq(res.status, 403, "Logout with wrong token MUST fail");
+			assert(!res.ok);
+			assert_eq(res.details.http_status, 403, "Logout with wrong token MUST fail");
 		});
 
 	// 3. Correct Token -> Success (302)
@@ -59,7 +61,8 @@ test('logout: security - csrf token validation', () => {
 				query: { stoken: session_token }
 			};
 			let res = router.handle(io, config, req);
-			assert_eq(res.status, 302, "Logout with correct token MUST succeed");
+			assert(res.ok, "Logout with correct token MUST succeed");
+			assert_eq(res.data.status, 302);
 		});
 	
 	assert(history.called("ubus", "session", "destroy"), "Session MUST be destroyed on valid logout");

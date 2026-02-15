@@ -26,33 +26,18 @@ function response(status, headers, body) {
 }
 
 /**
- * Creates an error response object for the shell to render.
- * @private
- */
-function error_response(code, status) {
-	return {
-		is_error: true,
-		code: code,
-		status: status || 500
-	};
-}
-
-/**
  * Handles the initial login redirect.
  * @private
  */
 function handle_login(io, config) {
 	session.reap_stale_handshakes(io, config.clock_tolerance);
 	let res = handshake.initiate(io, config);
-	if (!res.ok) {
-		let status = (type(res.details) == "object") ? res.details.http_status : res.status;
-		return error_response(res.error, status || 500);
-	}
+	if (!res.ok) return res;
 
-	return response(302, {
+	return Result.ok(response(302, {
 		"Location": res.data.url,
 		"Set-Cookie": `__Host-luci_sso_state=${res.data.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
-	});
+	}));
 }
 
 /**
@@ -61,19 +46,16 @@ function handle_login(io, config) {
  */
 function handle_callback(io, config, request, policy) {
 	let res = handshake.authenticate(io, config, request, policy);
-	if (!res.ok) {
-		let status = (type(res.details) == "object") ? res.details.http_status : res.status;
-		return error_response(res.error, status || 500);
-	}
+	if (!res.ok) return res;
 
-	return response(302, {
+	return Result.ok(response(302, {
 		"Location": "/cgi-bin/luci/",
 		"Set-Cookie": [
 			`sysauth_https=${res.data.sid}; HttpOnly; Secure; SameSite=Strict; Path=/`,
 			`sysauth=${res.data.sid}; HttpOnly; Secure; SameSite=Strict; Path=/`,
 			"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 		]
-	});
+	}));
 }
 
 /**
@@ -87,7 +69,7 @@ function handle_logout(io, config, request) {
 	let id_token_hint = null;
 
 	if (!sid) {
-		return response(302, { "Location": "/" });
+		return Result.ok(response(302, { "Location": "/" }));
 	}
 
 	let session_res = ubus.get_session(io, sid);
@@ -97,7 +79,7 @@ function handle_logout(io, config, request) {
 		let session_token = session_res.data.token || "";
 		if (!crypto.constant_time_eq(provided_token, session_token)) {
 			io.log("warn", "Logout attempt with invalid or missing CSRF token");
-			return error_response("AUTH_FAILED", 403);
+			return Result.err("AUTH_FAILED", { http_status: 403 });
 		}
 		id_token_hint = session_res.data.oidc_id_token;
 		ubus.destroy_session(io, sid);
@@ -121,13 +103,13 @@ function handle_logout(io, config, request) {
 		logout_url += `${sep}post_logout_redirect_uri=${lucihttp.urlencode(post_logout, 1)}`;
 	}
 
-	return response(302, {
+	return Result.ok(response(302, {
 		"Location": logout_url,
 		"Set-Cookie": [
 			"sysauth_https=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
 			"sysauth=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
 		]
-	});
+	}));
 }
 
 /**
@@ -141,7 +123,7 @@ export function handle(io, config, request, policy) {
 	if (path == "/") {
 		let query = request.query || {};
 		if (query.action == "enabled") {
-			return response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', config_mod.is_enabled(io) ? "true" : "false"));
+			return Result.ok(response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', config_mod.is_enabled(io) ? "true" : "false")));
 		}
 		return handle_login(io, config);
 	} else if (path == "/callback") {
@@ -150,5 +132,5 @@ export function handle(io, config, request, policy) {
 		return handle_logout(io, config, request);
 	}
 
-	return error_response("Not Found", 404);
+	return Result.err("Not Found", { http_status: 404 });
 };

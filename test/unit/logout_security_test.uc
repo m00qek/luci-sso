@@ -49,7 +49,8 @@ test('logout: security - robust origin extraction for post_logout_redirect_uri',
             })
             .with_env({}, (io) => {
                 let res = router.handle(io, config, request);
-                let location = res.headers["Location"];
+                assert(res.ok);
+                let location = res.data.headers["Location"];
                 
                 assert(index(location, "evil.com") == -1, `Logout URL MUST NOT contain injected HTTP_HOST (Case: ${c.redirect})`);
                 
