@@ -2,6 +2,7 @@
 
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
+import * as Result from 'luci_sso.result';
 
 /**
  * Implementation of OIDC Discovery and JWKS management.
@@ -79,7 +80,7 @@ function _is_https(url) {
 export function discover(io, issuer, options) {
 	if (type(issuer) != "string") die("CONTRACT_VIOLATION: issuer must be a string");
 
-	if (!_is_https(issuer)) return { ok: false, error: "INSECURE_ISSUER_URL" };
+	if (!_is_https(issuer)) return Result.err("INSECURE_ISSUER_URL");
 
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(issuer, "discovery");
@@ -87,12 +88,12 @@ export function discover(io, issuer, options) {
 
 	let cached = _read_cache(io, cache_path, ttl);
 	if (cached && cached.issuer == issuer) {
-		return { ok: true, data: cached };
+		return Result.ok(cached);
 	}
 
 	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
 	let fetch_url = options.internal_issuer_url || issuer;
-	if (!_is_https(fetch_url)) return { ok: false, error: "INSECURE_FETCH_URL" };
+	if (!_is_https(fetch_url)) return Result.err("INSECURE_FETCH_URL");
 
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
 	fetch_url += ".well-known/openid-configuration";
@@ -105,34 +106,34 @@ export function discover(io, issuer, options) {
 		let stale = _read_cache(io, cache_path, ttl, true);
 		if (stale && stale.issuer == issuer) {
 			io.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
-			return { ok: true, data: stale };
+			return Result.ok(stale);
 		}
 
 		if (!response || response.error) {
 			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${response?.error || "no response"}`);
-			return { ok: false, error: "NETWORK_ERROR" };
+			return Result.err("NETWORK_ERROR");
 		}
 		
 		io.log("warn", `Discovery fetch HTTP ${response.status} from [id: ${issuer_id}]`);
-		return { ok: false, error: "DISCOVERY_FAILED", details: response.status };
+		return Result.err("DISCOVERY_FAILED", { http_status: response.status });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
 		io.log("error", `Discovery JSON parse error: ${res.details}`);
-		return { ok: false, error: "INVALID_DISCOVERY_DOC" };
+		return Result.err("INVALID_DISCOVERY_DOC");
 	}
 	let config = res.data;
 
 	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
 	if (!config.issuer) {
 		io.log("error", `Discovery document missing issuer field from [id: ${issuer_id}]`);
-		return { ok: false, error: "DISCOVERY_MISSING_ISSUER" };
+		return Result.err("DISCOVERY_MISSING_ISSUER");
 	}
 	if (config.issuer && encoding.normalize_url(config.issuer) != encoding.normalize_url(issuer)) {
 		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${crypto.safe_id(config.issuer)}]`);
-		return { ok: false, error: "DISCOVERY_ISSUER_MISMATCH", 
-			 details: `Expected issuer_id ${issuer_id}` };
+		return Result.err("DISCOVERY_ISSUER_MISMATCH", 
+			 `Expected issuer_id ${issuer_id}` );
 	}
 
 	io.log("info", `Discovery successful for [id: ${issuer_id}]`);
@@ -140,10 +141,10 @@ export function discover(io, issuer, options) {
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {
 		if (type(config[field]) != "string" || length(config[field]) == 0) {
-			return { ok: false, error: "MISSING_REQUIRED_FIELD", details: field };
+			return Result.err("MISSING_REQUIRED_FIELD", field);
 		}
 		if (!_is_https(config[field])) {
-			return { ok: false, error: "INSECURE_ENDPOINT", details: field };
+			return Result.err("INSECURE_ENDPOINT", field);
 		}
 	}
 
@@ -161,7 +162,7 @@ export function discover(io, issuer, options) {
 
 	_write_cache(io, cache_path, config);
 
-	return { ok: true, data: config };
+	return Result.ok(config);
 };
 
 /**
@@ -170,7 +171,7 @@ export function discover(io, issuer, options) {
 export function fetch_jwks(io, jwks_uri, options) {
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
 
-	if (!_is_https(jwks_uri)) return { ok: false, error: "INSECURE_JWKS_URI" };
+	if (!_is_https(jwks_uri)) return Result.err("INSECURE_JWKS_URI");
 
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(jwks_uri, "jwks");
@@ -181,7 +182,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 		let cached = _read_cache(io, cache_path, ttl);
 		if (cached && type(cached.keys) == "array") {
 			io.log("info", `JWKS loaded from cache for [id: ${uri_id}]`);
-			return { ok: true, data: cached.keys };
+			return Result.ok(cached.keys);
 		}
 	}
 
@@ -191,22 +192,22 @@ export function fetch_jwks(io, jwks_uri, options) {
 		let stale = _read_cache(io, cache_path, ttl, true);
 		if (stale && type(stale.keys) == "array") {
 			io.log("warn", `Using stale JWKS cache due to network failure [id: ${uri_id}]`);
-			return { ok: true, data: stale.keys };
+			return Result.ok(stale.keys);
 		}
 
 		if (!response || response.error) {
 			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${response?.error || "no response"}`);
-			return { ok: false, error: "NETWORK_ERROR" };
+			return Result.err("NETWORK_ERROR");
 		}
 		
 		io.log("warn", `JWKS fetch HTTP ${response.status} from [id: ${uri_id}]`);
-		return { ok: false, error: "JWKS_FETCH_FAILED", details: response.status };
+		return Result.err("JWKS_FETCH_FAILED", { http_status: response.status });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok || type(res.data.keys) != "array") {
 		io.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"}`);
-		return { ok: false, error: "INVALID_JWKS_FORMAT" };
+		return Result.err("INVALID_JWKS_FORMAT");
 	}
 	let jwks = res.data;
 
@@ -214,7 +215,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 
 	_write_cache(io, cache_path, jwks);
 
-	return { ok: true, data: jwks.keys };
+	return Result.ok(jwks.keys);
 };
 
 /**
@@ -223,11 +224,11 @@ export function fetch_jwks(io, jwks_uri, options) {
 export function find_jwk(keys, kid) {
 	if (type(keys) != "array") die("CONTRACT_VIOLATION: keys must be an array");
 	if (!kid) {
-		if (length(keys) > 0) return { ok: true, data: keys[0] };
-		return { ok: false, error: "NO_KEYS_AVAILABLE" };
+		if (length(keys) > 0) return Result.ok(keys[0]);
+		return Result.err("NO_KEYS_AVAILABLE");
 	}
 	for (let i, key in keys) {
-		if (key.kid == kid) return { ok: true, data: key };
+		if (key.kid == kid) return Result.ok(key);
 	}
-	return { ok: false, error: "KEY_NOT_FOUND", details: kid };
+	return Result.err("KEY_NOT_FOUND", kid);
 };

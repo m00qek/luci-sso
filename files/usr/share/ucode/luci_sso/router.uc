@@ -6,6 +6,7 @@ import * as lucihttp from 'lucihttp';
 import * as discovery from 'luci_sso.discovery';
 import * as handshake from 'luci_sso.handshake';
 import * as config_mod from 'luci_sso.config';
+import * as Result from 'luci_sso.result';
 
 /**
  * Main CGI Router for luci-sso.
@@ -43,7 +44,10 @@ function error_response(code, status) {
 function handle_login(io, config) {
 	session.reap_stale_handshakes(io, config.clock_tolerance);
 	let res = handshake.initiate(io, config);
-	if (!res.ok) return error_response(res.error, res.status);
+	if (!res.ok) {
+		let status = (type(res.details) == "object") ? res.details.http_status : res.status;
+		return error_response(res.error, status || 500);
+	}
 
 	return response(302, {
 		"Location": res.data.url,
@@ -57,7 +61,10 @@ function handle_login(io, config) {
  */
 function handle_callback(io, config, request, policy) {
 	let res = handshake.authenticate(io, config, request, policy);
-	if (!res.ok) return error_response(res.error, res.status);
+	if (!res.ok) {
+		let status = (type(res.details) == "object") ? res.details.http_status : res.status;
+		return error_response(res.error, status || 500);
+	}
 
 	return response(302, {
 		"Location": "/cgi-bin/luci/",

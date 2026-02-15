@@ -5,6 +5,7 @@ import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
 import * as discovery from 'luci_sso.discovery';
+import * as Result from 'luci_sso.result';
 
 import * as config_mod from 'luci_sso.config';
 
@@ -22,29 +23,29 @@ function _validate_callback_request(io, config, request) {
 	let cookies = request.cookies || {};
 
 	if (query.error) {
-		return { ok: false, error: "IDP_ERROR", status: 400 };
+		return Result.err("IDP_ERROR", { http_status: 400 });
 	}
 
 	if (!query.code) {
-		return { ok: false, error: "MISSING_CODE", status: 400 };
+		return Result.err("MISSING_CODE", { http_status: 400 });
 	}
 
 	let state_token = cookies["__Host-luci_sso_state"];
 	if (!state_token) {
-		return { ok: false, error: "MISSING_HANDSHAKE_COOKIE", status: 401 };
+		return Result.err("MISSING_HANDSHAKE_COOKIE", { http_status: 401 });
 	}
 
 	let handshake_res = session.verify_state(io, state_token, config.clock_tolerance);
 	if (!handshake_res.ok) {
-		return { ok: false, error: handshake_res.error, status: 401 };
+		return Result.err(handshake_res.error, { http_status: 401 });
 	}
 
 	let handshake = handshake_res.data;
 	if (!crypto.constant_time_eq(query.state, handshake.state)) {
-		return { ok: false, error: "STATE_MISMATCH", status: 403 };
+		return Result.err("STATE_MISMATCH", { http_status: 403 });
 	}
 
-	return { ok: true, data: { code: query.code, handshake: handshake, token: state_token } };
+	return Result.ok({ code: query.code, handshake: handshake, token: state_token });
 }
 
 /**
@@ -55,7 +56,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	let session_id = handshake.id;
 	let disc_res = discovery.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
-		return { ok: false, error: "OIDC_DISCOVERY_FAILED", status: 500 };
+		return Result.err("OIDC_DISCOVERY_FAILED", { http_status: 500 });
 	}
 	// Create a shallow copy to avoid mutating the cached object
 	let discovery_doc = { ...disc_res.data };
@@ -85,7 +86,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 
 	let jwks_res = discovery.fetch_jwks(io, discovery_doc.jwks_uri);
 	if (!jwks_res.ok) {
-		return { ok: false, error: "JWKS_FETCH_FAILED", status: 500 };
+		return Result.err("JWKS_FETCH_FAILED", { http_status: 500 });
 	}
 
 	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
@@ -113,13 +114,10 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	}
 
 	if (!verify_res.ok) {
-		return { 
-			ok: false, 
-			error: "ID_TOKEN_VERIFICATION_FAILED", 
-			status: 401, 
+		return Result.err("ID_TOKEN_VERIFICATION_FAILED", { 
 			details: verify_res.error,
-			sub_details: verify_res.details
-		};
+			http_status: 401 
+		});
 	}
 
 	let user_data = verify_res.data;
@@ -132,7 +130,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 			// MANDATORY: Use constant-time comparison for identity binding
 			if (!crypto.constant_time_eq(ui_res.data.sub, user_data.sub)) {
 				io.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
-				return { ok: false, error: "IDENTITY_MISMATCH", status: 403 };
+				return Result.err("IDENTITY_MISMATCH", { http_status: 403 });
 			}
 			user_data.email = ui_res.data.email;
 			user_data.name = user_data.name || ui_res.data.name;
@@ -149,7 +147,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	let reg_res = ubus.register_token(io, access_token);
 	if (!reg_res.ok) {
 		io.log("error", `Access token registration failed [session_id: ${session_id}]: ${reg_res.error}`);
-		return { ok: false, error: "AUTH_FAILED", status: 403 };
+		return Result.err("AUTH_FAILED", { http_status: 403 });
 	}
 
 	// W2: Warn if access token lifetime exceeds the 24h replay protection window
@@ -163,13 +161,12 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		}
 	}
 
-	return { 
-		ok: true, 
+	return Result.ok({ 
 		data: user_data, 
 		access_token: tokens.access_token,
 		refresh_token: tokens.refresh_token,
 		id_token: tokens.id_token
-	};
+	});
 }
 
 /**
@@ -182,11 +179,11 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 export function initiate(io, config) {
 	io.log("info", "Initiating OIDC login flow");
 	let disc_res = discovery.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
-	if (!disc_res.ok) return { ok: false, error: "OIDC_DISCOVERY_FAILED", status: 500 };
+	if (!disc_res.ok) return Result.err("OIDC_DISCOVERY_FAILED", { http_status: 500 });
 
 	// Ensure system is initialized (bootstrap secret key if needed)
 	let key_res = session.get_secret_key(io);
-	if (!key_res.ok) return { ok: false, error: "SYSTEM_INIT_FAILED", status: 500 };
+	if (!key_res.ok) return Result.err("SYSTEM_INIT_FAILED", { http_status: 500 });
 
 	let handshake_res = session.create_state(io);
 	if (!handshake_res.ok) return handshake_res;
@@ -195,13 +192,10 @@ export function initiate(io, config) {
 	let url_res = oidc.get_auth_url(io, config, disc_res.data, handshake);
 	if (!url_res.ok) return url_res;
 
-	return {
-		ok: true,
-		data: {
-			url: url_res.data,
-			token: handshake.token
-		}
-	};
+	return Result.ok({
+		url: url_res.data,
+		token: handshake.token
+	});
 };
 
 /**
@@ -233,13 +227,13 @@ export function authenticate(io, config, request, policy) {
 		return oauth_res;
 	}
 
-	let user_data = oauth_res.data;
+	let user_data = oauth_res.data.data;
 	let perms = config_mod.find_roles_for_user(config, user_data);
 	
 	if (length(perms.read) == 0 && length(perms.write) == 0) {
 		session.consume_state(io, state_token);
 		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] matched no roles [session_id: ${session_id}]`);
-		return { ok: false, error: "USER_NOT_AUTHORIZED", status: 403 };
+		return Result.err("USER_NOT_AUTHORIZED", { http_status: 403 });
 	}
 
 	let ubus_res = ubus.create_passwordless_session(
@@ -247,23 +241,20 @@ export function authenticate(io, config, request, policy) {
 		perms.role_name, 
 		perms, 
 		user_data.email, 
-		oauth_res.access_token, 
-		oauth_res.refresh_token, 
-		oauth_res.id_token
+		oauth_res.data.access_token, 
+		oauth_res.data.refresh_token, 
+		oauth_res.data.id_token
 	);
 	
 	if (!ubus_res.ok) {
 		session.consume_state(io, state_token);
-		return { ok: false, error: "UBUS_LOGIN_FAILED", status: 500 };
+		return Result.err("UBUS_LOGIN_FAILED", { http_status: 500 });
 	}
 
 	io.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to role=${perms.role_name})`);
 
-	return {
-		ok: true,
-		data: {
-			sid: ubus_res.data,
-			email: user_data.email
-		}
-	};
+	return Result.ok({
+		sid: ubus_res.data,
+		email: user_data.email
+	});
 };

@@ -1,6 +1,7 @@
 import * as native from 'luci_sso.native';
 import * as encoding from 'luci_sso.encoding';
 import * as jwk from 'luci_sso.jwk';
+import * as Result from 'luci_sso.result';
 
 const MAX_TOKEN_SIZE = 16384; // 16 KB
 
@@ -72,9 +73,9 @@ export function sign_jws(payload, secret) {
 	let signed_data = b64_header + "." + b64_payload;
 	
 	let signature = native.hmac_sha256(secret, signed_data);
-	if (!signature) return { ok: false, error: "CRYPTO_ERROR", details: "hmac_sha256 failed" };
+	if (!signature) return Result.err("CRYPTO_ERROR", "hmac_sha256 failed");
 
-	return { ok: true, data: signed_data + "." + b64url_encode(signature) };
+	return Result.ok(signed_data + "." + b64url_encode(signature));
 };
 
 /**
@@ -88,39 +89,39 @@ export function verify_jws(token, secret) {
 	if (type(token) != "string") die("CONTRACT_VIOLATION: verify_jws expects string token");
 	if (type(secret) != "string") die("CONTRACT_VIOLATION: verify_jws expects string secret");
 
-	if (length(token) > MAX_TOKEN_SIZE) return { ok: false, error: "TOKEN_TOO_LARGE" };
+	if (length(token) > MAX_TOKEN_SIZE) return Result.err("TOKEN_TOO_LARGE");
 	
 	let parts = split(token, ".", 4);
-	if (length(parts) != 3) return { ok: false, error: "MALFORMED_JWS" };
+	if (length(parts) != 3) return Result.err("MALFORMED_JWS");
 
 	// 1. Decode and Validate Header
 	let header_json = b64url_decode(parts[0]);
-	if (!header_json) return { ok: false, error: "INVALID_HEADER_ENCODING" };
+	if (!header_json) return Result.err("INVALID_HEADER_ENCODING");
 	let res_h = safe_json(header_json);
-	if (!res_h.ok) return { ok: false, error: "INVALID_HEADER_JSON" };
+	if (!res_h.ok) return Result.err("INVALID_HEADER_JSON");
 	let header = res_h.data;
 	if (header.alg != "HS256") {
-		return { ok: false, error: "UNSUPPORTED_ALGORITHM", details: header.alg };
+		return Result.err("UNSUPPORTED_ALGORITHM", header.alg);
 	}
 
 	// 2. Verify Signature
 	let signed_data = parts[0] + "." + parts[1];
 	let provided_sig = b64url_decode(parts[2]);
-	if (!provided_sig) return { ok: false, error: "INVALID_SIGNATURE_ENCODING" };
+	if (!provided_sig) return Result.err("INVALID_SIGNATURE_ENCODING");
 	
 	let calculated_sig = native.hmac_sha256(secret, signed_data);
 	if (!calculated_sig || !constant_time_eq(calculated_sig, provided_sig)) {
-		return { ok: false, error: "INVALID_SIGNATURE" };
+		return Result.err("INVALID_SIGNATURE");
 	}
 	
 	// 3. Decode Payload
 	let payload_json = b64url_decode(parts[1]);
-	if (!payload_json) return { ok: false, error: "INVALID_PAYLOAD_ENCODING" };
+	if (!payload_json) return Result.err("INVALID_PAYLOAD_ENCODING");
 	let res_p = safe_json(payload_json);
-	if (!res_p.ok) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
+	if (!res_p.ok) return Result.err("INVALID_PAYLOAD_JSON");
 	let payload = res_p.data;
 
-	return { ok: true, data: payload };
+	return Result.ok(payload);
 };
 
 /**
@@ -138,31 +139,31 @@ export function verify_jwt(token, pubkey, options) {
 	if (type(options.now) != "int") die("CONTRACT_VIOLATION: verify_jwt expects mandatory integer options.now");
 	if (type(options.clock_tolerance) != "int") die("CONTRACT_VIOLATION: verify_jwt expects mandatory integer options.clock_tolerance");
 
-	if (length(token) > MAX_TOKEN_SIZE) return { ok: false, error: "TOKEN_TOO_LARGE" };
-	if (!options.alg) return { ok: false, error: "MISSING_ALGORITHM_OPTION" };
+	if (length(token) > MAX_TOKEN_SIZE) return Result.err("TOKEN_TOO_LARGE");
+	if (!options.alg) return Result.err("MISSING_ALGORITHM_OPTION");
 
 	let parts = split(token, ".", 4);
-	if (length(parts) != 3) return { ok: false, error: "MALFORMED_JWT" };
+	if (length(parts) != 3) return Result.err("MALFORMED_JWT");
 
 	// 1. Decode and Validate Header
 	let header_json = b64url_decode(parts[0]);
-	if (!header_json) return { ok: false, error: "INVALID_HEADER_ENCODING" };
+	if (!header_json) return Result.err("INVALID_HEADER_ENCODING");
 	let res_h = safe_json(header_json);
-	if (!res_h.ok || !res_h.data.alg) return { ok: false, error: "INVALID_HEADER_JSON" };
+	if (!res_h.ok || !res_h.data.alg) return Result.err("INVALID_HEADER_JSON");
 	let header = res_h.data;
 
 	// 2. Decode and Validate Payload Encoding (Fail Fast)
 	let payload_json = b64url_decode(parts[1]);
-	if (!payload_json) return { ok: false, error: "INVALID_PAYLOAD_ENCODING" };
+	if (!payload_json) return Result.err("INVALID_PAYLOAD_ENCODING");
 
 	// 3. Algorithm Enforcement
 	if (header.alg != options.alg) {
-		return { ok: false, error: "ALGORITHM_MISMATCH", details: `Expected ${options.alg}, got ${header.alg}` };
+		return Result.err("ALGORITHM_MISMATCH", `Expected ${options.alg}, got ${header.alg}`);
 	}
 
 	// 4. Decode and Verify Signature
 	let signature = b64url_decode(parts[2]);
-	if (!signature) return { ok: false, error: "INVALID_SIGNATURE_ENCODING" };
+	if (!signature) return Result.err("INVALID_SIGNATURE_ENCODING");
 
 	let signed_data = parts[0] + "." + parts[1];
 	let valid = false;
@@ -172,14 +173,14 @@ export function verify_jwt(token, pubkey, options) {
 	} else if (options.alg == "ES256") {
 		valid = native.verify_es256(signed_data, signature, pubkey);
 	} else {
-		return { ok: false, error: "UNSUPPORTED_ALGORITHM", details: options.alg };
+		return Result.err("UNSUPPORTED_ALGORITHM", options.alg);
 	}
 
-	if (!valid) return { ok: false, error: "INVALID_SIGNATURE" };
+	if (!valid) return Result.err("INVALID_SIGNATURE");
 
 	// 5. Decode Payload JSON
 	let res_p = safe_json(payload_json);
-	if (!res_p.ok) return { ok: false, error: "INVALID_PAYLOAD_JSON" };
+	if (!res_p.ok) return Result.err("INVALID_PAYLOAD_JSON");
 	let payload = res_p.data;
 
 	// 6. Claims Validation
@@ -187,31 +188,31 @@ export function verify_jwt(token, pubkey, options) {
 	let now = options.now;
 
 	if (payload.exp != null) {
-		if (type(payload.exp) != "int") return { ok: false, error: "INVALID_EXP_CLAIM" };
-		if (payload.exp < (now - clock_tolerance)) return { ok: false, error: "TOKEN_EXPIRED" };
+		if (type(payload.exp) != "int") return Result.err("INVALID_EXP_CLAIM");
+		if (payload.exp < (now - clock_tolerance)) return Result.err("TOKEN_EXPIRED");
 	}
 	
 	if (payload.nbf != null) {
-		if (type(payload.nbf) != "int") return { ok: false, error: "INVALID_NBF_CLAIM" };
-		if (payload.nbf > (now + clock_tolerance)) return { ok: false, error: "TOKEN_NOT_YET_VALID" };
+		if (type(payload.nbf) != "int") return Result.err("INVALID_NBF_CLAIM");
+		if (payload.nbf > (now + clock_tolerance)) return Result.err("TOKEN_NOT_YET_VALID");
 	}
 
 	if (payload.iat != null) {
-		if (type(payload.iat) != "int") return { ok: false, error: "INVALID_IAT_CLAIM" };
-		if (payload.iat > (now + clock_tolerance)) return { ok: false, error: "TOKEN_ISSUED_IN_FUTURE" };
+		if (type(payload.iat) != "int") return Result.err("INVALID_IAT_CLAIM");
+		if (payload.iat > (now + clock_tolerance)) return Result.err("TOKEN_ISSUED_IN_FUTURE");
 	}
 
 	if (options.iss && encoding.normalize_url(payload.iss) !== encoding.normalize_url(options.iss)) {
-		return { ok: false, error: "ISSUER_MISMATCH" };
+		return Result.err("ISSUER_MISMATCH");
 	}
 
 	if (options.aud) {
 		let aud = payload.aud;
 		let found = false;
 		if (type(aud) == "array") {
-			if (length(aud) == 0) return { ok: false, error: "INVALID_AUDIENCE" };
+			if (length(aud) == 0) return Result.err("INVALID_AUDIENCE");
 			for (let a in aud) {
-				if (type(a) != "string") return { ok: false, error: "MALFORMED_AUDIENCE" };
+				if (type(a) != "string") return Result.err("MALFORMED_AUDIENCE");
 				if (a === options.aud) {
 					found = true;
 					break;
@@ -222,11 +223,11 @@ export function verify_jwt(token, pubkey, options) {
 		}
 		
 		if (!found) {
-			return { ok: false, error: "AUDIENCE_MISMATCH" };
+			return Result.err("AUDIENCE_MISMATCH");
 		}
 	}
 
-	return { ok: true, data: payload };
+	return Result.ok(payload);
 };
 
 /**
@@ -246,10 +247,10 @@ export function random(len) {
 	}
 
 	if (!bytes || type(bytes) != "string" || length(bytes) != byte_len) {
-		return { ok: false, error: "CSPRNG_FAILURE" };
+		return Result.err("CSPRNG_FAILURE");
 	}
 
-	return { ok: true, data: bytes };
+	return Result.ok(bytes);
 };
 
 /**
@@ -271,13 +272,13 @@ export function sha256(str) {
  */
 export function sha256_hex(str) {
 	let hash_bin = sha256(str);
-	if (!hash_bin) return { ok: false, error: "CRYPTO_ERROR" };
+	if (!hash_bin) return Result.err("CRYPTO_ERROR");
 
 	let hex = "";
 	for (let i = 0; i < length(hash_bin); i++) {
 		hex += sprintf("%02x", ord(hash_bin, i));
 	}
-	return { ok: true, data: hex };
+	return Result.ok(hex);
 };
 
 /**
@@ -293,7 +294,7 @@ export function pkce_generate_verifier(len) {
 	let res = random(byte_len);
 	if (!res.ok) return res;
 
-	return { ok: true, data: b64url_encode(res.data) };
+	return Result.ok(b64url_encode(res.data));
 };
 
 /**
@@ -319,7 +320,7 @@ export function pkce_pair(len) {
 
 	let verifier = res.data;
 	let challenge = pkce_calculate_challenge(verifier);
-	return { ok: true, data: { verifier, challenge } };
+	return Result.ok({ verifier, challenge });
 };
 
 /**

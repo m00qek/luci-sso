@@ -1,5 +1,6 @@
 import { test, assert, assert_eq } from 'testing';
 import * as ubus from 'luci_sso.ubus';
+import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
 
 test('ubus: logic - get_session success', () => {
@@ -12,6 +13,7 @@ test('ubus: logic - get_session success', () => {
 
 	factory.with_env({}, (io) => {
 		let res = ubus.get_session(io, "sid-123");
+        assert(Result.is(res));
 		assert(res.ok);
 		assert_eq(res.data.oidc_user, "test@example.com");
 		assert_eq(res.data.oidc_id_token, "token-abc");
@@ -25,6 +27,7 @@ test('ubus: logic - get_session handle missing session', () => {
 
 	factory.with_env({}, (io) => {
 		let res = ubus.get_session(io, "invalid-sid");
+        assert(Result.is(res));
 		assert(!res.ok);
 		assert_eq(res.error, "SESSION_NOT_FOUND");
 	});
@@ -34,6 +37,7 @@ test('ubus: logic - get_session handle invalid SID', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		let res = ubus.get_session(io, null);
+        assert(Result.is(res));
 		assert(!res.ok);
 		assert_eq(res.error, "INVALID_SID");
 	});
@@ -54,6 +58,7 @@ test('ubus: security - create_passwordless_session generates 256-bit CSRF token 
 
 	factory.with_env({}, (io) => {
 		let res = ubus.create_passwordless_session(io, "root", { read: ["luci-mod-network"], write: [] }, "user@test.com", "at", "rt", "it");
+        assert(Result.is(res));
 		assert(res.ok);
 		assert_eq(length(grants), 1);
 		assert_eq(grants[0].scope, "access-group");
@@ -87,6 +92,7 @@ test('ubus: logic - register_token atomicity and full hash (B2)', () => {
 		
 		// 1. First registration should succeed
 		let res1 = ubus.register_token(io, token);
+        assert(Result.is(res1));
 		assert(res1.ok, "First token registration must succeed");
 		
 		// 2. Verify it created a 64-character hex ID entry
@@ -96,11 +102,13 @@ test('ubus: logic - register_token atomicity and full hash (B2)', () => {
 		
 		// 3. Second registration of SAME token must fail (replay)
 		let res2 = ubus.register_token(io, token);
+        assert(Result.is(res2));
 		assert(!res2.ok, "Replayed token registration must fail");
 		assert_eq(res2.error, "TOKEN_REPLAYED");
 		
 		// 4. Registration of DIFFERENT token should succeed
 		let res3 = ubus.register_token(io, token + "new");
+        assert(Result.is(res3));
 		assert(res3.ok, "Different token must succeed");
 		assert_eq(length(io.lsdir("/var/run/luci-sso/tokens")), 2, "Should have two entries now");
 	});

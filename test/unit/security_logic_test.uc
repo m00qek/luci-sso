@@ -2,6 +2,7 @@ import { test, assert, assert_eq } from 'testing';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
+import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
 
 // =============================================================================
@@ -14,12 +15,14 @@ test('security: JWT - reject alg: none', () => {
 	let token = none_header + "." + payload + ".";
 
 	// 1. JWT High-level
-	let res = crypto.verify_jwt(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300 });
-	assert_eq(res.error, "ALGORITHM_MISMATCH");
+	let res1 = crypto.verify_jwt(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300 });
+    assert(Result.is(res1));
+	assert_eq(res1.error, "ALGORITHM_MISMATCH");
 
 	// 2. JWS Primitive
-	res = crypto.verify_jws(token, "secret");
-	assert_eq(res.error, "UNSUPPORTED_ALGORITHM");
+	let res2 = crypto.verify_jws(token, "secret");
+    assert(Result.is(res2));
+	assert_eq(res2.error, "UNSUPPORTED_ALGORITHM");
 });
 
 test('security: JWT - reject stripped signature', () => {
@@ -28,12 +31,14 @@ test('security: JWT - reject stripped signature', () => {
     let stripped = header + "." + payload + ".";
     
     let res = crypto.verify_jwt(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300 });
+    assert(Result.is(res));
     assert_eq(res.error, "INVALID_SIGNATURE_ENCODING");
 });
 
 test('security: JWT - payload integrity', () => {
 	let secret = "secret";
 	let res_s = crypto.sign_jws({foo: "bar"}, secret);
+    assert(Result.is(res_s));
 	assert(res_s.ok);
 	let good_token = res_s.data;
 	let parts = split(good_token, ".");
@@ -43,6 +48,7 @@ test('security: JWT - payload integrity', () => {
 	let tampered = parts[0] + "." + bad_payload + "." + parts[2];
 	
 	let res = crypto.verify_jws(tampered, secret);
+    assert(Result.is(res));
 	assert_eq(res.error, "INVALID_SIGNATURE", "Tampering must invalidate HMAC signature");
 });
 

@@ -212,16 +212,18 @@ export function sign_jws(payload, secret) {
 If an operation fails due to external factors (expired token, network down, invalid signature), this is a valid state that the application might want to handle.
 
 - **Exceptions:** Use for "stop the world" failures where the caller likely can't recover easily (e.g., malformed discovery response).
-- **Result Objects:** Use for common business logic branches (e.g., token expired vs. invalid signature).
+- **Result Objects:** Use for all runtime failures and common business logic branches (e.g., token expired vs. invalid signature). These MUST be created using the `luci_sso.result` module.
 
 ```javascript
-// Result Object Pattern
+import * as Result from 'luci_sso.result';
+
+// Result Object Pattern (MANDATORY)
 export function verify_session(io, token) {
 	// ... logic ...
-	if (expired) return { ok: false, error: "EXPIRED" };
-	if (bad_sig) return { ok: false, error: "INVALID_SIGNATURE" };
+	if (expired) return Result.err("EXPIRED");
+	if (bad_sig) return Result.err("INVALID_SIGNATURE");
 	
-	return { ok: true, data: payload };
+	return Result.ok(payload);
 }
 ```
 
@@ -231,10 +233,26 @@ export function verify_session(io, token) {
 Is the failure a programming error (wrong types, null pointer, invalid internal state)?
 ├─ YES → Use die() (Fail Fast - CONTRACT_VIOLATION)
 └─ NO  → Is it a runtime failure (Expired token, network error, config error)?
-   └─ ALWAYS → Return Result Object { ok: false, error: "CODE", [details: "..."] }
+   └─ ALWAYS → Return Result.err("CODE", context_object)
 ```
 
-**Rationale:** In a CGI environment, `die()` causes a process crash which results in a generic 500 error. To provide a better user experience and robust error reporting, all runtime failures MUST return a Result Object so the caller (e.g., the web router) can render a user-friendly error page.
+**Rationale:** In a CGI environment, `die()` causes a process crash which results in a generic 500 error. To provide a better user experience and robust error reporting, all runtime failures MUST return a `Result` object.
+
+### Context Object Pattern
+
+When returning an error, developers SHOULD use a "context object" for the `details` parameter if more than one piece of information is needed.
+
+**Standard Fields:**
+- `http_status`: The recommended HTTP status code for the web layer.
+- `details`: A developer-friendly message or raw error from a sub-operation.
+
+**✅ CORRECT:**
+```javascript
+return Result.err("DISCOVERY_FAILED", { 
+    http_status: 502, 
+    details: "Connection timed out" 
+});
+```
 
 ---
 

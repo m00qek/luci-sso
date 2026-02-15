@@ -2,6 +2,7 @@
 
 import * as lucihttp from 'lucihttp';
 import * as encoding from 'luci_sso.encoding';
+import * as Result from 'luci_sso.result';
 
 /**
  * Maximum size for environment variables or parameter strings.

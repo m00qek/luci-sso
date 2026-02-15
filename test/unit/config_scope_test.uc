@@ -1,5 +1,6 @@
 import { test, assert, assert_eq } from '../testing.uc';
 import * as config from 'luci_sso.config';
+import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
 
 test('config: scope - load custom scope from UCI', () => {
@@ -23,6 +24,7 @@ test('config: scope - load custom scope from UCI', () => {
         .with_uci(mock_uci)
         .with_env({}, (io) => {
             let res = config.load(io);
+            assert(Result.is(res));
             assert(res.ok);
             assert_eq(res.data.scope, "openid email custom_scope", "Should correctly load custom scope from UCI");
         });
@@ -48,6 +50,7 @@ test('config: scope - handle missing scope', () => {
         .with_uci(mock_uci)
         .with_env({}, (io) => {
             let res = config.load(io);
+            assert(Result.is(res));
             assert(res.ok);
             // In the current implementation, res.data.scope will be undefined
             assert(res.data.scope === undefined, "Scope should be undefined if not in UCI");

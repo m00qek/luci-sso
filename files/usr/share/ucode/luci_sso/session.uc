@@ -1,5 +1,6 @@
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
+import * as Result from 'luci_sso.result';
 
 const SECRET_KEY_PATH = "/etc/luci-sso/secret.key";
 const SESSION_DURATION = 3600;
@@ -75,7 +76,7 @@ export function get_secret_key(io) {
 				if (!res.ok) {
 					io.log("error", "CRITICAL: CSPRNG failure during secret key generation");
 					try { io.remove(lock_path); } catch (e) {}
-					return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
+					return Result.err("CRYPTO_SYSTEM_FAILURE");
 				}
 
 				let new_key = res.data;
@@ -112,11 +113,11 @@ export function get_secret_key(io) {
 
 			if (!key || length(key) == 0) {
 				// FAIL: Do not fallback to random key (avoids transient session invalidation)
-				return { ok: false, error: "SYSTEM_KEY_UNAVAILABLE" };
+				return Result.err("SYSTEM_KEY_UNAVAILABLE");
 			}
 		}
 	}
-	return { ok: true, data: key };
+	return Result.ok(key);
 };
 
 /**
@@ -135,7 +136,7 @@ export function create_state(io) {
 
 	if (!res_p.ok || !res_s.ok || !res_n.ok || !res_h.ok) {
 		io.log("error", "CRITICAL: CSPRNG failure during handshake state generation");
-		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
+		return Result.err("CRYPTO_SYSTEM_FAILURE");
 	}
 
 	let pkce = res_p.data;
@@ -160,7 +161,7 @@ export function create_state(io) {
 		if (!io.write_file(tmp_path, sprintf("%J", data))) {
 			let err = io.fserror();
 			io.log("error", `Failed to save handshake state (write): ${err}`);
-			return { ok: false, error: "STATE_SAVE_FAILED", details: err };
+			return Result.err("STATE_SAVE_FAILED", err);
 		}
 
 		io.chmod(tmp_path, 0600);
@@ -169,24 +170,21 @@ export function create_state(io) {
 			let err = io.fserror();
 			io.log("error", `Failed to save handshake state (rename): ${err}`);
 			try { io.remove(tmp_path); } catch (e) {}
-			return { ok: false, error: "STATE_SAVE_FAILED", details: err };
+			return Result.err("STATE_SAVE_FAILED", err);
 		}
 	} catch (e) {
 		io.log("error", `Failed to save handshake state: ${e}`);
-		return { ok: false, error: "STATE_SAVE_FAILED" };
+		return Result.err("STATE_SAVE_FAILED");
 	}
 
 	io.log("info", `Handshake state created [session_id: ${data.id}]`);
 
-	return {
-		ok: true,
-		data: {
-			token: handle, // Opaque handle for the cookie
-			state: state,
-			nonce: nonce,
-			code_challenge: pkce.challenge
-		}
-	};
+	return Result.ok({
+		token: handle, // Opaque handle for the cookie
+		state: state,
+		nonce: nonce,
+		code_challenge: pkce.challenge
+	});
 };
 
 /**
@@ -220,7 +218,7 @@ export function verify_state(io, handle, clock_tolerance) {
 
 	// Ensure the handle is a safe filename (Base64URL only)
 	if (!match(handle, /^[A-Za-z0-9_-]+$/)) {
-		return { ok: false, error: "INVALID_HANDLE_FORMAT" };
+		return Result.err("INVALID_HANDLE_FORMAT");
 	}
 
 	let path = `${HANDSHAKE_DIR}/handshake_${handle}.json`;
@@ -233,67 +231,67 @@ export function verify_state(io, handle, clock_tolerance) {
 		// We RENAME the file to .consumed. Only one process can succeed in the rename.
 		if (!io.rename(path, consume_path)) {
 			io.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
-			return { ok: false, error: "STATE_NOT_FOUND" };
+			return Result.err("STATE_NOT_FOUND");
 		}
 		
 		content = io.read_file(consume_path);
 		if (content) io.remove(consume_path);
 	} catch (e) {
 		io.log("error", `Handshake state consumption failed [session_id: ${session_id}]: ${e}`);
-		return { ok: false, error: "STATE_NOT_FOUND" };
+		return Result.err("STATE_NOT_FOUND");
 	}
 
 	if (!content) {
 		io.log("error", `Handshake state content missing [session_id: ${session_id}]`);
-		return { ok: false, error: "STATE_NOT_FOUND" };
+		return Result.err("STATE_NOT_FOUND");
 	}
 
 	let res = encoding.safe_json(content);
 	if (!res.ok) {
 		io.log("error", `Handshake state corrupted [session_id: ${session_id}]: ${res.details}`);
-		return { ok: false, error: "STATE_CORRUPTED" };
+		return Result.err("STATE_CORRUPTED");
 	}
 	let data = res.data;
 
 	// B2: Validate mandatory handshake fields on load
 	if (!data.code_verifier || type(data.code_verifier) != "string" || length(data.code_verifier) < 43 || length(data.code_verifier) > 128) {
 		io.log("error", `Handshake state missing or invalid PKCE verifier [session_id: ${session_id}]`);
-		return { ok: false, error: "STATE_CORRUPTED" };
+		return Result.err("STATE_CORRUPTED");
 	}
 	if (!data.state || type(data.state) != "string") {
 		io.log("error", `Handshake state missing state parameter [session_id: ${session_id}]`);
-		return { ok: false, error: "STATE_CORRUPTED" };
+		return Result.err("STATE_CORRUPTED");
 	}
 	if (!data.nonce || type(data.nonce) != "string") {
 		io.log("error", `Handshake state missing nonce [session_id: ${session_id}]`);
-		return { ok: false, error: "STATE_CORRUPTED" };
+		return Result.err("STATE_CORRUPTED");
 	}
 
 	// W5: Enforce mandatory exp and iat claims
 	if (data.exp == null || type(data.exp) != "int") {
 		io.log("error", `Handshake state missing or invalid 'exp' [session_id: ${session_id}]`);
-		return { ok: false, error: "STATE_CORRUPTED" };
+		return Result.err("STATE_CORRUPTED");
 	}
 	if (data.iat == null || type(data.iat) != "int") {
 		io.log("error", `Handshake state missing or invalid 'iat' [session_id: ${session_id}]`);
-		return { ok: false, error: "STATE_CORRUPTED" };
+		return Result.err("STATE_CORRUPTED");
 	}
 
 	let now = io.time();
 
 	if (data.exp < (now - clock_tolerance)) {
 		io.log("warn", `Handshake state expired [session_id: ${session_id}]`);
-		return { ok: false, error: "HANDSHAKE_EXPIRED" };
+		return Result.err("HANDSHAKE_EXPIRED");
 	}
 
 	if (data.iat > (now + clock_tolerance)) {
 		io.log("warn", `Handshake state not yet valid [session_id: ${session_id}]`);
-		return { ok: false, error: "HANDSHAKE_NOT_YET_VALID" };
+		return Result.err("HANDSHAKE_NOT_YET_VALID");
 	}
 	
 	io.log("info", `Handshake state successfully validated [session_id: ${session_id}]`);
 	
-	return { ok: true, data: data };
+	return Result.ok(data);
 };
 
 /**
@@ -305,7 +303,7 @@ export function verify_state(io, handle, clock_tolerance) {
  */
 export function create(io, user_data) {
 	if (!user_data || (type(user_data.sub) != "string" && type(user_data.email) != "string")) {
-		return { ok: false, error: "INVALID_USER_DATA" };
+		return Result.err("INVALID_USER_DATA");
 	}
 
 	let res = get_secret_key(io);
@@ -332,7 +330,7 @@ export function create(io, user_data) {
  * @returns {object} - Result Object {ok, data/error}
  */
 export function verify(io, token, clock_tolerance) {
-	if (!token) return { ok: false, error: "NO_SESSION" };
+	if (!token) return Result.err("NO_SESSION");
 	if (type(token) != "string") die("CONTRACT_VIOLATION: verify expects string token");
 	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: verify expects mandatory integer clock_tolerance");
 	
@@ -341,24 +339,24 @@ export function verify(io, token, clock_tolerance) {
 	let secret = res.data;
 
 	let result = crypto.verify_jws(token, secret);
-	if (!result.ok) return { ok: false, error: "INVALID_SESSION", details: result.error };
+	if (!result.ok) return Result.err("INVALID_SESSION", result.error);
 	
 	let session = result.data;
 	let now = io.time();
 	
 	if (session.exp == null || type(session.exp) != "int") {
-		return { ok: false, error: "INVALID_SESSION" };
+		return Result.err("INVALID_SESSION");
 	}
 	if (session.exp < (now - clock_tolerance)) {
-		return { ok: false, error: "SESSION_EXPIRED" };
+		return Result.err("SESSION_EXPIRED");
 	}
 
 	if (session.iat == null || type(session.iat) != "int") {
-		return { ok: false, error: "INVALID_SESSION" };
+		return Result.err("INVALID_SESSION");
 	}
 	if (session.iat > (now + clock_tolerance)) {
-		return { ok: false, error: "SESSION_NOT_YET_VALID" };
+		return Result.err("SESSION_NOT_YET_VALID");
 	}
 	
-	return { ok: true, data: session };
+	return Result.ok(session);
 };

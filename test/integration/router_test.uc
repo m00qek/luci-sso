@@ -3,6 +3,7 @@ import * as router from 'luci_sso.router';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
+import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
 import * as f from 'integration.fixtures';
 import * as tf from 'unit.tier2_fixtures';
@@ -101,6 +102,7 @@ test('Router: Callback - Successful authentication and UBUS login', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
+        assert(Result.is(state_res));
 		let handshake = state_res.data;
 		
 		let at = "mock-access-token-123456";
@@ -145,6 +147,7 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
+        assert(Result.is(state_res));
 		let handshake = state_res.data;
 		
 		let at = "mock-at";
@@ -187,6 +190,7 @@ test('Router: Callback - Reject non-whitelisted users', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
+        assert(Result.is(state_res));
 		let handshake = state_res.data;
 		
 		let at = "mock-at";
@@ -213,6 +217,7 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 	});
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
+        assert(Result.is(state_res));
 		let handshake = state_res.data;
 		let access_token = "ALREADY_USED";
 		
@@ -221,6 +226,7 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 
 		// PRE-REGISTER the token to simulate replay
 		let res_h = crypto.sha256_hex(access_token);
+        assert(Result.is(res_h));
 		let token_id = res_h.data;
 		
 		factory.using(io)
@@ -246,6 +252,7 @@ test('Router: Callback - Reject state replay (handshake one-time use)', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
+        assert(Result.is(state_res));
 		let handshake = state_res.data;
 		let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 
@@ -267,6 +274,7 @@ test('Router: Callback - Reject code replay (IdP level rejection)', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
+        assert(Result.is(state_res));
 		let handshake = state_res.data;
 		let req = mock_request("/callback", { code: "REPLAYED_CODE", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 
@@ -284,6 +292,7 @@ test('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
+        assert(Result.is(state_res));
 		let handshake = state_res.data;
 		let req = mock_request("/callback", { code: "VALID_CODE", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 
@@ -301,6 +310,7 @@ test('Router: Security - Access token is NOT registered if verification fails (D
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
+        assert(Result.is(state_res));
 		let handshake = state_res.data;
 		let access_token = "DO_NOT_REGISTER_ME";
 		
@@ -322,6 +332,7 @@ test('Router: Security - Access token is NOT registered if verification fails (D
 			
 			// We'll mock the IdP to return the SAME access token again for a new code.
 			let state_res2 = session.create_state(io_http);
+            assert(Result.is(state_res2));
 			let handshake2 = state_res2.data;
 			
 			let factory_replay = factory.using(io_http).with_responses({

@@ -1,6 +1,7 @@
 import { test, assert, assert_eq, assert_throws } from 'testing';
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
+import * as Result from 'luci_sso.result';
 import * as f from 'unit.tier1_fixtures';
 import * as f2 from 'unit.tier2_fixtures';
 import * as h from 'unit.helpers';
@@ -11,14 +12,17 @@ import * as h from 'unit.helpers';
 
 test('crypto: plumbing - JWK set lookup', () => {
     let res = oidc.find_jwk(f.JWK_SET, "key-2");
+    assert(Result.is(res));
     assert(res.ok);
     assert_eq(res.data.kty, "EC");
 
     res = oidc.find_jwk(f.JWK_SET, null);
+    assert(Result.is(res));
     assert(res.ok);
     assert_eq(res.data.kid, "key-1");
 
     res = oidc.find_jwk(f.JWK_SET, "non-existent");
+    assert(Result.is(res));
     assert_eq(res.error, "KEY_NOT_FOUND");
 });
 
@@ -30,10 +34,13 @@ test('crypto: plumbing - clock tolerance boundary math', () => {
     // 1. Success case
     let payload_ok = { ...f2.MOCK_CLAIMS, exp: 1000 };
     let token_ok = h.generate_id_token(payload_ok, privkey, "RS256");
-    assert(crypto.verify_jwt(token_ok, pubkey, { alg: "RS256", now: 1299, clock_tolerance: clock_tolerance }).ok);
+    let res_v = crypto.verify_jwt(token_ok, pubkey, { alg: "RS256", now: 1299, clock_tolerance: clock_tolerance });
+    assert(Result.is(res_v));
+    assert(res_v.ok);
     
     // 2. Failure case (expired)
     let res = crypto.verify_jwt(token_ok, pubkey, { alg: "RS256", now: 1301, clock_tolerance: clock_tolerance });
+    assert(Result.is(res));
     assert_eq(res.error, "TOKEN_EXPIRED");
 });
 
@@ -41,10 +48,14 @@ test('crypto: plumbing - invalid algorithm in header', () => {
     let key = "key";
     let opts = { alg: "RS256", now: 123, clock_tolerance: 300 };
     let bad_alg = crypto.b64url_encode(sprintf("%J", { alg: "ROT13" }));
-    assert_eq(crypto.verify_jwt(bad_alg + ".e30.s", key, opts).error, "ALGORITHM_MISMATCH");
+    let res1 = crypto.verify_jwt(bad_alg + ".e30.s", key, opts);
+    assert(Result.is(res1));
+    assert_eq(res1.error, "ALGORITHM_MISMATCH");
 
     let no_alg = crypto.b64url_encode(sprintf("%J", { typ: "JWT" }));
-    assert_eq(crypto.verify_jwt(no_alg + ".e30.s", key, opts).error, "INVALID_HEADER_JSON");
+    let res2 = crypto.verify_jwt(no_alg + ".e30.s", key, opts);
+    assert(Result.is(res2));
+    assert_eq(res2.error, "INVALID_HEADER_JSON");
 });
 
 test('crypto: plumbing - JWK to PEM conversion', () => {
@@ -54,6 +65,7 @@ test('crypto: plumbing - JWK to PEM conversion', () => {
 		e: "AQAB"
 	};
 	let res = crypto.jwk_to_pem(jwk);
+    assert(Result.is(res));
 	assert(res.ok, "JWK to PEM failed: " + res.error);
 	assert(index(res.data, "-----BEGIN PUBLIC KEY-----") == 0);
 });
@@ -62,6 +74,7 @@ test('crypto: plumbing - JWK to secret (OCT/symmetric)', () => {
 	let secret_b64url = "bXktc2VjcmV0LWtleS0xMjM0NQ"; 
 	let jwk = { kty: "oct", k: secret_b64url };
 	let res = crypto.jwk_to_pem(jwk);
+    assert(Result.is(res));
 	assert(res.ok);
 	assert_eq(res.data, "my-secret-key-12345");
 });
@@ -69,16 +82,20 @@ test('crypto: plumbing - JWK to secret (OCT/symmetric)', () => {
 test('crypto: plumbing - token size enforcement', () => {
     let too_big = "1234567890";
     for (let i = 0; i < 11; i++) too_big += too_big; // 10 * 2^11 = 20,480 (> 16,384)
-    assert_eq(crypto.verify_jwt(too_big, "key", { alg: "RS256", now: 123, clock_tolerance: 300 }).error, "TOKEN_TOO_LARGE");
+    let res = crypto.verify_jwt(too_big, "key", { alg: "RS256", now: 123, clock_tolerance: 300 });
+    assert(Result.is(res));
+    assert_eq(res.error, "TOKEN_TOO_LARGE");
 });
 
 test('crypto: plumbing - PKCE primitives', () => {
     let res_v = crypto.pkce_generate_verifier(32);
+    assert(Result.is(res_v));
     assert(res_v.ok);
     assert(length(res_v.data) >= 43);
     let challenge = crypto.pkce_calculate_challenge(res_v.data);
     assert(challenge);
     let res_p = crypto.pkce_pair(32);
+    assert(Result.is(res_p));
     assert(res_p.ok);
     assert(res_p.data.verifier && res_p.data.challenge);
 });
@@ -105,12 +122,15 @@ test('crypto: torture - illegal type injection', () => {
 });
 
 test('crypto: torture - empty JWK handling', () => {
-    let res = oidc.find_jwk([], "any-kid");
-    assert_eq(res.error, "KEY_NOT_FOUND");
-    res = oidc.find_jwk([], null);
-    assert_eq(res.error, "NO_KEYS_AVAILABLE");
-    res = crypto.jwk_to_pem({ kty: "RSA", n: "", e: "" });
-    assert_eq(res.error, "MISSING_RSA_PARAMS");
+    let res1 = oidc.find_jwk([], "any-kid");
+    assert(Result.is(res1));
+    assert_eq(res1.error, "KEY_NOT_FOUND");
+    let res2 = oidc.find_jwk([], null);
+    assert(Result.is(res2));
+    assert_eq(res2.error, "NO_KEYS_AVAILABLE");
+    let res3 = crypto.jwk_to_pem({ kty: "RSA", n: "", e: "" });
+    assert(Result.is(res3));
+    assert_eq(res3.error, "MISSING_RSA_PARAMS");
 });
 
 test('crypto: torture - JSON depth (complexity limit)', () => {
@@ -125,8 +145,10 @@ test('crypto: torture - JSON depth (complexity limit)', () => {
 test('crypto: torture - buffer transition stability', () => {
     let secret = ""; for(let i=0; i<16384; i++) secret += "A";
     let res = crypto.sign_jws({foo: "bar"}, secret);
+    assert(Result.is(res));
     assert(res.ok, "Plumbing should handle 16KB secrets during signing");
     let verify = crypto.verify_jws(res.data, secret);
+    assert(Result.is(verify));
     assert(verify.ok, "Plumbing should handle 16KB secrets during verification");
 });
 
@@ -137,20 +159,25 @@ test('crypto: plumbing - issuer normalization (B3)', () => {
 
     // 1. Success case: Identical strings
     let t1 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com" }, privkey, "RS256");
-    assert(crypto.verify_jwt(t1, pubkey, opts).ok, "Should pass with identical issuer strings");
+    let res1 = crypto.verify_jwt(t1, pubkey, opts);
+    assert(Result.is(res1));
+    assert(res1.ok, "Should pass with identical issuer strings");
 
     // 2. Trailing slash in token (Current Failure Path for B3)
     let t2 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com/" }, privkey, "RS256");
     let res2 = crypto.verify_jwt(t2, pubkey, opts);
+    assert(Result.is(res2));
     assert(res2.ok, "Should pass with trailing slash in token iss claim: " + (res2.error || ""));
 
     // 3. Mixed case origin (Current Failure Path for B3)
     let t3 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "HTTPS://IDP.COM" }, privkey, "RS256");
     let res3 = crypto.verify_jwt(t3, pubkey, opts);
+    assert(Result.is(res3));
     assert(res3.ok, "Should pass with mixed case in token iss claim: " + (res3.error || ""));
 
     // 4. Trailing slash in config
     let t4 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com" }, privkey, "RS256");
     let res4 = crypto.verify_jwt(t4, pubkey, { ...opts, iss: "https://idp.com/" });
+    assert(Result.is(res4));
     assert(res4.ok, "Should pass with trailing slash in config iss: " + (res4.error || ""));
 });

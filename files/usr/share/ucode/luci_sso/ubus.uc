@@ -1,4 +1,5 @@
 import * as crypto from 'luci_sso.crypto';
+import * as Result from 'luci_sso.result';
 
 /**
  * Logic for interacting with UBUS sessions.
@@ -66,7 +67,7 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	let create_res = io.ubus_call("session", "create", { timeout: 3600 });
 	if (!create_res || !create_res.ubus_rpc_session) {
 		io.log("error", "UBUS session creation failed");
-		return { ok: false, error: "UBUS_SESSION_FAILED" };
+		return Result.err("UBUS_SESSION_FAILED");
 	}
 
 	let sid = create_res.ubus_rpc_session;
@@ -108,7 +109,7 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	let res_csrf = crypto.random(32);
 	if (!res_csrf.ok) {
 		io.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
-		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
+		return Result.err("CRYPTO_SYSTEM_FAILURE");
 	}
 	let csrf_token = crypto.b64url_encode(res_csrf.data);
 
@@ -127,7 +128,7 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 
 	io.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(oidc_email)}] mapped to ${username}`);
 
-	return { ok: true, data: sid };
+	return Result.ok(sid);
 };
 
 /**
@@ -138,15 +139,15 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
  * @returns {object} - Result Object {ok, data/error}
  */
 export function get_session(io, sid) {
-	if (type(io.ubus_call) != "function") return { ok: false, error: "UBUS_UNAVAILABLE" };
-	if (!sid || type(sid) != "string") return { ok: false, error: "INVALID_SID" };
+	if (type(io.ubus_call) != "function") return Result.err("UBUS_UNAVAILABLE");
+	if (!sid || type(sid) != "string") return Result.err("INVALID_SID");
 
 	let res = io.ubus_call("session", "get", { ubus_rpc_session: sid });
 	if (!res || type(res.values) != "object") {
-		return { ok: false, error: "SESSION_NOT_FOUND" };
+		return Result.err("SESSION_NOT_FOUND");
 	}
 
-	return { ok: true, data: res.values };
+	return Result.ok(res.values);
 };
 
 const TOKEN_REGISTRY_DIR = "/var/run/luci-sso/tokens";
@@ -182,7 +183,7 @@ export function reap_stale_tokens(io) {
  */
 export function register_token(io, access_token) {
 	try {
-		if (!access_token || type(access_token) != "string") return { ok: false, error: "INVALID_TOKEN" };
+		if (!access_token || type(access_token) != "string") return Result.err("INVALID_TOKEN");
 
 		// 1. Ensure registry exists
 		try { io.mkdir(TOKEN_REGISTRY_DIR, 0700); } catch(e) {}
@@ -196,12 +197,12 @@ export function register_token(io, access_token) {
 
 		// 3. ATOMIC: Try to create the directory. This is an atomic "test-and-set" in POSIX.
 		if (io.mkdir(lock_path, 0700)) {
-			return { ok: true };
+			return Result.ok();
 		}
-		return { ok: false, error: "TOKEN_REPLAYED" };
+		return Result.err("TOKEN_REPLAYED");
 	} catch (e) {
 		io.log("error", `Exception in register_token: ${e}`);
-		return { ok: false, error: "SYSTEM_ERROR", details: e };
+		return Result.err("SYSTEM_ERROR", e);
 	}
 };
 
@@ -213,12 +214,12 @@ export function register_token(io, access_token) {
  * @returns {object} - Result Object {ok, error}
  */
 export function destroy_session(io, sid) {
-	if (type(io.ubus_call) != "function") return { ok: false, error: "UBUS_UNAVAILABLE" };
-	if (!sid || type(sid) != "string") return { ok: false, error: "INVALID_SID" };
+	if (type(io.ubus_call) != "function") return Result.err("UBUS_UNAVAILABLE");
+	if (!sid || type(sid) != "string") return Result.err("INVALID_SID");
 
 	let res = io.ubus_call("session", "destroy", { ubus_rpc_session: sid });
 	if (res && res.error) {
-		return { ok: false, error: "UBUS_ERROR", details: res.error };
+		return Result.err("UBUS_ERROR", res.error);
 	}
-	return { ok: true };
+	return Result.ok();
 };

@@ -3,6 +3,7 @@ import * as io_mod from 'luci_sso.io';
 import * as web_mod from 'luci_sso.web';
 import * as config_loader from 'luci_sso.config';
 import * as router from 'luci_sso.router';
+import * as Result from 'luci_sso.result';
 
 const io = io_mod.create();
 
