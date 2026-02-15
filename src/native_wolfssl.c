@@ -95,6 +95,8 @@ static uc_value_t *uc_wolfssl_random(uc_vm_t *vm, size_t nargs) {
 	if (len <= 0 || len > 4096) return NULL;
 
 	if (!_rng_initialized) {
+		/* SAFETY: This module assumes single-threaded execution (CGI model).
+		 * If used in a multi-threaded context, _global_rng MUST be protected by a mutex. */
 		if (wc_InitRng(&_global_rng) != 0) return NULL;
 		_rng_initialized = 1;
 	}
@@ -144,6 +146,12 @@ static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
 
 	word32 idx = 0;
 	if (wc_RsaPublicKeyDecode(der, &idx, &key, der_len) != 0) {
+		wc_FreeRsaKey(&key);
+		return ucv_boolean_new(false);
+	}
+
+	/* SECURITY: Enforce minimum RSA key size (2048 bits) per NIST SP 800-57 */
+	if (wc_RsaEncryptSize(&key) < (2048 / 8)) {
 		wc_FreeRsaKey(&key);
 		return ucv_boolean_new(false);
 	}

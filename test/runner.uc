@@ -19,6 +19,7 @@ const backend_files = [
 	"unit.native_compliance_test",
 	"unit.native_torture_test",
 	"unit.native_hardening_test",
+	"unit.native_weak_rsa_test",
 	"unit.native_compliance_test_extra",
 	"unit.native_memory_safety_test"
 ];

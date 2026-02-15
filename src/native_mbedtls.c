@@ -108,6 +108,12 @@ static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs) {
 		return ucv_boolean_new(false);
 	}
 
+	/* SECURITY: Enforce minimum RSA key size (2048 bits) per NIST SP 800-57 */
+	if (mbedtls_pk_get_bitlen(&pk) < 2048) {
+		mbedtls_pk_free(&pk);
+		return ucv_boolean_new(false);
+	}
+
 	unsigned char hash[32];
 	size_t out_len;
 	if (psa_hash_compute(PSA_ALG_SHA_256, msg, msg_len, hash, sizeof(hash), &out_len) != PSA_SUCCESS) {
