@@ -53,6 +53,7 @@ To reduce network overhead and ensure resilience against transient IdP outages, 
 ### User-Agent vs. Router Networking (Split-Horizon)
 In many deployments, the **Browser** accesses the IdP via a public URL (e.g., `https://auth.com`), while the **Router** MUST access it via an internal URL (e.g., `https://10.0.0.5`). 
 *   **Logical vs. Physical:** The `issuer_url` serves as the logical OIDC identifier. The `internal_issuer_url` serves as the physical network fetch address.
+*   **Enforcement:** Both `issuer_url` and `internal_issuer_url` MUST use the `https://` scheme.
 *   **Origin Replacement:** When overriding IdP endpoints (token, jwks, userinfo) for the back-channel, the system MUST ONLY replace the **origin** (scheme + host + port) of the URL.
 *   **Path Integrity:** Simple string replacement is strictly FORBIDDEN as it may corrupt path components if the issuer URL appears as a substring (e.g., in Keycloak realm paths).
 *   **Security Bound:** The `issuer` claim in the discovery document and the `iss` claim in the ID Token MUST always match the logical `issuer_url`, regardless of the network path used to fetch them.

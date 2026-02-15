@@ -87,6 +87,10 @@ export function load(io) {
 		return Result.err("CONFIG_ERROR", "No valid roles found in /etc/config/luci-sso");
 	}
 
+	if (oidc_cfg.internal_issuer_url && substr(oidc_cfg.internal_issuer_url, 0, 8) !== "https://") {
+		return Result.err("CONFIG_ERROR", "internal_issuer_url must use HTTPS");
+	}
+
 	return Result.ok({
 		issuer_url: oidc_cfg.issuer_url,
 		internal_issuer_url: oidc_cfg.internal_issuer_url || oidc_cfg.issuer_url,
