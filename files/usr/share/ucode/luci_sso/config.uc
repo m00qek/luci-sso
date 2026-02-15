@@ -116,8 +116,9 @@ export function find_roles_for_user(config, claims) {
 
 		// Match email
 		if (email) {
+			let lc_email = lc(email);
 			for (let e in role.emails) {
-				if (e == email) {
+				if (lc(e) == lc_email) {
 					matched = true;
 					break;
 				}

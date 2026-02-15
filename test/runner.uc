@@ -58,6 +58,7 @@ const logic_files = [
 	"unit.session_write_fail_test",
 	"unit.ubus_logic_test",
 	"unit.config_logic_test",
+	"unit.config_case_insensitive_test",
 	"unit.config_scope_test",
 	"unit.web_logic_test",
 	"unit.security_logic_test",
