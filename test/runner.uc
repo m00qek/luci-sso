@@ -55,6 +55,7 @@ const logic_files = [
 	"unit.handshake_warning_test",
 	"unit.session_logic_test",
 	"unit.session_race_test",
+	"unit.session_write_fail_test",
 	"unit.ubus_logic_test",
 	"unit.config_logic_test",
 	"unit.config_scope_test",

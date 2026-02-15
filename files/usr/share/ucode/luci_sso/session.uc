@@ -82,7 +82,11 @@ export function get_secret_key(io) {
 				let new_key = res.data;
 				let tmp_path = SECRET_KEY_PATH + ".tmp";
 				// MANDATORY: Restricted permissions for secrets
-				io.write_file(tmp_path, new_key);
+				if (!io.write_file(tmp_path, new_key)) {
+					io.log("error", "CRITICAL: Failed to write secret key");
+					try { io.remove(lock_path); } catch (e) {}
+					return Result.err("SYSTEM_KEY_WRITE_FAILED");
+				}
 				io.chmod(tmp_path, 0600);
 				io.rename(tmp_path, SECRET_KEY_PATH);
 				key = new_key;
