@@ -48,7 +48,7 @@ To reduce network overhead and ensure resilience against transient IdP outages, 
 *   **JWK Sets:** SHOULD be cached for **24 hours**.
 *   **Atomic Updates:** All cache updates MUST use atomic POSIX `rename`.
 *   **Resilience Fallback:** If a network fetch for discovery or JWKS fails, the system MUST attempt to load the existing (stale) cache as a fallback of last resort. This ensures device accessibility during upstream downtime.
-*   **Forced Refresh:** The system MUST trigger a forced cache refresh if a cryptographic operation fails due to an unknown Key ID (`kid`).
+*   **Forced Refresh:** The system MUST trigger a forced cache refresh if a cryptographic operation fails due to an unknown Key ID (`kid`) or an invalid signature when a `kid` IS present (indicating a potential stale JWKS cache). The system MUST NOT retry the fetch if the `kid` is missing or if the header parse fails, as this prevents amplification-based DoS attacks against the Identity Provider.
 
 ### User-Agent vs. Router Networking (Split-Horizon)
 In many deployments, the **Browser** accesses the IdP via a public URL (e.g., `https://auth.com`), while the **Router** MUST access it via an internal URL (e.g., `https://10.0.0.5`). 

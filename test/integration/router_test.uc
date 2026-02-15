@@ -157,8 +157,7 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 		let at = "mock-at";
 		let at_hash = crypto.b64url_encode(substr(crypto.sha256(at), 0, 16));
 		let payload = { ...tf.MOCK_CLAIMS, iss: "https://idp.com", nonce: handshake.nonce, at_hash: at_hash };
-		payload.kid = tf.ROTATION_NEW_JWK.kid;
-		let id_token = h.generate_id_token(payload, tf.ROTATION_NEW_PRIVKEY, "RS256");
+		let id_token = h.generate_id_token(payload, tf.ROTATION_NEW_PRIVKEY, "RS256", tf.ROTATION_NEW_JWK.kid);
 
 		let cache_path = "/var/run/luci-sso/oidc-jwks-wv5enLcGYIn8PiwhdkeXzhVPct86Lf3q.json";
 		let stale_jwks = { keys: [ tf.MOCK_JWK ], cached_at: io.time() };

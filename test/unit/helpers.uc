@@ -12,8 +12,10 @@ export function generate_internal_token(payload, secret) {
  * Generates a high-fidelity signed JWT (RS256 or ES256) for OIDC logic testing.
  * Shells out to openssl for signing since native bindings only support verification.
  */
-export function generate_id_token(payload, privkey_pem, alg) {
+export function generate_id_token(payload, privkey_pem, alg, kid) {
 	let header = { alg: alg || "RS256", typ: "JWT" };
+	if (kid) header.kid = kid;
+	
 	let b64_header = crypto.b64url_encode(sprintf("%J", header));
 	let b64_payload = crypto.b64url_encode(sprintf("%J", payload));
 	let signed_data = b64_header + "." + b64_payload;

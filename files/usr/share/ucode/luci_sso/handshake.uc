@@ -99,7 +99,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		} else if (verify_res.error == "INVALID_SIGNATURE") {
 			let parts = split(tokens.id_token, ".");
 			let res_h = crypto.safe_json(crypto.b64url_decode(parts[0]));
-			if (!res_h.ok || !res_h.data.kid) {
+			if (res_h.ok && res_h.data.kid) {
 				should_retry = true;
 			}
 		}
