@@ -54,7 +54,7 @@ const ERROR_MAP = {
  */
 function safe_getenv(io, key) {
 	let val = io.getenv(key);
-	if (val && length(val) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE", { key: key });
+	if (val && length(val) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE", { http_status: 431, key: key });
 	return Result.ok(val);
 }
 
@@ -64,10 +64,10 @@ function safe_getenv(io, key) {
 export function parse_params(str) {
 	let params = {};
 	if (!str || type(str) != "string") return Result.ok(params);
-	if (length(str) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE");
+	if (length(str) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE", { http_status: 431 });
 
 	let pairs = split(str, "&");
-	if (length(pairs) > MAX_PARAM_COUNT) return Result.err("INPUT_TOO_LARGE");
+	if (length(pairs) > MAX_PARAM_COUNT) return Result.err("INPUT_TOO_LARGE", { http_status: 431 });
 
 	for (let pair in pairs) {
 		let parts = split(pair, "=", 2);
@@ -88,10 +88,10 @@ export function parse_params(str) {
 export function parse_cookies(str) {
 	let cookies = {};
 	if (!str || type(str) != "string") return Result.ok(cookies);
-	if (length(str) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE");
+	if (length(str) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE", { http_status: 431 });
 
 	let pairs = split(str, /;[ ]*/);
-	if (length(pairs) > MAX_PARAM_COUNT) return Result.err("INPUT_TOO_LARGE");
+	if (length(pairs) > MAX_PARAM_COUNT) return Result.err("INPUT_TOO_LARGE", { http_status: 431 });
 
 	for (let pair in pairs) {
 		let trimmed = trim(pair);
@@ -212,16 +212,11 @@ export function render(io, res) {
  */
 export function render_error(io, code, status) {
 	let user_msg = ERROR_MAP[code] || "An unexpected authentication error occurred.";
-	let http_status = status;
-
-	if (code == "INPUT_TOO_LARGE" && !http_status) {
-		http_status = 431;
-	}
 	
-	io.log("error", `[${http_status || 500}] ${code}`);
+	io.log("error", `[${status || 500}] ${code}`);
 
 	_out(io, {
-		"Status": HTTP_STATUS_MESSAGES[http_status || 500] || "500 Internal Server Error",
+		"Status": HTTP_STATUS_MESSAGES[status || 500] || "500 Internal Server Error",
 		"Content-Type": "text/plain"
 	}, `Error: ${user_msg}\n`);
 };

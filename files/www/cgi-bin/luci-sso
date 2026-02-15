@@ -17,7 +17,8 @@ try {
 	const config = res_c.data;
 	const res_req = web_mod.request(io);
 	if (!res_req.ok) {
-		web_mod.render_error(io, res_req.error, (res_req.error == "INPUT_TOO_LARGE") ? 431 : 400);
+		let status = (type(res_req.details) == "object") ? res_req.details.http_status : 400;
+		web_mod.render_error(io, res_req.error, status);
 		exit(0);
 	}
 

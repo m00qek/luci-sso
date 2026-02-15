@@ -85,11 +85,12 @@ test('web: security - parse_params rejects too many parameters', () => {
 	
 	assert(!res.ok, "Should fail on too many parameters");
 	assert_eq(res.error, "INPUT_TOO_LARGE");
+	assert_eq(res.details.http_status, 431);
 });
 
-test('web: security - render_error emits 431 for INPUT_TOO_LARGE', () => {
+test('web: security - render_error emits 431 when requested', () => {
 	mock.create().spy((io) => {
-		web.render_error(io, "INPUT_TOO_LARGE");
+		web.render_error(io, "INPUT_TOO_LARGE", 431);
 		let out = io.__state__.stdout_buf;
 		assert(index(out, "Status: 431 Request Header Fields Too Large") >= 0, "Should emit 431 status");
 		assert(index(out, "too much data") >= 0, "Should contain user-friendly error message");
