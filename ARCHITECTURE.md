@@ -70,6 +70,14 @@ The system MUST enforce an exclusively HTTPS-based OIDC flow to ensure transport
 *   **Enforcement:** The `issuer_url` MUST use the `https://` scheme.
 *   **Normalization:** All issuer URL comparisons MUST use normalized forms (lowercase scheme/host, no trailing slashes) to ensure interoperability across various IdP implementations.
 
+### HTTP Security Headers
+To prevent information leakage and client-side attacks, the system MUST enforce the following headers on all responses:
+*   **`Content-Security-Policy`**: `default-src 'none'; ...` to prevent XSS.
+*   **`X-Content-Type-Options`**: `nosniff` to prevent MIME confusion.
+*   **`X-Frame-Options`**: `DENY` to prevent Clickjacking.
+*   **`Cache-Control`**: `no-store` to prevent caching of sensitive auth artifacts (Code, ID Token) by proxies or browsers.
+*   **`Referrer-Policy`**: `no-referrer` to prevent leaking the Authorization Code or State via the `Referer` header to external sites.
+
 ### Back-channel (Router ↔ IdP)
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS.
 *   **Entropy Validation:** All cryptographic parameters (Secret Key, Nonce, State, CSRF tokens) MUST be sourced from a CSPRNG and explicitly validated for length and type. Any generation failure MUST result in a system halt (fail-closed) to prevent weak-key or CSRF vulnerabilities.

@@ -188,6 +188,8 @@ export function render(io, res) {
 	headers["Content-Security-Policy"] = "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; frame-ancestors 'none';";
 	headers["X-Content-Type-Options"] = "nosniff";
 	headers["X-Frame-Options"] = "DENY";
+	headers["Cache-Control"] = "no-store";
+	headers["Referrer-Policy"] = "no-referrer";
 
 	headers["Status"] = HTTP_STATUS_MESSAGES["" + res.status] || HTTP_STATUS_MESSAGES["200"];
 

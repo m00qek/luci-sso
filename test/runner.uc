@@ -78,7 +78,8 @@ const logic_files = [
 	"unit.logout_security_reproduction_test",
 	"unit.fuzz_logic_test",
 	"unit.https_enforcement_test",
-	"unit.dos_security_test"
+	"unit.dos_security_test",
+	"unit.web_security_headers_reproduction_test"
 ];
 
 for (let mod in logic_files) {
