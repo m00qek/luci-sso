@@ -16,7 +16,7 @@ test('session: security - verify_session truthiness bypass (Audit B1)', () => {
 		// Before fix: 'if (0 && ...)' skips check, returns ok: true
 		// After fix: '0 < now - tol' is true, returns ok: false, error: SESSION_EXPIRED
 		let payload_exp0 = { exp: 0, iat: now - 10, sub: "user" };
-		let token_exp0 = crypto.sign_jws(payload_exp0, key);
+		let token_exp0 = crypto.sign_jws(payload_exp0, key).data;
 		
 		let res_exp0 = session.verify(io, token_exp0, tolerance);
 		assert(!res_exp0.ok, "Session with exp=0 MUST be rejected");
@@ -26,14 +26,14 @@ test('session: security - verify_session truthiness bypass (Audit B1)', () => {
 		// Before fix: 'if (null && ...)' skips check, returns ok: true
 		// After fix: 'null == null' is true, returns ok: false, error: INVALID_SESSION
 		let payload_no_exp = { iat: now - 10, sub: "user" };
-		let token_no_exp = crypto.sign_jws(payload_no_exp, key);
+		let token_no_exp = crypto.sign_jws(payload_no_exp, key).data;
 		let res_no_exp = session.verify(io, token_no_exp, tolerance);
 		assert(!res_no_exp.ok, "Session without exp MUST be rejected");
 		assert_eq(res_no_exp.error, "INVALID_SESSION");
 
 		// 3. missing iat
 		let payload_no_iat = { exp: now + 3600, sub: "user" };
-		let token_no_iat = crypto.sign_jws(payload_no_iat, key);
+		let token_no_iat = crypto.sign_jws(payload_no_iat, key).data;
 		let res_no_iat = session.verify(io, token_no_iat, tolerance);
 		assert(!res_no_iat.ok, "Session without iat MUST be rejected");
 		assert_eq(res_no_iat.error, "INVALID_SESSION");

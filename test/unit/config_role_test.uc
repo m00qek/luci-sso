@@ -31,8 +31,10 @@ test('config: role - successful load and mapping', () => {
 	};
 
 	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
-		assert(config, "Should return configuration object");
+		let config_res = config_loader.load(io);
+		assert(config_res.ok, "Should load configuration");
+		let config = config_res.data;
+
 		assert_eq(length(config.roles), 2, "Should have 2 roles");
 		
 		assert_eq(config.roles[0].emails[0], "admin@test.com");
@@ -54,7 +56,7 @@ test('config: role - find_roles_for_user merges permissions', () => {
 	};
 
 	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
+		let config = config_loader.load(io).data;
 		let perms = config_loader.find_roles_for_user(config, { email: "user@test.com" });
 		
 		assert_eq(length(perms.read), 3, "Should have 3 unique read perms (r1, shared, r2)");
@@ -77,7 +79,7 @@ test('config: role - first matched role name wins', () => {
 	};
 
 	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
+		let config = config_loader.load(io).data;
 		let perms = config_loader.find_roles_for_user(config, { email: "user@test.com" });
 		
 		assert_eq(perms.role_name, "r_operator", "Should use the first matched role name");
@@ -94,7 +96,7 @@ test('config: role - wildcard expansion check', () => {
 	};
 
 	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
+		let config = config_loader.load(io).data;
 		let perms = config_loader.find_roles_for_user(config, { email: "admin@test.com" });
 		
 		assert_eq(perms.read[0], "*");
@@ -112,7 +114,7 @@ test('config: role - deny user with no roles', () => {
 	};
 
 	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
+		let config = config_loader.load(io).data;
 		let perms = config_loader.find_roles_for_user(config, { email: "stranger@test.com" });
 		
 		assert_eq(length(perms.read), 0);

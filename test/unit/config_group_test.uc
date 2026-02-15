@@ -31,7 +31,7 @@ test('config: role - group mapping support', () => {
 	};
 
 	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
+		let config = config_loader.load(io).data;
 		
 		// Test developer match
 		let perms_dev = config_loader.find_roles_for_user(config, { groups: ["developers", "everyone"] });
@@ -59,7 +59,7 @@ test('config: role - email OR group match', () => {
 	};
 
 	mocked.with_uci(mock_uci, (io) => {
-		let config = config_loader.load(io);
+		let config = config_loader.load(io).data;
 		
 		// Match by email
 		let perms_email = config_loader.find_roles_for_user(config, { email: "admin@test.com", groups: ["something-else"] });

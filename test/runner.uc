@@ -19,6 +19,7 @@ const backend_files = [
 	"unit.native_compliance_test",
 	"unit.native_torture_test",
 	"unit.native_hardening_test",
+	"unit.native_jwk_test",
 	"unit.native_weak_rsa_test",
 	"unit.native_compliance_test_extra",
 	"unit.native_memory_safety_test"
@@ -35,7 +36,8 @@ const plumbing_files = [
 	"unit.crypto_plumbing_test",
 	"unit.crypto_constant_time_test",
 	"unit.encoding_security_test",
-	"unit.encoding_url_test"
+	"unit.encoding_url_test",
+	"unit.encoding_url_normalization_test"
 ];
 
 for (let mod in plumbing_files) {
@@ -54,17 +56,24 @@ const logic_files = [
 	"unit.handshake_rotation_test",
 	"unit.handshake_dos_reproduction_test",
 	"unit.handshake_warning_test",
+	"unit.handshake_split_horizon_test",
+	"unit.handshake_userinfo_test",
 	"unit.session_logic_test",
 	"unit.session_race_test",
 	"unit.session_write_fail_test",
+	"unit.session_expiry_security_test",
+	"unit.session_security_reproduction_test",
 	"unit.ubus_logic_test",
 	"unit.config_logic_test",
+	"unit.config_group_test",
+	"unit.config_role_test",
 	"unit.config_case_insensitive_test",
 	"unit.config_scope_test",
 	"unit.web_logic_test",
 	"unit.web_status_coercion_test",
 	"unit.security_logic_test",
 	"unit.security_logic_test_extra",
+	"unit.logout_csrf_test",
 	"unit.logout_security_test",
 	"unit.logout_security_reproduction_test",
 	"unit.fuzz_logic_test",
@@ -92,3 +101,33 @@ run_all("Integration Tests (Tier 3)");
 clear_tests();
 require("meta.mock_test");
 run_all("Meta Tests (Tier 4)");
+
+// --- Integrity Check: Orphaned Tests ---
+const UNIT_DIR = "/usr/share/luci-sso/test/unit";
+let all_files = fs.lsdir(UNIT_DIR) || [];
+let registered = {};
+
+// Register all known tests
+for (let f in backend_files) registered[f] = true;
+for (let f in plumbing_files) registered[f] = true;
+for (let f in logic_files) registered[f] = true;
+
+let orphans = [];
+for (let f in all_files) {
+    // Only treat files ending in '_test.uc' as tests
+    if (match(f, /_test\.uc$/)) {
+        let mod_name = "unit." + substr(f, 0, length(f) - 3);
+        if (!registered[mod_name]) {
+            push(orphans, f);
+        }
+    }
+}
+
+if (length(orphans) > 0) {
+    print(`\n\u001b[1m\u001b[31m🚨 ORPHANED TESTS DETECTED:\u001b[0m\n`);
+    for (let o in orphans) {
+        print(`   - ${o} (Not in runner.uc)\n`);
+    }
+    print(`\n\u001b[31mRefusing to complete. All tests MUST be registered in test/runner.uc\u001b[0m\n`);
+    exit(1);
+}
