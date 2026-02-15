@@ -826,7 +826,7 @@ log("ID token present: " + (id_token ? "yes" : "no"));
 
 ---
 
-### 6. Algorithm Whitelisting
+### 7. Algorithm Whitelisting
 
 The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be implemented or accepted.
 

@@ -59,14 +59,18 @@ export function get_auth_url(io, config, discovery_doc, params) {
 		code_challenge_method: "S256"
 	};
 
-	let url = discovery_doc.authorization_endpoint;
+	let endpoint = discovery_doc.authorization_endpoint;
+	let parts = split(endpoint, "#", 2);
+	let url = parts[0];
+	let fragment = (length(parts) > 1) ? "#" + parts[1] : "";
+
 	let sep = (index(url, '?') == -1) ? '?' : '&';
 	for (let k, v in query) {
 		if (v == null) continue;
 		url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
 		sep = '&';
 	}
-	return Result.ok(url);
+	return Result.ok(url + fragment);
 };
 
 /**

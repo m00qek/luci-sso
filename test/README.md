@@ -40,16 +40,17 @@ The project includes specialized security tests beyond basic coverage:
 - **Permission Deduplication**: Verifies that merging multiple roles results in a unique set of ACL grants.
 - **Dynamic Grant Elevation**: Verifies that administrative roles triggers the dynamic scan of `/usr/share/rpcd/acl.d/` for full UI visibility.
 - **Authorization Parameter Validation**: Verifies mandatory presence and strength of `state`, `nonce`, and `code_challenge` during URL generation.
-- **Secret Key Bootstrap Resilience**: Verifies that the system correctly retries and recovers from race conditions during first-boot key generation.
+- **Secret Key Bootstrap Resilience**: Verifies that the system correctly retries and recovers from race conditions during first-boot key generation, and fails safely if the **write operation fails** (e.g. disk full).
 - **CSRF Entropy Validation**: Verifies that session creation fails safely if the CSPRNG fails to produce entropy for the CSRF token.
 - **PII Redaction (Logs)**: Verifies that raw emails or names NEVER leak into `io.log` during session operations.
 - **at_hash Torture**: Verifies byte-safe calculation of token hashes using binary-sensitive sequences (e.g., `0xC2`) to prevent character boundary errors.
 - **Fail-Safe Consumption**: Verifies that access tokens are consumed in the replay registry even if ID token verification fails.
 - **Algorithm Confusion**: Verifies that symmetric `HS256` tokens are rejected in production mode.
 - **DoS Protection (Memory)**: Verifies that HTTP responses exceeding **256 KB** are aborted to prevent memory exhaustion.
-- **Native Hardening**: Verifies that the C native bridge rejects insecure RSA exponents (even or < 3) and maintains persistent DRBG state.
+- **Native Hardening**: Verifies that the C native bridge rejects insecure RSA exponents (even or < 3), enforces a **minimum 2048-bit key size** for RS256, and maintains persistent DRBG state.
 - **WolfSSL Memory Safety**: Verifies that native conversion functions (e.g., `jwk_ec_p256_to_pem`) return `null` and do NOT crash on malformed inputs, preventing use-after-free vulnerabilities.
-- **JWKS Key Rotation**: Verifies the automatic recovery path and forced cache refresh when a new key ID is encountered.
+- **Logout Session Validation**: Verifies that OIDC logout redirects are ONLY performed for valid local sessions to prevent CSRF bypass and open redirects on expired cookies.
+- **JWKS Key Rotation**: Verifies the automatic recovery path and forced cache refresh when a new key ID is encountered, and ensures **DoS protection** by refusing to refresh on missing Key IDs.
 - **Constant-Time Integrity**: Verifies the `constant_time_eq` implementation against multi-value type confusion and long strings.
 
 ---

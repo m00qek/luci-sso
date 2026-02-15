@@ -189,7 +189,7 @@ export function render(io, res) {
 	headers["X-Content-Type-Options"] = "nosniff";
 	headers["X-Frame-Options"] = "DENY";
 
-	headers["Status"] = HTTP_STATUS_MESSAGES[res.status] || HTTP_STATUS_MESSAGES[200];
+	headers["Status"] = HTTP_STATUS_MESSAGES["" + res.status] || HTTP_STATUS_MESSAGES["200"];
 
 	if (res.status == 302) {
 		headers["Content-Type"] = "text/html";
@@ -216,7 +216,7 @@ export function render_error(io, code, status) {
 	io.log("error", `[${status || 500}] ${code}`);
 
 	_out(io, {
-		"Status": HTTP_STATUS_MESSAGES[status || 500] || "500 Internal Server Error",
+		"Status": HTTP_STATUS_MESSAGES["" + (status || 500)] || "500 Internal Server Error",
 		"Content-Type": "text/plain"
 	}, `Error: ${user_msg}\n`);
 };
