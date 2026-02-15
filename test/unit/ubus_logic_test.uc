@@ -86,7 +86,8 @@ test('ubus: logic - register_token atomicity and full hash (B2)', () => {
 		let token = "my-secret-token-123";
 		
 		// 1. First registration should succeed
-		assert(ubus.register_token(io, token), "First token registration must succeed");
+		let res1 = ubus.register_token(io, token);
+		assert(res1.ok, "First token registration must succeed");
 		
 		// 2. Verify it created a 64-character hex ID entry
 		let files = io.lsdir("/var/run/luci-sso/tokens");
@@ -94,10 +95,13 @@ test('ubus: logic - register_token atomicity and full hash (B2)', () => {
 		assert_eq(length(files[0]), 64, "Token ID must be a full 64-character SHA-256 hex digest");
 		
 		// 3. Second registration of SAME token must fail (replay)
-		assert(!ubus.register_token(io, token), "Replayed token registration must fail");
+		let res2 = ubus.register_token(io, token);
+		assert(!res2.ok, "Replayed token registration must fail");
+		assert_eq(res2.error, "TOKEN_REPLAYED");
 		
 		// 4. Registration of DIFFERENT token should succeed
-		assert(ubus.register_token(io, token + "new"), "Different token must succeed");
+		let res3 = ubus.register_token(io, token + "new");
+		assert(res3.ok, "Different token must succeed");
 		assert_eq(length(io.lsdir("/var/run/luci-sso/tokens")), 2, "Should have two entries now");
 	});
 });

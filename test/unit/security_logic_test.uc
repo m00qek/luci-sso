@@ -33,7 +33,9 @@ test('security: JWT - reject stripped signature', () => {
 
 test('security: JWT - payload integrity', () => {
 	let secret = "secret";
-	let good_token = crypto.sign_jws({foo: "bar"}, secret);
+	let res_s = crypto.sign_jws({foo: "bar"}, secret);
+	assert(res_s.ok);
+	let good_token = res_s.data;
 	let parts = split(good_token, ".");
     
     // Tamper with payload (malformed JSON)

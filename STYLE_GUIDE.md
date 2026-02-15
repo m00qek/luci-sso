@@ -228,18 +228,19 @@ export function verify_session(io, token) {
 ### Exception vs. Result Object Decision Tree
 
 ```
-Is the failure a programming error (wrong types, null pointer)?
-├─ YES → Use die() (Fail Fast)
-└─ NO  → Is it a common logic branch (e.g. Expired)?
-   ├─ YES → Return Result Object { ok: false, error: "CODE" }
-   └─ NO  → Throw/Die with "CODE: message"
+Is the failure a programming error (wrong types, null pointer, invalid internal state)?
+├─ YES → Use die() (Fail Fast - CONTRACT_VIOLATION)
+└─ NO  → Is it a runtime failure (Expired token, network error, config error)?
+   └─ ALWAYS → Return Result Object { ok: false, error: "CODE", [details: "..."] }
 ```
+
+**Rationale:** In a CGI environment, `die()` causes a process crash which results in a generic 500 error. To provide a better user experience and robust error reporting, all runtime failures MUST return a Result Object so the caller (e.g., the web router) can render a user-friendly error page.
 
 ---
 
 ### Error Code Format
 
-**Structure:** `CATEGORY_SPECIFIC_REASON`
+**Structure:** `CATEGORY_SPECIFIC_REASON` (MUST be SCREAMING_SNAKE_CASE)
 
 **Categories:**
 - `INVALID_*` - Bad input (caller error)

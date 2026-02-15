@@ -146,8 +146,9 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 
 	// MANDATORY: Register token AFTER verification (DoS Prevention)
 	let access_token = tokens.access_token;
-	if (!ubus.register_token(io, access_token)) {
-		io.log("error", `Access token replay detected [session_id: ${session_id}]`);
+	let reg_res = ubus.register_token(io, access_token);
+	if (!reg_res.ok) {
+		io.log("error", `Access token registration failed [session_id: ${session_id}]: ${reg_res.error}`);
 		return { ok: false, error: "AUTH_FAILED", status: 403 };
 	}
 

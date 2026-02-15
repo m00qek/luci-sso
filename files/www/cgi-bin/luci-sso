@@ -7,7 +7,13 @@ import * as router from 'luci_sso.router';
 const io = io_mod.create();
 
 try {
-	const config = config_loader.load(io);
+	const res_c = config_loader.load(io);
+	if (!res_c.ok) {
+		web_mod.render_error(io, res_c.error, 500);
+		exit(0);
+	}
+
+	const config = res_c.data;
 	const res = router.handle(io, config, web_mod.request(io));
 	if (res && res.is_error) {
 		web_mod.render_error(io, res.code, res.status);

@@ -178,30 +178,31 @@ export function reap_stale_tokens(io) {
  * 
  * @param {object} io - I/O provider
  * @param {string} access_token - Token to register
- * @returns {boolean} - True if registration succeeded (first use), false if replayed.
+ * @returns {object} - Result Object {ok, error}
  */
 export function register_token(io, access_token) {
 	try {
-		if (!access_token || type(access_token) != "string") return false;
+		if (!access_token || type(access_token) != "string") return { ok: false, error: "INVALID_TOKEN" };
 
 		// 1. Ensure registry exists
 		try { io.mkdir(TOKEN_REGISTRY_DIR, 0700); } catch(e) {}
 
 		// 2. Generate a unique cryptographic ID for the token (64-char hex digest)
-		let token_id = crypto.sha256_hex(access_token);
-		if (!token_id) return false;
+		let res_h = crypto.sha256_hex(access_token);
+		if (!res_h.ok) return res_h;
 		
+		let token_id = res_h.data;
 		let lock_path = `${TOKEN_REGISTRY_DIR}/${token_id}`;
 
 		// 3. ATOMIC: Try to create the directory. This is an atomic "test-and-set" in POSIX.
 		if (io.mkdir(lock_path, 0700)) {
-			return true;
+			return { ok: true };
 		}
+		return { ok: false, error: "TOKEN_REPLAYED" };
 	} catch (e) {
 		io.log("error", `Exception in register_token: ${e}`);
+		return { ok: false, error: "SYSTEM_ERROR", details: e };
 	}
-
-	return false;
 };
 
 /**
@@ -209,12 +210,15 @@ export function register_token(io, access_token) {
  * 
  * @param {object} io - I/O provider
  * @param {string} sid - UBUS session ID
- * @returns {boolean} - True if call succeeded
+ * @returns {object} - Result Object {ok, error}
  */
 export function destroy_session(io, sid) {
-	if (type(io.ubus_call) != "function") return false;
-	if (!sid || type(sid) != "string") return false;
+	if (type(io.ubus_call) != "function") return { ok: false, error: "UBUS_UNAVAILABLE" };
+	if (!sid || type(sid) != "string") return { ok: false, error: "INVALID_SID" };
 
-	io.ubus_call("session", "destroy", { ubus_rpc_session: sid });
-	return true;
+	let res = io.ubus_call("session", "destroy", { ubus_rpc_session: sid });
+	if (res && res.error) {
+		return { ok: false, error: "UBUS_ERROR", details: res.error };
+	}
+	return { ok: true };
 };

@@ -22,8 +22,9 @@ test('config: scope - load custom scope from UCI', () => {
     mock.create()
         .with_uci(mock_uci)
         .with_env({}, (io) => {
-            let cfg = config.load(io);
-            assert_eq(cfg.scope, "openid email custom_scope", "Should correctly load custom scope from UCI");
+            let res = config.load(io);
+            assert(res.ok);
+            assert_eq(res.data.scope, "openid email custom_scope", "Should correctly load custom scope from UCI");
         });
 });
 
@@ -46,8 +47,9 @@ test('config: scope - handle missing scope', () => {
     mock.create()
         .with_uci(mock_uci)
         .with_env({}, (io) => {
-            let cfg = config.load(io);
-            // In the current implementation, cfg.scope will be undefined
-            assert(cfg.scope === undefined, "Scope should be undefined if not in UCI");
+            let res = config.load(io);
+            assert(res.ok);
+            // In the current implementation, res.data.scope will be undefined
+            assert(res.data.scope === undefined, "Scope should be undefined if not in UCI");
         });
 });

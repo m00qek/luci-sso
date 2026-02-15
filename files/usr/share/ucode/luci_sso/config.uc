@@ -17,11 +17,11 @@ export function is_enabled(io) {
  * Loads the OIDC and Role configuration from UCI.
  * 
  * @param {object} io - I/O provider
- * @returns {object} - The validated configuration object
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function load(io) {
 	if (!is_enabled(io)) {
-		die("DISABLED");
+		return { ok: false, error: "DISABLED" };
 	}
 
 	let cursor = io.uci_cursor();
@@ -29,34 +29,34 @@ export function load(io) {
 	// 1. Load OIDC Provider Settings
 	let oidc_cfg = cursor.get_all("luci-sso", "default");
 	if (!oidc_cfg || oidc_cfg[".type"] !== "oidc") {
-		die("CONFIG_ERROR: OIDC section 'default' missing in /etc/config/luci-sso");
+		return { ok: false, error: "CONFIG_ERROR", details: "OIDC section 'default' missing in /etc/config/luci-sso" };
 	}
 
 	// 1.1 HTTPS Enforcement
 	let issuer = oidc_cfg.issuer_url;
 	if (!issuer) {
-		die("CONFIG_ERROR: issuer_url is mandatory");
+		return { ok: false, error: "CONFIG_ERROR", details: "issuer_url is mandatory" };
 	}
 
 	if (substr(issuer, 0, 8) !== "https://") {
-		die("CONFIG_ERROR: issuer_url must use HTTPS");
+		return { ok: false, error: "CONFIG_ERROR", details: "issuer_url must use HTTPS" };
 	}
 
 	if (!oidc_cfg.client_id || !oidc_cfg.client_secret) {
-		die("CONFIG_ERROR: client_id and client_secret are mandatory");
+		return { ok: false, error: "CONFIG_ERROR", details: "client_id and client_secret are mandatory" };
 	}
 
 	if (!oidc_cfg.redirect_uri || substr(oidc_cfg.redirect_uri, 0, 8) !== "https://") {
-		die("CONFIG_ERROR: redirect_uri is mandatory and must use HTTPS");
+		return { ok: false, error: "CONFIG_ERROR", details: "redirect_uri is mandatory and must use HTTPS" };
 	}
 
 	if (oidc_cfg.clock_tolerance == null || oidc_cfg.clock_tolerance == "") {
-		die("CONFIG_ERROR: clock_tolerance option is mandatory");
+		return { ok: false, error: "CONFIG_ERROR", details: "clock_tolerance option is mandatory" };
 	}
 
 	let clock_tolerance = int(oidc_cfg.clock_tolerance);
 	if (type(clock_tolerance) != "int") {
-		die("CONFIG_ERROR: clock_tolerance must be an integer");
+		return { ok: false, error: "CONFIG_ERROR", details: "clock_tolerance must be an integer" };
 	}
 
 	// 2. Load and Validate Roles
@@ -82,18 +82,21 @@ export function load(io) {
 	});
 
 	if (length(roles) == 0) {
-		die("CONFIG_ERROR: No valid roles found in /etc/config/luci-sso");
+		return { ok: false, error: "CONFIG_ERROR", details: "No valid roles found in /etc/config/luci-sso" };
 	}
 
 	return {
-		issuer_url: oidc_cfg.issuer_url,
-		internal_issuer_url: oidc_cfg.internal_issuer_url || oidc_cfg.issuer_url,
-		client_id: oidc_cfg.client_id,
-		client_secret: oidc_cfg.client_secret,
-		redirect_uri: oidc_cfg.redirect_uri,
-		scope: oidc_cfg.scope,
-		clock_tolerance: clock_tolerance,
-		roles: roles
+		ok: true,
+		data: {
+			issuer_url: oidc_cfg.issuer_url,
+			internal_issuer_url: oidc_cfg.internal_issuer_url || oidc_cfg.issuer_url,
+			client_id: oidc_cfg.client_id,
+			client_secret: oidc_cfg.client_secret,
+			redirect_uri: oidc_cfg.redirect_uri,
+			scope: oidc_cfg.scope,
+			clock_tolerance: clock_tolerance,
+			roles: roles
+		}
 	};
 };
 

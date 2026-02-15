@@ -34,7 +34,7 @@ C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfs
     *   The native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
     *   Public key parsing correctly distinguishes between PEM (requiring NUL termination) and DER (binary) formats to prevent out-of-bounds reads.
     *   HTTP response bodies are limited to **256 KB** at the ucode I/O layer to prevent memory exhaustion.
-*   **Constant-Time Comparisons:** All sensitive comparisons (e.g., state, nonce, signatures, at_hash) MUST use `constant_time_eq`. This function is designed to avoid early returns on length or content mismatch to mitigate timing side-channels.
+*   **Constant-Time Comparisons:** All sensitive comparisons (e.g., state, nonce, signatures, at_hash) MUST use `constant_time_eq`. This function is designed to avoid early returns on length or content mismatch to mitigate timing side-channels. The resulting boolean MUST be propagated via Result Objects to allow the caller to handle failures (e.g., by rendering an error page) without process-level crashes.
 
 ---
 

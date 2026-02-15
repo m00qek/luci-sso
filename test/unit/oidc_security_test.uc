@@ -22,7 +22,8 @@ test('oidc: security - reject HS256 algorithm confusion', () => {
 		exp: 1000,
 		at_hash: "fake_hash"
 	};
-	let token = crypto.sign_jws(payload, "secret-key"); // Maliciously signed with symmetric HS256
+	let res_s = crypto.sign_jws(payload, "secret-key"); // Maliciously signed with symmetric HS256
+	let token = res_s.data;
 
 	let tokens = { id_token: token, access_token: "fake" };
 	let keys = [{ kty: "RSA", kid: "key1", n: "...", e: "..." }]; // IdP only advertises RSA

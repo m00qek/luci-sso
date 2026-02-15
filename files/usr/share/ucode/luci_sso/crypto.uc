@@ -60,7 +60,7 @@ export const b64url_decode = encoding.b64url_decode;
  * 
  * @param {object} payload - Data to sign
  * @param {string} secret - Binary secret key
- * @returns {string} - Compact JWS string
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function sign_jws(payload, secret) {
 	if (type(payload) != "object") die("CONTRACT_VIOLATION: sign_jws expects object payload");
@@ -72,9 +72,9 @@ export function sign_jws(payload, secret) {
 	let signed_data = b64_header + "." + b64_payload;
 	
 	let signature = native.hmac_sha256(secret, signed_data);
-	if (!signature) die("CRYPTO_ERROR: hmac_sha256 failed");
+	if (!signature) return { ok: false, error: "CRYPTO_ERROR", details: "hmac_sha256 failed" };
 
-	return signed_data + "." + b64url_encode(signature);
+	return { ok: true, data: signed_data + "." + b64url_encode(signature) };
 };
 
 /**
@@ -267,33 +267,33 @@ export function sha256(str) {
  * Calculates SHA256 hash and returns it as a 64-character hex digest.
  * 
  * @param {string} str - Data to hash
- * @returns {string} - 64-character hex digest
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function sha256_hex(str) {
 	let hash_bin = sha256(str);
-	if (!hash_bin) return null;
+	if (!hash_bin) return { ok: false, error: "CRYPTO_ERROR" };
 
 	let hex = "";
 	for (let i = 0; i < length(hash_bin); i++) {
 		hex += sprintf("%02x", ord(hash_bin, i));
 	}
-	return hex;
+	return { ok: true, data: hex };
 };
 
 /**
  * Generates a PKCE Code Verifier.
  * 
  * @param {number} [len=43] - Length of verifier
- * @returns {string} - Base64URL encoded verifier
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function pkce_generate_verifier(len) {
 	let byte_len = len || 43;
 	if (byte_len < 32 || byte_len > 96) die("CONTRACT_VIOLATION: PKCE verifier must be 32-96 bytes");
 	
 	let res = random(byte_len);
-	if (!res.ok) return null;
+	if (!res.ok) return res;
 
-	return b64url_encode(res.data);
+	return { ok: true, data: b64url_encode(res.data) };
 };
 
 /**
@@ -311,14 +311,15 @@ export function pkce_calculate_challenge(verifier) {
  * Generates a PKCE Verifier and Challenge pair.
  * 
  * @param {number} [len] - Optional verifier length
- * @returns {object} - {verifier, challenge}
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function pkce_pair(len) {
-	let verifier = pkce_generate_verifier(len);
-	if (!verifier) return null;
+	let res = pkce_generate_verifier(len);
+	if (!res.ok) return res;
 
+	let verifier = res.data;
 	let challenge = pkce_calculate_challenge(verifier);
-	return { verifier, challenge };
+	return { ok: true, data: { verifier, challenge } };
 };
 
 /**

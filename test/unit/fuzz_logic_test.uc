@@ -36,7 +36,9 @@ test('fuzz: logic - large input stability', () => {
 
 test('fuzz: logic - bit flipping resistance', () => {
 	let secret = "secret";
-	let token = crypto.sign_jws({foo: "bar"}, secret);
+	let res_s = crypto.sign_jws({foo: "bar"}, secret);
+	assert(res_s.ok);
+	let token = res_s.data;
 	let parts = split(token, ".");
 	let sig = crypto.b64url_decode(parts[2]);
 	

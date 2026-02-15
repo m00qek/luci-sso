@@ -24,8 +24,9 @@ test('config: logic - successful load', () => {
         };
 
         mocked.with_uci(mock_uci, (io) => {
-                let config = config_loader.load(io);
-                assert(config, "Should return configuration object");
+                let res = config_loader.load(io);
+                assert(res.ok, "Should return successful result");
+                let config = res.data;
                 assert_eq(config.issuer_url, "https://idp.com");
                 assert_eq(config.clock_tolerance, 300);
                 assert_eq(config.roles[0].name, "r1");
@@ -43,7 +44,9 @@ test('config: logic - normalization (email list vs string)', () => {
         };
 
         mocked.with_uci(mock_uci, (io) => {
-                let config = config_loader.load(io);
+                let res = config_loader.load(io);
+                assert(res.ok, "Should be ok");
+                let config = res.data;
                 assert_eq(type(config.roles[0].emails), "array", "Single email should be wrapped in array");
                 assert_eq(length(config.roles[1].emails), 2, "Multiple emails should remain an array");
         });
@@ -60,7 +63,8 @@ test('config: logic - HTTPS enforcement', () => {
                         }
                 };
                 return mocked.with_uci(mock_uci, (io) => {
-                        try { config_loader.load(io); return true; } catch (e) { return false; }
+                        let res = config_loader.load(io);
+                        return res.ok;
                 });
         };
 
@@ -78,12 +82,10 @@ test('config: logic - reject empty or invalid roles', () => {
                 }
         };
         mocked.with_uci(mock_uci_1, (io) => {
-                try {
-                        config_loader.load(io);
-                        assert(false, "Should have failed due to zero roles");
-                } catch (e) {
-                        assert(index(e, "CONFIG_ERROR: No valid roles") != -1);
-                }
+                let res = config_loader.load(io);
+                assert(!res.ok, "Should have failed due to zero roles");
+                assert_eq(res.error, "CONFIG_ERROR");
+                assert(index(res.details, "No valid roles") != -1);
         });
 });
 test('config: logic - handle disabled state', () => {
@@ -94,14 +96,18 @@ test('config: logic - handle disabled state', () => {
 		}
 	};
 	mocked.with_uci(mock_uci, (io) => {
-		assert_throws(() => config_loader.load(io));
+		let res = config_loader.load(io);
+                assert(!res.ok);
+                assert_eq(res.error, "DISABLED");
 	});
 });
 
 test('config: logic - handle missing config', () => {
 	let mocked = mock.create();
 	mocked.with_uci({}, (io) => {
-		assert_throws(() => config_loader.load(io));
+		let res = config_loader.load(io);
+                assert(!res.ok);
+                assert_eq(res.error, "DISABLED"); // is_enabled returns false if missing
 	});
 });
 
@@ -142,7 +148,9 @@ test('config: logic - reject missing issuer URL', () => {
 		}
 	};
 	mocked.with_uci(mock_uci, (io) => {
-		assert_throws(() => config_loader.load(io));
+		let res = config_loader.load(io);
+                assert(!res.ok);
+                assert_eq(res.error, "CONFIG_ERROR");
 	});
 });
 
@@ -154,7 +162,9 @@ test('config: logic - reject missing clock tolerance', () => {
 		}
 	};
 	mocked.with_uci(mock_uci, (io) => {
-		assert_throws(() => config_loader.load(io));
+		let res = config_loader.load(io);
+                assert(!res.ok);
+                assert_eq(res.error, "CONFIG_ERROR");
 	});
 });
 
@@ -168,7 +178,9 @@ test('config: logic - reject missing mandatory OIDC fields', () => {
 		}
 	};
 	mocked.with_uci(mock_uci_1, (io) => {
-		assert_throws(() => config_loader.load(io));
+		let res = config_loader.load(io);
+                assert(!res.ok);
+                assert_eq(res.error, "CONFIG_ERROR");
 	});
 
 	// 2. Missing client_secret
@@ -178,7 +190,9 @@ test('config: logic - reject missing mandatory OIDC fields', () => {
 		}
 	};
 	mocked.with_uci(mock_uci_2, (io) => {
-		assert_throws(() => config_loader.load(io));
+		let res = config_loader.load(io);
+                assert(!res.ok);
+                assert_eq(res.error, "CONFIG_ERROR");
 	});
 });
 
@@ -198,6 +212,8 @@ test('config: logic - reject insecure redirect URI', () => {
 		}
 	};
 	mocked.with_uci(mock_uci, (io) => {
-		assert_throws(() => config_loader.load(io));
+		let res = config_loader.load(io);
+                assert(!res.ok);
+                assert_eq(res.error, "CONFIG_ERROR");
 	});
 });

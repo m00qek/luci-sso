@@ -73,12 +73,14 @@ test('crypto: plumbing - token size enforcement', () => {
 });
 
 test('crypto: plumbing - PKCE primitives', () => {
-    let verifier = crypto.pkce_generate_verifier(32);
-    assert(length(verifier) >= 43);
-    let challenge = crypto.pkce_calculate_challenge(verifier);
+    let res_v = crypto.pkce_generate_verifier(32);
+    assert(res_v.ok);
+    assert(length(res_v.data) >= 43);
+    let challenge = crypto.pkce_calculate_challenge(res_v.data);
     assert(challenge);
-    let pair = crypto.pkce_pair(32);
-    assert(pair.verifier && pair.challenge);
+    let res_p = crypto.pkce_pair(32);
+    assert(res_p.ok);
+    assert(res_p.data.verifier && res_p.data.challenge);
 });
 
 test('crypto: plumbing - correlation ID stability (safe_id)', () => {
@@ -123,8 +125,8 @@ test('crypto: torture - JSON depth (complexity limit)', () => {
 test('crypto: torture - buffer transition stability', () => {
     let secret = ""; for(let i=0; i<16384; i++) secret += "A";
     let res = crypto.sign_jws({foo: "bar"}, secret);
-    assert(res, "Plumbing should handle 16KB secrets during signing");
-    let verify = crypto.verify_jws(res, secret);
+    assert(res.ok, "Plumbing should handle 16KB secrets during signing");
+    let verify = crypto.verify_jws(res.data, secret);
     assert(verify.ok, "Plumbing should handle 16KB secrets during verification");
 });
 

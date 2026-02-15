@@ -128,16 +128,17 @@ export function get_secret_key(io) {
 export function create_state(io) {
 	ensure_handshake_dir(io);
 
-	let pkce = crypto.pkce_pair();
+	let res_p = crypto.pkce_pair();
 	let res_s = crypto.random(16);
 	let res_n = crypto.random(16);
 	let res_h = crypto.random(32);
 
-	if (!pkce || !res_s.ok || !res_n.ok || !res_h.ok) {
+	if (!res_p.ok || !res_s.ok || !res_n.ok || !res_h.ok) {
 		io.log("error", "CRITICAL: CSPRNG failure during handshake state generation");
 		return { ok: false, error: "CRYPTO_SYSTEM_FAILURE" };
 	}
 
+	let pkce = res_p.data;
 	let state = crypto.b64url_encode(res_s.data);
 	let nonce = crypto.b64url_encode(res_n.data);
 	let handle = crypto.b64url_encode(res_h.data);
@@ -319,8 +320,7 @@ export function create(io, user_data) {
 		exp: now + SESSION_DURATION
 	};
 	
-	let token = crypto.sign_jws(payload, secret);
-	return token ? { ok: true, data: token } : { ok: false, error: "SIGNING_FAILED" };
+	return crypto.sign_jws(payload, secret);
 };
 
 /**
