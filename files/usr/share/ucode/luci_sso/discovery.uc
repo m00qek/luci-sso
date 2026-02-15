@@ -71,7 +71,7 @@ function _write_cache(io, path, data) {
  * @private
  */
 function _is_https(url) {
-	return (type(url) == "string" && substr(url, 0, 8) == "https://");
+	return (type(url) == "string" && lc(substr(url, 0, 8)) == "https://");
 }
 
 /**
@@ -83,11 +83,12 @@ export function discover(io, issuer, options) {
 	if (!_is_https(issuer)) return Result.err("INSECURE_ISSUER_URL");
 
 	options = options || {};
-	let cache_path = options.cache_path || get_cache_path(issuer, "discovery");
+	let normalized_issuer = encoding.normalize_url(issuer);
+	let cache_path = options.cache_path || get_cache_path(normalized_issuer, "discovery");
 	let ttl = options.ttl || 86400; // 24 hours default (production standard)
 
 	let cached = _read_cache(io, cache_path, ttl);
-	if (cached && cached.issuer == issuer) {
+	if (cached && encoding.normalize_url(cached.issuer) == normalized_issuer) {
 		return Result.ok(cached);
 	}
 
@@ -99,12 +100,12 @@ export function discover(io, issuer, options) {
 	fetch_url += ".well-known/openid-configuration";
 
 	let response = io.http_get(fetch_url, { verify: true });
-	let issuer_id = crypto.safe_id(issuer);
+	let issuer_id = crypto.safe_id(normalized_issuer);
 
 	if (!response || response.error || response.status != 200) {
 		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
 		let stale = _read_cache(io, cache_path, ttl, true);
-		if (stale && stale.issuer == issuer) {
+		if (stale && encoding.normalize_url(stale.issuer) == normalized_issuer) {
 			io.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
 			return Result.ok(stale);
 		}
@@ -171,12 +172,13 @@ export function discover(io, issuer, options) {
 export function fetch_jwks(io, jwks_uri, options) {
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
 
-	if (!_is_https(jwks_uri)) return Result.err("INSECURE_JWKS_URI");
+	let normalized_uri = encoding.normalize_url(jwks_uri);
+	if (!_is_https(normalized_uri)) return Result.err("INSECURE_JWKS_URI");
 
 	options = options || {};
-	let cache_path = options.cache_path || get_cache_path(jwks_uri, "jwks");
+	let cache_path = options.cache_path || get_cache_path(normalized_uri, "jwks");
 	let ttl = options.ttl || 86400; // 24 hours default
-	let uri_id = crypto.safe_id(jwks_uri);
+	let uri_id = crypto.safe_id(normalized_uri);
 
 	if (!options.force) {
 		let cached = _read_cache(io, cache_path, ttl);
