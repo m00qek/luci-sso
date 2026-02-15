@@ -83,7 +83,10 @@ const logic_files = [
 	"unit.session_cleanup_reproduction_test",
 	"unit.config_validation_reproduction_test",
 	"unit.router_enabled_reproduction_test",
-	"unit.discovery_cache_reproduction_test"
+	"unit.discovery_cache_reproduction_test",
+	"unit.discovery_reproduction_test",
+	"unit.encoding_https_test",
+	"unit.handshake_state_consumption_test"
 ];
 
 for (let mod in logic_files) {

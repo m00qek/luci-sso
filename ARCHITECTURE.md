@@ -17,7 +17,7 @@ The project strictly follows the pattern of keeping business logic (OIDC, Sessio
     *   `session.uc`: Handshake and secret key persistence.
     *   `router.uc`: CGI request routing and logout orchestration.
     *   `config.uc`: UCI configuration parsing and validation.
-    *   `web.uc`: HTTP request/cookie parsing. Returns `Result` objects for all parsing operations to ensure explicit error handling for oversized or malformed inputs.
+    *   `web.uc`: HTTP request/cookie parsing. Returns `Result` objects for all parsing operations and response rendering to ensure explicit error handling and consistent API usage.
     *   `secure_http.uc`: HTTPS scheme enforcement.
     *   `jwk.uc`: JWK to PEM conversion.
     *   `ubus.uc`: LuCI session and token registry via ubus.
@@ -34,7 +34,7 @@ C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfs
     *   The native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
     *   Public key parsing correctly distinguishes between PEM (requiring NUL termination) and DER (binary) formats to prevent out-of-bounds reads.
     *   HTTP response bodies are limited to **256 KB** at the ucode I/O layer to prevent memory exhaustion.
-*   **Constant-Time Comparisons:** All sensitive comparisons (e.g., state, nonce, signatures, at_hash) MUST use `constant_time_eq`. This function is designed to avoid early returns on length or content mismatch to mitigate timing side-channels. The resulting boolean MUST be propagated via Result Objects to allow the caller to handle failures (e.g., by rendering an error page) without process-level crashes.
+*   **Constant-Time Comparisons:** All sensitive comparisons (e.g., state, nonce, signatures, at_hash, issuer, audience, and azp claims) MUST use `constant_time_eq`. This function is designed to avoid early returns on length or content mismatch to mitigate timing side-channels. The resulting boolean MUST be propagated via Result Objects to allow the caller to handle failures (e.g., by rendering an error page) without process-level crashes.
 
 ---
 
@@ -69,6 +69,7 @@ The system MUST enforce an exclusively HTTPS-based OIDC flow to ensure transport
 
 ### Front-channel (Browser ↔ IdP)
 *   **Enforcement:** The `issuer_url` MUST use the `https://` scheme.
+*   **Case-Insensitivity:** Protocol checks MUST be case-insensitive (e.g., `HTTPS://` is valid) per RFC 3986 §3.1. All logic MUST utilize the centralized `encoding.is_https()` utility.
 *   **Normalization:** All issuer URL comparisons MUST use normalized forms (lowercase scheme/host, no trailing slashes) to ensure interoperability across various IdP implementations.
 
 ### HTTP Security Headers

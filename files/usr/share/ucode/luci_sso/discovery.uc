@@ -67,20 +67,12 @@ function _write_cache(io, path, data) {
 }
 
 /**
- * Checks if a URL uses HTTPS.
- * @private
- */
-function _is_https(url) {
-	return (type(url) == "string" && lc(substr(url, 0, 8)) == "https://");
-}
-
-/**
  * Fetches and caches OIDC discovery document.
  */
 export function discover(io, issuer, options) {
 	if (type(issuer) != "string") die("CONTRACT_VIOLATION: issuer must be a string");
 
-	if (!_is_https(issuer)) return Result.err("INSECURE_ISSUER_URL");
+	if (!encoding.is_https(issuer)) return Result.err("INSECURE_ISSUER_URL");
 
 	options = options || {};
 	let normalized_issuer = encoding.normalize_url(issuer);
@@ -94,7 +86,7 @@ export function discover(io, issuer, options) {
 
 	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
 	let fetch_url = options.internal_issuer_url || issuer;
-	if (!_is_https(fetch_url)) return Result.err("INSECURE_FETCH_URL");
+	if (!encoding.is_https(fetch_url)) return Result.err("INSECURE_FETCH_URL");
 
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
 	fetch_url += ".well-known/openid-configuration";
@@ -111,7 +103,8 @@ export function discover(io, issuer, options) {
 		}
 
 		if (!response || response.error) {
-			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${response?.error || "no response"}`);
+			let err_msg = (response && response.error) ? response.error : "no response";
+			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${err_msg}`);
 			return Result.err("NETWORK_ERROR");
 		}
 		
@@ -144,19 +137,19 @@ export function discover(io, issuer, options) {
 		if (type(config[field]) != "string" || length(config[field]) == 0) {
 			return Result.err("MISSING_REQUIRED_FIELD", field);
 		}
-		if (!_is_https(config[field])) {
+		if (!encoding.is_https(config[field])) {
 			return Result.err("INSECURE_ENDPOINT", field);
 		}
 	}
 
 	// OPTIONAL: UserInfo endpoint (RFC 6749 / OIDC)
-	if (config.userinfo_endpoint && !_is_https(config.userinfo_endpoint)) {
+	if (config.userinfo_endpoint && !encoding.is_https(config.userinfo_endpoint)) {
 		io.log("warn", `Insecure userinfo_endpoint ignored from [id: ${issuer_id}]`);
 		delete config.userinfo_endpoint;
 	}
 
 	// OPTIONAL: RP-Initiated Logout support (RFC 7522 / OIDC)
-	if (config.end_session_endpoint && !_is_https(config.end_session_endpoint)) {
+	if (config.end_session_endpoint && !encoding.is_https(config.end_session_endpoint)) {
 		io.log("warn", `Insecure end_session_endpoint ignored from [id: ${issuer_id}]`);
 		delete config.end_session_endpoint;
 	}
@@ -173,7 +166,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
 
 	let normalized_uri = encoding.normalize_url(jwks_uri);
-	if (!_is_https(normalized_uri)) return Result.err("INSECURE_JWKS_URI");
+	if (!encoding.is_https(normalized_uri)) return Result.err("INSECURE_JWKS_URI");
 
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(normalized_uri, "jwks");
@@ -198,7 +191,8 @@ export function fetch_jwks(io, jwks_uri, options) {
 		}
 
 		if (!response || response.error) {
-			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${response?.error || "no response"}`);
+			let err_msg = (response && response.error) ? response.error : "no response";
+			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${err_msg}`);
 			return Result.err("NETWORK_ERROR");
 		}
 		

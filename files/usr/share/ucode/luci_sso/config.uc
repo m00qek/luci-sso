@@ -60,6 +60,9 @@ export function load(io) {
 	if (type(clock_tolerance) != "int") {
 		return Result.err("CONFIG_ERROR", "clock_tolerance must be an integer");
 	}
+	if (clock_tolerance < 0 || clock_tolerance > 3600) {
+		return Result.err("CONFIG_ERROR", "clock_tolerance must be between 0 and 3600 seconds");
+	}
 
 	// 2. Load and Validate Roles
 	let roles = [];

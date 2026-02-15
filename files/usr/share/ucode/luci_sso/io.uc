@@ -5,6 +5,7 @@ import * as uci from 'uci';
 import * as ubus from 'ubus';
 import * as log from 'log';
 import * as lucihttp from 'lucihttp';
+import * as encoding from 'luci_sso.encoding';
 import * as secure_http from 'luci_sso.secure_http';
 
 let _ubus_conn = null;
@@ -36,7 +37,7 @@ export function create() {
 
 		http_get: function(url, opts) {
 			// MANDATORY: HTTPS only (Blocker #6)
-			if (substr(url, 0, 8) !== "https://") {
+			if (!encoding.is_https(url)) {
 				this.log("error", `Security violation: Blocked insecure HTTP GET to ${url}`);
 				return { error: "HTTPS_REQUIRED" };
 			}
@@ -54,7 +55,7 @@ export function create() {
 
 		http_post: function(url, opts) {
 			// MANDATORY: HTTPS only (Blocker #6)
-			if (substr(url, 0, 8) !== "https://") {
+			if (!encoding.is_https(url)) {
 				this.log("error", `Security violation: Blocked insecure HTTP POST to ${url}`);
 				return { error: "HTTPS_REQUIRED" };
 			}

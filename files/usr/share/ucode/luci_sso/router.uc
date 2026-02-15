@@ -124,11 +124,19 @@ export function handle(io, config, request, policy) {
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
 
+	// SHORT-CIRCUIT: Action check (Does not require config)
 	if (path == "/") {
 		let query = request.query || {};
 		if (query.action == "enabled") {
 			return Result.ok(response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', config_mod.is_enabled(io) ? "true" : "false")));
 		}
+	}
+
+	// MANDATORY: Config guard
+	if (!config) {
+		return Result.err("SSO_DISABLED", { http_status: 503 });
+	}
+	if (path == "/") {
 		return handle_login(io, config);
 	} else if (path == "/callback") {
 		return handle_callback(io, config, request, policy);

@@ -40,3 +40,20 @@ test('router: reproduction - enabled endpoint returns JSON even if disabled (W2)
         assert_eq(res_router.data.body, '{"enabled": false}');
     });
 });
+
+test('router: security - null config guard (B2)', () => {
+    mock.create().spy((io) => {
+        // Ensure request is fully populated
+        let req = { 
+            path: "/", 
+            query: {},
+            cookies: {},
+            headers: {}
+        };
+        
+        let res = router.handle(io, null, req);
+        
+        assert(!res.ok, "Should fail when config is null");
+        assert_eq(res.error, "SSO_DISABLED");
+    });
+});

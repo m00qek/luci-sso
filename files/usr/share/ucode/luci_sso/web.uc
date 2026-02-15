@@ -110,23 +110,32 @@ export function parse_cookies(str) {
 };
 
 /**
+ * Sanitizes a header value to prevent CRLF injection (HTTP Response Splitting).
+ * @private
+ */
+function _sanitize_header(val) {
+	if (type(val) != "string") return val;
+	return replace(val, /[\r\n]+/g, " ");
+}
+
+/**
  * Internal helper to write HTTP headers and body.
  * @private
  */
 function _out(io, headers, body) {
 	// CGI SPEC: Status header MUST come first if present
 	if (headers["Status"]) {
-		io.stdout.write(`Status: ${headers["Status"]}\n`);
+		io.stdout.write(`Status: ${_sanitize_header(headers["Status"])}\n`);
 		delete headers["Status"];
 	}
 
 	for (let k, v in headers) {
 		if (type(v) == "array") {
 			for (let val in v) {
-				io.stdout.write(`${k}: ${val}\n`);
+				io.stdout.write(`${k}: ${_sanitize_header(val)}\n`);
 			}
 		} else if (v != null) {
-			io.stdout.write(`${k}: ${v}\n`);
+			io.stdout.write(`${k}: ${_sanitize_header(v)}\n`);
 		}
 	}
 	io.stdout.write("\n");

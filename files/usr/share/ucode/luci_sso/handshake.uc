@@ -220,7 +220,6 @@ export function authenticate(io, config, request, policy) {
 
 	let oauth_res = _complete_oauth_flow(io, config, code, handshake, policy);
 	if (!oauth_res.ok) {
-		session.consume_state(io, state_token);
 		if (oauth_res.details) {
 			io.log("error", `OAuth flow failed [session_id: ${session_id}]: ${oauth_res.error} (${oauth_res.details})`);
 		}
@@ -231,7 +230,6 @@ export function authenticate(io, config, request, policy) {
 	let perms = config_mod.find_roles_for_user(config, user_data);
 	
 	if (length(perms.read) == 0 && length(perms.write) == 0) {
-		session.consume_state(io, state_token);
 		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] matched no roles [session_id: ${session_id}]`);
 		return Result.err("USER_NOT_AUTHORIZED", { http_status: 403 });
 	}
@@ -247,7 +245,6 @@ export function authenticate(io, config, request, policy) {
 	);
 	
 	if (!ubus_res.ok) {
-		session.consume_state(io, state_token);
 		return Result.err("UBUS_LOGIN_FAILED", { http_status: 500 });
 	}
 

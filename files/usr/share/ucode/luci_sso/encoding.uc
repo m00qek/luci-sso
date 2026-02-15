@@ -1,5 +1,7 @@
 'use strict';
 
+import * as Result from 'luci_sso.result';
+
 /**
  * Implementation of RFC 7515 Base64URL encoding and decoding.
  * Pure utility module with no external side effects.
@@ -135,16 +137,12 @@ export function binary_truncate(data, len) {
  */
 export function safe_json(data) {
 	let raw = (type(data) == "object" && type(data.read) == "function") ? data.read() : data;
-	if (type(raw) != "string") return { ok: false, error: "INVALID_TYPE" };
+	if (type(raw) != "string") return Result.err("INVALID_TYPE");
 
 	try {
-		return { ok: true, data: json(raw) };
+		return Result.ok(json(raw));
 	} catch (e) {
-		return { 
-			ok: false, 
-			error: "PARSE_ERROR", 
-			details: e
-		};
+		return Result.err("PARSE_ERROR", e);
 	}
 };
 
@@ -170,4 +168,15 @@ export function normalize_url(url) {
 		res = substr(res, 0, length(res) - 1);
 	}
 	return res;
+};
+
+/**
+ * Checks if a URL uses the HTTPS scheme (case-insensitive).
+ * Per RFC 3986 §3.1, schemes are case-insensitive.
+ * 
+ * @param {string} url - The URL to check
+ * @returns {boolean} - True if HTTPS
+ */
+export function is_https(url) {
+	return (type(url) == "string" && lc(substr(url, 0, 8)) == "https://");
 };

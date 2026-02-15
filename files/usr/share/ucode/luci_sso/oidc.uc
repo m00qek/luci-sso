@@ -8,14 +8,6 @@ import * as Result from 'luci_sso.result';
 
 // --- Internal Helpers ---
 
-/**
- * Checks if a URL uses HTTPS.
- * @private
- */
-function _is_https(url) {
-	return (type(url) == "string" && substr(url, 0, 8) == "https://");
-}
-
 // --- Public API ---
 
 /**
@@ -77,7 +69,7 @@ export function get_auth_url(io, config, discovery_doc, params) {
  * Exchanges authorization code for tokens.
  */
 export function exchange_code(io, config, discovery, code, verifier, session_id) {
-	if (!_is_https(discovery.token_endpoint)) return Result.err("INSECURE_TOKEN_ENDPOINT");
+	if (!encoding.is_https(discovery.token_endpoint)) return Result.err("INSECURE_TOKEN_ENDPOINT");
 
 	// Audit logging for PKCE usage (Blocker #2)
 	let sid_ctx = session_id ? ` [session_id: ${session_id}]` : "";
@@ -182,7 +174,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	if (!pem_res.ok) return pem_res;
 
 	// MANDATORY Claims Check
-	if (encoding.normalize_url(discovery.issuer) != encoding.normalize_url(config.issuer_url)) {
+	if (!crypto.constant_time_eq(encoding.normalize_url(discovery.issuer), encoding.normalize_url(config.issuer_url))) {
 		return Result.err("DISCOVERY_ISSUER_MISMATCH", `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}`);
 	}
 
@@ -232,7 +224,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	if (type(payload.aud) == "array" && !payload.azp) {
 		return Result.err("MISSING_AZP_CLAIM");
 	}
-	if (payload.azp && payload.azp !== config.client_id) {
+	if (payload.azp && !crypto.constant_time_eq(payload.azp, config.client_id)) {
 		return Result.err("AZP_MISMATCH", `Expected ${config.client_id}, got ${payload.azp}`);
 	}
 
@@ -273,7 +265,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
  * @returns {object} - Result Object {ok, data: {sub, email, ...}}
  */
 export function fetch_userinfo(io, endpoint, access_token) {
-	if (!_is_https(endpoint)) return Result.err("INSECURE_USERINFO_ENDPOINT");
+	if (!encoding.is_https(endpoint)) return Result.err("INSECURE_USERINFO_ENDPOINT");
 	if (!access_token) return Result.err("MISSING_ACCESS_TOKEN");
 
 	io.log("info", "Fetching supplemental claims from UserInfo endpoint");

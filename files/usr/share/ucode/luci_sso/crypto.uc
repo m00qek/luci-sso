@@ -202,7 +202,7 @@ export function verify_jwt(token, pubkey, options) {
 		if (payload.iat > (now + clock_tolerance)) return Result.err("TOKEN_ISSUED_IN_FUTURE");
 	}
 
-	if (options.iss && encoding.normalize_url(payload.iss) !== encoding.normalize_url(options.iss)) {
+	if (options.iss && !constant_time_eq(encoding.normalize_url(payload.iss), encoding.normalize_url(options.iss))) {
 		return Result.err("ISSUER_MISMATCH");
 	}
 
@@ -213,13 +213,13 @@ export function verify_jwt(token, pubkey, options) {
 			if (length(aud) == 0) return Result.err("INVALID_AUDIENCE");
 			for (let a in aud) {
 				if (type(a) != "string") return Result.err("MALFORMED_AUDIENCE");
-				if (a === options.aud) {
+				if (constant_time_eq(a, options.aud)) {
 					found = true;
 					break;
 				}
 			}
 		} else {
-			found = (aud === options.aud);
+			found = constant_time_eq(aud, options.aud);
 		}
 		
 		if (!found) {

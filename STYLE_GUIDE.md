@@ -710,6 +710,20 @@ let enc = lucihttp.urlencode(url, 1);
 let enc = lucihttp.urlencode(url);
 ```
 
+### 7. Protocol Enforcement
+**Status: MANDATORY CENTRALIZATION**
+To ensure OIDC compliance and prevent case-manipulation bypasses, all HTTPS scheme checks MUST utilize the centralized `encoding.is_https()` utility. Local `substr()` or case-sensitive `===` checks are strictly FORBIDDEN.
+
+**✅ CORRECT:**
+```javascript
+if (!encoding.is_https(url)) return Result.err("INSECURE");
+```
+
+**❌ INCORRECT:**
+```javascript
+if (substr(url, 0, 8) !== "https://") ...
+```
+
 ---
 
 ## 8. Module Organization
