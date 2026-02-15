@@ -22,15 +22,17 @@ test('web: rendering - standardized error prevents internal leakage', () => {
 });
 
 test('web: parsing - standard cookie format', () => {
-	let c = web.parse_cookies("foo=bar; baz=qux");
-	assert_eq(c.foo, "bar");
-	assert_eq(c.baz, "qux");
+	let res = web.parse_cookies("foo=bar; baz=qux");
+	assert(res.ok);
+	assert_eq(res.data.foo, "bar");
+	assert_eq(res.data.baz, "qux");
 });
 
 test('web: parsing - standard query parameters', () => {
-	let p = web.parse_params("a=1&b=2%203");
-	assert_eq(p.a, "1");
-	assert_eq(p.b, "2 3");
+	let res = web.parse_params("a=1&b=2%203");
+	assert(res.ok);
+	assert_eq(res.data.a, "1");
+	assert_eq(res.data.b, "2 3");
 });
 
 test('web: security - prevent XSS in redirect location', () => {
@@ -53,6 +55,44 @@ test('web: security - prevent XSS in redirect location', () => {
 		
 		assert(index(body, malicious_loc) == -1, "Raw malicious location MUST NOT be present in HTML body");
 		assert(index(body, 'alert(&quot;XSS&quot;)') >= 0 || index(body, 'alert(&#x27;XSS&#x27;)') >= 0, "Location MUST be HTML escaped in body");
+	});
+});
+
+test('web: security - safe_getenv returns Result.err on overflow', () => {
+	let long_val = "";
+	for (let i = 0; i < 16385; i++) long_val += "a";
+	
+	mock.create().with_env({ "HTTP_HOST": long_val }, (io) => {
+		let res = web.request(io);
+		assert(!res.ok, "Should fail on overflow");
+		assert_eq(res.error, "INPUT_TOO_LARGE");
+	});
+});
+
+test('web: security - parse_params returns Result.err on overflow', () => {
+	let long_val = "";
+	for (let i = 0; i < 16385; i++) long_val += "a";
+	
+	let res = web.parse_params(long_val);
+	assert(!res.ok, "Should fail on overflow");
+	assert_eq(res.error, "INPUT_TOO_LARGE");
+});
+
+test('web: security - parse_params rejects too many parameters', () => {
+	let params = [];
+	for (let i = 0; i < 101; i++) push(params, `p${i}=v${i}`);
+	let res = web.parse_params(join("&", params));
+	
+	assert(!res.ok, "Should fail on too many parameters");
+	assert_eq(res.error, "INPUT_TOO_LARGE");
+});
+
+test('web: security - render_error emits 431 for INPUT_TOO_LARGE', () => {
+	mock.create().spy((io) => {
+		web.render_error(io, "INPUT_TOO_LARGE");
+		let out = io.__state__.stdout_buf;
+		assert(index(out, "Status: 431 Request Header Fields Too Large") >= 0, "Should emit 431 status");
+		assert(index(out, "too much data") >= 0, "Should contain user-friendly error message");
 	});
 });
 

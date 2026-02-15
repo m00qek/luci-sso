@@ -17,7 +17,7 @@ The project strictly follows the pattern of keeping business logic (OIDC, Sessio
     *   `session.uc`: Handshake and secret key persistence.
     *   `router.uc`: CGI request routing and logout orchestration.
     *   `config.uc`: UCI configuration parsing and validation.
-    *   `web.uc`: HTTP request/cookie parsing.
+    *   `web.uc`: HTTP request/cookie parsing. Returns `Result` objects for all parsing operations to ensure explicit error handling for oversized or malformed inputs.
     *   `secure_http.uc`: HTTPS scheme enforcement.
     *   `jwk.uc`: JWK to PEM conversion.
     *   `ubus.uc`: LuCI session and token registry via ubus.
