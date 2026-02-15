@@ -17,4 +17,9 @@ if [ -d "$STATES" ]; then
     # Handshakes are only valid for ~5-10 minutes. 60 minutes is safe for cleanup.
     # We only target handshake_*.json files to avoid touching discovery/jwks caches.
     find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json" -mmin +60 -delete 2>/dev/null
+    
+    # 3. Reap Orphaned Atomic Writes (60 minutes)
+    # Cleans up failed renames (.tmp) or failed consumptions (.consumed)
+    find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json.consumed" -mmin +60 -delete 2>/dev/null
+    find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json.tmp" -mmin +60 -delete 2>/dev/null
 fi

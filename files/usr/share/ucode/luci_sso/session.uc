@@ -239,11 +239,15 @@ export function verify_state(io, handle, clock_tolerance) {
 		}
 		
 		content = io.read_file(consume_path);
-		if (content) io.remove(consume_path);
 	} catch (e) {
 		io.log("error", `Handshake state consumption failed [session_id: ${session_id}]: ${e}`);
+		// Attempt to cleanup the consumed file if it exists but failed to read/process
+		try { io.remove(consume_path); } catch (e) {}
 		return Result.err("STATE_NOT_FOUND");
 	}
+
+	// Always remove the consumed file immediately
+	try { io.remove(consume_path); } catch (e) {}
 
 	if (!content) {
 		io.log("error", `Handshake state content missing [session_id: ${session_id}]`);
