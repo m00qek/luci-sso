@@ -67,8 +67,8 @@
             ssoBtn.disabled = true;
             ssoBtn.textContent = 'Redirecting...';
             
-            // Absolute redirect to preserve scheme/host
-            window.location.href = window.location.protocol + '//' + window.location.host + '/cgi-bin/luci-sso';
+            // SECURITY: Always enforce HTTPS for the SSO initiation flow (ARCHITECTURE.md §3)
+            window.location.href = 'https://' + window.location.host + '/cgi-bin/luci-sso';
         };
 
         // 4. Inject
