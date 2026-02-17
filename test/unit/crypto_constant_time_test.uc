@@ -44,9 +44,9 @@ test('crypto: constant_time_eq - multi-value / array inputs', () => {
 });
 
 test('crypto: constant_time_eq - very long strings', () => {
-    // 32KB is sufficient for a "long" string in this context
+    // 16KB is sufficient for a "long" string in this context
     let long_a = "1234567890ABCDEF1234567890ABCDEF"; // 32 bytes
-    for (let i = 0; i < 10; i++) long_a += long_a; // 32 * 2^10 = 32,768 (32KB)
+    for (let i = 0; i < 9; i++) long_a += long_a; // 32 * 2^9 = 16,384 (16KB)
     
     let long_b = long_a;
     let long_c = long_a + "X";

@@ -32,8 +32,8 @@ export function constant_time_eq(a, b) {
 	let len_b = length(b);
 
 	// MANDATORY: Length cap to prevent DoS via amplification (W1)
-	// Any value longer than 64KB is considered excessive for tokens/hashes in this system.
-	if (len_a > 65536 || len_b > 65536) return false;
+	// Any value longer than 16KB is considered excessive for tokens/hashes in this system.
+	if (len_a > 16384 || len_b > 16384) return false;
 
 	let res = (len_a ^ len_b);
 

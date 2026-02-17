@@ -35,6 +35,7 @@ clear_tests();
 const plumbing_files = [
 	"unit.crypto_plumbing_test",
 	"unit.crypto_constant_time_test",
+	"unit.crypto_dos_reproduction_test",
 	"unit.encoding_security_test",
 	"unit.encoding_url_test",
 	"unit.encoding_url_normalization_test"
