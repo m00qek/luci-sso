@@ -67,6 +67,7 @@ const logic_files = [
 	"unit.session_security_reproduction_test",
 	"unit.session_busy_wait_test",
 	"unit.ubus_logic_test",
+	"unit.ubus_acl_security_test",
 	"unit.config_logic_test",
 	"unit.config_group_test",
 	"unit.config_role_test",

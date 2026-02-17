@@ -25,8 +25,11 @@ function _grant_all_luci_acls(io, sid) {
 		if (!res.ok || type(res.data) != "object") continue;
 
 		let groups = [];
-		for (let key in keys(res.data)) {
-			if (match(key, /^luci-/)) {
+		for (let key, val in res.data) {
+			// MANDATORY: Security Hardening (W5)
+			// 1. Key MUST start with 'luci-'
+			// 2. Value MUST be an object (RPCD ACL schema requirement)
+			if (match(key, /^luci-/) && type(val) == "object") {
 				push(groups, key);
 			}
 		}
