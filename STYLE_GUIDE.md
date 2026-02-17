@@ -222,7 +222,7 @@ export function verify_session(io, token) {
 	// ... logic ...
 	if (expired) return Result.err("EXPIRED");
 	if (bad_sig) return Result.err("INVALID_SIGNATURE");
-	
+
 	return Result.ok(payload);
 }
 ```
@@ -333,16 +333,16 @@ import { create_mock_io } from 'helpers';
 
 test('Feature: Success case', () => {
 	let io = create_mock_io();
-	
+
 	// Setup
 	io._responses["https://idp.com/.well-known"] = {
 		status: 200,
 		body: "{}"
 	};
-	
+
 	// Execute
 	let result = module_under_test.function(io, args);
-	
+
 	// Assert
 	assert(!result.error, "Should succeed");
 	assert_eq(result.data, expected);
@@ -354,7 +354,7 @@ test('Feature: Error case', () => {
 		status: 500,
 		body: ""
 	};
-	
+
 	try {
 		module_under_test.function(io, args);
 		assert(false, "Should have thrown");
@@ -503,7 +503,7 @@ if (condition) {
 function validate(input) {
 	if (!input) die("MISSING_INPUT");
 	if (type(input) != "string") die("INVALID_TYPE");
-	
+
 	// Happy path at end
 	return process(input);
 }
@@ -782,11 +782,11 @@ function b64url_to_b64(str) {
 	// ...
 }
 
-function constant_time_eq(a, b) {
+// Public API (exported)
+export function constant_time_eq(a, b) {
 	// ...
 }
 
-// Public API (exported)
 export function verify_jwt(token, pubkey, options) {
 	// ...
 };

@@ -5,6 +5,7 @@ import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
 import * as discovery from 'luci_sso.discovery';
+import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 
 import * as config_mod from 'luci_sso.config';
@@ -65,7 +66,9 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	if (config.internal_issuer_url != config.issuer_url) {
 		let replace_origin = (url, old_origin, new_origin) => {
 			if (type(url) != "string") return url;
-			if (substr(url, 0, length(old_origin)) == old_origin) {
+			let norm_old = encoding.normalize_url(old_origin);
+			let url_prefix = encoding.normalize_url(substr(url, 0, length(old_origin)));
+			if (url_prefix == norm_old) {
 				return new_origin + substr(url, length(old_origin));
 			}
 			return url;
@@ -90,7 +93,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	}
 
 	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
-	
+
 	// Key Rotation Recovery
 	if (!verify_res.ok) {
 		let should_retry = false;
@@ -212,7 +215,7 @@ export function authenticate(io, config, request, policy) {
 
 	let val_res = _validate_callback_request(io, config, request);
 	if (!val_res.ok) return val_res;
-	
+
 	let code = val_res.data.code;
 	let handshake = val_res.data.handshake;
 	let state_token = val_res.data.token;
@@ -228,7 +231,7 @@ export function authenticate(io, config, request, policy) {
 
 	let user_data = oauth_res.data.data;
 	let perms = config_mod.find_roles_for_user(config, user_data);
-	
+
 	if (length(perms.read) == 0 && length(perms.write) == 0) {
 		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] matched no roles [session_id: ${session_id}]`);
 		return Result.err("USER_NOT_AUTHORIZED", { http_status: 403 });
@@ -243,7 +246,7 @@ export function authenticate(io, config, request, policy) {
 		oauth_res.data.refresh_token, 
 		oauth_res.data.id_token
 	);
-	
+
 	if (!ubus_res.ok) {
 		return Result.err("UBUS_LOGIN_FAILED", { http_status: 500 });
 	}

@@ -48,14 +48,14 @@ function _read_cache(io, path, ttl, ignore_ttl) {
 function _write_cache(io, path, data) {
 	try {
 		let cache_data = { ...data, cached_at: io.time() };
-		
+
 		let res = crypto.random(8);
 		if (!res.ok) {
 			io.log("error", "Cache write aborted: CSPRNG failure");
 			return;
 		}
 		let tmp_path = `${path}.${crypto.b64url_encode(res.data)}.tmp`;
-		
+
 		if (io.write_file(tmp_path, sprintf("%J", cache_data))) {
 			if (!io.rename(tmp_path, path)) {
 				io.remove(tmp_path);
@@ -97,7 +97,7 @@ export function discover(io, issuer, options) {
 	if (!response || response.error || response.status != 200) {
 		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
 		let stale = _read_cache(io, cache_path, ttl, true);
-		if (stale && encoding.normalize_url(stale.issuer) == normalized_issuer) {
+		if (stale && crypto.constant_time_eq(encoding.normalize_url(stale.issuer), normalized_issuer)) {
 			io.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
 			return Result.ok(stale);
 		}
@@ -107,7 +107,7 @@ export function discover(io, issuer, options) {
 			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${err_msg}`);
 			return Result.err("NETWORK_ERROR");
 		}
-		
+
 		io.log("warn", `Discovery fetch HTTP ${response.status} from [id: ${issuer_id}]`);
 		return Result.err("DISCOVERY_FAILED", { http_status: response.status });
 	}
@@ -195,7 +195,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${err_msg}`);
 			return Result.err("NETWORK_ERROR");
 		}
-		
+
 		io.log("warn", `JWKS fetch HTTP ${response.status} from [id: ${uri_id}]`);
 		return Result.err("JWKS_FETCH_FAILED", { http_status: response.status });
 	}

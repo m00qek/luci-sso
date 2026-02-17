@@ -154,13 +154,13 @@ function _out(io, headers, body) {
 export function request(io) {
 	let res_path = safe_getenv(io, "PATH_INFO");
 	if (!res_path.ok) return res_path;
-	
+
 	let res_qs = safe_getenv(io, "QUERY_STRING");
 	if (!res_qs.ok) return res_qs;
-	
+
 	let res_cookie = safe_getenv(io, "HTTP_COOKIE");
 	if (!res_cookie.ok) return res_cookie;
-	
+
 	let res_host = safe_getenv(io, "HTTP_HOST");
 	if (!res_host.ok) return res_host;
 
@@ -204,11 +204,7 @@ export function render(io, res) {
 
 	if (res.status == 302) {
 		headers["Content-Type"] = "text/html";
-		
-		let loc = headers["Location"] || "";
-		let escaped_loc = encoding.html_escape(loc);
-		body = '<html><head><meta http-equiv="refresh" content="0;url=' + escaped_loc + '"></head>';
-		body += '<body><p>Redirecting to <a href="' + escaped_loc + '">' + escaped_loc + '</a>...</p></body></html>\n';
+		body = '<html><body><p>Redirecting...</p></body></html>\n';
 	}
 
 	_out(io, headers, body);
@@ -223,7 +219,7 @@ export function render(io, res) {
  */
 export function render_error(io, code, status) {
 	let user_msg = ERROR_MAP[code] || "An unexpected authentication error occurred.";
-	
+
 	io.log("error", `[${status || 500}] ${code}`);
 
 	_out(io, {
@@ -241,9 +237,9 @@ export function render_error(io, code, status) {
 export function error(io, e) {
 	let msg = sprintf("%s", e);
 	let stack = (type(e) == "object") ? e.stacktrace : "";
-	
+
 	io.log("error", `Router crash: ${msg}\n${stack}`);
-	
+
 	_out(io, {
 		"Status": "500 Internal Server Error",
 		"Content-Type": "text/plain"

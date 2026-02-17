@@ -124,20 +124,20 @@ for (let f in logic_files) registered[f] = true;
 
 let orphans = [];
 for (let f in all_files) {
-    // Only treat files ending in '_test.uc' as tests
-    if (match(f, /_test\.uc$/)) {
-        let mod_name = "unit." + substr(f, 0, length(f) - 3);
-        if (!registered[mod_name]) {
-            push(orphans, f);
-        }
-    }
+	// Only treat files ending in '_test.uc' as tests
+	if (match(f, /_test\.uc$/)) {
+		let mod_name = "unit." + substr(f, 0, length(f) - 3);
+		if (!registered[mod_name]) {
+			push(orphans, f);
+		}
+	}
 }
 
 if (length(orphans) > 0) {
-    print(`\n\u001b[1m\u001b[31m🚨 ORPHANED TESTS DETECTED:\u001b[0m\n`);
-    for (let o in orphans) {
-        print(`   - ${o} (Not in runner.uc)\n`);
-    }
-    print(`\n\u001b[31mRefusing to complete. All tests MUST be registered in test/runner.uc\u001b[0m\n`);
-    exit(1);
+	print(`\n\u001b[1m\u001b[31m🚨 ORPHANED TESTS DETECTED:\u001b[0m\n`);
+	for (let o in orphans) {
+		print(`   - ${o} (Not in runner.uc)\n`);
+	}
+	print(`\n\u001b[31mRefusing to complete. All tests MUST be registered in test/runner.uc\u001b[0m\n`);
+	exit(1);
 }
