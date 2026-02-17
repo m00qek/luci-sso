@@ -80,7 +80,7 @@ export function discover(io, issuer, options) {
 	let ttl = options.ttl || 86400; // 24 hours default (production standard)
 
 	let cached = _read_cache(io, cache_path, ttl);
-	if (cached && encoding.normalize_url(cached.issuer) == normalized_issuer) {
+	if (cached && crypto.constant_time_eq(encoding.normalize_url(cached.issuer), normalized_issuer)) {
 		return Result.ok(cached);
 	}
 
@@ -124,7 +124,7 @@ export function discover(io, issuer, options) {
 		io.log("error", `Discovery document missing issuer field from [id: ${issuer_id}]`);
 		return Result.err("DISCOVERY_MISSING_ISSUER");
 	}
-	if (config.issuer && encoding.normalize_url(config.issuer) != encoding.normalize_url(issuer)) {
+	if (config.issuer && !crypto.constant_time_eq(encoding.normalize_url(config.issuer), encoding.normalize_url(issuer))) {
 		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${crypto.safe_id(config.issuer)}]`);
 		return Result.err("DISCOVERY_ISSUER_MISMATCH", 
 			 `Expected issuer_id ${issuer_id}` );

@@ -52,6 +52,7 @@ const logic_files = [
 	"unit.oidc_url_fragment_test",
 	"unit.oidc_security_test",
 	"unit.discovery_security_test",
+	"unit.discovery_constant_time_test",
 	"unit.discovery_resilience_test",
 	"unit.handshake_rotation_test",
 	"unit.handshake_dos_reproduction_test",
