@@ -68,6 +68,7 @@ const logic_files = [
 	"unit.config_group_test",
 	"unit.config_role_test",
 	"unit.config_case_insensitive_test",
+	"unit.config_https_case_test",
 	"unit.config_scope_test",
 	"unit.web_logic_test",
 	"unit.web_status_coercion_test",

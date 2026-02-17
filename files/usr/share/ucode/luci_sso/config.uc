@@ -3,6 +3,7 @@
  */
 
 import * as Result from 'luci_sso.result';
+import * as encoding from 'luci_sso.encoding';
 
 /**
  * Checks if the SSO service is enabled in UCI.
@@ -40,7 +41,7 @@ export function load(io) {
 		return Result.err("CONFIG_ERROR", "issuer_url is mandatory");
 	}
 
-	if (substr(issuer, 0, 8) !== "https://") {
+	if (!encoding.is_https(issuer)) {
 		return Result.err("CONFIG_ERROR", "issuer_url must use HTTPS");
 	}
 
@@ -48,7 +49,7 @@ export function load(io) {
 		return Result.err("CONFIG_ERROR", "client_id and client_secret are mandatory");
 	}
 
-	if (!oidc_cfg.redirect_uri || substr(oidc_cfg.redirect_uri, 0, 8) !== "https://") {
+	if (!oidc_cfg.redirect_uri || !encoding.is_https(oidc_cfg.redirect_uri)) {
 		return Result.err("CONFIG_ERROR", "redirect_uri is mandatory and must use HTTPS");
 	}
 
@@ -90,7 +91,7 @@ export function load(io) {
 		return Result.err("CONFIG_ERROR", "No valid roles found in /etc/config/luci-sso");
 	}
 
-	if (oidc_cfg.internal_issuer_url && substr(oidc_cfg.internal_issuer_url, 0, 8) !== "https://") {
+	if (oidc_cfg.internal_issuer_url && !encoding.is_https(oidc_cfg.internal_issuer_url)) {
 		return Result.err("CONFIG_ERROR", "internal_issuer_url must use HTTPS");
 	}
 
