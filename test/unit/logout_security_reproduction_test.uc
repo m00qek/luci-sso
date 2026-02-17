@@ -37,7 +37,46 @@ test('router: logout - DO NOT initiate OIDC logout if local session is invalid',
             
             assert(res.ok);
             // EXPECTED behavior: Redirect to local root if session is missing.
-            // CURRENT behavior (VULNERABLE): It redirects to https://idp.com/logout...
             assert_eq(res.data.headers["Location"], "/", "Should redirect to root if session is invalid");
         });
+});
+
+test('router: security - W3: post_logout_redirect_uri match check', () => {
+	let malformed_config = {
+		...f.MOCK_CONFIG,
+		redirect_uri: "not-a-url" // Will fail the regex match
+	};
+
+	let sid = "test-sid";
+	let id_token = "test-id-token";
+
+	mock.create()
+		.with_responses({
+			[`${f.MOCK_CONFIG.issuer_url}/.well-known/openid-configuration`]: { 
+				status: 200, 
+				body: { ...f.MOCK_DISCOVERY, end_session_endpoint: "https://idp.com/logout" }
+			}
+		})
+		.spy((io) => {
+			// Mock ubus session verify
+			io.ubus_call = (obj, method, args) => {
+				if (obj == "session" && method == "get") {
+					return { values: { oidc_id_token: id_token, user: "admin" } };
+				}
+				return {};
+			};
+
+			let request = {
+				path: "/logout",
+				cookies: { sysauth_https: sid }
+			};
+
+			let res = router.handle(io, malformed_config, request);
+			
+			assert(res.ok, "Should succeed even with malformed redirect_uri");
+			let loc = res.data.headers.Location;
+			
+			// Should default to "/" if regex match fails
+			assert(index(loc, "post_logout_redirect_uri=%2F") >= 0, "Should default to safe '/' for malformed URI");
+		});
 });

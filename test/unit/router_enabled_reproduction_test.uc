@@ -35,7 +35,7 @@ test('router: reproduction - enabled endpoint returns JSON even if disabled (W2)
         // If disabled, we still call router.handle(io, null, req)
         let res_router = router.handle(io, null, req);
         
-        assert(res_router.ok);
+        assert(res_router.ok, "Action 'enabled' MUST succeed even without config");
         assert_eq(res_router.data.status, 200);
         assert_eq(res_router.data.body, '{"enabled": false}');
     });
@@ -55,5 +55,6 @@ test('router: security - null config guard (B2)', () => {
         
         assert(!res.ok, "Should fail when config is null");
         assert_eq(res.error, "SSO_DISABLED");
+        assert_eq(res.details.http_status, 503);
     });
 });

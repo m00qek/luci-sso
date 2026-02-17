@@ -27,11 +27,16 @@ export const safe_json = encoding.safe_json;
  */
 export function constant_time_eq(a, b) {
 	if (type(a) != "string" || type(b) != "string") return false;
-	
+
 	let len_a = length(a);
 	let len_b = length(b);
+
+	// MANDATORY: Length cap to prevent DoS via amplification (W1)
+	// Any value longer than 64KB is considered excessive for tokens/hashes in this system.
+	if (len_a > 65536 || len_b > 65536) return false;
+
 	let res = (len_a ^ len_b);
-	
+
 	// We iterate based on the length of the first string (usually the untrusted input).
 	// This ensures that for a given input length, the execution time is constant
 	// regardless of the secret's content or length.
@@ -40,7 +45,7 @@ export function constant_time_eq(a, b) {
 		let char_b = ord(b, i % (len_b || 1));
 		res |= (char_a ^ char_b);
 	}
-	
+
 	return (res == 0);
 };
 
@@ -66,12 +71,12 @@ export const b64url_decode = encoding.b64url_decode;
 export function sign_jws(payload, secret) {
 	if (type(payload) != "object") die("CONTRACT_VIOLATION: sign_jws expects object payload");
 	if (type(secret) != "string") die("CONTRACT_VIOLATION: sign_jws expects string secret");
-	
+
 	let header = { alg: "HS256", typ: "JWT" };
 	let b64_header = b64url_encode(sprintf("%J", header));
 	let b64_payload = b64url_encode(sprintf("%J", payload));
 	let signed_data = b64_header + "." + b64_payload;
-	
+
 	let signature = native.hmac_sha256(secret, signed_data);
 	if (!signature) return Result.err("CRYPTO_ERROR", "hmac_sha256 failed");
 
@@ -90,7 +95,7 @@ export function verify_jws(token, secret) {
 	if (type(secret) != "string") die("CONTRACT_VIOLATION: verify_jws expects string secret");
 
 	if (length(token) > MAX_TOKEN_SIZE) return Result.err("TOKEN_TOO_LARGE");
-	
+
 	let parts = split(token, ".", 4);
 	if (length(parts) != 3) return Result.err("MALFORMED_JWS");
 
@@ -108,12 +113,12 @@ export function verify_jws(token, secret) {
 	let signed_data = parts[0] + "." + parts[1];
 	let provided_sig = b64url_decode(parts[2]);
 	if (!provided_sig) return Result.err("INVALID_SIGNATURE_ENCODING");
-	
+
 	let calculated_sig = native.hmac_sha256(secret, signed_data);
 	if (!calculated_sig || !constant_time_eq(calculated_sig, provided_sig)) {
 		return Result.err("INVALID_SIGNATURE");
 	}
-	
+
 	// 3. Decode Payload
 	let payload_json = b64url_decode(parts[1]);
 	if (!payload_json) return Result.err("INVALID_PAYLOAD_ENCODING");
@@ -191,7 +196,7 @@ export function verify_jwt(token, pubkey, options) {
 		if (type(payload.exp) != "int") return Result.err("INVALID_EXP_CLAIM");
 		if (payload.exp < (now - clock_tolerance)) return Result.err("TOKEN_EXPIRED");
 	}
-	
+
 	if (payload.nbf != null) {
 		if (type(payload.nbf) != "int") return Result.err("INVALID_NBF_CLAIM");
 		if (payload.nbf > (now + clock_tolerance)) return Result.err("TOKEN_NOT_YET_VALID");
@@ -221,7 +226,7 @@ export function verify_jwt(token, pubkey, options) {
 		} else {
 			found = constant_time_eq(aud, options.aud);
 		}
-		
+
 		if (!found) {
 			return Result.err("AUDIENCE_MISMATCH");
 		}
@@ -239,7 +244,7 @@ export function verify_jwt(token, pubkey, options) {
 export function random(len) {
 	let byte_len = len || 32;
 	if (type(byte_len) != "int") die("CONTRACT_VIOLATION: random expects integer length");
-	
+
 	// TESTING HOOK: Allow simulating CSPRNG failure
 	let bytes = null;
 	if (!global.TESTING_RANDOM_FAIL) {
@@ -290,7 +295,7 @@ export function sha256_hex(str) {
 export function pkce_generate_verifier(len) {
 	let byte_len = len || 43;
 	if (byte_len < 32 || byte_len > 96) die("CONTRACT_VIOLATION: PKCE verifier must be 32-96 bytes");
-	
+
 	let res = random(byte_len);
 	if (!res.ok) return res;
 
