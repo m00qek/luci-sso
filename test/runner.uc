@@ -88,6 +88,7 @@ const logic_files = [
 	"unit.session_cleanup_reproduction_test",
 	"unit.config_validation_reproduction_test",
 	"unit.router_enabled_reproduction_test",
+	"unit.router_logout_redirect_test",
 	"unit.discovery_cache_reproduction_test",
 	"unit.discovery_reproduction_test",
 	"unit.encoding_https_test",
