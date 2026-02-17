@@ -177,6 +177,8 @@ function build_provider(state) {
 		
 		fserror: () => state.last_error || "No error",
 		
+		sleep: trackable("sleep", (s) => { /* Mock sleep does nothing but increment time if we wanted to */ }),
+
 		stdout: {
 			write: (s) => { 
 				state.stdout_buf += s;

@@ -23,7 +23,8 @@ The project strictly follows the pattern of keeping business logic (OIDC, Sessio
     *   `ubus.uc`: LuCI session and token registry via ubus.
     *   `io.uc`: I/O abstraction layer.
 *   **Imperative Shell:** The CGI script in `files/www/cgi-bin/luci-sso` which initializes the real `io` object and the `router.uc` CGI controller.
-*   **IO Contract:** The `io` object MUST implement a standard set of methods: `time`, `read_file`, `write_file`, `rename`, `remove`, `mkdir`, `lsdir`, `stat`, `chmod`, `fserror`, `getenv`, `stdout`, `ubus_call`, `uci_cursor`, `http_get`, `http_post`, `urlencode`, and **`log`**.
+*   **IO Contract:** The `io` object MUST implement a standard set of methods: `time`, `read_file`, `write_file`, `rename`, `remove`, `mkdir`, `lsdir`, `stat`, `chmod`, `fserror`, `getenv`, `stdout`, `ubus_call`, `uci_cursor`, `http_get`, `http_post`, `urlencode`, `log`, and **`sleep`**.
+*   **Resource Efficiency (Non-Blocking):** On single-core embedded systems, the functional core MUST NOT implement busy-wait loops or spin-locks. All blocking operations or retry delays MUST utilize the `io.sleep()` interface to yield CPU time to the kernel and other processes.
 *   **Mandatory Auditing:** Logging is NOT optional. All security-relevant events, including handshake creation, validation failures, and network errors, MUST be logged for forensic purposes.
 *   **Benefit:** Enables 100% offline unit testing without mocks for the logic itself.
 

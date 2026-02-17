@@ -87,6 +87,7 @@ export function create() {
 
 		uci_cursor: () => uci.cursor(),
 		fserror: () => fs.error(),
+		sleep: (seconds) => system(sprintf("sleep %d", seconds)),
 		stdout: fs.stdout
 	};
 };

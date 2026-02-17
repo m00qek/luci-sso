@@ -102,8 +102,7 @@ export function get_secret_key(io) {
 
 			while (retries < max_retries) {
 				// Wait for a clock tick (at least 1 second in production)
-				let start = io.time();
-				while (io.time() == start) { /* busy wait */ }
+				io.sleep(1);
 
 				try {
 					key = io.read_file(SECRET_KEY_PATH);
