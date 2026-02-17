@@ -1,250 +1,98 @@
-import * as math from 'math';
+import * as assertions from 'testing.assertions';
+import * as runner from 'testing.runner';
+import * as loader from 'testing.loader';
 
-global.testing_state = global.testing_state || { tests: [], results: [] };
-global._spec_depth = global._spec_depth || 0;
+global.testing_state = global.testing_state || { tests: [] };
 
-const ASSERT_PREFIX = "__ASSERT__:";
-const C_RESET = "\u001b[0m", 
-      C_RED = "\u001b[31m", 
-      C_BRED = "\u001b[91m", 
-      C_GREEN = "\u001b[32m", 
-      C_BOLD = "\u001b[1m", 
-      C_YELLOW = "\u001b[33m",
-      C_CYAN = "\u001b[36m";
+// --- DSL Exports ---
 
-const color = (c, t) => `${c}${t}${C_RESET}`;
-
-function deep_equal(a, b) {
-    if (a == b) return true;
-    if (type(a) != type(b)) return false;
-    if (type(a) == "object") {
-        if (length(a) != length(b)) return false;
-        for (let k, v in a) {
-            if (!deep_equal(v, b[k])) return false;
-        }
-        return true;
-    }
-    if (type(a) == "array") {
-        if (length(a) != length(b)) return false;
-        for (let i = 0; i < length(a); i++) {
-            if (!deep_equal(a[i], b[i])) return false;
-        }
-        return true;
-    }
-    return false;
-}
-
-export function assert_eq(actual, expected, msg) {
-    if (!deep_equal(actual, expected)) {
-        die(`${ASSERT_PREFIX}${msg || "Equality failed"}\n      ${color(C_RED, "Expected:")} ${sprintf("%J", expected)}\n      ${color(C_RED, "Actual:  ")} ${sprintf("%J", actual)}`);
-    }
-};
-
-export function assert(cond, msg) {
-    if (!cond) {
-        die(`${ASSERT_PREFIX}${msg || "Assertion failed"}`);
-    }
-};
-
-export function assert_throws(fn, msg) {
-    let threw = false;
-    try { fn(); } catch (e) { threw = true; }
-    if (!threw) die(`${ASSERT_PREFIX}${msg || "Expected function to throw exception"}`);
-};
+export const assert = assertions.assert;
+export const assert_eq = assertions.assert_eq;
+export const assert_throws = assertions.assert_throws;
+export const assert_match = assertions.assert_match;
+export const assert_fail = assertions.assert_fail;
 
 /**
- * Registers a standard test or a group header.
+ * Registers a standard test.
  */
-export function test(name, fn, type, depth) {
+export function test(name, fn) {
+    let mod = loader.normalize_module_name(sourcepath(1), global.testing_state.prefix);
+
     push(global.testing_state.tests, { 
 		name, 
-		fn, 
-		type: type || "test", 
-		depth: depth || 0 
+		fn,
+        module: mod
 	});
 };
 
 /**
- * Resets the test queue.
+ * Registers a test that will be skipped.
  */
-export function clear_tests() {
+export function test_skip(name, fn) {
+    let mod = loader.normalize_module_name(sourcepath(1), global.testing_state.prefix);
+
+    push(global.testing_state.tests, {
+        name,
+        fn,
+        skipped: true,
+        module: mod
+    });
+};
+
+// --- Internal Lifecycle ---
+
+function clear_tests() {
 	global.testing_state.tests = [];
-	global._spec_depth = 0;
 };
 
-// --- Specification DSL ---
+// --- Main Entry Point ---
 
-export function when(desc, fn) {
-	test("When " + desc, null, "header", 0);
-	let prev = global._spec_depth;
-	global._spec_depth = 1;
-	fn();
-	global._spec_depth = prev;
-};
+/**
+ * Executes multiple test suites based on the provided configuration.
+ * 
+ * @param {array} suites - Array of {dir, name} objects.
+ * @param {object} options - Execution options (verbose, filter, modules, prefix).
+ * @returns {boolean} - True if all tests passed.
+ */
+export function run(suites, options) {
+    options = options || {};
+    let overall_success = true;
 
-export function and(desc, fn) {
-	test("and " + desc, null, "header", 1);
-	let prev = global._spec_depth;
-	global._spec_depth = 2;
-	fn();
-	global._spec_depth = prev;
-};
+    // 1. Setup Global Context for test registration
+    global.testing_state.prefix = options.prefix;
 
-export function then(desc, fn) {
-	test("then " + desc, fn, "test", global._spec_depth);
-};
-
-// --- Runner Engine ---
-
-function colorize_spec(str) {
-	let res = str;
-	res = replace(res, /^When /, color(C_CYAN, "When "));
-	res = replace(res, /^and /, color(C_YELLOW, "and "));
-	res = replace(res, /^then /, color(C_YELLOW, "then "));
-	return res;
-}
-
-function run_item(t) {
-	if (!t.fn) return { ok: true, type: "header" };
-
-	let filter = getenv("FILTER");
-	if (filter && index(t.name, filter) == -1) {
-		return { ok: true, type: "skipped" };
-	}
-
-	try {
-		t.fn();
-		return { ok: true, type: "test" };
-	} catch (e) {
-		let err_str = sprintf("%s", e);
-		let is_assertion = (index(err_str, ASSERT_PREFIX) == 0);
-		if (is_assertion) {
-			return { ok: false, type: "test", failure: replace(err_str, ASSERT_PREFIX, "") };
-		} else {
-			return { ok: false, type: "test", error: (type(e) == "object" && e.stack) ? e.stack : err_str };
-		}
-	}
-}
-
-export function run_all(suite_name) {
-    let tests = global.testing_state.tests;
-    let start_time = clock();
-    let verbose = (getenv("VERBOSE") == "1");
-    let passed = 0;
-    let failed = 0;
-    let errors = 0;
-    let failures_list = [];
-    let errors_list = [];
-
-    if (suite_name) {
-        print(`\n${color(C_BOLD + C_CYAN, "● Suite: " + suite_name)}\n\n`);
+    // 2. Normalize Module Whitelist if present
+    if (type(options.modules) == "array") {
+        let normalized = [];
+        for (let m in options.modules) {
+            if (length(m) > 0) {
+                push(normalized, loader.normalize_module_name(m, options.prefix));
+            }
+        }
+        options.modules = (length(normalized) > 0) ? normalized : null;
     }
 
-    for (let i = 0; i < length(tests); ) {
-		let t = tests[i];
-
-		if (t.type == "header" && t.depth == 0 && index(t.name, "When ") == 0) {
-			let spec_results = [];
-			let all_ok = true;
-			let j = i + 1;
-
-			while (j < length(tests) && tests[j].depth > 0) {
-				let child = tests[j];
-				if (all_ok) {
-					let res = run_item(child);
-					push(spec_results, { item: child, result: res });
-					if (!res.ok) {
-						all_ok = false;
-						if (res.failure) failed++; else errors++;
-						push(res.failure ? failures_list : errors_list, { name: child.name, error: res.failure || res.error });
-					} else if (res.type == "test") {
-						passed++;
-					}
-				} else {
-					push(spec_results, { item: child, result: { ok: true, type: "skipped" } });
-				}
-				j++;
-			}
-
-			if (verbose) {
-				let status = all_ok ? color(C_GREEN, "[PASS]") : color(C_RED, "[FAIL]");
-				print(`${status} ${color(C_BOLD, colorize_spec(t.name))}\n`);
-				for (let r in spec_results) {
-					let indent = "       "; // Align with '[PASS] '
-					for (let k = 0; k < r.item.depth; k++) indent += "  ";
-
-					if (r.result.type == "header") {
-						print(`${indent}${color(C_BOLD, colorize_spec(r.item.name))}\n`);
-					} else if (r.result.type == "skipped") {
-						// Keep output clean
-					} else {
-						let s = r.result.ok ? "" : color(C_RED, "[FAIL] ");
-						let line_indent = r.result.ok ? indent : substr(indent, 0, length(indent) - 7);
-
-						print(`${line_indent}${s}${colorize_spec(r.item.name)}\n`);
-						if (!r.result.ok) {
-							let msg = r.result.failure || r.result.error;
-							print(`${indent}       ${replace(msg, /\n/g, "\n" + indent + "       ")}\n\n`);
-						}
-					}
-				}
-				print("\n");
-			} else {
-				print(all_ok ? color(C_GREEN, "●") : color(C_RED, "■"));
-			}
-			i = j;
-			continue;
-		}
-
-		let res = run_item(t);
-		if (res.ok) {
-			passed++;
-			if (verbose) {
-				print(`${color(C_GREEN, "[PASS]")} ${colorize_spec(t.name)}\n`);
-			} else {
-				print(color(C_GREEN, "●"));
-			}
-		} else {
-			if (res.failure) failed++; else errors++;
-			push(res.failure ? failures_list : errors_list, { name: t.name, error: res.failure || res.error });
-			if (verbose) {
-				print(`${color(C_RED, "[FAIL]")} ${colorize_spec(t.name)}\n       ${res.failure || res.error}\n\n`);
-			} else {
-				print(color(C_RED, "■"));
-			}
-		}
-		i++;
-
-		if (verbose && (i < length(tests)) && tests[i].depth == 0) {
-			print("\n");
-		}
+    // 3. Normalize Filter Regex once
+    if (type(options.filter) == "string" && length(options.filter) > 0) {
+        options.filter = regexp(options.filter);
+    } else if (type(options.filter) != "regexp") {
+        options.filter = null;
     }
 
-    if (!verbose) {
-		print("\n");
-		if (length(failures_list) > 0) {
-			print(`\n${color(C_BOLD + C_RED, "Failures:")}\n`);
-			for (let f in failures_list) {
-				print(`  ${color(C_RED, "✖")} ${f.name}\n      ${replace(f.error, /\n/g, "\n      ")}\n\n`);
-			}
-		}
-		if (length(errors_list) > 0) {
-			print(`\n${color(C_BOLD + C_BRED, "Errors:")}\n`);
-			for (let e in errors_list) {
-				print(`  ${color(C_BRED, "‼")} ${e.name}\n      ${replace(e.error, /\n/g, "\n      ")}\n\n`);
-			}
-		}
-	}
-
-    let end_time = clock();
-    let duration = (end_time[0] - start_time[0]) + ((end_time[1] - start_time[1]) / 1000000000.0);
-
-    print(`${color(C_GREEN, passed)} successes / ` +
-          `${color(C_RED, failed)} failures / ` +
-          `${color(C_BRED, errors)} errors ` +
-          `(${color(C_BOLD, sprintf("%.6f", duration))} seconds)\n`);
-
-    if (failed > 0 || errors > 0) {
-        exit(1);
+    // 4. Execution Loop
+    for (let s in suites) {
+        clear_tests();
+        loader.load_suite(s.dir, options.prefix, (file, err) => {
+            // Register a placeholder test that will fail with the syntax error
+            test(`Syntax Error: ${file}`, () => {
+                die(err);
+            });
+        });
+        
+        if (!runner.run_suite(global.testing_state.tests, s.name, options)) {
+            overall_success = false;
+        }
     }
+
+    return overall_success;
 };

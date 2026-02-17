@@ -2,13 +2,52 @@
 
 This project adheres to a strict testing architecture designed for security, resilience, and predictability in an embedded environment.
 
-## 1. Running Tests
+## 1. Architecture
 
-### Unit & Integration (Tiers 0-4)
-These tests run inside the OpenWrt runtime container (`luci`) to ensure accurate ABI and ucode behavior.
+The testing framework is a custom, modular library built natively in ucode to ensure zero external dependencies in the target runtime.
+
+### Directory Structure
+Tests are organized into **Suites** corresponding to architectural layers:
+
+*   **`tier0/` (Backend Compliance):** Native C binding tests. Verifies cryptographic primitives (SHA, HMAC, ECC) and memory safety.
+*   **`tier1/` (Cryptographic Plumbing):** Low-level ucode logic. Verifies the binding layer and core utilities.
+*   **`tier2/` (Business Logic):** The core application logic. Verifies OIDC state machines, role mapping, and configuration parsing.
+*   **`tier3/` (Integration Tests):** Full system simulation. Verifies CGI headers, UBUS session management, and end-to-end flows using mocks.
+*   **`tier4/` (Meta Tests):** Self-tests for the framework itself.
+
+### Core Components
+*   **`test/runner.uc`**: The CLI orchestrator. Handles environment variables (`VERBOSE`, `FILTER`, `MODULES`) and invokes the library.
+*   **`test/testing.uc`**: The public facade. Manages global state and exports the DSL (`test`, `assert`).
+*   **`test/testing/`**: Implementation modules (Loader, Matcher, Runner, Reporters).
+
+---
+
+## 2. Running Tests
+
+### Standard Run
+Executes all suites in order (Tier 0 -> Tier 4).
 ```bash
-# Run all ucode tests
 make unit-test
+```
+
+### Verbose Mode
+Use `VERBOSE=1` to see a detailed, line-by-line report of every test case.
+```bash
+make unit-test VERBOSE=1
+```
+
+### Filtered Run (Regex)
+Use `FILTER` to run only tests whose names match a regular expression.
+```bash
+# Run only compliance tests regarding SHA256
+make unit-test FILTER='compliance.*SHA256'
+```
+
+### Targeted Run (Modules)
+Use `MODULES` to run specific test files (whitelist). This bypasses the full suite execution but still reports "ignored" tests from the same suite for context.
+```bash
+# Run only specific files (comma or space separated)
+make unit-test MODULES='test/tier0/native_compliance_test.uc,test/tier2/oidc_logic_test.uc'
 ```
 
 ### End-to-End (E2E)
@@ -20,70 +59,45 @@ make e2e-up
 # Run the browser tests
 make e2e-test
 ```
-*See [devenv/README.md](../devenv/README.md) for detailed environment setup.*
-
-## 2. Testing Tiers
-
-| Tier | Name | Language | Scope | Goal |
-| :--- | :--- | :--- | :--- | :--- |
-| **0** | **Backend Compliance** | ucode | C Native Modules | Verify cryptographic primitives (SHA, HMAC, ECC) against test vectors. |
-| **1** | **Plumbing** | ucode | `crypto.uc` | Verify the ucode-to-C binding layer. |
-| **2** | **Business Logic** | ucode | `oidc.uc`, `session.uc`, `config.uc` | **Core Logic.** Verify OIDC state machines, role mapping, and permission deduplication. |
-| **3** | **Integration** | ucode | CGI + UBUS | Verify system wiring, HTTP headers, and dynamic UBUS session elevation. |
-| **4** | **Meta** | ucode | `mock.uc` | Verify the test harness itself ensures the mocks behave correctly (including UCI section names). |
-| **E2E** | **Full Stack** | **JavaScript** | Browser ↔ IdP ↔ Router | Verify the end-to-end user experience using Playwright. |
-
-### Hardened Security Validation
-
-The project includes specialized security tests beyond basic coverage:
-- **RBAC Mapping & Priority**: Verifies that user claims are correctly mapped to roles and that the first matched role name is used as the identity label.
-- **Permission Deduplication**: Verifies that merging multiple roles results in a unique set of ACL grants.
-- **Dynamic Grant Elevation**: Verifies that administrative roles triggers the dynamic scan of `/usr/share/rpcd/acl.d/` for full UI visibility.
-- **Authorization Parameter Validation**: Verifies mandatory presence and strength of `state`, `nonce`, and `code_challenge` during URL generation.
-- **Secret Key Bootstrap Resilience**: Verifies that the system correctly retries and recovers from race conditions during first-boot key generation, and fails safely if the **write operation fails** (e.g. disk full).
-- **CSRF Entropy Validation**: Verifies that session creation fails safely if the CSPRNG fails to produce entropy for the CSRF token.
-- **PII Redaction (Logs)**: Verifies that raw emails or names NEVER leak into `io.log` during session operations.
-- **at_hash Torture**: Verifies byte-safe calculation of token hashes using binary-sensitive sequences (e.g., `0xC2`) to prevent character boundary errors.
-- **Fail-Safe Consumption**: Verifies that access tokens are consumed in the replay registry even if ID token verification fails.
-- **Algorithm Confusion**: Verifies that symmetric `HS256` tokens are rejected in production mode.
-- **DoS Protection (Memory)**: Verifies that HTTP responses exceeding **256 KB** are aborted to prevent memory exhaustion.
-- **Native Hardening**: Verifies that the C native bridge rejects insecure RSA exponents (even or < 3), enforces a **minimum 2048-bit key size** for RS256, and maintains persistent DRBG state.
-- **WolfSSL Memory Safety**: Verifies that native conversion functions (e.g., `jwk_ec_p256_to_pem`) return `null` and do NOT crash on malformed inputs, preventing use-after-free vulnerabilities.
-- **Logout Session Validation**: Verifies that OIDC logout redirects are ONLY performed for valid local sessions to prevent CSRF bypass and open redirects on expired cookies.
-- **JWKS Key Rotation**: Verifies the automatic recovery path and forced cache refresh when a new key ID is encountered, and ensures **DoS protection** by refusing to refresh on missing Key IDs.
-- **Constant-Time Integrity**: Verifies the `constant_time_eq` implementation against multi-value type confusion and long strings.
 
 ---
 
-## 3. Testing Philosophy
+## 3. Writing Tests
 
-1.  **Temporal Isolation:** Tests MUST NOT leak state. Every mock reality SHALL exist only for the duration of a closure.
-2.  **Minimal Mock Context:** An `io` provider MUST contain ONLY the mocks strictly required by the function under test.
-3.  **Minimal State Capture:** Mocks SHOULD only record interactions when wrapped in a `spy()` block to prevent memory exhaustion and "ghost data" leaks.
+### The DSL
+Tests are defined using the `test` function exported by the `testing` module.
 
-## 2. Assertion Hierarchy (Stability Rules)
+```javascript
+import { test, test_skip, assert, assert_eq, assert_throws, assert_match } from 'testing';
 
-To keep tests robust and refactor-friendly, always follow this priority when writing assertions:
+test('feature: success scenario', () => {
+    let result = 1 + 1;
+    assert_eq(result, 2, "Math should work");
+});
 
-### Tier 1: Return Values (Primary)
-Always assert on the function's return value first. This verifies the **Public Contract**.
-*   **Target**: `assert(res.ok)`, `assert_eq(res.data.sid, "...")`.
+test_skip('feature: broken scenario', () => {
+    // This will be reported as [SKIP] or ○
+    assert(false); 
+});
+```
 
-### Tier 2: Observable State (Secondary)
-If the function has side-effects (like writing a file), verify the **final state** of the mock reality rather than the call itself.
-*   **Target**: `assert(io.read_file("/etc/config/pkg"))`.
-*   **Avoid**: Using `spy()` to check if `write_file` was called, unless the specific arguments or frequency are the target of the test.
+### Assertions
+*   `assert(cond, [msg])`: Fails if condition is falsy.
+*   `assert_eq(actual, expected, [msg])`: Deep equality check (objects/arrays).
+*   `assert_match(actual, regex, [msg])`: Fails if string does not match regex.
+*   `assert_throws(fn, [msg])`: Fails if function does not throw.
+*   `assert_fail([msg])`: Unconditional failure.
 
-### Tier 3: Spies (Last Resort)
-Use `spy()` ONLY for interactions that leave no persistent state in the mock, or where the protocol sequence is a security requirement.
-*   **Target**: UBUS calls, Log messages, or verifying that a file was *deleted* (if it didn't exist before).
-*   **Target**: `assert(data.called("ubus", "session", "login"))`.
+### Isolation & State
+*   **File Isolation:** Each file is loaded independently.
+*   **Test Isolation:** Tests within a suite are **shuffled** before execution to detect side-effect leakage.
+*   **Mocking:** Use `test/mock.uc` to create isolated realities.
 
 ---
 
-## 3. Mocking with `mock.uc`
+## 4. Mocking Strategy
 
-The `mock` module provides a fluent DSL for building mock realities.
+The `mock` module provides a fluent DSL for building isolated test environments.
 
 ### Basic Usage
 ```javascript
@@ -92,6 +106,7 @@ import * as mock from 'mock';
 let factory = mock.create();
 
 factory.with_env({ PATH_INFO: "/logout" }, (io) => {
+    // 'io' is a self-contained object implementing the system interface
     let req = web.request(io);
     assert_eq(req.path, "/logout");
 });
@@ -112,8 +127,8 @@ factory.with_files({ "/etc/key": "123" }, (io) => {
 });
 ```
 
-### Spying and Interaction Queries
-The `spy()` method returns a **Query Handle**. Interaction assertions should read like English sentences.
+### Spying
+The `spy()` method returns a **Query Handle** to verify side-effects (logging, UBUS calls).
 
 ```javascript
 let data = factory.with_ubus({ "session:destroy": {} }).spy((io) => {
@@ -127,26 +142,9 @@ assert(data.called("log", "warn"));
 
 ---
 
-## 3. Supported Scopes
+## 5. Coding Standards
 
-| Scope | Description |
-| :--- | :--- |
-| `with_files(data, cb)` | Simulates filesystem (`read_file`, `write_file`, `lsdir`). |
-| `with_uci(data, cb)` | Simulates UCI configuration packages. |
-| `with_env(data, cb)` | Simulates CGI environment variables. |
-| `with_responses(data, cb)` | Simulates HTTP network responses. |
-| `with_ubus(data, cb)` | Simulates UBUS object/method calls. |
-| `with_read_only(cb)` | Simulates a read-only filesystem (fails `write_file`, `mkdir`). |
-| `spy(cb)` | Enables interaction recording and returns a Query Handle. |
-| `get_stdout(cb)` | Executes a block and returns the raw captured `stdout`. |
-
----
-
-## 4. ucode Syntax Gotchas
-
-To ensure cross-version compatibility and parser stability, strictly follow these rules:
-
-1.  **NO Optional Chaining (`?.`)**: It returns an "empty" type that crashes during evaluation.
-2.  **NO Destructuring (`let {a} = obj`)**: Use explicit property assignment.
-3.  **Hybrid Arrow Functions**: Use arrow functions for logic and passthroughs. Use traditional `function` when returning an object literal directly to avoid brace ambiguity.
-4.  **NaN Equality**: Always use `type(x) != "int"` to detect failed integer conversions.
+1.  **NO Globals:** Tests must not rely on or modify `global` scope outside of the `testing` framework itself.
+2.  **Explicit Imports:** All test files must import `testing` and `mock` explicitly.
+3.  **Fixture Localization:** Fixtures (static data) should be placed in `test/tierX/fixtures.uc` and imported only by tests in that tier to prevent coupling.
+4.  **No Top-Level Side Effects:** Test files should only register tests at the top level. Execution logic must be inside the `test()` closure.
