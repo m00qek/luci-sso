@@ -120,6 +120,11 @@ export function get_secret_key(io) {
 			}
 		}
 	}
+
+	if (!key || length(key) == 0) {
+		return Result.err("SYSTEM_KEY_GENERATION_FAILED");
+	}
+
 	return Result.ok(key);
 };
 
