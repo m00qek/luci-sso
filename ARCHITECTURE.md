@@ -81,6 +81,9 @@ To prevent information leakage and client-side attacks, the system MUST enforce 
 *   **`Cache-Control`**: `no-store` to prevent caching of sensitive auth artifacts (Code, ID Token) by proxies or browsers.
 *   **`Referrer-Policy`**: `no-referrer` to prevent leaking the Authorization Code or State via the `Referer` header to external sites.
 
+**Known Edge Case (Protocol Inheritance):**
+The client-side status check (`?action=enabled`) utilizes relative URLs to inherit the current page's protocol. If LuCI is accessed over HTTP, this check is performed over HTTP to avoid browser Mixed-Content blocks. This is considered acceptable for a binary "enabled/disabled" status disclosure. However, the system MUST always transition to HTTPS (forcing the scheme) before initiating any OIDC protocol exchanges.
+
 ### Back-channel (Router ↔ IdP)
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS.
 *   **Entropy Validation:** All cryptographic parameters (Secret Key, Nonce, State, CSRF tokens) MUST be sourced from a CSPRNG and explicitly validated for length and type. Any generation failure MUST result in a system halt (fail-closed) to prevent weak-key or CSRF vulnerabilities.
