@@ -192,6 +192,13 @@ export function verify_jwt(token, pubkey, options) {
 	let clock_tolerance = options.clock_tolerance;
 	let now = options.now;
 
+	// MANDATORY: exp (Expiry) and iat (Issued At) MUST be present (Audit B2)
+	// Both exp and iat are required for strict OIDC compliance and age validation.
+	if (!options.allow_missing_claims) {
+		if (payload.exp == null) return Result.err("MISSING_EXP_CLAIM");
+		if (payload.iat == null) return Result.err("MISSING_IAT_CLAIM");
+	}
+
 	if (payload.exp != null) {
 		if (type(payload.exp) != "int") return Result.err("INVALID_EXP_CLAIM");
 		if (payload.exp < (now - clock_tolerance)) return Result.err("TOKEN_EXPIRED");
