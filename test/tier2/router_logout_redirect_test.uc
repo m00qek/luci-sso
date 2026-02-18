@@ -38,9 +38,7 @@ test('router: logic - logout redirect derivation robustness (W3)', () => {
 		let req = { path: "/logout", query: { stoken: "csrf" }, cookies: { sysauth: "sid" } };
 		let res = router.handle(io, config, req, TEST_POLICY);
 		assert(res.ok);
-		// Current logic: replace() doesn't match, returns original string
-		// Result: ...post_logout_redirect_uri=ftp%3A%2F%2Frouter.lan%2Fcallback
-		// Should ideally fallback to "/" if the regex fails to extract a safe origin.
-		assert(index(res.data.headers["Location"], "post_logout_redirect_uri=%2F") != -1, "Should fallback to / for invalid redirect_uri scheme");
+		// Correct logic (Audit W4): If regex fails, OMIT the parameter entirely rather than sending relative /
+		assert(index(res.data.headers["Location"], "post_logout_redirect_uri=") == -1, "Should OMIT post_logout_redirect_uri for invalid redirect_uri scheme");
 	});
 });

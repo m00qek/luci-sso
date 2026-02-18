@@ -10,7 +10,7 @@ import * as fs from 'fs';
  * @private
  */
 function get_system_ca_files() {
-    let cas = [];
+    let cas_map = {};
     
     // 1. Check for individual hashed certs (standard OpenWrt /etc/ssl/certs)
     let files = fs.lsdir("/etc/ssl/certs");
@@ -18,12 +18,13 @@ function get_system_ca_files() {
         for (let f in files) {
             // Include both .crt and .pem files commonly found in trust stores
             if (match(f, /\.(crt|pem)$/)) {
-                push(cas, "/etc/ssl/certs/" + f);
+                let path = "/etc/ssl/certs/" + f;
+                cas_map[path] = true;
             }
         }
     }
 
-    // 2. Check for common bundle files if the directory scan was empty
+    // 2. Check for common bundle files (Audit W5: Deduplicate with directory scan)
     let bundles = [
         "/etc/ssl/certs/ca-certificates.crt",
         "/etc/ssl/cert.pem",
@@ -31,12 +32,12 @@ function get_system_ca_files() {
     ];
 
     for (let b in bundles) {
-        if (fs.access(b)) {
-            push(cas, b);
+        if (!cas_map[b] && fs.access(b)) {
+            cas_map[b] = true;
         }
     }
 
-    return cas;
+    return keys(cas_map);
 }
 
 const MAX_RESPONSE_SIZE = 262144; // 256 KB

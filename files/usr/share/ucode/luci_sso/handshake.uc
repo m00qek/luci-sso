@@ -67,9 +67,12 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		let replace_origin = (url, old_origin, new_origin) => {
 			if (type(url) != "string") return url;
 			let norm_old = encoding.normalize_url(old_origin);
-			let url_prefix = encoding.normalize_url(substr(url, 0, length(old_origin)));
+			// Match using normalized forms to handle case/trailing slash differences
+			// but extract using the RAW prefix length to preserve path integrity (Audit W3)
+			let prefix_len = length(old_origin);
+			let url_prefix = encoding.normalize_url(substr(url, 0, prefix_len));
 			if (url_prefix == norm_old) {
-				return new_origin + substr(url, length(old_origin));
+				return new_origin + substr(url, prefix_len);
 			}
 			return url;
 		};

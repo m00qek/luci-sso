@@ -4,6 +4,7 @@
 
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
+import * as crypto from 'luci_sso.crypto';
 
 /**
  * Checks if the SSO service is enabled in UCI.
@@ -126,7 +127,7 @@ export function find_roles_for_user(config, claims) {
 		if (email) {
 			let lc_email = lc(email);
 			for (let e in role.emails) {
-				if (lc(e) == lc_email) {
+				if (crypto.constant_time_eq(lc(e), lc_email)) {
 					matched = true;
 					break;
 				}
@@ -137,7 +138,7 @@ export function find_roles_for_user(config, claims) {
 		if (!matched && length(groups) > 0) {
 			for (let g_claim in groups) {
 				for (let g_role in role.groups) {
-					if (g_claim == g_role) {
+					if (crypto.constant_time_eq(g_claim, g_role)) {
 						matched = true;
 						break;
 					}

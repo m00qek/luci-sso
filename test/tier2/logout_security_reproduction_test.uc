@@ -77,6 +77,6 @@ test('router: security - W3: post_logout_redirect_uri match check', () => {
 			let loc = res.data.headers.Location;
 			
 			// Should default to "/" if regex match fails
-			assert(index(loc, "post_logout_redirect_uri=%2F") >= 0, "Should default to safe '/' for malformed URI");
+			assert(index(loc, "post_logout_redirect_uri=") == -1, "Should OMIT post_logout_redirect_uri for malformed URI");
 		});
 });
