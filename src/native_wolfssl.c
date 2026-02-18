@@ -2,6 +2,10 @@
 #include <string.h>
 #include <stdlib.h>
 
+#ifdef _REENTRANT
+#error "WolfSSL native module is NOT thread-safe. Do not compile with threading support."
+#endif
+
 #include <ucode/module.h>
 
 #include <wolfssl/options.h>
