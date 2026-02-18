@@ -1,5 +1,6 @@
 'use strict';
 
+import * as uloop from 'uloop';
 import * as fs from 'fs';
 import * as uci from 'uci';
 import * as ubus from 'ubus';
@@ -87,7 +88,16 @@ export function create() {
 
 		uci_cursor: () => uci.cursor(),
 		fserror: () => fs.error(),
-		sleep: (seconds) => system(sprintf("sleep %d", seconds)),
+
+		sleep: (seconds) => {
+			if ((type(seconds) != "int" && type(seconds) != "double") || seconds < 0 || seconds > 30) {
+				die("CONTRACT_VIOLATION: sleep expects positive number <= 30");
+			}
+			uloop.init();
+			uloop.timer(seconds * 1000, () => uloop.end());
+			uloop.run();
+		},
+
 		stdout: fs.stdout
 	};
 };

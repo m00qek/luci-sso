@@ -846,6 +846,15 @@ The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be imp
 
 ---
 
+### 8. No Shell Execution (system() / popen())
+
+Logic MUST NOT utilize `system()` or `popen()` for any operation. These functions are unnecessarily heavy and introduce command injection risks.
+
+- **Delays:** Use `io.sleep()` (which utilizes `uloop.timer()`) instead of `system("sleep X")`.
+- **System Calls:** Use ucode built-ins or native C bindings for all system operations.
+
+---
+
 ## 10. Documentation Standards
 
 ### README.md
