@@ -219,12 +219,12 @@ export function fetch_jwks(io, jwks_uri, options) {
  */
 export function find_jwk(keys, kid) {
 	if (type(keys) != "array") die("CONTRACT_VIOLATION: keys must be an array");
-	if (!kid) {
-		if (length(keys) > 0) return Result.ok(keys[0]);
-		return Result.err("NO_KEYS_AVAILABLE");
-	}
-	for (let i, key in keys) {
-		if (key.kid == kid) return Result.ok(key);
-	}
-	return Result.err("KEY_NOT_FOUND", kid);
-};
+		if (!kid) {
+			if (length(keys) > 0) return Result.ok(keys[0]);
+			return Result.err("NO_KEYS_AVAILABLE");
+		}
+		for (let i, key in keys) {
+			if (crypto.constant_time_eq(key.kid, kid)) return Result.ok(key);
+		}
+		return Result.err("KEY_NOT_FOUND", kid);
+	};

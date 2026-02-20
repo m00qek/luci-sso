@@ -36,20 +36,25 @@ export function get_auth_url(io, config, discovery_doc, params) {
 	if (!params.nonce || type(params.nonce) != "string" || length(params.nonce) < 16) {
 		return Result.err("MISSING_NONCE_PARAMETER");
 	}
-	if (!params.code_challenge || type(params.code_challenge) != "string") {
-		return Result.err("MISSING_PKCE_CHALLENGE");
-	}
-
-	let query = {
-		response_type: "code",
-		client_id: config.client_id,
-		redirect_uri: config.redirect_uri,
-		scope: config.scope || "openid profile email",
-		state: params.state,
-		nonce: params.nonce,
-		code_challenge: params.code_challenge,
-		code_challenge_method: "S256"
-	};
+	        	if (!params.code_challenge || type(params.code_challenge) != "string") {
+	        		return Result.err("MISSING_PKCE_CHALLENGE");
+	        	}
+	        
+	        	// BLOCKER FIX: Enforce HTTPS on authorization_endpoint (B3)
+	        	if (!encoding.is_https(discovery_doc.authorization_endpoint)) {
+	        		return Result.err("INSECURE_AUTH_ENDPOINT");
+	        	}
+	        
+	        	let query = {
+	        		response_type: "code",
+	        		client_id: config.client_id,
+	        		redirect_uri: config.redirect_uri,
+	        		scope: config.scope || "openid profile email",
+	        		state: params.state,
+	        		nonce: params.nonce,
+	        		code_challenge: params.code_challenge,
+	        		code_challenge_method: "S256"
+	        	};
 
 	let endpoint = discovery_doc.authorization_endpoint;
 	let parts = split(endpoint, "#", 2);

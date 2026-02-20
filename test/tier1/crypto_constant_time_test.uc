@@ -62,3 +62,12 @@ test('crypto: constant_time_eq - length leakage prevention logic', () => {
     assert(!constant_time_eq('abcd', 'abc'), 'Should return false for suffix match with different length');
     assert(!constant_time_eq('a', 'b'), 'Should return false for different single bytes');
 });
+
+test('crypto: constant_time_eq - max_len logic verification', () => {
+    // Specifically test that if we pass a long string as the SECOND argument, 
+    // it still fails and processes correctly.
+    let long = "this_is_a_very_long_string_to_test_max_len_logic_123456789";
+    let short = "this_is_a_very_long_string";
+    assert(!constant_time_eq(short, long), 'Should return false for prefix (short, long)');
+    assert(!constant_time_eq(long, short), 'Should return false for prefix (long, short)');
+});

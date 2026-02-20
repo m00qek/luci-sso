@@ -818,9 +818,9 @@ The system MUST validate all external inputs. Contract violations MUST trigger `
 
 ### 4. Fail-Safe Execution Order (Consumption First)
 
-State handles and access tokens MUST be registered or consumed BEFORE performing expensive verification operations.
+State handles (handshake state) MUST be consumed BEFORE performing expensive verification operations. OIDC Access Tokens MUST be registered in the local session registry AFTER successful cryptographic verification of the ID Token.
 
-**Rationale:** Prevents brute-force signature or padding attacks by ensuring an attacker only gets one attempt per token.
+**Rationale:** Early consumption of state handles prevents replay attacks. Late registration of access tokens ensures the local registry is not polluted with unverified data from unauthenticated sources (DoS mitigation).
 
 ---
 

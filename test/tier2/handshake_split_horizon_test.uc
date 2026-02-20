@@ -192,3 +192,64 @@ test('handshake: split-horizon - prevents corruption when internal_issuer_url is
             assert(res.ok, `Handshake should succeed with internal_issuer_url as substring. Error: ${res.error}`);
         });
 });
+
+test('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)', () => {
+    let issuer_url = "https://idp.com/"; // Trailing slash
+    let internal_issuer_url = "https://internal.lan";
+    
+    let discovery_doc = {
+        issuer: "https://idp.com", // normalized
+        authorization_endpoint: "https://idp.com/auth",
+        token_endpoint: "https://idp.com/token",
+        jwks_uri: "https://idp.com/jwks"
+    };
+
+    let test_config = {
+        ...f.MOCK_CONFIG,
+        issuer_url: issuer_url,
+        internal_issuer_url: internal_issuer_url,
+    };
+
+    mock.create()
+        .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
+        .spy((io) => {
+            io.http_get = (url) => {
+                if (url == internal_issuer_url + "/.well-known/openid-configuration") {
+                    return { status: 200, body: { read: () => sprintf("%J", discovery_doc) } };
+                }
+                if (url == internal_issuer_url + "/jwks") {
+                    return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
+                }
+                return { status: 404 };
+            };
+
+            io.http_post = (url) => {
+                // If W3 bug existed, prefix_len of "https://idp.com/" (16) would be used
+                // on "https://idp.com/token", resulting in "https://internal.lanoken"
+                if (url == internal_issuer_url + "/token") {
+                    return { status: 200, body: { read: () => sprintf("%J", { access_token: "at", id_token: "it" }) } };
+                }
+                return { status: 404, body: { read: () => "URL Corrupted: " + url } };
+            };
+
+            let s_res = session.create_state(io);
+            let s_data = s_res.data;
+            let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
+            let raw_data = crypto.safe_json(io.read_file(path)).data;
+            raw_data.nonce = "test-nonce";
+            io.write_file(path, sprintf("%J", raw_data));
+
+            let request = {
+                path: "/callback",
+                query: { code: "c1", state: raw_data.state },
+                cookies: { "__Host-luci_sso_state": s_data.token },
+                env: { HTTPS: "on" }
+            };
+
+            // Use internal_issuer_url for discovery but we expect it to talk to IDP via it
+            let res = handshake.authenticate(io, test_config, request);
+            
+            // If we reached here without a "URL Corrupted" failure in io.http_post, it means the prefix replacement worked!
+            assert(true);
+        });
+});

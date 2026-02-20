@@ -33,22 +33,22 @@ export function constant_time_eq(a, b) {
 
 	// MANDATORY: Length cap to prevent DoS via amplification (W1)
 	// Any value longer than 16KB is considered excessive for tokens/hashes in this system.
-	if (len_a > 16384 || len_b > 16384) return false;
-
-	let res = (len_a ^ len_b);
-
-	// We iterate based on the length of the first string (usually the untrusted input).
-	// This ensures that for a given input length, the execution time is constant
-	// regardless of the secret's content or length.
-	for (let i = 0; i < len_a; i++) {
-		let char_a = ord(a, i);
-		let char_b = ord(b, i % (len_b || 1));
-		res |= (char_a ^ char_b);
-	}
-
-	return (res == 0);
-};
-
+		if (len_a > 16384 || len_b > 16384) return false;
+	
+		let res = (len_a ^ len_b);
+	
+		// We iterate based on the maximum length of the two strings.
+		// This ensures that for any two inputs, the timing is dominated by the
+		// longer string, mitigating length-probing attacks.
+		let max_len = (len_a > len_b) ? len_a : len_b;
+		for (let i = 0; i < max_len; i++) {
+			let char_a = ord(a, i % (len_a || 1));
+			let char_b = ord(b, i % (len_b || 1));
+			res |= (char_a ^ char_b);
+		}
+	
+		return (res == 0);
+	};
 // --- Public API ---
 
 /**

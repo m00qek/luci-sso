@@ -10,8 +10,8 @@ The testing framework is a custom, modular library built natively in ucode to en
 Tests are organized into **Suites** corresponding to architectural layers:
 
 *   **`tier0/` (Backend Compliance):** Native C binding tests. Verifies cryptographic primitives (SHA, HMAC, ECC) and memory safety.
-*   **`tier1/` (Cryptographic Plumbing):** Low-level ucode logic. Verifies the binding layer and core utilities.
-*   **`tier2/` (Business Logic):** The core application logic. Verifies OIDC state machines, role mapping, and configuration parsing.
+*   **`tier1/` (Cryptographic Plumbing):** Low-level ucode logic. Verifies the binding layer and core utilities (including constant-time comparisons).
+*   **`tier2/` (Business Logic):** The core application logic. Verifies OIDC state machines (including split-horizon path preservation), role mapping, and configuration parsing.
 *   **`tier3/` (Integration Tests):** Full system simulation. Verifies CGI headers, UBUS session management, and end-to-end flows using mocks.
 *   **`tier4/` (Meta Tests):** Self-tests for the framework itself.
 

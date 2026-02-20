@@ -62,27 +62,35 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	// Create a shallow copy to avoid mutating the cached object
 	let discovery_doc = { ...disc_res.data };
 
-	// Back-Channel Override: The Router must talk to the IdP via the internal network
-	if (config.internal_issuer_url != config.issuer_url) {
-		let replace_origin = (url, old_origin, new_origin) => {
-			if (type(url) != "string") return url;
-			let norm_old = encoding.normalize_url(old_origin);
-			// Match using normalized forms to handle case/trailing slash differences
-			// but extract using the RAW prefix length to preserve path integrity (Audit W3)
-			let prefix_len = length(old_origin);
-			let url_prefix = encoding.normalize_url(substr(url, 0, prefix_len));
-			if (url_prefix == norm_old) {
-				return new_origin + substr(url, prefix_len);
+		// Back-Channel Override: The Router must talk to the IdP via the internal network
+		if (config.internal_issuer_url != config.issuer_url) {
+			let replace_origin = (url, old_origin, new_origin) => {
+				if (type(url) != "string") return url;
+				let norm_url = encoding.normalize_url(url);
+				let norm_old = encoding.normalize_url(old_origin);
+				
+				// Check if the normalized URL starts with the normalized old origin
+				if (substr(norm_url, 0, length(norm_old)) == norm_old) {
+					// We need to find where norm_old ends in the ORIGINAL url
+					// Since normalize_url only lowercases scheme/host and strips trailing slashes,
+					// we can find the end of the host.
+					let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
+					if (m) {
+						let raw_origin = m[1] + m[2];
+						if (encoding.normalize_url(raw_origin) == norm_old) {
+							return new_origin + m[3];
+						}
+					}
+				}
+				return url;
+			};
+	
+			discovery_doc.token_endpoint = replace_origin(discovery_doc.token_endpoint, config.issuer_url, config.internal_issuer_url);
+			discovery_doc.jwks_uri = replace_origin(discovery_doc.jwks_uri, config.issuer_url, config.internal_issuer_url);
+			if (discovery_doc.userinfo_endpoint) {
+				discovery_doc.userinfo_endpoint = replace_origin(discovery_doc.userinfo_endpoint, config.issuer_url, config.internal_issuer_url);
 			}
-			return url;
-		};
-
-		discovery_doc.token_endpoint = replace_origin(discovery_doc.token_endpoint, config.issuer_url, config.internal_issuer_url);
-		discovery_doc.jwks_uri = replace_origin(discovery_doc.jwks_uri, config.issuer_url, config.internal_issuer_url);
-		if (discovery_doc.userinfo_endpoint) {
-			discovery_doc.userinfo_endpoint = replace_origin(discovery_doc.userinfo_endpoint, config.issuer_url, config.internal_issuer_url);
 		}
-	}
 
 	let exchange_res = oidc.exchange_code(io, config, discovery_doc, code, handshake.code_verifier, session_id);
 	if (!exchange_res.ok) {

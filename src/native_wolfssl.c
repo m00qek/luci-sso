@@ -29,14 +29,29 @@
 	} while(0)
 
 #define VALIDATE_INPUT_SIZES_NULL(msg_len, sig_len, key_len) \
-	do { \
-		if ((msg_len) > MAX_INPUT_SIZE || (sig_len) > MAX_INPUT_SIZE || (key_len) > MAX_INPUT_SIZE) { \
-			return NULL; \
-		} \
-	} while(0)
+        do { \
+                if ((msg_len) > MAX_INPUT_SIZE || (sig_len) > MAX_INPUT_SIZE || (key_len) > MAX_INPUT_SIZE) { \
+                        return NULL; \
+                } \
+        } while(0)
 
-static void secure_memzero(void *p, size_t len)
-{
+#define VALIDATE_WOLFSSL_STATE() \
+        do { \
+                if (!_rng_initialized) { \
+                        if (wc_InitRng(&_global_rng) != 0) return ucv_boolean_new(false); \
+                        _rng_initialized = 1; \
+                } \
+        } while(0)
+
+#define VALIDATE_WOLFSSL_STATE_NULL() \
+        do { \
+                if (!_rng_initialized) { \
+                        if (wc_InitRng(&_global_rng) != 0) return NULL; \
+                        _rng_initialized = 1; \
+                } \
+        } while(0)
+
+static void secure_memzero(void *p, size_t len){
 	if (p == NULL || len == 0) return;
 	volatile unsigned char *vp = (volatile unsigned char *)p;
 	while (len--) *vp++ = 0;
@@ -98,12 +113,7 @@ static uc_value_t *uc_wolfssl_random(uc_vm_t *vm, size_t nargs) {
 	int len = (ucv_type(arg) == UC_INTEGER) ? ucv_int64_get(arg) : 32;
 	if (len <= 0 || len > 4096) return NULL;
 
-	if (!_rng_initialized) {
-		/* SAFETY: This module assumes single-threaded execution (CGI model).
-		 * If used in a multi-threaded context, _global_rng MUST be protected by a mutex. */
-		if (wc_InitRng(&_global_rng) != 0) return NULL;
-		_rng_initialized = 1;
-	}
+	VALIDATE_WOLFSSL_STATE_NULL();
 
 	unsigned char *buf = malloc(len);
 	if (!buf) return NULL;
@@ -133,12 +143,13 @@ static uc_value_t *uc_wolfssl_verify_rs256(uc_vm_t *vm, size_t nargs) {
 	const unsigned char *sig = (const unsigned char *)ucv_string_get(v_sig);
 	size_t sig_len = ucv_string_length(v_sig);
 	const unsigned char *key_pem = (const unsigned char *)ucv_string_get(v_key);
-	size_t key_len = ucv_string_length(v_key);
-
-	VALIDATE_INPUT_SIZES(msg_len, sig_len, key_len);
-
-	RsaKey key;
-	wc_InitRsaKey(&key, NULL);
+		size_t key_len = ucv_string_length(v_key);
+	
+		VALIDATE_INPUT_SIZES(msg_len, sig_len, key_len);
+		VALIDATE_WOLFSSL_STATE();
+	
+		RsaKey key;
+		wc_InitRsaKey(&key, NULL);
 	
 	// Convert PEM to DER first (WolfSSL's Decode functions usually prefer DER)
 	unsigned char der[4096];
@@ -182,14 +193,15 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 	size_t msg_len = ucv_string_length(v_msg);
 	const unsigned char *raw_sig = (const unsigned char *)ucv_string_get(v_sig);
 	size_t raw_sig_len = ucv_string_length(v_sig);
-	const char *key_pem = ucv_string_get(v_key);
-	size_t key_len = ucv_string_length(v_key);
-
-	if (raw_sig_len != 64) return ucv_boolean_new(false);
-	VALIDATE_INPUT_SIZES(msg_len, raw_sig_len, key_len);
-
-	unsigned char hash[WC_SHA256_DIGEST_SIZE];
-	if (wc_Sha256Hash(msg, msg_len, hash) != 0) return ucv_boolean_new(false);
+		const char *key_pem = ucv_string_get(v_key);
+		size_t key_len = ucv_string_length(v_key);
+	
+		if (raw_sig_len != 64) return ucv_boolean_new(false);
+		VALIDATE_INPUT_SIZES(msg_len, raw_sig_len, key_len);
+		VALIDATE_WOLFSSL_STATE();
+	
+		unsigned char hash[WC_SHA256_DIGEST_SIZE];
+		if (wc_Sha256Hash(msg, msg_len, hash) != 0) return ucv_boolean_new(false);
 
 	ecc_key key;
 	wc_ecc_init(&key);
