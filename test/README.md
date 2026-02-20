@@ -54,7 +54,7 @@ make unit-test MODULES='test/tier0/native_compliance_test.uc,test/tier2/oidc_log
 These tests run in a separate Playwright container (`browser`) and verify the full OIDC flow against the Mock IdP and LuCI.
 ```bash
 # Start the E2E stack
-make e2e-up
+make up
 
 # Run the browser tests
 make e2e-test

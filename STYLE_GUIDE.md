@@ -1007,7 +1007,8 @@ Before submitting PR, verify:
 ### Orchestration
 The primary entry point for development is `devenv/Makefile`, which delegates complex logic to `devenv/scripts/test.sh`.
 *   **`make compile`**: Triggers the SDK container to build native C components.
-*   **`make up` / `make e2e-up`**: Lifts the local or E2E OIDC stack.
+*   **`make up`**: Lifts the CI/E2E OIDC stack.
+*   **`make local-up`**: Lifts the local development stack.
 *   **`make unit-test` / `make e2e-test`**: Executes tests with support for `MODULES="..."` and `FILTER="..."`.
 *   **`make watch-tests`**: Polyglot watcher that runs unit or E2E tests automatically on change.
 
