@@ -15,7 +15,7 @@ All code examples in this guide follow the style rules defined herein. Examples 
 
 For real-world implementations, see:
 - [`files/usr/share/ucode/luci_sso/`](../files/usr/share/ucode/luci_sso/) - Production code
-- [`test/unit/`](../test/unit/) - Test code
+- [`test/tier*/`](../test/) - Test code (Tier 0 to Tier 4)
 
 ### Living Document
 

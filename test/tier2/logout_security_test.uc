@@ -70,3 +70,33 @@ test('logout: security - robust origin extraction for post_logout_redirect_uri',
             });
     }
 });
+
+test('logout: security - ignore insecure end_session_endpoint (W2)', () => {
+    let config = f.MOCK_CONFIG;
+    let sid = "session-789";
+    let stoken = "csrf-token-xyz";
+    let request = {
+        path: "/logout",
+        query: { stoken: stoken },
+        cookies: { sysauth_https: sid }
+    };
+
+    mock.create()
+        .with_ubus({
+            "session:get": { values: { token: stoken, oidc_id_token: "hint" } },
+            "session:destroy": {}
+        })
+        .with_responses({
+            "https://trusted.idp/.well-known/openid-configuration": {
+                status: 200,
+                // INSECURE endpoint
+                body: { ...f.MOCK_DISCOVERY, end_session_endpoint: "http://insecure.idp/logout" }
+            }
+        })
+        .spy((io) => {
+            let res = router.handle(io, config, request);
+            assert(res.ok);
+            // Should fallback to local root "/" instead of redirecting to HTTP
+            assert_eq(res.data.headers["Location"], "/", "Should ignore insecure logout endpoint and fallback to local root");
+        });
+});

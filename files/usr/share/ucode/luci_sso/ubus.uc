@@ -75,15 +75,17 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 
 	let sid = create_res.ubus_rpc_session;
 
-	// 2. Grant Permissions
-	let grant_perm = (scope, obj, func) => {
-		io.ubus_call("session", "grant", {
-			ubus_rpc_session: sid,
-			scope: scope,
-			objects: [[obj, func]]
-		});
-	};
-
+	        // 2. Grant Permissions
+	        let grant_perm = (scope, obj, func) => {
+	                let res = io.ubus_call("session", "grant", {
+	                        ubus_rpc_session: sid,
+	                        scope: scope,
+	                        objects: [[obj, func]]
+	                });
+	                if (!res) {
+	                        io.log("warn", `UBUS session grant failed [sid: ${substr(sid, 0, 8)}...] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
+	                }
+	        };
 	let is_admin = false;
 	for (let r in perms.read) { if (crypto.constant_time_eq(r, "*")) { is_admin = true; break; } }
 	if (!is_admin) {

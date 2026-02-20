@@ -6,6 +6,7 @@ import * as lucihttp from 'lucihttp';
 import * as discovery from 'luci_sso.discovery';
 import * as handshake from 'luci_sso.handshake';
 import * as config_mod from 'luci_sso.config';
+import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 
 /**
@@ -90,26 +91,29 @@ function handle_logout(io, config, request) {
 
 	let logout_url = "/";
 
-	// OIDC RP-Initiated Logout
-	let disc_res = discovery.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
-	if (disc_res.ok && disc_res.data.end_session_endpoint) {
-		let end_session = disc_res.data.end_session_endpoint;
-		let sep = (index(end_session, '?') == -1) ? '?' : '&';
-		
-		logout_url = end_session;
-		if (id_token_hint) {
-			logout_url += `${sep}id_token_hint=${lucihttp.urlencode(id_token_hint, 1)}`;
-			sep = '&';
-		}
-		
-		let redirect_uri = config.redirect_uri || "";
-		let m = match(redirect_uri, /^(https:\/\/[^\/]+).*/);
-		if (m) {
-			let post_logout = m[1] + "/";
-			logout_url += `${sep}post_logout_redirect_uri=${lucihttp.urlencode(post_logout, 1)}`;
-		}
-	}
-
+	        // OIDC RP-Initiated Logout
+	        let disc_res = discovery.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
+	        if (disc_res.ok && disc_res.data.end_session_endpoint) {
+	                let end_session = disc_res.data.end_session_endpoint;
+	
+	                // BLOCKER FIX: Enforce HTTPS on end_session_endpoint (W2)
+	                if (encoding.is_https(end_session)) {
+	                        let sep = (index(end_session, '?') == -1) ? '?' : '&';
+	
+	                        logout_url = end_session;
+	                        if (id_token_hint) {
+	                                logout_url += `${sep}id_token_hint=${lucihttp.urlencode(id_token_hint, 1)}`;
+	                                sep = '&';
+	                        }
+	
+	                        let redirect_uri = config.redirect_uri || "";
+	                        let m = match(redirect_uri, /^(https:\/\/[^\/]+).*/);
+	                        if (m) {
+	                                let post_logout = m[1] + "/";
+	                                logout_url += `${sep}post_logout_redirect_uri=${lucihttp.urlencode(post_logout, 1)}`;
+	                        }
+	                }
+	        }
 	return Result.ok(response(302, {
 		"Location": logout_url,
 		"Set-Cookie": [

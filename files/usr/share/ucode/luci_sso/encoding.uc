@@ -163,13 +163,10 @@ export function normalize_url(url) {
 		res = lc(m[1]) + lc(m[2]) + m[3];
 	}
 
-	// Remove trailing slashes
-	while (substr(res, -1) == "/") {
-		res = substr(res, 0, length(res) - 1);
-	}
-	return res;
-};
-
+	        // Remove trailing slashes
+	        res = replace(res, /\/+$/, "");
+	        return res;
+	};
 /**
  * Checks if a URL uses the HTTPS scheme (case-insensitive).
  * Per RFC 3986 §3.1, schemes are case-insensitive.
