@@ -104,8 +104,8 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 
 	let response = io.http_post(discovery.token_endpoint, {
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
-		body: encoded_body,
-		verify: true // Explicitly request TLS certificate verification
+		body: encoded_body
+		// TLS verification is enforced by default in the IO provider
 	});
 
 	if (!response || response.error) {
@@ -163,7 +163,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	// BLOCKER: Enforce algorithm whitelist from policy
 	let alg_allowed = false;
 	for (let a in p.allowed_algs) {
-		if (header.alg == a) {
+		if (crypto.constant_time_eq(header.alg, a)) {
 			alg_allowed = true;
 			break;
 		}
@@ -276,8 +276,8 @@ export function fetch_userinfo(io, endpoint, access_token) {
 	io.log("info", "Fetching supplemental claims from UserInfo endpoint");
 
 	let response = io.http_get(endpoint, {
-		headers: { "Authorization": `Bearer ${access_token}` },
-		verify: true
+		headers: { "Authorization": `Bearer ${access_token}` }
+		// TLS verification is enforced by default in the IO provider
 	});
 
 	if (!response || response.error) {

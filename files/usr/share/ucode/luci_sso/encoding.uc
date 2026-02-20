@@ -160,13 +160,24 @@ export function normalize_url(url) {
 	let res = url;
 	let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
 	if (m) {
-		res = lc(m[1]) + lc(m[2]) + m[3];
+		let scheme = lc(m[1]);
+		let host = lc(m[2]);
+		let path = m[3];
+
+		// W2: Strip default ports per RFC 3986 §6.2.3
+		if (scheme == "https://") {
+			host = replace(host, /:443$/, "");
+		} else if (scheme == "http://") {
+			host = replace(host, /:80$/, "");
+		}
+
+		res = scheme + host + path;
 	}
 
-	        // Remove trailing slashes
-	        res = replace(res, /\/+$/, "");
-	        return res;
-	};
+	// Remove trailing slashes
+	res = replace(res, /\/+$/, "");
+	return res;
+};
 /**
  * Checks if a URL uses the HTTPS scheme (case-insensitive).
  * Per RFC 3986 §3.1, schemes are case-insensitive.

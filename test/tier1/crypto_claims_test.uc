@@ -20,10 +20,10 @@ test('Security: JWT - Mandatory Claims Enforced (Audit B2)', () => {
     let res = crypto.verify_jwt(PLUMBING_RSA.token, PLUMBING_RSA.pubkey, opts);
     assert_eq(res.error, "MISSING_EXP_CLAIM", "Should fail on missing exp");
 
-    // 2. Override: allow_missing_claims should pass
+    // 2. W3 Fix: even with allow_missing_claims, it should still FAIL
     let opts_allow = { ...opts, allow_missing_claims: true };
     let res_allow = crypto.verify_jwt(PLUMBING_RSA.token, PLUMBING_RSA.pubkey, opts_allow);
-    assert(!res_allow.error, "Should pass with allow_missing_claims=true");
+    assert_eq(res_allow.error, "MISSING_EXP_CLAIM", "W3: allow_missing_claims MUST be ignored/removed");
 });
 
 test('Security: JWT - Mandatory iat Enforced', () => {

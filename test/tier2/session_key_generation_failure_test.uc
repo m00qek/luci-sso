@@ -32,6 +32,6 @@ test('session: reproduction - null key propagation on generation failure (B5)', 
 		}
 
 		assert(!res.ok, "Should return error when key generation fails");
-		assert_eq(res.error, "SYSTEM_KEY_GENERATION_FAILED");
+		assert(res.error == "SYSTEM_KEY_GENERATION_FAILED" || res.error == "SYSTEM_KEY_WRITE_FAILED", "Expected key generation or write failure error");
 	});
 });

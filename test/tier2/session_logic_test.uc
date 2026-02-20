@@ -240,3 +240,22 @@ test('session: logic - detect CSPRNG failure during handshake creation (B2)', ()
 	
 	global.TESTING_RANDOM_FAIL = false;
 });
+
+// W1: Unchecked io.rename in get_secret_key
+test('session: get_secret_key - W1 rename failure regression', () => {
+	// Mock IO where rename fails (manual override)
+	mock.create()
+		.with_files({
+			"/etc/luci-sso/secret.key": null, // Key does not exist
+			"/etc/luci-sso": { ".type": "directory" }
+		})
+		.spy((io) => {
+			// Manually inject a failing rename
+			io.rename = () => false;
+
+			let res = session.get_secret_key(io);
+			
+			assert(!res.ok, "W1: get_secret_key MUST fail if atomic rename fails");
+			assert_eq(res.error, "SYSTEM_KEY_WRITE_FAILED", "W1: Expected error code for rename failure");
+		});
+});

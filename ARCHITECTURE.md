@@ -151,6 +151,7 @@ The system implements full session synchronization during logout to prevent "Loc
 
 ### RP-Initiated Logout
 *   **Authentication:** The system MUST only perform the OIDC logout redirect if a valid local session exists. Unauthenticated logout requests MUST be redirected to the local root (`/`) to prevent open redirect vulnerabilities.
+*   **CSRF Protection:** Logout requests MUST include a valid `stoken` query parameter. The system MUST perform a constant-time comparison against the session's CSRF token. Both the provided token and the session token MUST be non-empty; an empty string comparison MUST result in a 403 Forbidden response to prevent CSRF bypasses.
 *   **Enforcement:** When an authenticated user accesses `/logout`, the system MUST perform OIDC Discovery to locate the IdP's `end_session_endpoint`.
 *   **Protocol:** If the endpoint is available, the User Agent MUST be redirected there with an `id_token_hint` (retrieved from the UBUS session) and a `post_logout_redirect_uri`.
 *   **Cleanup:** The local UBUS session MUST be destroyed and session cookies (`sysauth`, `sysauth_https`) MUST be cleared BEFORE the redirect occurs.

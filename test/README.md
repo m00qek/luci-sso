@@ -16,7 +16,7 @@ Tests are organized into **Suites** corresponding to architectural layers:
 *   **`tier4/` (Meta Tests):** Self-tests for the framework itself.
 
 ### Core Components
-*   **`test/runner.uc`**: The CLI orchestrator. Handles environment variables (`VERBOSE`, `FILTER`, `MODULES`) and invokes the library.
+*   **`test/runner.uc`**: The CLI orchestrator. Handles environment variables (`VERBOSE`, `FILTER`, `MODULES`). It utilizes **Process Isolation** for full suite runs, executing each tier in a fresh sub-process to prevent file descriptor exhaustion from cumulative module imports.
 *   **`test/testing.uc`**: The public facade. Manages global state and exports the DSL (`test`, `assert`).
 *   **`test/testing/`**: Implementation modules (Loader, Matcher, Runner, Reporters).
 

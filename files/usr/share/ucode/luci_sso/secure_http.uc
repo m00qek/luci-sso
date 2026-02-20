@@ -125,6 +125,7 @@ export function request(method, url, opts) {
     }
 
     uloop.run();
+    con.disconnect();
 
     return response;
 };

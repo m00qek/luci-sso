@@ -739,6 +739,7 @@ luci-sso/
 │   ├── handshake.uc   # OIDC state machine and session orchestration
 │   ├── session.uc     # Session management (JWS tokens)
 │   ├── encoding.uc    # Pure data encoding and string logic
+│   ├── result.uc      # Standard Result object pattern for error handling
 │   ├── jwk.uc         # JSON Web Key management
 │   ├── config.uc      # UCI configuration loader
 │   ├── web.uc         # CGI and HTTP request/response logic
@@ -749,12 +750,14 @@ luci-sso/
 │   ├── native_mbedtls.c   # mbedtls backend
 │   └── native_wolfssl.c   # wolfssl backend
 ├── test/
-│   ├── unit/          # Unit tests for individual modules
-│   │   ├── tier0_fixtures.uc # Minimal crypto/encoding fixtures
-│   │   ├── tier1_fixtures.uc # OIDC/JWT logic fixtures
-│   │   └── tier2_fixtures.uc # Complex handshake/session fixtures
-│   ├── integration/   # Integration tests for router and UBUS
+│   ├── tier0/         # Native crypto compliance (MbedTLS/WolfSSL)
+│   ├── tier1/         # Encoding/crypto logic tests
+│   ├── tier2/         # Integration (handshake, session, config, ubus)
+│   ├── tier3/         # Router / IO tests
+│   ├── tier4/         # Mock system tests
 │   ├── e2e/           # Playwright browser tests
+│   ├── testing/       # Test framework
+│   ├── lib/           # Test helpers
 │   ├── mock.uc        # Mock I/O provider
 │   └── runner.uc      # Test harness
 └── ARCHITECTURE.md    # System architecture and security model

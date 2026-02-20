@@ -61,14 +61,15 @@ test('router: security - W3: post_logout_redirect_uri match check', () => {
 			// Mock ubus session verify
 			io.ubus_call = (obj, method, args) => {
 				if (obj == "session" && method == "get") {
-					return { values: { oidc_id_token: id_token, user: "admin" } };
+					return { values: { token: "valid-stoken", oidc_id_token: id_token, user: "admin" } };
 				}
 				return {};
 			};
 
 			let request = {
 				path: "/logout",
-				cookies: { sysauth_https: sid }
+				cookies: { sysauth_https: sid },
+				query: { stoken: "valid-stoken" }
 			};
 
 			let res = router.handle(io, malformed_config, request);

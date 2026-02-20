@@ -88,10 +88,17 @@ export function get_secret_key(io) {
 					return Result.err("SYSTEM_KEY_WRITE_FAILED");
 				}
 				io.chmod(tmp_path, 0600);
-				io.rename(tmp_path, SECRET_KEY_PATH);
+				if (!io.rename(tmp_path, SECRET_KEY_PATH)) {
+					io.log("error", "CRITICAL: Failed to atomically install secret key");
+					try { io.remove(tmp_path); } catch (e) {}
+					try { io.remove(lock_path); } catch (e) {}
+					return Result.err("SYSTEM_KEY_WRITE_FAILED");
+				}
 				key = new_key;
 			} catch (e) {
-				// Error during generation/write
+				io.log("error", `Failed to generate or write secret key: ${e}`);
+				try { io.remove(lock_path); } catch (ex) {}
+				return Result.err("SYSTEM_KEY_WRITE_FAILED");
 			}
 			// 3. ALWAYS release the lock
 			try { io.remove(lock_path); } catch (e) {}
