@@ -82,9 +82,10 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	                        scope: scope,
 	                        objects: [[obj, func]]
 	                });
-	                if (!res) {
-	                        io.log("warn", `UBUS session grant failed [sid: ${substr(sid, 0, 8)}...] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
-	                }
+	                			if (!res) {
+	                				io.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(sid)}] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
+	                			}
+	                
 	        };
 	let is_admin = false;
 	for (let r in perms.read) { if (crypto.constant_time_eq(r, "*")) { is_admin = true; break; } }

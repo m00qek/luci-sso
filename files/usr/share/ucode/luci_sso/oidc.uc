@@ -33,30 +33,30 @@ export function get_auth_url(io, config, discovery_doc, params) {
 	if (!params.state || type(params.state) != "string" || length(params.state) < 16) {
 		return Result.err("MISSING_STATE_PARAMETER");
 	}
-	if (!params.nonce || type(params.nonce) != "string" || length(params.nonce) < 16) {
-		return Result.err("MISSING_NONCE_PARAMETER");
-	}
-	        	if (!params.code_challenge || type(params.code_challenge) != "string") {
-	        		return Result.err("MISSING_PKCE_CHALLENGE");
-	        	}
-	        
-	        	// BLOCKER FIX: Enforce HTTPS on authorization_endpoint (B3)
-	        	if (!encoding.is_https(discovery_doc.authorization_endpoint)) {
-	        		return Result.err("INSECURE_AUTH_ENDPOINT");
-	        	}
-	        
-	        	let query = {
-	        		response_type: "code",
-	        		client_id: config.client_id,
-	        		redirect_uri: config.redirect_uri,
-	        		scope: config.scope || "openid profile email",
-	        		state: params.state,
-	        		nonce: params.nonce,
-	        		code_challenge: params.code_challenge,
-	        		code_challenge_method: "S256"
-	        	};
-
-	let endpoint = discovery_doc.authorization_endpoint;
+		if (!params.nonce || type(params.nonce) != "string" || length(params.nonce) < 16) {
+			return Result.err("MISSING_NONCE_PARAMETER");
+		}
+	
+		if (!params.code_challenge || type(params.code_challenge) != "string") {
+			return Result.err("MISSING_PKCE_CHALLENGE");
+		}
+	
+		// BLOCKER FIX: Enforce HTTPS on authorization_endpoint (B3)
+		if (!encoding.is_https(discovery_doc.authorization_endpoint)) {
+			return Result.err("INSECURE_AUTH_ENDPOINT");
+		}
+	
+		let query = {
+			response_type: "code",
+			client_id: config.client_id,
+			redirect_uri: config.redirect_uri,
+			scope: config.scope || "openid profile email",
+			state: params.state,
+			nonce: params.nonce,
+			code_challenge: params.code_challenge,
+			code_challenge_method: "S256"
+		};
+		let endpoint = discovery_doc.authorization_endpoint;
 	let parts = split(endpoint, "#", 2);
 	let url = parts[0];
 	let fragment = (length(parts) > 1) ? "#" + parts[1] : "";
@@ -147,7 +147,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
  * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
  */
 export function verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy) {
-	if (!tokens.id_token) return Result.err("MISSING_ID_TOKEN");
+	if (!tokens.id_token || type(tokens.id_token) != "string") return Result.err("MISSING_ID_TOKEN");
 
 	// 1. Policy Enforcement (Second Dimension)
 	const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
@@ -255,7 +255,8 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	let user_data = {
 		sub: payload.sub,
 		email: payload.email,
-		name: payload.name
+		name: payload.name,
+		groups: (type(payload.groups) == "array") ? payload.groups : []
 	};
 
 	return Result.ok(user_data);
