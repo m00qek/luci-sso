@@ -139,14 +139,19 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	// FALLBACK: If email is missing from ID Token, try UserInfo endpoint (OIDC §5.3)
 	if (!user_data.email && discovery_doc.userinfo_endpoint) {
 		let ui_res = oidc.fetch_userinfo(io, discovery_doc.userinfo_endpoint, tokens.access_token);
-		if (ui_res.ok) {
-			// SECURITY: sub MUST match (OIDC Core §5.3.2)
-			// MANDATORY: Use constant-time comparison for identity binding
-			if (!crypto.constant_time_eq(ui_res.data.sub, user_data.sub)) {
-				io.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
-				return Result.err("IDENTITY_MISMATCH", { http_status: 403 });
-			}
-			user_data.email = ui_res.data.email;
+					if (ui_res.ok) {
+						// SECURITY: sub MUST match (OIDC Core §5.3.2)
+						// MANDATORY: Use constant-time comparison for identity binding
+						// W1 Hardening: Use normalization to handle case-inconsistent IdPs
+						let norm_ui_sub = encoding.normalize_sub(ui_res.data.sub);
+						let norm_id_sub = encoding.normalize_sub(user_data.sub);
+		
+						if (!crypto.constant_time_eq(norm_ui_sub, norm_id_sub)) {
+							io.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
+							return Result.err("IDENTITY_MISMATCH", { http_status: 403 });
+						}
+						user_data.email = ui_res.data.email;
+		
 			user_data.name = user_data.name || ui_res.data.name;
 			user_data.groups = user_data.groups || ui_res.data.groups;
 			io.log("info", `Claims successfully supplemented via UserInfo [session_id: ${session_id}]`);

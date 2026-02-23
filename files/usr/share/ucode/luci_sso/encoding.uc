@@ -179,6 +179,21 @@ export function normalize_url(url) {
 	return res;
 };
 /**
+ * Normalizes a 'sub' claim for comparison.
+ * While the OIDC spec states that 'sub' is case-sensitive, some enterprise
+ * Identity Providers exhibit case-inconsistent behavior across different
+ * endpoints (ID Token vs UserInfo). Normalizing to lowercase ensures 
+ * interoperability and prevents false IDENTITY_MISMATCH errors.
+ * 
+ * @param {string} sub - The sub claim to normalize
+ * @returns {string} - Normalized sub
+ */
+export function normalize_sub(sub) {
+	if (type(sub) != "string") return "";
+	return lc(sub);
+};
+
+/**
  * Checks if a URL uses the HTTPS scheme (case-insensitive).
  * Per RFC 3986 §3.1, schemes are case-insensitive.
  * 

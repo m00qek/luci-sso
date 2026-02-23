@@ -60,7 +60,8 @@ In many deployments, the **Browser** accesses the IdP via a public URL (e.g., `h
 *   **Security Bound:** The `issuer` claim in the discovery document and the `iss` claim in the ID Token MUST always match the logical `issuer_url`, regardless of the network path used to fetch them.
 *   **Trigger:** If the mandatory `email` claim is missing from the verified ID Token, the system SHOULD attempt to fetch it from the `userinfo_endpoint`.
 *   **Authentication:** The fetch MUST be performed using the `access_token` as a Bearer token over an encrypted (HTTPS) back-channel.
-*   **Security Bound:** The `sub` claim returned by the UserInfo endpoint MUST match the `sub` claim from the cryptographically verified ID Token. Any mismatch MUST result in immediate session termination.
+*   **Security Bound:** The `sub` claim returned by the UserInfo endpoint MUST match the `sub` claim from the cryptographically verified ID Token. 
+*   **Normalization:** To ensure interoperability with Identity Providers that exhibit case-inconsistent behavior, the system SHOULD normalize `sub` claims to lowercase before comparison. Any mismatch in the normalized forms MUST result in immediate session termination.
 
 ---
 
