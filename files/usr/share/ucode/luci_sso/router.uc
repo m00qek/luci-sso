@@ -199,5 +199,5 @@ export function handle(io, config, request, policy) {
 		return handle_logout(io, config, request);
 	}
 
-	return Result.err("Not Found", { http_status: 404 });
+	return Result.err("NOT_FOUND", { http_status: 404 });
 };

@@ -25,8 +25,10 @@ const HTTP_STATUS_MESSAGES = {
 	"401": "401 Unauthorized",
 	"403": "403 Forbidden",
 	"404": "404 Not Found",
+	"429": "429 Too Many Requests",
 	"431": "431 Request Header Fields Too Large",
-	"500": "500 Internal Server Error"
+	"500": "500 Internal Server Error",
+	"503": "503 Service Unavailable"
 };
 
 /**
@@ -45,7 +47,10 @@ const ERROR_MAP = {
 	"AUTH_FAILED": "Authentication failed. You MUST try logging in again.",
 	"NETWORK_ERROR": "A network error occurred while communicating with the IdP. Contact your administrator.",
 	"INSECURE_ENDPOINT": "The IdP provided an insecure endpoint. Connection aborted for security. You MUST contact your administrator.",
-	"INPUT_TOO_LARGE": "The request contains too much data. You MUST reduce the size of your request (e.g. fewer cookies)."
+	"INPUT_TOO_LARGE": "The request contains too much data. You MUST reduce the size of your request (e.g. fewer cookies).",
+	"TOO_MANY_REQUESTS": "Too many requests. Please wait before trying again.",
+	"SSO_DISABLED": "Single Sign-On is not enabled on this device.",
+	"NOT_FOUND": "The requested path was not found."
 };
 
 /**
