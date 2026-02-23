@@ -88,7 +88,11 @@ The client-side status check (`?action=enabled`) utilizes relative URLs to inher
 *   **Enforcement:** All backend calls (Discovery, Token Exchange, JWKS) MUST be performed over HTTPS.
 *   **Entropy Validation:** All cryptographic parameters (Secret Key, Nonce, State, CSRF tokens) MUST be sourced from a CSPRNG and explicitly validated for length and type. Any generation failure MUST result in a system halt (fail-closed) to prevent weak-key or CSRF vulnerabilities.
 *   **Verification:** The router MUST reject any connection where the IdP's certificate is not trusted by the system's CA store.
-*   **DoS Protection:** The system MUST enforce a **256 KB** maximum size limit on all incoming HTTP response bodies.
+*   **DoS Protection:** 
+    *   The system MUST enforce a **256 KB** maximum size limit on all incoming HTTP response bodies.
+    *   The CGI entry point MUST implement a **Global Rate Limiter** to prevent resource exhaustion of the `tmpfs` (where handshake files are stored).
+    *   The limiter SHOULD follow a fixed-window strategy (default: 50 requests per 60 seconds).
+    *   Requests exceeding this threshold MUST be rejected with a `429 Too Many Requests` status code.
 *   **Token Binding:** The system MUST enforce `at_hash` validation for all flows.
 *   **Replay Protection:** Handshake states MUST be consumed using atomic POSIX `rename` for strict one-time use. OIDC Access Tokens MUST be registered in a local registry immediately AFTER successful cryptographic verification of the ID Token to prevent DoS attacks using unverified tokens.
 *   **Algorithm Enforcement:** The system MUST ONLY accept asymmetric signatures (RS256, ES256) for OIDC ID Tokens. Symmetric algorithms (HS256) are strictly limited to internal session management via dedicated symmetric-only APIs. This separation prevents Algorithm Confusion attacks where a Public Key might be misused as an HMAC secret.

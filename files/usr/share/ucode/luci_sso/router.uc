@@ -14,6 +14,49 @@ import * as Result from 'luci_sso.result';
  * Handles path routing and maps protocol flow results to HTTP responses.
  */
 
+const RATELIMIT_DIR = "/var/run/luci-sso";
+const RATELIMIT_FILE = RATELIMIT_DIR + "/ratelimit.json";
+const WINDOW = 60;   // 60 seconds
+const THRESHOLD = 50; // 50 requests per window
+
+/**
+ * Checks and updates the global rate limit state.
+ * @private
+ */
+function _check_rate_limit(io) {
+	let now = io.time();
+	let state = { count: 0, window_start: now };
+
+	let raw = io.read_file(RATELIMIT_FILE);
+	if (raw) {
+		let res = encoding.safe_json(raw);
+		if (res.ok) {
+			state = res.data;
+		}
+	}
+
+	// Reset window if it has expired
+	if (now - state.window_start > WINDOW) {
+		state.count = 1;
+		state.window_start = now;
+	} else {
+		state.count++;
+	}
+
+	// Persist state atomically
+	if (!io.write_file(RATELIMIT_FILE, sprintf("%J", state))) {
+		// Log but continue if we can't write (resilience)
+		io.log("error", "Failed to write rate limit state file");
+	}
+
+	if (state.count > THRESHOLD) {
+		io.log("warn", `Rate limit exceeded: ${state.count} requests in current window [limit: ${THRESHOLD}]`);
+		return false;
+	}
+
+	return true;
+}
+
 /**
  * Creates a response object.
  * @private
@@ -137,6 +180,11 @@ export function handle(io, config, request, policy) {
 		if (query.action == "enabled") {
 			return Result.ok(response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', config_mod.is_enabled(io) ? "true" : "false")));
 		}
+	}
+
+	// MANDATORY: Rate limit (Protects handshake state generation and token exchange)
+	if (!_check_rate_limit(io)) {
+		return Result.err("TOO_MANY_REQUESTS", { http_status: 429 });
 	}
 
 	// MANDATORY: Config guard
