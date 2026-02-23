@@ -152,10 +152,16 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 						}
 						user_data.email = ui_res.data.email;
 		
-			user_data.name = user_data.name || ui_res.data.name;
-			user_data.groups = user_data.groups || ui_res.data.groups;
-			io.log("info", `Claims successfully supplemented via UserInfo [session_id: ${session_id}]`);
-		} else {
+						if (!user_data.name && ui_res.data.name) {
+							user_data.name = ui_res.data.name;
+						}
+
+						if (length(user_data.groups) == 0 && type(ui_res.data.groups) == "array") {
+							user_data.groups = ui_res.data.groups;
+						}
+
+						io.log("info", `Claims successfully supplemented via UserInfo [session_id: ${session_id}]`);
+					} else {
 			io.log("warn", `UserInfo fallback failed [session_id: ${session_id}]: ${ui_res.error}`);
 		}
 	}
