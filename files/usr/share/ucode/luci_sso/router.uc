@@ -44,7 +44,13 @@ function _check_rate_limit(io) {
 	}
 
 	// Persist state atomically
-	if (!io.write_file(RATELIMIT_FILE, sprintf("%J", state))) {
+	let tmp_file = RATELIMIT_FILE + ".tmp";
+	if (io.write_file(tmp_file, sprintf("%J", state))) {
+		if (!io.rename(tmp_file, RATELIMIT_FILE)) {
+			io.log("error", "Failed to atomically install rate limit state file");
+			io.remove(tmp_file);
+		}
+	} else {
 		// Log but continue if we can't write (resilience)
 		io.log("error", "Failed to write rate limit state file");
 	}
