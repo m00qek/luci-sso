@@ -332,5 +332,8 @@ static const uc_function_list_t wolfssl_fns[] = {
 };
 
 void uc_module_init(uc_vm_t *vm, uc_value_t *scope) {
+	if (wc_InitRng(&_global_rng) == 0) {
+		_rng_initialized = 1;
+	}
 	uc_function_list_register(scope, wolfssl_fns);
 }

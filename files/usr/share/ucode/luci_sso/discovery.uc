@@ -49,7 +49,7 @@ function _write_cache(io, path, data) {
 	try {
 		let cache_data = { ...data, cached_at: io.time() };
 
-		let res = crypto.random(8);
+		let res = crypto.random(io, 8);
 		if (!res.ok) {
 			io.log("error", "Cache write aborted: CSPRNG failure");
 			return;

@@ -112,6 +112,14 @@ function build_provider(state) {
 		log: trackable("log", (level, msg) => {
 			// In mock mode, we just record it. History is handled by the trackable wrapper.
 		}),
+
+		random: trackable("random", (len) => {
+			if (state.random_fail) return null;
+			let res = "";
+			// Deterministic random for predictable tests
+			for (let i = 0; i < len; i++) res += "A"; 
+			return res;
+		}),
 		
 		http_get: trackable("http_get", (url) => {
 			// MANDATORY HTTPS: (Mirroring Production Blocker #6)
@@ -216,6 +224,12 @@ function build_factory(state) {
 		with_ubus: scoped("ubus"),
 		with_responses: scoped("responses"),
 
+		with_random_fail: (cb) => {
+			let next_state = { ...state, random_fail: true };
+			if (cb) return cb(build_provider(next_state));
+			return build_factory(next_state);
+		},
+
 		with_read_only: (cb) => {
 			let next_state = { ...state, read_only: true };
 			if (cb) return cb(build_provider(next_state));
@@ -253,6 +267,7 @@ export function create() {
 		history: [],
 		stdout_buf: "",
 		read_only: false,
+		random_fail: false,
 		last_error: null
 	});
 };

@@ -84,7 +84,7 @@ export function get_secret_key(io) {
 		if (acquired) {
 			try {
 				// 2. We are the generator: Generate and Write
-				let res = crypto.random(32);
+				let res = crypto.random(io, 32);
 				if (!res.ok) {
 					io.log("error", "CRITICAL: CSPRNG failure during secret key generation");
 					try { io.remove(lock_path); } catch (e) {}
@@ -156,10 +156,10 @@ export function get_secret_key(io) {
 export function create_state(io) {
 	ensure_handshake_dir(io);
 
-	let res_p = crypto.pkce_pair();
-	let res_s = crypto.random(16);
-	let res_n = crypto.random(16);
-	let res_h = crypto.random(32);
+	let res_p = crypto.pkce_pair(io);
+	let res_s = crypto.random(io, 16);
+	let res_n = crypto.random(io, 16);
+	let res_h = crypto.random(io, 32);
 
 	if (!res_p.ok || !res_s.ok || !res_n.ok || !res_h.ok) {
 		io.log("error", "CRITICAL: CSPRNG failure during handshake state generation");

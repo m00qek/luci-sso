@@ -216,29 +216,23 @@ test('session: logic - atomic handshake state creation', () => {
 });
 
 test('session: logic - detect CSPRNG failure during secret key generation (B1)', () => {
-	let factory = mock.create();
-	global.TESTING_RANDOM_FAIL = true;
-	
-	factory.with_env({}, (io) => {
-		let res = session.get_secret_key(io);
-		assert(!res.ok, "Should fail when random() returns null");
-		assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
-	});
-	
-	global.TESTING_RANDOM_FAIL = false;
+	mock.create()
+		.with_random_fail()
+		.with_env({}, (io) => {
+			let res = session.get_secret_key(io);
+			assert(!res.ok, "Should fail when random() returns null");
+			assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
+		});
 });
 
 test('session: logic - detect CSPRNG failure during handshake creation (B2)', () => {
-	let factory = mock.create();
-	global.TESTING_RANDOM_FAIL = true;
-	
-	factory.with_env({}, (io) => {
-		let res = session.create_state(io);
-		assert(!res.ok, "Should fail when random() returns null");
-		assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
-	});
-	
-	global.TESTING_RANDOM_FAIL = false;
+	mock.create()
+		.with_random_fail()
+		.with_env({}, (io) => {
+			let res = session.create_state(io);
+			assert(!res.ok, "Should fail when random() returns null");
+			assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
+		});
 });
 
 // W1: Unchecked io.rename in get_secret_key

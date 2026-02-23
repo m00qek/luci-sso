@@ -95,27 +95,13 @@ test('security: reject authorization URL generation without nonce (B1)', () => {
 });
 
 test('security: detect CSPRNG failure during CSRF token generation (B3)', () => {
-
-	global.TESTING_RANDOM_FAIL = true;
-
-
-
-	mock.create().with_ubus({
-
-		"session:create": { ubus_rpc_session: "sid" }
-
-	}).with_env({}, (io) => {
-
-		let res = ubus.create_passwordless_session(io, "root", { read: ["*"], write: ["*"] }, "user@example.com", "at", "rt", "it");
-
-		assert(!res.ok, "MUST reject session creation if CSPRNG fails");
-
-		assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
-
-	});
-
-
-
-	delete global.TESTING_RANDOM_FAIL;
-
+	mock.create()
+		.with_random_fail()
+		.with_ubus({
+			"session:create": { ubus_rpc_session: "sid" }
+		}).with_env({}, (io) => {
+			let res = ubus.create_passwordless_session(io, "root", { read: ["*"], write: ["*"] }, "user@example.com", "at", "rt", "it");
+			assert(!res.ok, "MUST reject session creation if CSPRNG fails");
+			assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
+		});
 });

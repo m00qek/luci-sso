@@ -112,7 +112,7 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	}
 
 	// 3. Generate CSRF token
-	let res_csrf = crypto.random(32);
+	let res_csrf = crypto.random(io, 32);
 	if (!res_csrf.ok) {
 		io.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
 		return Result.err("CRYPTO_SYSTEM_FAILURE");

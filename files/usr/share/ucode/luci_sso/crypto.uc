@@ -197,20 +197,16 @@ export function verify_jwt(token, pubkey, options) {
 	if (payload.exp == null) return Result.err("MISSING_EXP_CLAIM");
 	if (payload.iat == null) return Result.err("MISSING_IAT_CLAIM");
 
-	if (payload.exp != null) {
-		if (type(payload.exp) != "int") return Result.err("INVALID_EXP_CLAIM");
-		if (payload.exp < (now - clock_tolerance)) return Result.err("TOKEN_EXPIRED");
-	}
+	if (type(payload.exp) != "int") return Result.err("INVALID_EXP_CLAIM");
+	if (payload.exp < (now - clock_tolerance)) return Result.err("TOKEN_EXPIRED");
 
 	if (payload.nbf != null) {
 		if (type(payload.nbf) != "int") return Result.err("INVALID_NBF_CLAIM");
 		if (payload.nbf > (now + clock_tolerance)) return Result.err("TOKEN_NOT_YET_VALID");
 	}
 
-	if (payload.iat != null) {
-		if (type(payload.iat) != "int") return Result.err("INVALID_IAT_CLAIM");
-		if (payload.iat > (now + clock_tolerance)) return Result.err("TOKEN_ISSUED_IN_FUTURE");
-	}
+	if (type(payload.iat) != "int") return Result.err("INVALID_IAT_CLAIM");
+	if (payload.iat > (now + clock_tolerance)) return Result.err("TOKEN_ISSUED_IN_FUTURE");
 
 	if (options.iss && !constant_time_eq(encoding.normalize_url(payload.iss), encoding.normalize_url(options.iss))) {
 		return Result.err("ISSUER_MISMATCH");
@@ -243,18 +239,15 @@ export function verify_jwt(token, pubkey, options) {
 /**
  * Generates cryptographically secure random bytes.
  * 
+ * @param {object} io - I/O provider
  * @param {number} [len=32] - Number of bytes to generate
  * @returns {object} - Result Object {ok, data/error}
  */
-export function random(len) {
+export function random(io, len) {
 	let byte_len = len || 32;
 	if (type(byte_len) != "int") die("CONTRACT_VIOLATION: random expects integer length");
 
-	// TESTING HOOK: Allow simulating CSPRNG failure
-	let bytes = null;
-	if (!global.TESTING_RANDOM_FAIL) {
-		bytes = native.random(byte_len);
-	}
+	let bytes = (io && io.random) ? io.random(byte_len) : native.random(byte_len);
 
 	if (!bytes || type(bytes) != "string" || length(bytes) != byte_len) {
 		return Result.err("CSPRNG_FAILURE");
@@ -294,14 +287,15 @@ export function sha256_hex(str) {
 /**
  * Generates a PKCE Code Verifier.
  * 
+ * @param {object} io - I/O provider
  * @param {number} [len=43] - Length of verifier
  * @returns {object} - Result Object {ok, data/error}
  */
-export function pkce_generate_verifier(len) {
+export function pkce_generate_verifier(io, len) {
 	let byte_len = len || 43;
 	if (byte_len < 32 || byte_len > 96) die("CONTRACT_VIOLATION: PKCE verifier must be 32-96 bytes");
 
-	let res = random(byte_len);
+	let res = random(io, byte_len);
 	if (!res.ok) return res;
 
 	return Result.ok(b64url_encode(res.data));
@@ -321,11 +315,12 @@ export function pkce_calculate_challenge(verifier) {
 /**
  * Generates a PKCE Verifier and Challenge pair.
  * 
+ * @param {object} io - I/O provider
  * @param {number} [len] - Optional verifier length
  * @returns {object} - Result Object {ok, data/error}
  */
-export function pkce_pair(len) {
-	let res = pkce_generate_verifier(len);
+export function pkce_pair(io, len) {
+	let res = pkce_generate_verifier(io, len);
 	if (!res.ok) return res;
 
 	let verifier = res.data;

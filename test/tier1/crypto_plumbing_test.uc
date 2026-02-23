@@ -88,13 +88,13 @@ test('crypto: plumbing - token size enforcement', () => {
 });
 
 test('crypto: plumbing - PKCE primitives', () => {
-    let res_v = crypto.pkce_generate_verifier(32);
+    let res_v = crypto.pkce_generate_verifier(null, 32);
     assert(Result.is(res_v));
     assert(res_v.ok);
     assert(length(res_v.data) >= 43);
     let challenge = crypto.pkce_calculate_challenge(res_v.data);
     assert(challenge);
-    let res_p = crypto.pkce_pair(32);
+    let res_p = crypto.pkce_pair(null, 32);
     assert(Result.is(res_p));
     assert(res_p.ok);
     assert(res_p.data.verifier && res_p.data.challenge);
