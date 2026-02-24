@@ -34,6 +34,7 @@ C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfs
 *   **Hardening:** To prevent buffer overflow and resource exhaustion attacks:
     *   The native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
     *   Public key parsing correctly distinguishes between PEM (requiring NUL termination) and DER (binary) formats to prevent out-of-bounds reads.
+    *   The `binary_truncate` utility enforces a strict contract requiring the truncation length to be less than or equal to the input data length to prevent undefined behavior.
     *   HTTP response bodies are limited to **256 KB** at the ucode I/O layer to prevent memory exhaustion.
 *   **Constant-Time Comparisons:** All sensitive comparisons (e.g., state, nonce, signatures, at_hash, issuer, audience, and azp claims) MUST use `constant_time_eq`. This function is designed to avoid early returns on length or content mismatch to mitigate timing side-channels. The resulting boolean MUST be propagated via Result Objects to allow the caller to handle failures (e.g., by rendering an error page) without process-level crashes.
 
@@ -93,6 +94,7 @@ The client-side status check (`?action=enabled`) utilizes relative URLs to inher
     *   The system MUST enforce a **256 KB** maximum size limit on all incoming HTTP response bodies.
     *   The CGI entry point MUST implement a **Global Rate Limiter** to prevent resource exhaustion of the `tmpfs` (where handshake files are stored).
     *   The limiter SHOULD follow a fixed-window strategy (default: 50 requests per 60 seconds).
+    *   **Known Limitation:** The rate limiter implements a permissive TOCTOU strategy. Under high concurrency, multiple CGI processes MAY read the same counter state and concurrently increment it, allowing the effective request count to slightly exceed the threshold. This is considered acceptable for the current default thresholds on single-core embedded systems.
     *   Requests exceeding this threshold MUST be rejected with a `429 Too Many Requests` status code.
 *   **Token Binding:** The system MUST enforce `at_hash` validation for all flows.
 *   **Replay Protection:** Handshake states MUST be consumed using atomic POSIX `rename` for strict one-time use. OIDC Access Tokens MUST be registered in a local registry immediately AFTER successful cryptographic verification of the ID Token to prevent DoS attacks using unverified tokens.
@@ -115,7 +117,7 @@ To prevent Algorithmic Complexity DoS attacks, periodic maintenance tasks (reapi
 ## 5. Session & CSRF Handling
 
 ### Security Cookies
-The system utilizes the `__Host-` cookie prefix for all session-related cookies.
+The system utilizes the `__Host-` cookie prefix for its own session-related cookies (e.g., `__Host-luci_sso_state`). The `sysauth` and `sysauth_https` cookies retain their LuCI-native names for framework compatibility but MUST include `Secure`, `HttpOnly`, `SameSite=Strict`, and `Path=/` attributes.
 *   **Requirement:** This mandates `Secure`, `Path=/`, and prevents cookie shadowing from subdomains, fulfilling modern web security best practices.
 
 ### Modern LuCI Hook (JavaScript)

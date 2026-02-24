@@ -92,24 +92,6 @@ export function b64url_encode(str) {
 };
 
 /**
- * Safely escapes a string for inclusion in HTML content.
- * Prevents XSS and JavaScript Unicode escape injection.
- * 
- * @param {string} str - Raw string
- * @returns {string} - HTML escaped string
- */
-export function html_escape(str) {
-	if (type(str) != "string") return "";
-	let res = replace(str, /\\/g, "\\\\");
-	res = replace(res, /&/g, "&amp;");
-	res = replace(res, /</g, "&lt;");
-	res = replace(res, />/g, "&gt;");
-	res = replace(res, /"/g, "&quot;");
-	res = replace(res, /'/g, "&#x27;");
-	return res;
-};
-
-/**
  * Extracts exactly N bytes from a string.
  * This is byte-safe and avoids UTF-8 character boundary issues.
  * 
@@ -120,6 +102,7 @@ export function html_escape(str) {
 export function binary_truncate(data, len) {
 	if (type(data) != "string") die("CONTRACT_VIOLATION: binary_truncate expects string data");
 	if (type(len) != "int") die("CONTRACT_VIOLATION: binary_truncate expects integer length");
+	if (len > length(data)) die("CONTRACT_VIOLATION: truncation length exceeds data length");
 
 	let res = "";
 	for (let i = 0; i < len; i++) {
@@ -140,7 +123,9 @@ export function safe_json(data) {
 	if (type(raw) != "string") return Result.err("INVALID_TYPE");
 
 	try {
-		return Result.ok(json(raw));
+		let parsed = json(raw);
+		if (parsed == null) return Result.err("PARSE_ERROR", "JSON decoded to null");
+		return Result.ok(parsed);
 	} catch (e) {
 		return Result.err("PARSE_ERROR", e);
 	}
