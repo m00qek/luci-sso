@@ -33,18 +33,19 @@ export function get_auth_url(io, config, discovery_doc, params) {
 	if (!params.state || type(params.state) != "string" || length(params.state) < 16) {
 		return Result.err("MISSING_STATE_PARAMETER");
 	}
-		if (!params.nonce || type(params.nonce) != "string" || length(params.nonce) < 16) {
-			return Result.err("MISSING_NONCE_PARAMETER");
-		}
-	
-		if (!params.code_challenge || type(params.code_challenge) != "string") {
-			return Result.err("MISSING_PKCE_CHALLENGE");
-		}
-	
-		// BLOCKER FIX: Enforce HTTPS on authorization_endpoint (B3)
-		if (!encoding.is_https(discovery_doc.authorization_endpoint)) {
-			return Result.err("INSECURE_AUTH_ENDPOINT");
-		}
+
+	if (!params.nonce || type(params.nonce) != "string" || length(params.nonce) < 16) {
+		return Result.err("MISSING_NONCE_PARAMETER");
+	}
+
+	if (!params.code_challenge || type(params.code_challenge) != "string") {
+		return Result.err("MISSING_PKCE_CHALLENGE");
+	}
+
+	// BLOCKER FIX: Enforce HTTPS on authorization_endpoint (B3)
+	if (!encoding.is_https(discovery_doc.authorization_endpoint)) {
+		return Result.err("INSECURE_AUTH_ENDPOINT");
+	}
 	
 		// W2: RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
 		if (index(discovery_doc.authorization_endpoint, '#') != -1) {
