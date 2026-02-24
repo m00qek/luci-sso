@@ -46,6 +46,11 @@ export function get_auth_url(io, config, discovery_doc, params) {
 			return Result.err("INSECURE_AUTH_ENDPOINT");
 		}
 	
+		// W2: RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
+		if (index(discovery_doc.authorization_endpoint, '#') != -1) {
+			return Result.err("INVALID_AUTH_ENDPOINT", "authorization_endpoint MUST NOT contain a fragment");
+		}
+	
 		let query = {
 			response_type: "code",
 			client_id: config.client_id,
@@ -56,18 +61,15 @@ export function get_auth_url(io, config, discovery_doc, params) {
 			code_challenge: params.code_challenge,
 			code_challenge_method: "S256"
 		};
-		let endpoint = discovery_doc.authorization_endpoint;
-	let parts = split(endpoint, "#", 2);
-	let url = parts[0];
-	let fragment = (length(parts) > 1) ? "#" + parts[1] : "";
-
-	let sep = (index(url, '?') == -1) ? '?' : '&';
-	for (let k, v in query) {
-		if (v == null) continue;
-		url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
-		sep = '&';
-	}
-	return Result.ok(url + fragment);
+		let url = discovery_doc.authorization_endpoint;
+	
+		let sep = (index(url, '?') == -1) ? '?' : '&';
+		for (let k, v in query) {
+			if (v == null) continue;
+			url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
+			sep = '&';
+		}
+		return Result.ok(url);
 };
 
 /**
