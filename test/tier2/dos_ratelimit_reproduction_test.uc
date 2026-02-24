@@ -32,12 +32,13 @@ test('REPRODUCTION: router: lacks global rate limiting', () => {
                 }
             }
 
-            // 2. Verify Exemption for Action=Enabled
+            // 2. Verify Enforcement for Action=Enabled
             // (Note: The window is still 60s, so we're already past the threshold)
             let action_req = { path: "/", query: { action: "enabled" }, cookies: {} };
             for (let i = 0; i < 5; i++) {
                 let res = router.handle(io, test_config, action_req);
-                assert(res.ok, "Action=Enabled SHOULD be exempt from rate limiting");
+                assert(!res.ok, "Action=Enabled SHOULD NOT be exempt from rate limiting (N3)");
+                assert_eq(res.error, "TOO_MANY_REQUESTS");
             }
         });
 });

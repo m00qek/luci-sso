@@ -180,17 +180,17 @@ export function handle(io, config, request, policy) {
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
 
+	// MANDATORY: Rate limit (Protects handshake state generation and token exchange)
+	if (!_check_rate_limit(io)) {
+		return Result.err("TOO_MANY_REQUESTS", { http_status: 429 });
+	}
+
 	// SHORT-CIRCUIT: Action check (Does not require config)
 	if (path == "/") {
 		let query = request.query || {};
 		if (query.action == "enabled") {
 			return Result.ok(response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', config_mod.is_enabled(io) ? "true" : "false")));
 		}
-	}
-
-	// MANDATORY: Rate limit (Protects handshake state generation and token exchange)
-	if (!_check_rate_limit(io)) {
-		return Result.err("TOO_MANY_REQUESTS", { http_status: 429 });
 	}
 
 	// MANDATORY: Config guard
