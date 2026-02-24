@@ -200,9 +200,6 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 		VALIDATE_INPUT_SIZES(msg_len, raw_sig_len, key_len);
 		VALIDATE_WOLFSSL_STATE();
 	
-		unsigned char hash[WC_SHA256_DIGEST_SIZE];
-		if (wc_Sha256Hash(msg, msg_len, hash) != 0) return ucv_boolean_new(false);
-
 	ecc_key key;
 	wc_ecc_init(&key);
 
@@ -225,7 +222,12 @@ static uc_value_t *uc_wolfssl_verify_es256(uc_vm_t *vm, size_t nargs) {
 
 	// raw_sig is guaranteed to be 64 bytes (checked above)
 	if (wc_ecc_rs_raw_to_sig(raw_sig, 32, raw_sig + 32, 32, der_sig, &der_sig_len) != 0) {
-		secure_memzero(hash, sizeof(hash));
+		wc_ecc_free(&key);
+		return ucv_boolean_new(false);
+	}
+
+	unsigned char hash[WC_SHA256_DIGEST_SIZE];
+	if (wc_Sha256Hash(msg, msg_len, hash) != 0) {
 		wc_ecc_free(&key);
 		return ucv_boolean_new(false);
 	}
