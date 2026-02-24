@@ -22,7 +22,12 @@ try {
 	if (!res_c.ok) {
 		if (res_c.error == "DISABLED" && req.path == "/" && req.query.action == "enabled") {
 			const res_router = router.handle(io, null, req);
-			web_mod.render(io, res_router.data);
+			if (!res_router.ok) {
+				let status = (type(res_router.details) == "object") ? res_router.details.http_status : 500;
+				web_mod.render_error(io, res_router.error, status);
+			} else {
+				web_mod.render(io, res_router.data);
+			}
 			exit(0);
 		}
 		web_mod.render_error(io, res_c.error, 500);
