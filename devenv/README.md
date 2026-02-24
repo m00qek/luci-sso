@@ -98,9 +98,9 @@ The `pki` service automatically generates a development CA and per-service certi
 
 ## 🛠 Troubleshooting
 
-*   **Permission Denied on `bin/`:** The `Makefile` is designed to create the necessary subdirectories (e.g., `bin/lib/${SDK_ARCH}`) on the host before starting Docker. If you manually deleted `bin/` and encounter issues, ensure your host user has write permissions to the project root. If Docker still creates a directory as root, run `sudo chown -R $USER:$USER bin/`.
+*   **Permission Denied on `bin/`:** This usually occurs if the environment is started (`make up`) before the initial compilation (`make compile`). If the `bin/lib` directories do not exist, Docker will create them as `root` when mounting volumes, which prevents your host user from writing to them later. 
+    *   **Fix:** Run `make down`, delete the `bin/` directory if it exists (`sudo rm -rf bin`), and then run `make compile` followed by `make up`.
+    *   **Automation:** The `Makefile` now automatically exports your host `UID` and `GID` and applies `chmod a+rwx` to the build directories to mitigate these issues in multi-user or CI environments.
 *   **Port Conflicts:** If ports 8443 or 5556 are in use, you can override them in `devenv/Makefile` or via environment variables.
-*   **`native.so` is a directory:** If you see an error like `Error loading shared library ... native.so: Is a directory`, it means the environment was started before the native components were compiled. Docker automatically creates a directory when a volume source file is missing. To fix this:
-    1.  Stop the environment: `make down` (or `make local-down`)
-    2.  Compile the components: `make compile`
-    3.  Restart the environment: `make up` (or `make local-up`)
+*   **`native.so` is a directory:** If you see an error like `Error loading shared library ... native.so: Is a directory`, it means the environment was started before the native components were compiled. Docker automatically creates a directory when a volume source file is missing. 
+    *   **Fix:** Follow the same steps as the "Permission Denied" issue above: `make down`, `make compile`, then `make up`.

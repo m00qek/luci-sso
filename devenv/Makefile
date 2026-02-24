@@ -14,6 +14,8 @@ RED   := \033[1;31m
 RESET := \033[0m
 
 # Project Variables
+export UID := $(shell id -u)
+export GID := $(shell id -g)
 export PKI_CURVE := prime256v1
 export NODE_VERSION := 25
 export ALPINE_VERSION := 3.23
@@ -21,7 +23,7 @@ export SDK_VERSION := 24.10.5
 
 # Architecture Resolution (Authoritative SDK Model)
 # 1. Determine SDK_ARCH (Manual override > Host detection)
-export SDK_ARCH ?= $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host)
+export SDK_ARCH := $(or $(SDK_ARCH),$(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host))
 
 # 2. Derive ROOTFS_ARCH from SDK_ARCH
 export ROOTFS_ARCH := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh $(SDK_ARCH))
@@ -43,14 +45,17 @@ export PORT_LUCI := 8443
 # --- 2. DYNAMIC SUITE CONFIG ---
 # Default to local if not set
 export DOCKER_SUITE ?= local
+export DOCKER_NAMESPACE := ghcr.io/m00qek
 
 # Lazy variables (=) evaluated at runtime
 export RESOLVED_DOCKER_COMPOSE = $(DEVENV_DIR)/.resolved.docker-compose.$(DOCKER_SUITE).yaml
 # Use SDK_ARCH in project name to ensure isolated containers per architecture
 COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
 
-# Helper: Returns container ID if any service in the suite is running
-SUITE_IS_RUNNING = $(shell docker compose $(COMPOSE_FLAGS) ps -q 2>/dev/null)
+# Helper: Command to return container IDs if any service in the suite is running
+# We use --all to ensure we detect the project even if one-shot services (pki) have exited
+# This is a raw string, NOT wrapped in $(shell), so it's evaluated at recipe runtime.
+SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
 
 # --- 3. PUBLIC INTERFACE ---
 .PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests
@@ -102,16 +107,22 @@ watch-tests: .watch-tests
 
 test: unit-test e2e-test
 
+pull: DOCKER_SUITE = ci
+pull: .pull
+
 VAR ?= ""
 print-env: 
 	@echo "$${$(VAR)}"
+
+.pull:
+	@docker compose $(COMPOSE_FLAGS) pull
 
 # --- 4. IMPLEMENTATION (Private Targets) ---
 
 # Macro: Abort if the current DOCKER_SUITE is not running
 define VALIDATE_SUITE_RUNNING
-	@if [ -z "$(SUITE_IS_RUNNING)" ]; then \
-		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."; \
+	@if [ -z "$$($(SUITE_IS_RUNNING_CMD))" ]; then \
+		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING (Project: $(DOCKER_SUITE)-$(SDK_ARCH))."; \
 		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"; \
 		echo -e "\n      make up"; \
 		exit 1; \
@@ -147,9 +158,12 @@ endef
 	
 	@echo -e " $(BLUE)⚙️$(RESET)  Generating configuration for '$(DOCKER_SUITE)'..."
 	docker compose $(COMPOSE_FLAGS) config > $(RESOLVED_DOCKER_COMPOSE)
+
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) pull
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) build
 	
 	@echo -e " $(GREEN)🚀$(RESET) Starting '$(DOCKER_SUITE)' environment..."
-	docker compose $(COMPOSE_FLAGS) up --remove-orphans
+	docker compose $(COMPOSE_FLAGS) up --remove-orphans -d
 	
 	@echo -e " $(GREEN)✨$(RESET) Done!$(RESET)"
 
@@ -184,10 +198,12 @@ compile: $(SENTINEL)
 $(SENTINEL): $(wildcard $(PROJECT_ROOT)/src/*.c) $(wildcard $(PROJECT_ROOT)/src/*.h) $(PROJECT_ROOT)/src/CMakeLists.txt
 	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(SDK_ARCH)/$(CRYPTO_LIB)..."
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
 	@touch $(SENTINEL)
 
 package:
 	@echo -e " $(BLUE)📦$(RESET) Building IPK package for $(SDK_ARCH)..."
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/packages
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh package

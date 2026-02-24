@@ -1,63 +1,66 @@
-name: CI Pipeline
+name: Continuous Integration
 
 on:
   push:
-    branches: [main, master]
-    tags: ["v*"]
-    paths-ignore:
-      - "**.md"
-      - ".gitignore"
-      - "LICENSE"
-      - ".vscode/**"
-  pull_request:
-    branches: [main, master]
-    paths-ignore:
-      - "**.md"
-      - ".gitignore"
-      - "LICENSE"
-      - ".vscode/**"
+    branches: [main, master, ci]
+  workflow_dispatch:
+    inputs:
+      force_rebuild:
+        description: "Force rebuild of all images"
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository_owner }}/${{ github.event.repository.name }}
 
 jobs:
-  check-changes:
-    name: Check for Environment Changes
+  metadata:
+    name: Extract Metadata
     runs-on: ubuntu-latest
     outputs:
-      build_env: ${{ steps.filter.outputs.build_env }}
+      pkg_depends: ${{ steps.vars.outputs.pkg_depends }}
+      sdk_version: ${{ steps.vars.outputs.sdk_version }}
+      sdk_arch: ${{ steps.vars.outputs.sdk_arch }}
+      node_version: ${{ steps.vars.outputs.node_version }}
+      alpine_version: ${{ steps.vars.outputs.alpine_version }}
+      repo_owner: ${{ steps.vars.outputs.repo_owner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Path Filter
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            build_env:
-              - 'devenv/**'
 
-  build-images:
-    name: Build & Publish Images
-    needs: check-changes
-    if: needs.check-changes.outputs.build_env == 'true' || github.event_name == 'workflow_dispatch'
+      - name: Get Project Variables
+        id: vars
+        run: |
+          # Use --no-print-directory and xargs to ensure perfectly clean strings
+          DEPENDS=$(make -s --no-print-directory -C devenv print-env VAR=PKG_DEPENDS | xargs)
+          VERSION=$(make -s --no-print-directory -C devenv print-env VAR=SDK_VERSION | xargs)
+          NODE_V=$(make -s --no-print-directory -C devenv print-env VAR=NODE_VERSION | xargs)
+          ALPINE_V=$(make -s --no-print-directory -C devenv print-env VAR=ALPINE_VERSION | xargs)
+          ARCH="x86-64"
+
+          echo "pkg_depends=$DEPENDS" >> $GITHUB_OUTPUT
+          echo "sdk_version=$VERSION" >> $GITHUB_OUTPUT
+          echo "sdk_arch=$ARCH" >> $GITHUB_OUTPUT
+          echo "node_version=$NODE_V" >> $GITHUB_OUTPUT
+          echo "alpine_version=$ALPINE_V" >> $GITHUB_OUTPUT
+
+          OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          echo "repo_owner=$OWNER" >> $GITHUB_OUTPUT
+
+  build-core:
+    name: Build Core Images
+    needs: metadata
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        crypto_lib: [mbedtls]
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        service: [openwrt, sdk]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Export Project Variables from dev.mk
-        run: |
-          grep '^PKG_NAME' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
-          grep '^SDK_VERSION' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
-          grep '^SDK_ARCH' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
-          echo "PKG_DEPENDS=liblucihttp-ucode libmbedtls libucode libwolfssl ucode ucode-mod-fs ucode-mod-math ucode-mod-uloop ucode-mod-ubus ucode-mod-uci ucode-mod-uclient" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -69,61 +72,44 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push Builder (Only once)
-        if: matrix.crypto_lib == 'mbedtls'
+      - name: Build and Push
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file: devenv/builder/Dockerfile
-          push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
+          context: ./devenv/services/${{ matrix.service }}
+          file: devenv/services/${{ matrix.service }}/Dockerfile
+          push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}/builder:latest
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}/builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }}
+            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:latest
+            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:${{ needs.metadata.outputs.sdk_arch }}-${{ needs.metadata.outputs.sdk_version }}
           build-args: |
-            SDK_ARCH=${{ env.SDK_ARCH }}
-            SDK_VERSION=${{ env.SDK_VERSION }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            SDK_ARCH=${{ needs.metadata.outputs.sdk_arch }}
+            SDK_VERSION=${{ needs.metadata.outputs.sdk_version }}
+            PKG_DEPENDS=${{ needs.metadata.outputs.pkg_depends }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
-      - name: Build and push Tester
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: devenv/runner/Dockerfile
-          push: ${{ github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master') }}
-          tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}/tester-${{ matrix.crypto_lib }}:latest
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ github.event.repository.name }}/tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }}
-          build-args: |
-            SDK_ARCH=${{ env.SDK_ARCH }}
-            SDK_VERSION=${{ env.SDK_VERSION }}
-            PKG_DEPENDS=${{ env.PKG_DEPENDS }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-  test:
-    name: Run Unit Tests
-    needs: [check-changes, build-images]
-    strategy:
-      matrix:
-        crypto_lib: [mbedtls]
-    if: |
-      always() &&
-      needs.check-changes.result == 'success' &&
-      (needs.build-images.result == 'success' || needs.build-images.result == 'skipped')
+  build-helpers:
+    name: Build Helper Images
+    needs: metadata
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - service: idp
+            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+          - service: browser
+            tag_suffix: node${{ needs.metadata.outputs.node_version }}-alpine${{ needs.metadata.outputs.alpine_version }}
+          - service: pki
+            tag_suffix: alpine${{ needs.metadata.outputs.alpine_version }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Export Project Variables from dev.mk
-        run: |
-          grep '^PKG_NAME' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
-          grep '^SDK_VERSION' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
-          grep '^SDK_ARCH' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to the Container registry
         uses: docker/login-action@v3
@@ -132,65 +118,58 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull Docker Images
-        continue-on-error: true
-        run: |
-          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          REPO_NAME=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
-          IMAGE_BASE="$REGISTRY/$REPO_OWNER/$REPO_NAME"
+      - name: Build and Push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./devenv/services/${{ matrix.service }}
+          file: devenv/services/${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:latest
+            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:${{ matrix.tag_suffix }}
+          build-args: |
+            NODE_VERSION=${{ needs.metadata.outputs.node_version }}
+            ALPINE_VERSION=${{ needs.metadata.outputs.alpine_version }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
-          docker pull $IMAGE_BASE/builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || docker pull $IMAGE_BASE/builder:latest || true
-          docker pull $IMAGE_BASE/tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || docker pull $IMAGE_BASE/tester-${{ matrix.crypto_lib }}:latest || true
-
-          docker tag $IMAGE_BASE/builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} ${{ env.PKG_NAME }}-builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || \
-          docker tag $IMAGE_BASE/builder:latest ${{ env.PKG_NAME }}-builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || true
-
-          docker tag $IMAGE_BASE/tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} luci-sso-tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || \
-          docker tag $IMAGE_BASE/tester-${{ matrix.crypto_lib }}:latest luci-sso-tester-${{ matrix.crypto_lib }}:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} || true
-
-      - name: Run tests
-        run: make -f dev.mk test CRYPTO_LIB=${{ matrix.crypto_lib }} VERBOSE=1
-
-  release:
-    name: Build & Release IPK
-    needs: test
-    if: startsWith(github.ref, 'refs/tags/v')
+  test:
+    name: Run Verification Suite
     runs-on: ubuntu-latest
+    needs: [metadata, build-helpers, build-core]
     permissions:
-      contents: write
+      contents: read
       packages: read
+    env:
+      SDK_ARCH: ${{ needs.metadata.outputs.sdk_arch }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Export Project Variables from dev.mk
-        run: |
-          grep '^PKG_NAME' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
-          grep '^SDK_VERSION' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
-          grep '^SDK_ARCH' dev.mk | sed 's/[[:space:]]*:=[[:space:]]*/=/' >> $GITHUB_ENV
+      - name: Pull
+        run: make -sC devenv pull
 
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Compile (mbedtls)
+        run: make -sC devenv compile CRYPTO_LIB=mbedtls
 
-      - name: Pull Docker Images
-        run: |
-          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          REPO_NAME=$(echo "${{ github.event.repository.name }}" | tr '[:upper:]' '[:lower:]')
-          IMAGE_BASE="$REGISTRY/$REPO_OWNER/$REPO_NAME"
-          docker pull $IMAGE_BASE/builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }}
-          docker tag $IMAGE_BASE/builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }} ${{ env.PKG_NAME }}-builder:${{ env.SDK_ARCH }}-${{ env.SDK_VERSION }}
+      - name: Compile (wolfssl)
+        run: make -sC devenv compile CRYPTO_LIB=wolfssl
 
-      - name: Build IPK package
-        run: make -f dev.mk package
+      - name: Start environment
+        run: make -sC devenv up
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: bin/packages/*/base/${{ env.PKG_NAME }}*.ipk
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run unit tests (mbedtls)
+        run: make -sC devenv unit-test CRYPTO_LIB=mbedtls VERBOSE=1
+
+      - name: Run E2E tests (mbedtls)
+        run: make -sC devenv e2e-test CRYPTO_LIB=mbedtls
+
+      - name: Run unit tests (wolfssl)
+        run: make -sC devenv unit-test CRYPTO_LIB=wolfssl VERBOSE=1
+
+      - name: Run E2E tests (wolfssl)
+        run: make -sC devenv e2e-test CRYPTO_LIB=wolfssl
+
+      - name: Stop environment
+        if: always()
+        run: make -sC devenv down

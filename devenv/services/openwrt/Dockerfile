@@ -7,9 +7,20 @@ RUN mkdir -p /var/lock && \
   opkg update && \
   opkg install --force-reinstall $(echo $PKG_DEPENDS)
 
+RUN mkdir -p /var/lock && \
+  opkg update && \
+  opkg install --force-reinstall libmbedtls libwolfssl
+
 # DEV dependencies
-RUN opkg install --force-reinstall \
-  rpcd uhttpd luci-ssl luci-mod-admin-full luci-light inotifywait openssl-util
+RUN mkdir -p /var/lock && \
+  opkg update && \
+  opkg install --force-reinstall \
+  rpcd \
+  uhttpd \
+  luci-ssl \
+  luci-mod-admin-full \
+  luci-light inotifywait \
+  openssl-util
 
 COPY start.sh /usr/local/bin/start.sh
 RUN chmod +x /usr/local/bin/start.sh

@@ -11,9 +11,14 @@ services:
   # The Browser is ONLY needed for E2E
   browser:
     container_name: ${DOCKER_SUITE}-${SDK_ARCH}-browser
+    image: ${DOCKER_NAMESPACE}/luci-sso-browser:node${NODE_VERSION}-alpine${ALPINE_VERSION}
     stop_grace_period: 0s
     build:
       context: ./services/browser
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
       args:
         NODE_VERSION: ${NODE_VERSION}
         ALPINE_VERSION: ${ALPINE_VERSION}
