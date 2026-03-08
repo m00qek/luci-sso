@@ -112,7 +112,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 			should_retry = true;
 		} else if (verify_res.error == "INVALID_SIGNATURE") {
 			let parts = split(tokens.id_token, ".");
-			let res_h = crypto.safe_json(crypto.b64url_decode(parts[0]));
+			let res_h = encoding.safe_json(encoding.b64url_decode(parts[0]));
 			if (res_h.ok && res_h.data.kid) {
 				should_retry = true;
 			}
@@ -179,7 +179,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	// W2: Warn if access token lifetime exceeds the 24h replay protection window
 	let a_parts = split(access_token, ".");
 	if (length(a_parts) == 3) {
-		let res_ap = crypto.safe_json(crypto.b64url_decode(a_parts[1]));
+		let res_ap = encoding.safe_json(encoding.b64url_decode(a_parts[1]));
 		if (res_ap.ok && res_ap.data.exp && res_ap.data.iat) {
 			if ((res_ap.data.exp - res_ap.data.iat) > 86400) {
 				io.log("warn", `Access token lifetime exceeds 24h replay window [session_id: ${session_id}]`);

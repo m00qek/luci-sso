@@ -2,7 +2,6 @@ import * as uclient from 'uclient';
 import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
-import * as jwk from 'luci_sso.jwk';
 import * as discovery from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
 
@@ -157,7 +156,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	let p = policy || DEFAULT_POLICY;
 
 	let parts = split(tokens.id_token, ".");
-	let res_h = encoding.safe_json(crypto.b64url_decode(parts[0]));
+	let res_h = encoding.safe_json(encoding.b64url_decode(parts[0]));
 	if (!res_h.ok) {
 		return Result.err("INVALID_JWT_HEADER", res_h.details);
 	}
@@ -178,7 +177,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	let jwk_res = find_jwk(keys, header.kid);
 	if (!jwk_res.ok) return jwk_res;
 
-	let pem_res = jwk.jwk_to_pem(jwk_res.data);
+	let pem_res = crypto.jwk_to_pem(jwk_res.data);
 	if (!pem_res.ok) return pem_res;
 
 	// MANDATORY Claims Check
@@ -194,7 +193,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 		aud: config.client_id
 	};
 
-	let result = crypto.verify_jwt(tokens.id_token, pem_res.data, validation_opts);
+	let result = crypto.jwt_verify(tokens.id_token, pem_res.data, validation_opts);
 	if (!result.ok) return result;
 
 	let payload = result.data;
@@ -245,11 +244,11 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 		return Result.err("MISSING_AT_HASH");
 	}
 
-	let full_hash = crypto.sha256(tokens.access_token);
+	let full_hash = crypto.hash_sha256(tokens.access_token);
 	if (!full_hash) return Result.err("CRYPTO_ERROR");
 
 	let left_half = encoding.binary_truncate(full_hash, 16);
-	let expected_hash = crypto.b64url_encode(left_half);
+	let expected_hash = encoding.b64url_encode(left_half);
 
 	if (!crypto.constant_time_eq(expected_hash, payload.at_hash)) {
 		return Result.err("AT_HASH_MISMATCH");

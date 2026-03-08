@@ -1,11 +1,12 @@
 import * as crypto from 'luci_sso.crypto';
+import * as encoding from 'luci_sso.encoding';
 import * as fs from 'fs';
 
 /**
  * Generates a signed HS256 JWT for internal session testing.
  */
 export function generate_internal_token(payload, secret) {
-	return crypto.sign_jws(payload, secret);
+	return crypto.jws_sign(payload, secret);
 };
 
 /**
@@ -16,8 +17,8 @@ export function generate_id_token(payload, privkey_pem, alg, kid) {
 	let header = { alg: alg || "RS256", typ: "JWT" };
 	if (kid) header.kid = kid;
 	
-	let b64_header = crypto.b64url_encode(sprintf("%J", header));
-	let b64_payload = crypto.b64url_encode(sprintf("%J", payload));
+	let b64_header = encoding.b64url_encode(sprintf("%J", header));
+	let b64_payload = encoding.b64url_encode(sprintf("%J", payload));
 	let signed_data = b64_header + "." + b64_payload;
 
 	// Use temporary files for signing data and key
@@ -63,5 +64,5 @@ export function generate_id_token(payload, privkey_pem, alg, kid) {
 		sig_bin = r + s;
 	}
 
-	return signed_data + "." + crypto.b64url_encode(sig_bin);
+	return signed_data + "." + encoding.b64url_encode(sig_bin);
 };

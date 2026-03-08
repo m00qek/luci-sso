@@ -1,4 +1,4 @@
-import { safe_json } from 'luci_sso.crypto';
+import { safe_json } from 'luci_sso.encoding';
 import { assert, test } from 'testing';
 
 test('encoding: security - safe_json does not leak raw fragments on failure', () => {

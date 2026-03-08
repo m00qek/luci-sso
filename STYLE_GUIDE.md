@@ -133,7 +133,7 @@ let io = {
 import { urlencode } from 'luci_sso.utils';  // ❌ String transformation
 // Use built-ins directly
 let parsed = json(str);     // ❌ String parsing
-let hash = sha256(msg);     // ❌ Cryptographic hash (deterministic)
+let hash = hash_sha256(msg);     // ❌ Cryptographic hash (deterministic)
 let result = replace(s, p, r);  // ❌ String manipulation
 ```
 
@@ -200,7 +200,7 @@ We distinguish between errors caused by the programmer (Contract Bugs) and error
 If a function is called with the wrong types or in an invalid state, this is a bug in the calling code. The system should "fail fast" to prevent undefined behavior.
 
 ```javascript
-export function sign_jws(payload, secret) {
+export function jws_sign(payload, secret) {
 	if (type(payload) != "object") die("CONTRACT_VIOLATION: payload must be an object");
 	if (type(secret) != "string") die("CONTRACT_VIOLATION: secret must be a string");
 	// ...
@@ -284,7 +284,7 @@ return Result.err("DISCOVERY_FAILED", {
 **❌ INCORRECT:**
 
 ```javascript
-let result = verify_jwt(token, key, opts);
+let result = jwt_verify(token, key, opts);
 // Forgot to check result.error
 use(result.payload);  // Undefined if error occurred
 ```
@@ -293,7 +293,7 @@ use(result.payload);  // Undefined if error occurred
 
 ```javascript
 // With exceptions (automatic propagation)
-let payload = verify_jwt(token, key, opts);
+let payload = jwt_verify(token, key, opts);
 use(payload);  // Exception thrown if verification failed
 
 // With result objects (explicit check)
@@ -390,7 +390,7 @@ test('Security: Reject alg=none attack', () => { /* ... */ });
 - ✅ Edge cases (empty input, null, boundary values)
 - ✅ Security cases (tampering, injection, bypass attempts)
 
-**Example for `verify_jwt()`:**
+**Example for `jwt_verify()`:**
 
 ```javascript
 test('JWT: Valid token succeeds', () => { /* ... */ });
@@ -790,11 +790,11 @@ export function constant_time_eq(a, b) {
 	// ...
 }
 
-export function verify_jwt(token, pubkey, options) {
+export function jwt_verify(token, pubkey, options) {
 	// ...
 };
 
-export function sign_jws(payload, secret) {
+export function jws_sign(payload, secret) {
 	// ...
 };
 
@@ -920,13 +920,13 @@ Logic MUST NOT utilize `system()` or `popen()` for any operation. These function
  * @throws {string} - Error code on failure
  * 
  * @example
- * let payload = verify_jwt(token, pem_key, {
+ * let payload = jwt_verify(token, pem_key, {
  *     alg: "RS256",
  *     iss: "https://accounts.google.com",
  *     aud: "my-client-id"
  * });
  */
-export function verify_jwt(token, pubkey, options) {
+export function jwt_verify(token, pubkey, options) {
 	// ...
 };
 ```
@@ -962,7 +962,7 @@ export function verify_jwt(token, pubkey, options) {
 feat(crypto): Add HMAC-SHA256 implementation
 
 - Implement uc_mbedtls_hmac_sha256 in C
-- Add sign_jws/verify_jws wrappers in ucode
+- Add jws_sign/jws_verify wrappers in ucode
 - Add tests for JWS creation and verification
 
 Closes #42

@@ -1,7 +1,8 @@
-import { test, assert, assert_eq } from 'testing';
+import { test, test_skip, assert, assert_eq } from 'testing';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
+import * as native from 'luci_sso.native';
 
 test('session: logic - handshake lifecycle (creation, validation, atomic consumption)', () => {
 	let factory = mock.create();
@@ -216,23 +217,41 @@ test('session: logic - atomic handshake state creation', () => {
 });
 
 test('session: logic - detect CSPRNG failure during secret key generation (B1)', () => {
-	mock.create()
-		.with_random_fail()
-		.with_env({}, (io) => {
-			let res = session.get_secret_key(io);
-			assert(!res.ok, "Should fail when random() returns null");
-			assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
-		});
+    crypto.set_native({ ...native, random: () => null });
+    
+    let res = null;
+    let err = null;
+    try {
+        mock.create().with_env({}, (io) => {
+            res = session.get_secret_key(io);
+        });
+    } catch (e) {
+        err = e;
+    }
+    crypto.set_native(null);
+    if (err) die(err);
+
+    assert(!res.ok, "Should fail when random() returns null");
+    assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
 });
 
 test('session: logic - detect CSPRNG failure during handshake creation (B2)', () => {
-	mock.create()
-		.with_random_fail()
-		.with_env({}, (io) => {
-			let res = session.create_state(io);
-			assert(!res.ok, "Should fail when random() returns null");
-			assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
-		});
+    crypto.set_native({ ...native, random: () => null });
+
+    let res = null;
+    let err = null;
+    try {
+        mock.create().with_env({}, (io) => {
+            res = session.create_state(io);
+        });
+    } catch (e) {
+        err = e;
+    }
+    crypto.set_native(null);
+    if (err) die(err);
+
+    assert(!res.ok, "Should fail when random() returns null");
+    assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
 });
 
 // W1: Unchecked io.rename in get_secret_key

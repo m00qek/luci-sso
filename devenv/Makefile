@@ -132,16 +132,19 @@ endef
 .unit-test:
 	$(VALIDATE_SUITE_RUNNING)
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
 .e2e-test:
 	$(VALIDATE_SUITE_RUNNING)
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
 
 .watch-tests:
 	$(VALIDATE_SUITE_RUNNING)
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
 .build-images:
@@ -198,12 +201,13 @@ compile: $(SENTINEL)
 $(SENTINEL): $(wildcard $(PROJECT_ROOT)/src/*.c) $(wildcard $(PROJECT_ROOT)/src/*.h) $(PROJECT_ROOT)/src/CMakeLists.txt
 	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(SDK_ARCH)/$(CRYPTO_LIB)..."
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
-	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
+
 	@touch $(SENTINEL)
 
 package:
 	@echo -e " $(BLUE)📦$(RESET) Building IPK package for $(SDK_ARCH)..."
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/packages
-	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH) 2>/dev/null || true
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh package

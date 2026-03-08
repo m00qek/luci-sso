@@ -1,5 +1,6 @@
 import { test, assert, assert_eq } from 'testing';
 import * as crypto from 'luci_sso.crypto';
+import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 
 // =============================================================================
@@ -17,9 +18,9 @@ test('fuzz: logic - Base64URL consistency', () => {
 	];
 
 	for (let i, original in cases) {
-		let encoded = crypto.b64url_encode(original);
+		let encoded = encoding.b64url_encode(original);
 		assert(!match(encoded, /[+/=]/), `Encoded string '${encoded}' should not contain +, / or =`);
-		let decoded = crypto.b64url_decode(encoded);
+		let decoded = encoding.b64url_decode(encoded);
 		assert_eq(original, decoded, `Roundtrip failed for case: ${original}`);
 	}
 });
@@ -30,8 +31,8 @@ test('fuzz: logic - large input stability', () => {
 	for (let i = 0; i < 1024; i++) {
 		large += "1234567890123456";
 	}
-	let encoded = crypto.b64url_encode(large);
-	let decoded = crypto.b64url_decode(encoded);
+	let encoded = encoding.b64url_encode(large);
+	let decoded = encoding.b64url_decode(encoded);
 	assert_eq(length(decoded), 16384, "Should successfully roundtrip 16KB");
 });
 
@@ -39,7 +40,7 @@ test('fuzz: logic - bit flipping resistance', () => {
 
 	let secret = "secret";
 
-	let res_s = crypto.sign_jws({foo: "bar"}, secret);
+	let res_s = crypto.jws_sign({foo: "bar"}, secret);
 
     assert(Result.is(res_s));
 
@@ -49,7 +50,7 @@ test('fuzz: logic - bit flipping resistance', () => {
 
 	let parts = split(token, ".");
 
-	let sig = crypto.b64url_decode(parts[2]);
+	let sig = encoding.b64url_decode(parts[2]);
 
 	
 
@@ -69,11 +70,11 @@ test('fuzz: logic - bit flipping resistance', () => {
 
 	
 
-	let tampered_token = parts[0] + "." + parts[1] + "." + crypto.b64url_encode(tampered_sig);
+	let tampered_token = parts[0] + "." + parts[1] + "." + encoding.b64url_encode(tampered_sig);
 
 	
 
-	let result = crypto.verify_jws(tampered_token, secret);
+	let result = crypto.jws_verify(tampered_token, secret);
 
     assert(Result.is(result));
 
@@ -93,9 +94,9 @@ test('fuzz: logic - header injection resistance', () => {
 
 	
 
-	let b64_header = crypto.b64url_encode(sprintf("%J", header));
+	let b64_header = encoding.b64url_encode(sprintf("%J", header));
 
-	let b64_payload = crypto.b64url_encode(sprintf("%J", payload));
+	let b64_payload = encoding.b64url_encode(sprintf("%J", payload));
 
 	let signed_data = b64_header + "." + b64_payload;
 
@@ -107,11 +108,11 @@ test('fuzz: logic - header injection resistance', () => {
 
 	let signature = import_native.hmac_sha256(secret, signed_data);
 
-	let token = signed_data + "." + crypto.b64url_encode(signature);
+	let token = signed_data + "." + encoding.b64url_encode(signature);
 
 
 
-	let result = crypto.verify_jws(token, secret);
+	let result = crypto.jws_verify(token, secret);
 
     assert(Result.is(result));
 

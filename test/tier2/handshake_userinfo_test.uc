@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as encoding from 'luci_sso.encoding';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
@@ -40,7 +41,7 @@ test('handshake: userinfo - supplements missing email when sub matches', () => {
             io.http_post = (url) => {
                 let access_token = "at-123";
                 // ID Token WITHOUT email
-                let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16)) };
+                let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)) };
                 let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
                 return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };
             };
@@ -48,7 +49,7 @@ test('handshake: userinfo - supplements missing email when sub matches', () => {
             let s_res = session.create_state(io);
             let s_data = s_res.data;
             let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
-            let raw_data = crypto.safe_json(io.read_file(path)).data;
+            let raw_data = encoding.safe_json(io.read_file(path)).data;
             raw_data.nonce = "test-nonce";
             io.write_file(path, sprintf("%J", raw_data));
 
@@ -96,7 +97,7 @@ test('handshake: userinfo - fails identity binding when sub mismatches', () => {
 
             io.http_post = (url) => {
                 let access_token = "at-456";
-                let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16)) };
+                let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)) };
                 let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
                 return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };
             };
@@ -104,7 +105,7 @@ test('handshake: userinfo - fails identity binding when sub mismatches', () => {
             let s_res = session.create_state(io);
             let s_data = s_res.data;
             let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
-            let raw_data = crypto.safe_json(io.read_file(path)).data;
+            let raw_data = encoding.safe_json(io.read_file(path)).data;
             raw_data.nonce = "test-nonce";
             io.write_file(path, sprintf("%J", raw_data));
 

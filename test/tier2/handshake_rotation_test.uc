@@ -2,6 +2,7 @@ import { test, assert, assert_eq } from 'testing';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
+import * as encoding from 'luci_sso.encoding';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
@@ -66,7 +67,7 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
                 ...f.MOCK_CLAIMS,
                 email: "user-123",
                 nonce: s_data.nonce,
-                at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16))
+                at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16))
             };
             let token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", f.ROTATION_NEW_JWK.kid);
             let tokens = { access_token: access_token, id_token: token };

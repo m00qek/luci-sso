@@ -84,7 +84,7 @@ export function get_secret_key(io) {
 		if (acquired) {
 			try {
 				// 2. We are the generator: Generate and Write
-				let res = crypto.random(io, 32);
+				let res = crypto.random(32);
 				if (!res.ok) {
 					io.log("error", "CRITICAL: CSPRNG failure during secret key generation");
 					try { io.remove(lock_path); } catch (e) {}
@@ -156,10 +156,10 @@ export function get_secret_key(io) {
 export function create_state(io) {
 	ensure_handshake_dir(io);
 
-	let res_p = crypto.pkce_pair(io);
-	let res_s = crypto.random(io, 16);
-	let res_n = crypto.random(io, 16);
-	let res_h = crypto.random(io, 32);
+	let res_p = crypto.pkce_pair();
+	let res_s = crypto.random(16);
+	let res_n = crypto.random(16);
+	let res_h = crypto.random(32);
 
 	if (!res_p.ok || !res_s.ok || !res_n.ok || !res_h.ok) {
 		io.log("error", "CRITICAL: CSPRNG failure during handshake state generation");
@@ -167,9 +167,9 @@ export function create_state(io) {
 	}
 
 	let pkce = res_p.data;
-	let state = crypto.b64url_encode(res_s.data);
-	let nonce = crypto.b64url_encode(res_n.data);
-	let handle = crypto.b64url_encode(res_h.data);
+	let state = encoding.b64url_encode(res_s.data);
+	let nonce = encoding.b64url_encode(res_n.data);
+	let handle = encoding.b64url_encode(res_h.data);
 	let now = io.time();
 
 	let data = {
@@ -349,7 +349,7 @@ export function create(io, user_data) {
 		exp: now + SESSION_DURATION
 	};
 	
-	return crypto.sign_jws(payload, secret);
+	return crypto.jws_sign(payload, secret);
 };
 
 /**
@@ -369,7 +369,7 @@ export function verify(io, token, clock_tolerance) {
 	if (!res.ok) return res;
 	let secret = res.data;
 
-	let result = crypto.verify_jws(token, secret);
+	let result = crypto.jws_verify(token, secret);
 	if (!result.ok) return Result.err("INVALID_SESSION", result.error);
 	
 	let session = result.data;

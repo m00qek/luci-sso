@@ -23,7 +23,7 @@ test('oidc: security - reject HS256 algorithm confusion', () => {
 		exp: 1000,
 		at_hash: "fake_hash"
 	};
-	let res_s = crypto.sign_jws(payload, "secret-key"); // Maliciously signed with symmetric HS256
+	let res_s = crypto.jws_sign(payload, "secret-key"); // Maliciously signed with symmetric HS256
     assert(Result.is(res_s));
 	let token = res_s.data;
 

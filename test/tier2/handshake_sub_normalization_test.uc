@@ -1,6 +1,7 @@
 import { test, assert, assert_eq } from 'testing';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
+import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
@@ -38,7 +39,7 @@ test('REPRODUCTION: handshake: userinfo fallback fails on case-mismatched sub', 
             let original_write_file = io.write_file;
             io.write_file = (path, data) => {
                 if (match(path, /handshake_.*\.json/)) {
-                    let res = crypto.safe_json(data);
+                    let res = encoding.safe_json(data);
                     if (res.ok) captured_nonce = res.data.nonce;
                 }
                 return original_write_file(path, data);
@@ -52,7 +53,7 @@ test('REPRODUCTION: handshake: userinfo fallback fails on case-mismatched sub', 
                     sub: "user-123",
                     email: null, 
                     nonce: captured_nonce, 
-                    at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16)) 
+                    at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)) 
                 };
                 let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
                 return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };

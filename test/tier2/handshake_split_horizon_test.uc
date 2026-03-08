@@ -1,6 +1,7 @@
 import { test, assert, assert_eq } from 'testing';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
+import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
@@ -73,7 +74,7 @@ test('handshake: split-horizon - prevents path corruption when issuer_url is in 
                         iss: issuer_url,
                         email: "admin@example.com",
                         nonce: "test-nonce",
-                        at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16))
+                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16))
                     };
                     let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
                     return { 
@@ -94,7 +95,7 @@ test('handshake: split-horizon - prevents path corruption when issuer_url is in 
             let path = "/var/run/luci-sso/handshake_" + handle + ".json";
             
             let content = io.read_file(path);
-            let json_res = crypto.safe_json(content);
+            let json_res = encoding.safe_json(content);
             if (!json_res.ok) {
                 print("Failed to parse handshake state from: ", path, " (", json_res.details, ")\n");
                 assert(false);
@@ -166,7 +167,7 @@ test('handshake: split-horizon - prevents corruption when internal_issuer_url is
                         iss: issuer_url,
                         email: "admin@example.com", 
                         nonce: "test-nonce",
-                        at_hash: crypto.b64url_encode(substr(crypto.sha256(access_token), 0, 16))
+                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16))
                     };
                     let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
                     return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };
@@ -177,7 +178,7 @@ test('handshake: split-horizon - prevents corruption when internal_issuer_url is
             let s_res = session.create_state(io);
             let s_data = s_res.data;
             let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
-            let raw_data = crypto.safe_json(io.read_file(path)).data;
+            let raw_data = encoding.safe_json(io.read_file(path)).data;
             raw_data.nonce = "test-nonce";
             io.write_file(path, sprintf("%J", raw_data));
 
@@ -235,7 +236,7 @@ test('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)
             let s_res = session.create_state(io);
             let s_data = s_res.data;
             let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
-            let raw_data = crypto.safe_json(io.read_file(path)).data;
+            let raw_data = encoding.safe_json(io.read_file(path)).data;
             raw_data.nonce = "test-nonce";
             io.write_file(path, sprintf("%J", raw_data));
 

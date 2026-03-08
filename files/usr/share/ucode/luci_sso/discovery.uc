@@ -14,7 +14,7 @@ import * as Result from 'luci_sso.result';
  * @private
  */
 function get_cache_path(id, prefix) {
-	let h = crypto.b64url_encode(crypto.sha256(id));
+	let h = encoding.b64url_encode(crypto.hash_sha256(id));
 	return `/var/run/luci-sso/oidc-${prefix}-${substr(h, 0, 32)}.json`;
 }
 
@@ -49,12 +49,12 @@ function _write_cache(io, path, data) {
 	try {
 		let cache_data = { ...data, cached_at: io.time() };
 
-		let res = crypto.random(io, 8);
+		let res = crypto.random(8);
 		if (!res.ok) {
 			io.log("error", "Cache write aborted: CSPRNG failure");
 			return;
 		}
-		let tmp_path = `${path}.${crypto.b64url_encode(res.data)}.tmp`;
+		let tmp_path = `${path}.${encoding.b64url_encode(res.data)}.tmp`;
 
 		if (io.write_file(tmp_path, sprintf("%J", cache_data))) {
 			if (!io.rename(tmp_path, path)) {

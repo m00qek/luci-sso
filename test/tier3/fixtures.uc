@@ -42,5 +42,5 @@ export function sign_anchor_token(crypto, issuer, email, now, nonce, at_hash) {
 		at_hash: at_hash
 	};
 	// We use sign_jws which creates HS256
-	return crypto.sign_jws(payload, ANCHOR_SECRET);
+	return crypto.jws_sign(payload, ANCHOR_SECRET);
 };

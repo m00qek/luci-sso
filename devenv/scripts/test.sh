@@ -28,7 +28,12 @@ translate_unit_paths() {
   local translated=""
   for mod in $modules; do
     # test/tier2/crypto_test.uc -> tier2.crypto_test
-    translated="$translated $(echo "$mod" | sed -E 's|^(\.\./)?test/||' | sed 's|\.uc$||' | tr '/' '.')"
+    local t=$(echo "$mod" | sed -E 's|^(\.\./)?test/||' | sed 's|\.uc$||' | tr '/' '.')
+    if [ -z "$translated" ]; then
+      translated="$t"
+    else
+      translated="$translated $t"
+    fi
   done
   echo "$translated"
 }
@@ -38,7 +43,12 @@ translate_e2e_paths() {
   local translated=""
   for mod in $modules; do
     # test/e2e/01-login.spec.js -> tests/01-login.spec.js
-    translated="$translated $(echo "$mod" | sed -E 's|^(\.\./)?test/e2e/|tests/|')"
+    local t=$(echo "$mod" | sed -E 's|^(\.\./)?test/e2e/|tests/|')
+    if [ -z "$translated" ]; then
+      translated="$t"
+    else
+      translated="$translated $t"
+    fi
   done
   echo "$translated"
 }
@@ -52,7 +62,7 @@ run_unit() {
   log_info "🧪 Running unit tests in openwrt container..."
   docker compose $COMPOSE_FLAGS exec openwrt \
     sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
-  docker compose $COMPOSE_FLAGS exec -e MODULES="$modules" -e FILTER="$filter" -e VERBOSE="$VERBOSE" openwrt ucode \
+  docker compose $COMPOSE_FLAGS exec -e MODULES="$(translate_unit_paths "$modules")" -e FILTER="$filter" -e VERBOSE="$VERBOSE" openwrt ucode \
     -L /usr/share/ucode \
     -L /usr/lib/ucode \
     -L /usr/share/ucode/luci_sso \

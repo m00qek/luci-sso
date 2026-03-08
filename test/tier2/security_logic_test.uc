@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
@@ -10,44 +11,44 @@ import * as mock from 'mock';
 // =============================================================================
 
 test('security: JWT - reject alg: none', () => {
-	let none_header = crypto.b64url_encode(sprintf("%J", { alg: "none", typ: "JWT" }));
-	let payload = crypto.b64url_encode(sprintf("%J", { sub: "admin" }));
+	let none_header = encoding.b64url_encode(sprintf("%J", { alg: "none", typ: "JWT" }));
+	let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" }));
 	let token = none_header + "." + payload + ".";
 
 	// 1. JWT High-level
-	let res1 = crypto.verify_jwt(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300 });
+	let res1 = crypto.jwt_verify(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300 });
     assert(Result.is(res1));
 	assert_eq(res1.error, "ALGORITHM_MISMATCH");
 
 	// 2. JWS Primitive
-	let res2 = crypto.verify_jws(token, "secret");
+	let res2 = crypto.jws_verify(token, "secret");
     assert(Result.is(res2));
 	assert_eq(res2.error, "UNSUPPORTED_ALGORITHM");
 });
 
 test('security: JWT - reject stripped signature', () => {
-    let header = crypto.b64url_encode(sprintf("%J", { alg: "HS256" }));
-    let payload = crypto.b64url_encode(sprintf("%J", { sub: "admin" }));
+    let header = encoding.b64url_encode(sprintf("%J", { alg: "HS256" }));
+    let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" }));
     let stripped = header + "." + payload + ".";
     
-    let res = crypto.verify_jwt(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300 });
+    let res = crypto.jwt_verify(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300 });
     assert(Result.is(res));
     assert_eq(res.error, "INVALID_SIGNATURE_ENCODING");
 });
 
 test('security: JWT - payload integrity', () => {
 	let secret = "secret";
-	let res_s = crypto.sign_jws({foo: "bar"}, secret);
+	let res_s = crypto.jws_sign({foo: "bar"}, secret);
     assert(Result.is(res_s));
 	assert(res_s.ok);
 	let good_token = res_s.data;
 	let parts = split(good_token, ".");
     
     // Tamper with payload (malformed JSON)
-	let bad_payload = crypto.b64url_encode("{ invalid json }");
+	let bad_payload = encoding.b64url_encode("{ invalid json }");
 	let tampered = parts[0] + "." + bad_payload + "." + parts[2];
 	
-	let res = crypto.verify_jws(tampered, secret);
+	let res = crypto.jws_verify(tampered, secret);
     assert(Result.is(res));
 	assert_eq(res.error, "INVALID_SIGNATURE", "Tampering must invalidate HMAC signature");
 });

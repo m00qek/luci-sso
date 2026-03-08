@@ -1,3 +1,4 @@
+import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
 
@@ -21,7 +22,7 @@ function _grant_all_luci_acls(io, sid) {
 		let content = io.read_file(`${acl_dir}/${f}`);
 		if (!content) continue;
 
-		let res = crypto.safe_json(content);
+		let res = encoding.safe_json(content);
 		if (!res.ok || type(res.data) != "object") continue;
 
 		let groups = [];
@@ -111,12 +112,12 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	}
 
 	// 3. Generate CSRF token
-	let res_csrf = crypto.random(io, 32);
+	let res_csrf = crypto.random(32);
 	if (!res_csrf.ok) {
 		io.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
 		return Result.err("CRYPTO_SYSTEM_FAILURE");
 	}
-	let csrf_token = crypto.b64url_encode(res_csrf.data);
+	let csrf_token = encoding.b64url_encode(res_csrf.data);
 
 	// 4. Set session variables
 	io.ubus_call("session", "set", {
@@ -194,7 +195,7 @@ export function register_token(io, access_token) {
 		try { io.mkdir(TOKEN_REGISTRY_DIR, 0700); } catch(e) {}
 
 		// 2. Generate a unique cryptographic ID for the token (64-char hex digest)
-		let res_h = crypto.sha256_hex(access_token);
+		let res_h = crypto.hash_sha256_hex(access_token);
 		if (!res_h.ok) return res_h;
 		
 		let token_id = res_h.data;

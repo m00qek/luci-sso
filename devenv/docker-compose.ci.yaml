@@ -7,6 +7,10 @@ services:
     environment:
       - REDIRECT_URL=https://${FQDN_LUCI}
       - ISSUER_URL=https://${FQDN_IDP}
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
 
   # The Browser is ONLY needed for E2E
   browser:

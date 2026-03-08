@@ -1,5 +1,6 @@
 import { test, assert, assert_eq } from 'testing';
 import * as handshake from 'luci_sso.handshake';
+import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
@@ -9,7 +10,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
     let now = 1516239022;
     // Lifetime = 25 hours (90000 seconds) > 24 hours (86400)
     let payload = { iat: now, exp: now + 90000 };
-    let long_lived_token = "header." + crypto.b64url_encode(sprintf("%J", payload)) + ".signature";
+    let long_lived_token = "header." + encoding.b64url_encode(sprintf("%J", payload)) + ".signature";
     
     let test_config = {
         ...f.MOCK_CONFIG,
@@ -40,7 +41,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
             let nonce_val = replace(state_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
 
             // Setup minimal environment
-            let at_hash = crypto.b64url_encode(substr(crypto.sha256(tokens.access_token), 0, 16));
+            let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(tokens.access_token), 0, 16));
             let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_val, at_hash: at_hash };
             tokens.id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
 
@@ -78,7 +79,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
 
     let cases = [
         { name: "Opaque", token: "opaque_string_without_dots" },
-        { name: "Short-lived", token: "h." + crypto.b64url_encode(sprintf("%J", { iat: 100, exp: 200 })) + ".s" }
+        { name: "Short-lived", token: "h." + encoding.b64url_encode(sprintf("%J", { iat: 100, exp: 200 })) + ".s" }
     ];
 
     for (let c in cases) {
@@ -102,7 +103,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
                 let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
                 let nonce_val = replace(state_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
 
-                let at_hash = crypto.b64url_encode(substr(crypto.sha256(tokens.access_token), 0, 16));
+                let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(tokens.access_token), 0, 16));
                 let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_val, at_hash: at_hash };
                 tokens.id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
                 
