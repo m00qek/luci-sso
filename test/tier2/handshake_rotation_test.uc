@@ -67,7 +67,7 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
                 ...f.MOCK_CLAIMS,
                 email: "user-123",
                 nonce: s_data.nonce,
-                at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16))
+                at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data
             };
             let token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", f.ROTATION_NEW_JWK.kid);
             let tokens = { access_token: access_token, id_token: token };

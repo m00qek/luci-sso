@@ -1,10 +1,7 @@
-'use strict';
-
 import * as Result from 'luci_sso.result';
 
 /**
  * Implementation of RFC 7515 Base64URL encoding and decoding.
- * Pure utility module with no external side effects.
  */
 
 const MAX_UTILS_SIZE = 32768; // 32 KB
@@ -16,7 +13,7 @@ const MAX_UTILS_SIZE = 32768; // 32 KB
 function _map_to_url_safe(str) {
 	let res = replace(str, /\+/g, '-');
 	return replace(res, /\//g, '_');
-}
+};
 
 /**
  * Maps URL-safe characters back to standard Base64.
@@ -25,7 +22,7 @@ function _map_to_url_safe(str) {
 function _map_from_url_safe(str) {
 	let res = replace(str, /-/g, '+');
 	return replace(res, /_/g, '/');
-}
+};
 
 /**
  * Adds padding characters to a Base64 string if needed.
@@ -37,7 +34,7 @@ function _add_padding(str) {
 		str += '=';
 	}
 	return str;
-}
+};
 
 /**
  * Removes all padding characters from a Base64 string.
@@ -45,7 +42,7 @@ function _add_padding(str) {
  */
 function _strip_padding(str) {
 	return replace(str, /=/g, '');
-}
+};
 
 /**
  * Converts Base64URL to Standard Base64 with padding.
@@ -53,42 +50,56 @@ function _strip_padding(str) {
  * @private
  */
 function b64url_to_b64(str) {
-	if (type(str) != "string") return null;
-	if (length(str) == 0) return "";
+	if (length(str) == 0)
+    return "";
 	
 	// Validate Base64URL charset: [A-Za-z0-9_-]
-	if (!match(str, /^[A-Za-z0-9_-]+$/)) return null;
+	if (!match(str, /^[A-Za-z0-9_-]+$/))
+    return null;
 	
 	return _add_padding(_map_from_url_safe(str));
-}
+};
 
 /**
  * Decodes a Base64URL string to a raw string.
  * Enforces a strict size limit to prevent OOM.
  * 
  * @param {string} str - Base64URL string
- * @returns {string} - Raw binary string or null
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function b64url_decode(str) {
-	if (type(str) != "string") die("CONTRACT_VIOLATION: b64url_decode expects string");
+	if (type(str) != "string")
+    die("CONTRACT_VIOLATION: b64url_decode expects string");
 	
-	if (length(str) > MAX_UTILS_SIZE) return null;
+	if (length(str) > MAX_UTILS_SIZE)
+    return Result.err("TOKEN_TOO_LARGE");
 
 	let b64 = b64url_to_b64(str);
-	return (b64 != null) ? b64dec(b64) : null;
+	if (b64 == null)
+    return Result.err("INVALID_ENCODING");
+
+	let decoded = b64dec(b64);
+	if (decoded == null)
+    return Result.err("INVALID_ENCODING");
+
+	return Result.ok(decoded);
 };
 
 /**
  * Encodes a raw string to Base64URL.
  * 
  * @param {string} str - Raw binary string
- * @returns {string} - Base64URL string
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function b64url_encode(str) {
-	if (type(str) != "string") die("CONTRACT_VIOLATION: b64url_encode expects string");
+	if (type(str) != "string")
+    die("CONTRACT_VIOLATION: b64url_encode expects string");
 	
 	let b64 = b64enc(str);
-	return _strip_padding(_map_to_url_safe(b64));
+	if (b64 == null)
+    return Result.err("ENCODE_ERROR");
+
+	return Result.ok(_strip_padding(_map_to_url_safe(b64)));
 };
 
 /**
@@ -97,18 +108,20 @@ export function b64url_encode(str) {
  * 
  * @param {string} data - Raw binary data string
  * @param {number} len - Number of bytes to extract
- * @returns {string} - Truncated binary string
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function binary_truncate(data, len) {
-	if (type(data) != "string") die("CONTRACT_VIOLATION: binary_truncate expects string data");
-	if (type(len) != "int") die("CONTRACT_VIOLATION: binary_truncate expects integer length");
-	if (len > length(data)) die("CONTRACT_VIOLATION: truncation length exceeds data length");
+	if (type(data) != "string")
+    die("CONTRACT_VIOLATION: binary_truncate expects string data");
 
-	let res = "";
-	for (let i = 0; i < len; i++) {
-		res += chr(ord(data, i));
-	}
-	return res;
+	if (type(len) != "int")
+    die("CONTRACT_VIOLATION: binary_truncate expects integer length");
+
+	if (len > length(data))
+    die("CONTRACT_VIOLATION: truncation length exceeds data length");
+
+	// substr() in ucode is byte-safe for binary strings
+	return Result.ok(substr(data, 0, len));
 };
 
 /**
@@ -116,15 +129,26 @@ export function binary_truncate(data, len) {
  * Handles both strings and stream-like objects with a .read() method.
  * 
  * @param {string|object} data - Input to decode.
- * @returns {object} - { ok: true, data: ... } or { ok: false, error: "CODE", details: "..." }
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function safe_json(data) {
 	let raw = (type(data) == "object" && type(data.read) == "function") ? data.read() : data;
+	
+	// If it's a Result object (e.g. from b64url_decode), extract data
+	if (type(raw) == "object" && raw.ok != null) {
+		if (!raw.ok)
+      return raw;
+
+		raw = raw.data;
+	}
+
 	if (type(raw) != "string") return Result.err("INVALID_TYPE");
 
 	try {
 		let parsed = json(raw);
-		if (parsed == null) return Result.err("PARSE_ERROR", "JSON decoded to null");
+		if (parsed == null)
+      return Result.err("PARSE_ERROR", "JSON decoded to null");
+
 		return Result.ok(parsed);
 	} catch (e) {
 		return Result.err("PARSE_ERROR", e);
@@ -137,45 +161,47 @@ export function safe_json(data) {
  * Per RFC 3986, the path component is case-sensitive.
  * 
  * @param {string} url - The URL to normalize
- * @returns {string} - Normalized URL
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function normalize_url(url) {
-	if (type(url) != "string") return "";
+	if (type(url) != "string")
+    die("CONTRACT_VIOLATION: normalize_url expects string");
 	
 	let res = url;
 	let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
-	if (m) {
-		let scheme = lc(m[1]);
-		let host = lc(m[2]);
-		let path = m[3];
+	if (!m)
+    return Result.err("MALFORMED_URL", url);
 
-		// W2: Strip default ports per RFC 3986 §6.2.3
-		if (scheme == "https://") {
-			host = replace(host, /:443$/, "");
-		} else if (scheme == "http://") {
-			host = replace(host, /:80$/, "");
-		}
+	let scheme = lc(m[1]);
+	let host = lc(m[2]);
+	let path = m[3];
 
-		res = scheme + host + path;
+	// Strip default ports per RFC 3986 §6.2.3
+	if (scheme == "https://") {
+		host = replace(host, /:443$/, "");
+	} else if (scheme == "http://") {
+		host = replace(host, /:80$/, "");
 	}
+
+	res = scheme + host + path;
 
 	// Remove trailing slashes
 	res = replace(res, /\/+$/, "");
-	return res;
+	return Result.ok(res);
 };
+
 /**
  * Normalizes a 'sub' claim for comparison.
- * While the OIDC spec states that 'sub' is case-sensitive, some enterprise
- * Identity Providers exhibit case-inconsistent behavior across different
- * endpoints (ID Token vs UserInfo). Normalizing to lowercase ensures 
- * interoperability and prevents false IDENTITY_MISMATCH errors.
+ * Normalizing to lowercase ensures interoperability.
  * 
  * @param {string} sub - The sub claim to normalize
- * @returns {string} - Normalized sub
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function normalize_sub(sub) {
-	if (type(sub) != "string") return "";
-	return lc(sub);
+	if (type(sub) != "string")
+    die("CONTRACT_VIOLATION: normalize_sub expects string");
+
+	return Result.ok(lc(sub));
 };
 
 /**

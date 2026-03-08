@@ -1,5 +1,4 @@
 import * as _native from 'luci_sso.native';
-import * as encoding from 'luci_sso.encoding';
 
 import * as Result from 'luci_sso.result';
 
@@ -24,20 +23,21 @@ export function set_native(n) {
 
 // --- JSON Helpers ---
 export function constant_time_eq(a, b) {
-  return c_base.constant_time_eq(a, b);
+	return c_base.constant_time_eq(a, b);
 };
+
 // --- Public API ---
 
 export function jws_sign(payload, secret) {
-  return c_jws.jws_sign(native, payload, secret);
+	return c_jws.sign(native, payload, secret);
 };
 
 export function jws_verify(token, secret) {
-  return c_jws.jws_verify(native, token, secret);
+	return c_jws.verify(native, token, secret);
 };
 
 export function jwt_verify(token, pubkey, options) {
-  return c_jwt.jwt_verify(native, token, pubkey, options);
+	return c_jwt.verify(native, token, pubkey, options);
 };
 
 export function random(len) {
@@ -45,20 +45,21 @@ export function random(len) {
 };
 
 export function hash_sha256(str) {
-	return c_hash.hash_sha256(native, str);
+	return c_hash.sha256(native, str);
 };
+
 export function hash_sha256_hex(str) {
-	return c_hash.hash_sha256_hex(native, str);
+	return c_hash.sha256_hex(native, str);
 };
 
 export function pkce_pair(len) {
-  return c_pkce.pair(native, len);
+	return c_pkce.pair(native, len);
 };
 
 export function jwk_to_pem(jwk) {
-  return c_jwk.to_pem(native, jwk);
+	return c_jwk.to_pem(native, jwk);
 };
 
 export function safe_id(token) {
-		return c_base.safe_id(native, token);
+	return c_base.safe_id(native, token);
 };

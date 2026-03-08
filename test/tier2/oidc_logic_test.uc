@@ -127,7 +127,7 @@ test('oidc: ID token - support multi-audience arrays', () => {
 	let keys = JWKS.keys;
 	let at = "mock-at";
 	let full_hash = crypto.hash_sha256(at);
-	let ah = encoding.b64url_encode(substr(full_hash, 0, 16));
+	let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 	
 	// 1. Success: Correct ID in array
 	// RFC 7519: If aud is array, azp is mandatory.
@@ -158,7 +158,7 @@ test('oidc: ID token - support AZP claim', () => {
 	let keys = JWKS.keys;
 	let at = "mock-at";
 	let full_hash = crypto.hash_sha256(at);
-	let ah = encoding.b64url_encode(substr(full_hash, 0, 16));
+	let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 	let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], at_hash: ah };
 
 	mock.create().with_env({}, (io) => {
@@ -197,7 +197,7 @@ test('oidc: ID token - enforce nonce matching', () => {
 	let keys = JWKS.keys;
 	let at = "mock-at";
 	let full_hash = crypto.hash_sha256(at);
-	let ah = encoding.b64url_encode(substr(full_hash, 0, 16));
+	let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 	let payload = { ...f.MOCK_CLAIMS, at_hash: ah };
 	let token = h.generate_id_token(payload, PRIVKEY, "RS256");
 	
@@ -295,8 +295,8 @@ test('oidc: ID token - at_hash validation ensures token binding', () => {
 	let keys = JWKS.keys;
 	
 	let full_hash = crypto.hash_sha256(access_token);
-	let left_half = encoding.binary_truncate(full_hash, 16);
-	let correct_hash = encoding.b64url_encode(left_half);
+	let left_half = encoding.binary_truncate(full_hash, 16).data;
+	let correct_hash = encoding.b64url_encode(left_half).data;
 
 	mock.create().with_env({}, (io) => {
 		// 1. Success: at_hash matches access_token
@@ -333,8 +333,8 @@ test('oidc: ID token - at_hash validation byte-safety torture', () => {
 	let full_hash = crypto.hash_sha256(access_token);
 	
 	// Manually construct the left-half correctly (raw bytes)
-	let left_half = encoding.binary_truncate(full_hash, 16);
-	let correct_at_hash = encoding.b64url_encode(left_half);
+	let left_half = encoding.binary_truncate(full_hash, 16).data;
+	let correct_at_hash = encoding.b64url_encode(left_half).data;
 
 	mock.create().with_env({}, (io) => {
 		let p = { ...f.MOCK_CLAIMS, at_hash: correct_at_hash };
@@ -455,7 +455,7 @@ test('oidc: ID token - enforce azp when aud is array (Blocker 1771006966)', () =
 	let keys = JWKS.keys;
 	let at = "mock-at";
 	let full_hash = crypto.hash_sha256(at);
-	let ah = encoding.b64url_encode(substr(full_hash, 0, 16));
+	let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 	
 	// Create a payload with multiple audiences but NO authorized party (azp)
 	// RFC 7519 Section 3.1.3.7: If aud is array, azp is MANDATORY.

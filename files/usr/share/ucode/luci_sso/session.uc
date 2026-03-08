@@ -42,7 +42,7 @@ function ensure_handshake_dir(io) {
 	} catch (e) {
 		// Might already exist or failed permissions, we'll find out on write
 	}
-}
+};
 
 /**
  * Internal helper to get/generate the router secret key.
@@ -167,9 +167,18 @@ export function create_state(io) {
 	}
 
 	let pkce = res_p.data;
-	let state = encoding.b64url_encode(res_s.data);
-	let nonce = encoding.b64url_encode(res_n.data);
-	let handle = encoding.b64url_encode(res_h.data);
+	let res_b64_s = encoding.b64url_encode(res_s.data);
+	let res_b64_n = encoding.b64url_encode(res_n.data);
+	let res_b64_h = encoding.b64url_encode(res_h.data);
+
+	if (!res_b64_s.ok || !res_b64_n.ok || !res_b64_h.ok) {
+		io.log("error", "CRITICAL: b64url_encode failure during handshake state generation");
+		return Result.err("CRYPTO_SYSTEM_FAILURE");
+	}
+
+	let state = res_b64_s.data;
+	let nonce = res_b64_n.data;
+	let handle = res_b64_h.data;
 	let now = io.time();
 
 	let data = {

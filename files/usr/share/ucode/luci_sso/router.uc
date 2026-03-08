@@ -61,7 +61,7 @@ function _check_rate_limit(io) {
 	}
 
 	return true;
-}
+};
 
 /**
  * Creates a response object.
@@ -73,7 +73,7 @@ function response(status, headers, body) {
 		headers: headers || {},
 		body: body || ""
 	};
-}
+};
 
 /**
  * Handles the initial login redirect.
@@ -88,7 +88,7 @@ function handle_login(io, config) {
 		"Location": res.data.url,
 		"Set-Cookie": `__Host-luci_sso_state=${res.data.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
 	}));
-}
+};
 
 /**
  * Handles the OIDC callback path.
@@ -106,7 +106,7 @@ function handle_callback(io, config, request, policy) {
 			"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 		]
 	}));
-}
+};
 
 /**
  * Handles the logout request.
@@ -170,7 +170,7 @@ function handle_logout(io, config, request) {
 			"sysauth=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
 		]
 	}));
-}
+};
 
 /**
  * Main entry point for the router.

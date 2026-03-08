@@ -17,8 +17,8 @@ export function generate_id_token(payload, privkey_pem, alg, kid) {
 	let header = { alg: alg || "RS256", typ: "JWT" };
 	if (kid) header.kid = kid;
 	
-	let b64_header = encoding.b64url_encode(sprintf("%J", header));
-	let b64_payload = encoding.b64url_encode(sprintf("%J", payload));
+	let b64_header = encoding.b64url_encode(sprintf("%J", header)).data;
+	let b64_payload = encoding.b64url_encode(sprintf("%J", payload)).data;
 	let signed_data = b64_header + "." + b64_payload;
 
 	// Use temporary files for signing data and key
@@ -64,5 +64,5 @@ export function generate_id_token(payload, privkey_pem, alg, kid) {
 		sig_bin = r + s;
 	}
 
-	return signed_data + "." + encoding.b64url_encode(sig_bin);
+	return signed_data + "." + encoding.b64url_encode(sig_bin).data;
 };

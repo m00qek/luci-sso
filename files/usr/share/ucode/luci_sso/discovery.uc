@@ -13,16 +13,19 @@ import * as Result from 'luci_sso.result';
  * Generates a unique cache path for an identifier (issuer or JWKS URI).
  * @private
  */
-function get_cache_path(id, prefix) {
-	let h = encoding.b64url_encode(crypto.hash_sha256(id));
-	return `/var/run/luci-sso/oidc-${prefix}-${substr(h, 0, 32)}.json`;
-}
+function get_cache_path(id_res, prefix) {
+	if (!id_res.ok) return null;
+	let h_res = encoding.b64url_encode(crypto.hash_sha256(id_res.data));
+	if (!h_res.ok) return null;
+	return `/var/run/luci-sso/oidc-${prefix}-${substr(h_res.data, 0, 32)}.json`;
+};
 
 /**
  * Reads and validates a cached object.
  * @private
  */
 function _read_cache(io, path, ttl, ignore_ttl) {
+	if (!path) return null;
 	try {
 		let content = io.read_file(path);
 		if (!content) return null;
@@ -39,13 +42,14 @@ function _read_cache(io, path, ttl, ignore_ttl) {
 	} catch (e) {
 		return null;
 	}
-}
+};
 
 /**
  * Writes data to cache with a timestamp (Atomic).
  * @private
  */
 function _write_cache(io, path, data) {
+	if (!path) return;
 	try {
 		let cache_data = { ...data, cached_at: io.time() };
 
@@ -54,7 +58,10 @@ function _write_cache(io, path, data) {
 			io.log("error", "Cache write aborted: CSPRNG failure");
 			return;
 		}
-		let tmp_path = `${path}.${encoding.b64url_encode(res.data)}.tmp`;
+		let b64_res = encoding.b64url_encode(res.data);
+		if (!b64_res.ok) return;
+
+		let tmp_path = `${path}.${b64_res.data}.tmp`;
 
 		if (io.write_file(tmp_path, sprintf("%J", cache_data))) {
 			if (!io.rename(tmp_path, path)) {
@@ -64,7 +71,7 @@ function _write_cache(io, path, data) {
 	} catch (e) {
 		io.log("error", `Cache write failure: ${e}`);
 	}
-}
+};
 
 /**
  * Fetches and caches OIDC discovery document.
@@ -75,13 +82,19 @@ export function discover(io, issuer, options) {
 	if (!encoding.is_https(issuer)) return Result.err("INSECURE_ISSUER_URL");
 
 	options = options || {};
-	let normalized_issuer = encoding.normalize_url(issuer);
-	let cache_path = options.cache_path || get_cache_path(normalized_issuer, "discovery");
+	let normalized_issuer_res = encoding.normalize_url(issuer);
+	if (!normalized_issuer_res.ok) return normalized_issuer_res;
+	let normalized_issuer = normalized_issuer_res.data;
+
+	let cache_path = options.cache_path || get_cache_path(normalized_issuer_res, "discovery");
 	let ttl = options.ttl || 86400; // 24 hours default (production standard)
 
 	let cached = _read_cache(io, cache_path, ttl);
-	if (cached && crypto.constant_time_eq(encoding.normalize_url(cached.issuer), normalized_issuer)) {
-		return Result.ok(cached);
+	if (cached && cached.issuer) {
+		let cached_issuer_res = encoding.normalize_url(cached.issuer);
+		if (cached_issuer_res.ok && crypto.constant_time_eq(cached_issuer_res.data, normalized_issuer)) {
+			return Result.ok(cached);
+		}
 	}
 
 	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
@@ -97,9 +110,12 @@ export function discover(io, issuer, options) {
 	if (!response || response.error || response.status != 200) {
 		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
 		let stale = _read_cache(io, cache_path, ttl, true);
-		if (stale && crypto.constant_time_eq(encoding.normalize_url(stale.issuer), normalized_issuer)) {
-			io.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
-			return Result.ok(stale);
+		if (stale && stale.issuer) {
+			let stale_issuer_res = encoding.normalize_url(stale.issuer);
+			if (stale_issuer_res.ok && crypto.constant_time_eq(stale_issuer_res.data, normalized_issuer)) {
+				io.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
+				return Result.ok(stale);
+			}
 		}
 
 		if (!response || response.error) {
@@ -124,8 +140,10 @@ export function discover(io, issuer, options) {
 		io.log("error", `Discovery document missing issuer field from [id: ${issuer_id}]`);
 		return Result.err("DISCOVERY_MISSING_ISSUER");
 	}
-	if (config.issuer && !crypto.constant_time_eq(encoding.normalize_url(config.issuer), encoding.normalize_url(issuer))) {
-		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${crypto.safe_id(config.issuer)}]`);
+	
+	let config_issuer_res = encoding.normalize_url(config.issuer);
+	if (!config_issuer_res.ok || !crypto.constant_time_eq(config_issuer_res.data, normalized_issuer)) {
+		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(config_issuer_res.data) : "INVALID"}]`);
 		return Result.err("DISCOVERY_ISSUER_MISMATCH", 
 			 `Expected issuer_id ${issuer_id}` );
 	}
@@ -165,11 +183,14 @@ export function discover(io, issuer, options) {
 export function fetch_jwks(io, jwks_uri, options) {
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
 
-	let normalized_uri = encoding.normalize_url(jwks_uri);
+	let normalized_uri_res = encoding.normalize_url(jwks_uri);
+	if (!normalized_uri_res.ok) return normalized_uri_res;
+	let normalized_uri = normalized_uri_res.data;
+
 	if (!encoding.is_https(normalized_uri)) return Result.err("INSECURE_JWKS_URI");
 
 	options = options || {};
-	let cache_path = options.cache_path || get_cache_path(normalized_uri, "jwks");
+	let cache_path = options.cache_path || get_cache_path(normalized_uri_res, "jwks");
 	let ttl = options.ttl || 86400; // 24 hours default
 	let uri_id = crypto.safe_id(normalized_uri);
 

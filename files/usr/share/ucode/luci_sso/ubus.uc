@@ -48,7 +48,7 @@ function _grant_all_luci_acls(io, sid) {
 			});
 		}
 	}
-}
+};
 
 /**
  * Creates a real LuCI system session via UBUS WITHOUT a password.
@@ -117,7 +117,12 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 		io.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
 		return Result.err("CRYPTO_SYSTEM_FAILURE");
 	}
-	let csrf_token = encoding.b64url_encode(res_csrf.data);
+	let csrf_res = encoding.b64url_encode(res_csrf.data);
+	if (!csrf_res.ok) {
+		io.log("error", "CRITICAL: b64url_encode failure during CSRF token generation");
+		return Result.err("CRYPTO_SYSTEM_FAILURE");
+	}
+	let csrf_token = csrf_res.data;
 
 	// 4. Set session variables
 	io.ubus_call("session", "set", {

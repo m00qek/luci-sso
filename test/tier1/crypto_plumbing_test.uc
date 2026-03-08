@@ -50,12 +50,12 @@ test('crypto: plumbing - clock tolerance boundary math', () => {
 test('crypto: plumbing - invalid algorithm in header', () => {
     let key = "key";
     let opts = { alg: "RS256", now: 123, clock_tolerance: 300 };
-    let bad_alg = encoding.b64url_encode(sprintf("%J", { alg: "ROT13" }));
+    let bad_alg = encoding.b64url_encode(sprintf("%J", { alg: "ROT13" })).data;
     let res1 = crypto.jwt_verify(bad_alg + ".e30.s", key, opts);
     assert(Result.is(res1));
     assert_eq(res1.error, "ALGORITHM_MISMATCH");
 
-    let no_alg = encoding.b64url_encode(sprintf("%J", { typ: "JWT" }));
+    let no_alg = encoding.b64url_encode(sprintf("%J", { typ: "JWT" })).data;
     let res2 = crypto.jwt_verify(no_alg + ".e30.s", key, opts);
     assert(Result.is(res2));
     assert_eq(res2.error, "INVALID_HEADER_JSON");
@@ -95,8 +95,8 @@ test('crypto: plumbing - PKCE primitives', () => {
     assert(Result.is(res_v));
     assert(res_v.ok);
     assert(length(res_v.data) >= 43);
-    let challenge = pkce.calculate_challenge(native, res_v.data);
-    assert(challenge);
+    let challenge_res = pkce.calculate_challenge(native, res_v.data);
+    assert(challenge_res.ok);
     let res_p = crypto.pkce_pair(32);
     assert(Result.is(res_p));
     assert(res_p.ok);

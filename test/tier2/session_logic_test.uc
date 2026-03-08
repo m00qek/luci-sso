@@ -1,4 +1,4 @@
-import { test, test_skip, assert, assert_eq } from 'testing';
+import { test, assert, assert_eq } from 'testing';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';

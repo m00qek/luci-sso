@@ -12,14 +12,17 @@ import * as Result from 'luci_sso.result';
  * pattern and avoiding logical branching based on secret content.
  */
 export function constant_time_eq(a, b) {
-	if (type(a) != "string" || type(b) != "string") return false;
+	if (type(a) != "string" || type(b) != "string")
+    return false;
 
 	let len_a = length(a);
 	let len_b = length(b);
 
-	// MANDATORY: Length cap to prevent DoS via amplification (W1)
-	// Any value longer than 16KB is considered excessive for tokens/hashes in this system.
-	if (len_a > 16384 || len_b > 16384) return false;
+	// MANDATORY: Length cap to prevent DoS via amplification
+	// Any value longer than 16KB is considered excessive for tokens/hashes in 
+  // this system.
+	if (len_a > 16384 || len_b > 16384)
+    return false;
 
 	let res = (len_a ^ len_b);
 
@@ -46,12 +49,11 @@ export function constant_time_eq(a, b) {
 export function random(native, len) {
 	let byte_len = len || 32;
 	if (type(byte_len) != "int")
-    die("CONTRACT_VIOLATION: random expects integer length");
+		 die("CONTRACT_VIOLATION: random expects integer length");
 
 	let bytes = native.random(byte_len);
-	if (!bytes || type(bytes) != "string" || length(bytes) != byte_len) {
+	if (!bytes || type(bytes) != "string" || length(bytes) != byte_len)
 		return Result.err("CSPRNG_FAILURE");
-	}
 
 	return Result.ok(bytes);
 };
@@ -74,7 +76,7 @@ export function safe_id(native, token) {
 
 	let hash_bin = native.sha256(token);
 	if (!hash_bin)
-    return "[ERROR]";
+		 return "[ERROR]";
 
 	let hex = "";
 	for (let i = 0; i < 8; i++) {

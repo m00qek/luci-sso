@@ -8,47 +8,55 @@ import * as hash from 'luci_sso.crypto.hash';
 /**
  * Generates a PKCE Code Verifier.
  * 
- * @param {object} io - I/O provider
+ * @param {object} native - Native crypto provider
  * @param {number} [len=43] - Length of verifier
  * @returns {object} - Result Object {ok, data/error}
  */
 export function generate_verifier(native, len) {
-  // TODO: use constants isntead of magic numbers
 	let byte_len = len || 43;
 	if (byte_len < 32 || byte_len > 96)
-    die("CONTRACT_VIOLATION: PKCE verifier must be 32-96 bytes");
+		die("CONTRACT_VIOLATION: PKCE verifier must be 32-96 bytes");
 
-	let res = base.random(native, byte_len);
-	if (!res.ok)
-    return res;
+	let result = base.random(native, byte_len);
+	if (!result.ok)
+		return result;
 
-	return Result.ok(encoding.b64url_encode(res.data));
+	return encoding.b64url_encode(result.data);
 };
 
 /**
  * Calculates a PKCE Code Challenge from a verifier using S256.
  * 
+ * @param {object} native - Native crypto provider
  * @param {string} verifier - PKCE verifier string
- * @returns {string} - Base64URL encoded challenge
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function calculate_challenge(native, verifier) {
-	return encoding.b64url_encode(hash.hash_sha256(native, verifier));
+	let hashed = hash.sha256(native, verifier);
+	if (!hashed)
+    return Result.err("CRYPTO_ERROR");
+
+	return encoding.b64url_encode(hashed);
 };
 
 /**
  * Generates a PKCE Verifier and Challenge pair.
  * 
- * @param {object} io - I/O provider
+ * @param {object} native - Native crypto provider
  * @param {number} [len] - Optional verifier length
  * @returns {object} - Result Object {ok, data/error}
  */
 export function pair(native, len) {
 	let verifier = generate_verifier(native, len);
 	if (!verifier.ok)
-    return verifier;
+		return verifier;
+
+	let challenge = calculate_challenge(native, verifier.data);
+	if (!challenge.ok)
+		return challenge;
 
 	return Result.ok({
-    verifier: verifier.data, 
-    challenge: calculate_challenge(native, verifier.data)
-  });
+		verifier: verifier.data, 
+		challenge: challenge.data
+	});
 };

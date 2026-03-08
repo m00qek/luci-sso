@@ -17,7 +17,7 @@ export function load_suite(dir_path, prefix, error_cb) {
 
 	let test_files = [];
 	for (let f in files) {
-		if (match(f, /_test\.uc$/)) {
+		if (match(f, /_test(_extra)?\.uc$/)) {
 			push(test_files, f);
 		}
 	}

@@ -11,8 +11,8 @@ import * as mock from 'mock';
 // =============================================================================
 
 test('security: JWT - reject alg: none', () => {
-	let none_header = encoding.b64url_encode(sprintf("%J", { alg: "none", typ: "JWT" }));
-	let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" }));
+	let none_header = encoding.b64url_encode(sprintf("%J", { alg: "none", typ: "JWT" })).data;
+	let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" })).data;
 	let token = none_header + "." + payload + ".";
 
 	// 1. JWT High-level
@@ -27,8 +27,8 @@ test('security: JWT - reject alg: none', () => {
 });
 
 test('security: JWT - reject stripped signature', () => {
-    let header = encoding.b64url_encode(sprintf("%J", { alg: "HS256" }));
-    let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" }));
+    let header = encoding.b64url_encode(sprintf("%J", { alg: "HS256" })).data;
+    let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" })).data;
     let stripped = header + "." + payload + ".";
     
     let res = crypto.jwt_verify(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300 });
@@ -45,7 +45,7 @@ test('security: JWT - payload integrity', () => {
 	let parts = split(good_token, ".");
     
     // Tamper with payload (malformed JSON)
-	let bad_payload = encoding.b64url_encode("{ invalid json }");
+	let bad_payload = encoding.b64url_encode("{ invalid json }").data;
 	let tampered = parts[0] + "." + bad_payload + "." + parts[2];
 	
 	let res = crypto.jws_verify(tampered, secret);

@@ -46,30 +46,30 @@ export function get_auth_url(io, config, discovery_doc, params) {
 		return Result.err("INSECURE_AUTH_ENDPOINT");
 	}
 	
-		// W2: RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
-		if (index(discovery_doc.authorization_endpoint, '#') != -1) {
-			return Result.err("INVALID_AUTH_ENDPOINT", "authorization_endpoint MUST NOT contain a fragment");
-		}
-	
-		let query = {
-			response_type: "code",
-			client_id: config.client_id,
-			redirect_uri: config.redirect_uri,
-			scope: config.scope || "openid profile email",
-			state: params.state,
-			nonce: params.nonce,
-			code_challenge: params.code_challenge,
-			code_challenge_method: "S256"
-		};
-		let url = discovery_doc.authorization_endpoint;
-	
-		let sep = (index(url, '?') == -1) ? '?' : '&';
-		for (let k, v in query) {
-			if (v == null) continue;
-			url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
-			sep = '&';
-		}
-		return Result.ok(url);
+	// W2: RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
+	if (index(discovery_doc.authorization_endpoint, '#') != -1) {
+		return Result.err("INVALID_AUTH_ENDPOINT", "authorization_endpoint MUST NOT contain a fragment");
+	}
+
+	let query = {
+		response_type: "code",
+		client_id: config.client_id,
+		redirect_uri: config.redirect_uri,
+		scope: config.scope || "openid profile email",
+		state: params.state,
+		nonce: params.nonce,
+		code_challenge: params.code_challenge,
+		code_challenge_method: "S256"
+	};
+	let url = discovery_doc.authorization_endpoint;
+
+	let sep = (index(url, '?') == -1) ? '?' : '&';
+	for (let k, v in query) {
+		if (v == null) continue;
+		url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
+		sep = '&';
+	}
+	return Result.ok(url);
 };
 
 /**
@@ -181,7 +181,9 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	if (!pem_res.ok) return pem_res;
 
 	// MANDATORY Claims Check
-	if (!crypto.constant_time_eq(encoding.normalize_url(discovery.issuer), encoding.normalize_url(config.issuer_url))) {
+	let disc_iss_res = encoding.normalize_url(discovery.issuer);
+	let conf_iss_res = encoding.normalize_url(config.issuer_url);
+	if (!disc_iss_res.ok || !conf_iss_res.ok || !crypto.constant_time_eq(disc_iss_res.data, conf_iss_res.data)) {
 		return Result.err("DISCOVERY_ISSUER_MISMATCH", `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}`);
 	}
 
@@ -247,10 +249,13 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	let full_hash = crypto.hash_sha256(tokens.access_token);
 	if (!full_hash) return Result.err("CRYPTO_ERROR");
 
-	let left_half = encoding.binary_truncate(full_hash, 16);
-	let expected_hash = encoding.b64url_encode(left_half);
+	let left_half_res = encoding.binary_truncate(full_hash, 16);
+	if (!left_half_res.ok) return Result.err("CRYPTO_ERROR");
 
-	if (!crypto.constant_time_eq(expected_hash, payload.at_hash)) {
+	let expected_hash_res = encoding.b64url_encode(left_half_res.data);
+	if (!expected_hash_res.ok) return Result.err("CRYPTO_ERROR");
+
+	if (!crypto.constant_time_eq(expected_hash_res.data, payload.at_hash)) {
 		return Result.err("AT_HASH_MISMATCH");
 	}
 

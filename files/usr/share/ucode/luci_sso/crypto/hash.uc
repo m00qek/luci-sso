@@ -6,9 +6,9 @@ import * as Result from 'luci_sso.result';
  * @param {string} str - Data to hash
  * @returns {string} - 32-byte binary hash string
  */
-export function hash_sha256(native, str) {
+export function sha256(native, str) {
 	if (type(str) != "string")
-    die("CONTRACT_VIOLATION: hash_sha256 expects string input");
+		 die("CONTRACT_VIOLATION: hash_sha256 expects string input");
 
 	return native.sha256(str);
 };
@@ -19,10 +19,10 @@ export function hash_sha256(native, str) {
  * @param {string} str - Data to hash
  * @returns {object} - Result Object {ok, data/error}
  */
-export function hash_sha256_hex(native, str) {
-	let hash_bin = hash_sha256(native, str);
+export function sha256_hex(native, str) {
+	let hash_bin = sha256(native, str);
 	if (!hash_bin)
-    return Result.err("CRYPTO_ERROR");
+		 return Result.err("CRYPTO_ERROR");
 
 	let hex = "";
 	for (let i = 0; i < length(hash_bin); i++) {

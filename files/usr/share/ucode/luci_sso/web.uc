@@ -61,7 +61,7 @@ function safe_getenv(io, key) {
 	let val = io.getenv(key);
 	if (val && length(val) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE", { http_status: 431, key: key });
 	return Result.ok(val);
-}
+};
 
 /**
  * Parses a query string into an object with URL decoding.
@@ -121,7 +121,7 @@ export function parse_cookies(str) {
 function _sanitize_header(val) {
 	if (type(val) != "string") return val;
 	return replace(val, /[\r\n]+/g, " ");
-}
+};
 
 /**
  * Internal helper to write HTTP headers and body.
@@ -148,7 +148,7 @@ function _out(io, headers, body) {
 		io.stdout.write(body);
 	}
 	io.stdout.flush();
-}
+};
 
 /**
  * Extracts and parses the request context from the CGI environment.
