@@ -104,22 +104,23 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 		sep = "&";
 	}
 
-	let response = io.http_post(discovery.token_endpoint, {
+	let res_http = io.http_post(discovery.token_endpoint, {
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		body: encoded_body
 		// TLS verification is enforced by default in the IO provider
 	});
 
-	if (!response || response.error) {
-		let err_msg = (response && response.error) ? response.error : "no response";
-		io.log("warn", `Token exchange network error${sid_ctx}: ${err_msg}`);
+	if (!res_http.ok) {
+		io.log("warn", `Token exchange network error${sid_ctx}: ${res_http.error}`);
 		return Result.err("NETWORK_ERROR");
 	}
+
+	let response = res_http.data;
 	if (response.status != 200) {
 		let res_err = encoding.safe_json(response.body);
 		if (res_err.ok && res_err.data.error == "invalid_grant") {
 			io.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
-			return Result.err("OIDC_INVALID_GRANT");
+			return Result.err("OIDC_INVALID_GRANT", { http_status: 400 });
 		}
 		io.log("warn", `Token exchange HTTP ${response.status}${sid_ctx}`);
 		return Result.err("TOKEN_EXCHANGE_FAILED", { http_status: response.status });
@@ -283,16 +284,17 @@ export function fetch_userinfo(io, endpoint, access_token) {
 
 	io.log("info", "Fetching supplemental claims from UserInfo endpoint");
 
-	let response = io.http_get(endpoint, {
+	let res_http = io.http_get(endpoint, {
 		headers: { "Authorization": `Bearer ${access_token}` }
 		// TLS verification is enforced by default in the IO provider
 	});
 
-	if (!response || response.error) {
-		let err_msg = (response && response.error) ? response.error : "no response";
-		io.log("warn", `UserInfo fetch network error: ${err_msg}`);
+	if (!res_http.ok) {
+		io.log("warn", `UserInfo fetch network error: ${res_http.error}`);
 		return Result.err("NETWORK_ERROR");
 	}
+
+	let response = res_http.data;
 	if (response.status != 200) {
 		io.log("warn", `UserInfo fetch HTTP ${response.status}`);
 		return Result.err("USERINFO_FETCH_FAILED", { http_status: response.status });

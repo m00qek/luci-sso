@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
@@ -30,8 +31,8 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
         })
         .spy((io) => {
             io.http_get = (url) => {
-                if (index(url, "jwks") != -1) return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
-                return { status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } };
+                if (index(url, "jwks") != -1) return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
+                return Result.ok({ status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } });
             };
 
             let state_res = handshake.initiate(io, test_config);
@@ -45,7 +46,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
             let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_val, at_hash: at_hash };
             tokens.id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
 
-            io.http_post = (url) => ({ status: 200, body: { read: () => sprintf("%J", tokens) } });
+            io.http_post = (url) => Result.ok({ status: 200, body: { read: () => sprintf("%J", tokens) } });
 
             let request = {
                 path: "/callback",
@@ -93,8 +94,8 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
             })
             .spy((io) => {
                 io.http_get = (url) => {
-                    if (index(url, "jwks") != -1) return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
-                    return { status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } };
+                    if (index(url, "jwks") != -1) return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } });
                 };
 
                 let state_res = handshake.initiate(io, test_config);
@@ -107,7 +108,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
                 let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_val, at_hash: at_hash };
                 tokens.id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
                 
-                io.http_post = (url) => ({ status: 200, body: { read: () => sprintf("%J", tokens) } });
+                io.http_post = (url) => Result.ok({ status: 200, body: { read: () => sprintf("%J", tokens) } });
 
                 let request = {
                     path: "/callback",

@@ -103,7 +103,9 @@ test('session: logic - cleanup of abandoned handshakes', () => {
 			return { mtime: now };
 		};
 
-		session.reap_stale_handshakes(io, 300);
+		let reap_res = session.reap_stale_handshakes(io, 300);
+		assert(reap_res.ok);
+		assert_eq(reap_res.data, 1, "Should report 1 file reaped");
 		
 		assert(!io.read_file(old_path), "Old handshake should be reaped");
 		assert(io.read_file(new_path), "Recent handshake should remain");

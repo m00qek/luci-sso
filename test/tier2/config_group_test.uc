@@ -34,18 +34,23 @@ test('config: role - group mapping support', () => {
 		let config = config_loader.load(io).data;
 		
 		// Test developer match
-		let perms_dev = config_loader.find_roles_for_user(config, { groups: ["developers", "everyone"] });
+		let res_dev = config_loader.find_roles_for_user(config, { groups: ["developers", "everyone"] });
+		assert(res_dev.ok, "Should find dev role");
+		let perms_dev = res_dev.data;
 		assert_eq(perms_dev.role_name, "r_dev");
 		assert_eq(perms_dev.read[0], "git");
 		
 		// Test operations match
-		let perms_ops = config_loader.find_roles_for_user(config, { groups: ["operations"] });
+		let res_ops = config_loader.find_roles_for_user(config, { groups: ["operations"] });
+		assert(res_ops.ok, "Should find ops role");
+		let perms_ops = res_ops.data;
 		assert_eq(perms_ops.role_name, "r_ops");
 		assert_eq(perms_ops.write[0], "*");
 		
 		// Test no match
-		let perms_none = config_loader.find_roles_for_user(config, { groups: ["marketing"] });
-		assert_eq(length(perms_none.read), 0);
+		let res_none = config_loader.find_roles_for_user(config, { groups: ["marketing"] });
+		assert(!res_none.ok, "Should NOT find roles");
+		assert_eq(res_none.error, "NO_ROLES_MATCHED");
 	});
 });
 
@@ -62,11 +67,13 @@ test('config: role - email OR group match', () => {
 		let config = config_loader.load(io).data;
 		
 		// Match by email
-		let perms_email = config_loader.find_roles_for_user(config, { email: "admin@test.com", groups: ["something-else"] });
-		assert_eq(perms_email.role_name, "r1");
+		let res_email = config_loader.find_roles_for_user(config, { email: "admin@test.com", groups: ["something-else"] });
+		assert(res_email.ok);
+		assert_eq(res_email.data.role_name, "r1");
 
 		// Match by group
-		let perms_group = config_loader.find_roles_for_user(config, { email: "user@test.com", groups: ["admins"] });
-		assert_eq(perms_group.role_name, "r1");
+		let res_group = config_loader.find_roles_for_user(config, { email: "user@test.com", groups: ["admins"] });
+		assert(res_group.ok);
+		assert_eq(res_group.data.role_name, "r1");
 	});
 });

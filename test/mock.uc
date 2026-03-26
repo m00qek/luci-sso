@@ -1,6 +1,7 @@
 'use strict';
 
 import * as lucihttp from 'lucihttp';
+import * as Result from 'luci_sso.result';
 
 /**
  * Creates a Query Handle for inspecting captured history.
@@ -33,7 +34,12 @@ function create_query_handle(history) {
 function build_provider(state) {
 	const trackable = (name, fn) => (...args) => {
 		if (state.recording) push(state.history, { type: name, args: args });
-		return fn(...args);
+		let res = fn(...args);
+		if ((name == "http_get" || name == "http_post") && !Result.is(res)) {
+			if (res && res.error) return Result.err(res.error);
+			return Result.ok(res);
+		}
+		return res;
 	};
 
 	let io = {
@@ -115,38 +121,40 @@ function build_provider(state) {
 
 		http_get: trackable("http_get", (url) => {
 			// MANDATORY HTTPS: (Mirroring Production Blocker #6)
-			if (substr(url, 0, 8) !== "https://") return { error: "HTTPS_REQUIRED" };
+			if (substr(url, 0, 8) !== "https://") return Result.err("HTTPS_REQUIRED");
 			let res = state.responses[url];
-			if (!res) return { status: 404, body: { read: () => "" } };
-			if (res.error) return { error: res.error };
+			if (!res) return Result.ok({ status: 404, body: { read: () => "" } });
+			if (res.error) return Result.err(res.error);
 
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
 			
 			// Mirror B2 security policy: Unbounded accumulation protection
-			if (length(raw_body) > 262144) return { error: "RESPONSE_TOO_LARGE" };
+			if (length(raw_body) > 262144) return Result.err("RESPONSE_TOO_LARGE");
 
-			return { status: res.status, body: { read: () => raw_body } };
+			return Result.ok({ status: res.status, body: { read: () => raw_body } });
 		}),
 		
 		http_post: trackable("http_post", (url, opts) => {
 			// MANDATORY HTTPS: (Mirroring Production Blocker #6)
-			if (substr(url, 0, 8) !== "https://") return { error: "HTTPS_REQUIRED" };
+			if (substr(url, 0, 8) !== "https://") return Result.err("HTTPS_REQUIRED");
 			let res = state.responses[url];
-			if (!res) return { status: 404, body: { read: () => "" } };
-			if (res.error) return { error: res.error };
+			if (!res) return Result.ok({ status: 404, body: { read: () => "" } });
+			if (res.error) return Result.err(res.error);
 
 			let raw_body = (type(res.body) == "string") ? res.body : sprintf("%J", res.body);
 
 			// Mirror B2 security policy: Unbounded accumulation protection
-			if (length(raw_body) > 262144) return { error: "RESPONSE_TOO_LARGE" };
+			if (length(raw_body) > 262144) return Result.err("RESPONSE_TOO_LARGE");
 
-			return { status: res.status, body: { read: () => raw_body } };
+			return Result.ok({ status: res.status, body: { read: () => raw_body } });
 		}),
 		
 		ubus_call: trackable("ubus", (obj, method, args) => {
 			let key = `${obj}:${method}`;
 			let res = state.ubus[key] || state.ubus[obj] || {};
-			return (type(res) == "function") ? res(args) : res;
+			let data = (type(res) == "function") ? res(args) : res;
+			if (data === null) return Result.err("UBUS_ERROR");
+			return Result.ok(data);
 		}),
 		
 		uci_cursor: () => {

@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as Result from 'luci_sso.result';
 import * as oidc from 'luci_sso.oidc';
 import * as handshake from 'luci_sso.handshake';
 import * as crypto from 'luci_sso.crypto';
@@ -43,8 +44,8 @@ test('handshake: security - register_token deferred until after verification (Do
     mock.create()
         .with_env({}, (io) => {
             // 1. Setup mock responses: Successful exchange, but verification will fail later
-            io.http_get = (url) => ({ status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } });
-            io.http_post = (url) => ({ status: 200, body: { read: () => sprintf("%J", { access_token: "at1", id_token: "invalid.id.token" }) } });
+            io.http_get = (url) => Result.ok({ status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } });
+            io.http_post = (url) => Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: "at1", id_token: "invalid.id.token" }) } });
 
             // 2. Setup state
             let state_res = handshake.initiate(io, test_config);

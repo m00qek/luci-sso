@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as Result from 'luci_sso.result';
 import * as oidc from 'luci_sso.oidc';
 import * as handshake from 'luci_sso.handshake';
 import * as encoding from 'luci_sso.encoding';
@@ -76,9 +77,9 @@ test('REPRODUCTION: handshake: userinfo fallback drops groups claim', () => {
                         at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data 
                     };
                     let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                    return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
                 }
-                return { status: 404 };
+                return Result.ok({ status: 404 });
             };
 
             let s_res = handshake.initiate(io, test_config);

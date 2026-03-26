@@ -3,6 +3,7 @@
 import * as uclient from 'uclient';
 import * as uloop from 'uloop';
 import * as fs from 'fs';
+import * as Result from 'luci_sso.result';
 
 /**
  * Loads system CA certificates from standard OpenWrt locations.
@@ -48,7 +49,7 @@ const MAX_RESPONSE_SIZE = 262144; // 256 KB
  * @param {string} method - HTTP method (GET, POST, etc.)
  * @param {string} url - Target URL
  * @param {object} [opts] - { headers, post_data, timeout }
- * @returns {object} - { status, body, error, headers }
+ * @returns {object} - Result Object {ok, data: {status, body, headers}/error}
  */
 export function request(method, url, opts) {
     opts = opts || {};
@@ -57,9 +58,9 @@ export function request(method, url, opts) {
     let response = {
         status: 0,
         body: "",
-        error: null,
         headers: {}
     };
+    let error = null;
 
     let con;
 
@@ -76,13 +77,13 @@ export function request(method, url, opts) {
                 
                 // MANDATORY: Validate data type before concatenation (B4)
                 if (type(data) != "string") {
-                    response.error = "INVALID_DATA_TYPE";
+                    error = "INVALID_DATA_TYPE";
                     uloop.end();
                     return;
                 }
 
                 if ((length(response.body) + length(data)) > MAX_RESPONSE_SIZE) {
-                    response.error = "RESPONSE_TOO_LARGE";
+                    error = "RESPONSE_TOO_LARGE";
                     uloop.end();
                     return;
                 }
@@ -93,26 +94,26 @@ export function request(method, url, opts) {
             uloop.end();
         },
         error: function(u, code) {
-            response.error = "UCLIENT_ERROR_" + code;
+            error = "UCLIENT_ERROR_" + code;
             uloop.end();
         }
     };
 
     con = uclient.new(url, null, callbacks);
-    if (!con) return { status: 0, body: "", error: "CONNECTION_FAILED" };
+    if (!con) return Result.err("CONNECTION_FAILED");
 
     // Set up SSL context using ONLY system CAs
     let ca_files = get_system_ca_files();
     
     // Strict Verification is MANDATORY
     if (!con.ssl_init({ ca_files: ca_files, verify: true })) {
-        return { status: 0, body: "", error: "SSL_INIT_FAILED" };
+        return Result.err("SSL_INIT_FAILED");
     }
 
     if (opts.timeout) con.set_timeout(opts.timeout);
 
     if (!con.connect()) {
-        return { status: 0, body: "", error: "CONNECT_FAILED" };
+        return Result.err("CONNECT_FAILED");
     }
 
     let req_opts = {
@@ -121,11 +122,12 @@ export function request(method, url, opts) {
     if (opts.post_data) req_opts.post_data = opts.post_data;
 
     if (!con.request(method, req_opts)) {
-        return { status: 0, body: "", error: "REQUEST_START_FAILED" };
+        return Result.err("REQUEST_START_FAILED");
     }
 
     uloop.run();
     con.disconnect();
 
-    return response;
+    if (error) return Result.err(error);
+    return Result.ok(response);
 };

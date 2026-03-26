@@ -257,12 +257,14 @@ export function authenticate(io, config, request, policy) {
 	}
 
 	let user_data = oauth_res.data.data;
-	let perms = config_mod.find_roles_for_user(config, user_data);
+	let res_perms = config_mod.find_roles_for_user(config, user_data);
 
-	if (length(perms.read) == 0 && length(perms.write) == 0) {
+	if (!res_perms.ok) {
 		io.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] matched no roles [session_id: ${session_id}]`);
 		return Result.err("USER_NOT_AUTHORIZED", { http_status: 403 });
 	}
+
+	let perms = res_perms.data;
 
 	let ubus_res = ubus.create_passwordless_session(
 		io, 

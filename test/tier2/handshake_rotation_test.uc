@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
@@ -50,8 +51,8 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
                     call_count++;
                     data = (call_count == 1) ? old_jwks : new_jwks;
                 }
-                if (data) return { status: 200, body: { read: () => sprintf("%J", data) } };
-                return { status: 404, body: { read: () => "" } };
+                if (data) return Result.ok({ status: 200, body: { read: () => sprintf("%J", data) } });
+                return Result.ok({ status: 404, body: { read: () => "" } });
             };
 
             // Create a valid handshake state
@@ -72,7 +73,7 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
             let token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", f.ROTATION_NEW_JWK.kid);
             let tokens = { access_token: access_token, id_token: token };
 
-            io.http_post = (url) => ({ 
+            io.http_post = (url) => Result.ok({ 
                 status: 200, 
                 body: { read: () => sprintf("%J", tokens) } 
             });

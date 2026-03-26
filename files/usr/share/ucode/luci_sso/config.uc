@@ -9,12 +9,14 @@ import * as crypto from 'luci_sso.crypto';
 /**
  * Checks if the SSO service is enabled in UCI.
  * @param {object} io - I/O provider
- * @returns {boolean}
+ * @returns {object} - Result Object {ok, data/error}
  */
 export function is_enabled(io) {
 	let cursor = io.uci_cursor();
+	if (!cursor) return Result.err("UCI_ERROR");
+
 	let enabled = cursor.get("luci-sso", "default", "enabled");
-	return (enabled === '1');
+	return Result.ok(enabled === '1');
 };
 
 /**
@@ -24,7 +26,9 @@ export function is_enabled(io) {
  * @returns {object} - Result Object {ok, data/error}
  */
 export function load(io) {
-	if (!is_enabled(io)) {
+	let enabled_res = is_enabled(io);
+	if (!enabled_res.ok) return enabled_res;
+	if (!enabled_res.data) {
 		return Result.err("DISABLED");
 	}
 
@@ -113,7 +117,7 @@ export function load(io) {
  * 
  * @param {object} config - The loaded config
  * @param {object} claims - OIDC ID Token claims (email, groups, etc)
- * @returns {object} - { read: [], write: [], role_name: "..." }
+ * @returns {object} - Result Object {ok, data: {read, write, role_name}/error}
  */
 export function find_roles_for_user(config, claims) {
 	let perms = { read: [], write: [], role_name: null };
@@ -167,5 +171,9 @@ export function find_roles_for_user(config, claims) {
 		}
 	}
 
-	return perms;
+	if (!perms.role_name) {
+		return Result.err("NO_ROLES_MATCHED");
+	}
+
+	return Result.ok(perms);
 };

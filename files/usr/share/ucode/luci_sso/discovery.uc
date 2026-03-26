@@ -104,10 +104,10 @@ export function discover(io, issuer, options) {
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
 	fetch_url += ".well-known/openid-configuration";
 
-	let response = io.http_get(fetch_url, { verify: true });
+	let res_http = io.http_get(fetch_url, { verify: true });
 	let issuer_id = crypto.safe_id(normalized_issuer);
 
-	if (!response || response.error || response.status != 200) {
+	if (!res_http.ok || res_http.data.status != 200) {
 		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
 		let stale = _read_cache(io, cache_path, ttl, true);
 		if (stale && stale.issuer) {
@@ -118,15 +118,16 @@ export function discover(io, issuer, options) {
 			}
 		}
 
-		if (!response || response.error) {
-			let err_msg = (response && response.error) ? response.error : "no response";
-			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${err_msg}`);
+		if (!res_http.ok) {
+			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${res_http.error}`);
 			return Result.err("NETWORK_ERROR");
 		}
 
-		io.log("warn", `Discovery fetch HTTP ${response.status} from [id: ${issuer_id}]`);
-		return Result.err("DISCOVERY_FAILED", { http_status: response.status });
+		io.log("warn", `Discovery fetch HTTP ${res_http.data.status} from [id: ${issuer_id}]`);
+		return Result.err("DISCOVERY_FAILED", { http_status: res_http.data.status });
 	}
+
+	let response = res_http.data;
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
@@ -202,8 +203,8 @@ export function fetch_jwks(io, jwks_uri, options) {
 		}
 	}
 
-	let response = io.http_get(jwks_uri, { verify: true });
-	if (!response || response.error || response.status != 200) {
+	let res_http = io.http_get(jwks_uri, { verify: true });
+	if (!res_http.ok || res_http.data.status != 200) {
 		// RESILIENCE FALLBACK: Try stale cache
 		let stale = _read_cache(io, cache_path, ttl, true);
 		if (stale && type(stale.keys) == "array") {
@@ -211,15 +212,16 @@ export function fetch_jwks(io, jwks_uri, options) {
 			return Result.ok(stale.keys);
 		}
 
-		if (!response || response.error) {
-			let err_msg = (response && response.error) ? response.error : "no response";
-			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${err_msg}`);
+		if (!res_http.ok) {
+			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${res_http.error}`);
 			return Result.err("NETWORK_ERROR");
 		}
 
-		io.log("warn", `JWKS fetch HTTP ${response.status} from [id: ${uri_id}]`);
-		return Result.err("JWKS_FETCH_FAILED", { http_status: response.status });
+		io.log("warn", `JWKS fetch HTTP ${res_http.data.status} from [id: ${uri_id}]`);
+		return Result.err("JWKS_FETCH_FAILED", { http_status: res_http.data.status });
 	}
+
+	let response = res_http.data;
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok || type(res.data.keys) != "array") {

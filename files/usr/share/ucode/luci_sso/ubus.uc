@@ -68,13 +68,13 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	}
 
 	// 1. Create a raw session
-	let create_res = io.ubus_call("session", "create", { timeout: 3600 });
-	if (!create_res || !create_res.ubus_rpc_session) {
+	let res_create = io.ubus_call("session", "create", { timeout: 3600 });
+	if (!res_create.ok || !res_create.data.ubus_rpc_session) {
 		io.log("error", "UBUS session creation failed");
 		return Result.err("UBUS_SESSION_FAILED");
 	}
 
-	let sid = create_res.ubus_rpc_session;
+	let sid = res_create.data.ubus_rpc_session;
 
 	// 2. Grant Permissions
 	let grant_perm = (scope, obj, func) => {
@@ -83,7 +83,7 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 			scope: scope,
 			objects: [[obj, func]]
 		});
-		if (!res) {
+		if (!res.ok) {
 			io.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(sid)}] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
 		}
 	};
@@ -154,11 +154,11 @@ export function get_session(io, sid) {
 	if (!sid || type(sid) != "string") return Result.err("INVALID_SID");
 
 	let res = io.ubus_call("session", "get", { ubus_rpc_session: sid });
-	if (!res || type(res.values) != "object") {
+	if (!res.ok || type(res.data.values) != "object") {
 		return Result.err("SESSION_NOT_FOUND");
 	}
 
-	return Result.ok(res.values);
+	return Result.ok(res.data.values);
 };
 
 const TOKEN_REGISTRY_DIR = "/var/run/luci-sso/tokens";
@@ -166,22 +166,28 @@ const TOKEN_REGISTRY_DIR = "/var/run/luci-sso/tokens";
 /**
  * Removes old token replay files.
  * @param {object} io - I/O provider
+ * @returns {object} - Result Object {ok, data: count/error}
  */
 export function reap_stale_tokens(io) {
 	let files = io.lsdir(TOKEN_REGISTRY_DIR);
-	if (!files) return;
+	if (!files) return Result.ok(0);
 
 	let now = io.time();
 	let max_age = 86400; // 24 hours (Used tokens are re-playable after this)
+	let reaped = 0;
 
 	for (let f in files) {
 		let path = `${TOKEN_REGISTRY_DIR}/${f}`;
 		let st = io.stat(path);
 		// Note: we use directories for atomic locking
 		if (st && st.mtime && (now - st.mtime) > max_age) {
-			try { io.remove(path); } catch (e) {}
+			try { 
+				io.remove(path);
+				reaped++;
+			} catch (e) {}
 		}
 	}
+	return Result.ok(reaped);
 };
 
 /**
@@ -229,7 +235,7 @@ export function destroy_session(io, sid) {
 	if (!sid || type(sid) != "string") return Result.err("INVALID_SID");
 
 	let res = io.ubus_call("session", "destroy", { ubus_rpc_session: sid });
-	if (res && res.error) {
+	if (!res.ok) {
 		return Result.err("UBUS_ERROR", res.error);
 	}
 	return Result.ok();

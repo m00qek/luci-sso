@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
@@ -48,23 +49,23 @@ test('handshake: split-horizon - prevents path corruption when issuer_url is in 
         .spy((io) => {
             io.http_get = (url) => {
                 if (url == internal_issuer_url + "/.well-known/openid-configuration") {
-                    return { status: 200, body: { read: () => sprintf("%J", discovery_doc) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", discovery_doc) } });
                 }
                 // If the bug exists, this will be called with the corrupted URL
                 if (url == internal_issuer_url + "/realms/auth.com/jwks") {
-                    return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
                 }
                 if (url == internal_issuer_url + "/realms/internal.lan:8443/jwks") {
                      // This is what we expect if naive replace is used
-                     return { status: 404, body: { read: () => "Path Corrupted" } };
+                     return Result.ok({ status: 404, body: { read: () => "Path Corrupted" } });
                 }
-                return { status: 404, body: { read: () => "" } };
+                return Result.ok({ status: 404, body: { read: () => "" } });
             };
 
             io.http_post = (url, body, options) => {
                 // VERIFICATION: Check if the URL is corrupted
                 if (url == internal_issuer_url + "/realms/internal.lan:8443/token") {
-                    return { status: 404, body: { read: () => "Path Corrupted" } };
+                    return Result.ok({ status: 404, body: { read: () => "Path Corrupted" } });
                 }
                 
                 if (url == internal_issuer_url + "/realms/auth.com/token") {
@@ -77,12 +78,12 @@ test('handshake: split-horizon - prevents path corruption when issuer_url is in 
                         at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data
                     };
                     let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                    return { 
+                    return Result.ok({ 
                         status: 200, 
                         body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } 
-                    };
+                    });
                 }
-                return { status: 404, body: { read: () => "" } };
+                return Result.ok({ status: 404, body: { read: () => "" } });
             };
 
             let s_res = session.create_state(io);
@@ -151,12 +152,12 @@ test('handshake: split-horizon - prevents corruption when internal_issuer_url is
         .spy((io) => {
             io.http_get = (url) => {
                 if (url == internal_issuer_url + "/.well-known/openid-configuration") {
-                    return { status: 200, body: { read: () => sprintf("%J", discovery_doc) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", discovery_doc) } });
                 }
                 if (url == internal_issuer_url + "/jwks") {
-                    return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
                 }
-                return { status: 404 };
+                return Result.ok({ status: 404 });
             };
 
             io.http_post = (url) => {
@@ -170,9 +171,9 @@ test('handshake: split-horizon - prevents corruption when internal_issuer_url is
                         at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data
                     };
                     let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                    return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
                 }
-                return { status: 404 };
+                return Result.ok({ status: 404 });
             };
 
             let s_res = session.create_state(io);
@@ -216,21 +217,21 @@ test('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)
         .spy((io) => {
             io.http_get = (url) => {
                 if (url == internal_issuer_url + "/.well-known/openid-configuration") {
-                    return { status: 200, body: { read: () => sprintf("%J", discovery_doc) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", discovery_doc) } });
                 }
                 if (url == internal_issuer_url + "/jwks") {
-                    return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
                 }
-                return { status: 404 };
+                return Result.ok({ status: 404 });
             };
 
             io.http_post = (url) => {
                 // If W3 bug existed, prefix_len of "https://idp.com/" (16) would be used
                 // on "https://idp.com/token", resulting in "https://internal.lanoken"
                 if (url == internal_issuer_url + "/token") {
-                    return { status: 200, body: { read: () => sprintf("%J", { access_token: "at", id_token: "it" }) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: "at", id_token: "it" }) } });
                 }
-                return { status: 404, body: { read: () => "URL Corrupted: " + url } };
+                return Result.ok({ status: 404, body: { read: () => "URL Corrupted: " + url } });
             };
 
             let s_res = session.create_state(io);

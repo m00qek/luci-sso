@@ -12,24 +12,30 @@ const REAP_GRACE_PERIOD = 60;
  * Removes handshake files older than the duration.
  * @param {object} io - I/O provider
  * @param {number} clock_tolerance - Clock skew tolerance
+ * @returns {object} - Result Object {ok, data: count/error}
  */
 export function reap_stale_handshakes(io, clock_tolerance) {
 	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: reap_stale_handshakes expects mandatory integer clock_tolerance");
 
 	let files = io.lsdir(HANDSHAKE_DIR);
-	if (!files) return;
+	if (!files) return Result.ok(0);
 
 	let now = io.time();
+	let reaped = 0;
 	for (let f in files) {
 		if (match(f, /^handshake_[A-Za-z0-9_-]+\.json$/)) {
 			let path = `${HANDSHAKE_DIR}/${f}`;
 			let st = io.stat(path);
 			// Use a slightly larger grace period than duration + tolerance
 			if (st && st.mtime && (now - st.mtime) > (HANDSHAKE_DURATION + clock_tolerance + REAP_GRACE_PERIOD)) {
-				try { io.remove(path); } catch (e) {}
+				try { 
+					io.remove(path);
+					reaped++;
+				} catch (e) {}
 			}
 		}
 	}
+	return Result.ok(reaped);
 };
 
 /**

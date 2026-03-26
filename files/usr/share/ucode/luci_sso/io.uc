@@ -8,6 +8,7 @@ import * as log from 'log';
 import * as lucihttp from 'lucihttp';
 import * as encoding from 'luci_sso.encoding';
 import * as secure_http from 'luci_sso.secure_http';
+import * as Result from 'luci_sso.result';
 
 let _ubus_conn = null;
 
@@ -40,25 +41,25 @@ export function create() {
 			// MANDATORY: HTTPS only (Blocker #6)
 			if (!encoding.is_https(url)) {
 				this.log("error", `Security violation: Blocked insecure HTTP GET to ${url}`);
-				return { error: "HTTPS_REQUIRED" };
+				return Result.err("HTTPS_REQUIRED");
 			}
 			let headers = (opts && opts.headers) ? opts.headers : {};
 			let res = secure_http.request('GET', url, { 
 				timeout: 10000,
 				headers: headers
 			});
-			if (res.error) {
+			if (!res.ok) {
 				this.log("error", `HTTPS GET failed for ${url}: ${res.error}`);
-				return { error: "NETWORK_ERROR" };
+				return Result.err("NETWORK_ERROR", res.error);
 			}
-			return { status: res.status, body: res.body };
+			return Result.ok({ status: res.data.status, body: res.data.body });
 		},
 
 		http_post: function(url, opts) {
 			// MANDATORY: HTTPS only (Blocker #6)
 			if (!encoding.is_https(url)) {
 				this.log("error", `Security violation: Blocked insecure HTTP POST to ${url}`);
-				return { error: "HTTPS_REQUIRED" };
+				return Result.err("HTTPS_REQUIRED");
 			}
 			let headers = (opts && opts.headers) ? opts.headers : {};
 			let post_data = (opts && opts.body) ? opts.body : null;
@@ -68,11 +69,11 @@ export function create() {
 				headers: headers,
 				post_data: post_data 
 			});
-			if (res.error) {
+			if (!res.ok) {
 				this.log("error", `HTTPS POST failed for ${url}: ${res.error}`);
-				return { error: "NETWORK_ERROR" };
+				return Result.err("NETWORK_ERROR", res.error);
 			}
-			return { status: res.status, body: res.body };
+			return Result.ok({ status: res.data.status, body: res.data.body });
 		},
 
 		urlencode: lucihttp.urlencode,
@@ -81,9 +82,11 @@ export function create() {
 		ubus_call: (obj, method, args) => {
 			if (!_ubus_conn) {
 				_ubus_conn = ubus.connect();
-				if (!_ubus_conn) return null;
+				if (!_ubus_conn) return Result.err("UBUS_CONNECT_FAILED");
 			}
-			return _ubus_conn.call(obj, method, args);
+			let res = _ubus_conn.call(obj, method, args);
+			if (res === null) return Result.err("UBUS_ERROR");
+			return Result.ok(res);
 		},
 
 		uci_cursor: () => uci.cursor(),

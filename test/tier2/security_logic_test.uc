@@ -97,9 +97,12 @@ test('security: token registry - cleanup of stale tokens', () => {
 			return { mtime: now };
 		};
 
-		ubus.reap_stale_tokens(io);
-		
+		let res = ubus.reap_stale_tokens(io);
+		assert(res.ok);
+		assert_eq(res.data, 1, "Should report 1 token reaped");
+
 		let files = io.lsdir("/var/run/luci-sso/tokens");
+
 		assert(index(files, "old-id") == -1, "Old token should be reaped");
 		assert(index(files, "new-id") >= 0, "New token should remain");
 	});
@@ -123,7 +126,9 @@ test('security: handshake registry - cleanup of stale handshakes (N5)', () => {
 			return { mtime: now };
 		};
 
-		session.reap_stale_handshakes(io, 60);
+		let res = session.reap_stale_handshakes(io, 60);
+		assert(res.ok);
+		assert_eq(res.data, 1, "Should report 1 file reaped");
 		
 		let files = io.lsdir("/var/run/luci-sso");
 		assert(index(files, "handshake_old.json") == -1, "Old handshake should be reaped");

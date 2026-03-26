@@ -128,7 +128,9 @@ test('config: logic - is_enabled reflects UCI state', () => {
 		}
 	};
 	factory.with_uci(uci_enabled, (io) => {
-		assert(config_loader.is_enabled(io), "Should be enabled");
+		let res = config_loader.is_enabled(io);
+		assert(Result.is(res));
+		assert(res.ok && res.data === true, "Should be enabled");
 	});
 
 	// Disabled
@@ -138,12 +140,16 @@ test('config: logic - is_enabled reflects UCI state', () => {
 		}
 	};
 	factory.with_uci(uci_disabled, (io) => {
-		assert(!config_loader.is_enabled(io), "Should be disabled");
+		let res = config_loader.is_enabled(io);
+		assert(Result.is(res));
+		assert(res.ok && res.data === false, "Should be disabled");
 	});
 
 	// Missing section
 	factory.with_uci({}, (io) => {
-		assert(!config_loader.is_enabled(io), "Should be disabled if missing");
+		let res = config_loader.is_enabled(io);
+		assert(Result.is(res));
+		assert(res.ok && res.data === false, "Should be disabled if missing");
 	});
 });
 

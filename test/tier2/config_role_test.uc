@@ -57,7 +57,9 @@ test('config: role - find_roles_for_user merges permissions', () => {
 
 	mocked.with_uci(mock_uci, (io) => {
 		let config = config_loader.load(io).data;
-		let perms = config_loader.find_roles_for_user(config, { email: "user@test.com" });
+		let res = config_loader.find_roles_for_user(config, { email: "user@test.com" });
+		assert(res.ok, "Should find roles");
+		let perms = res.data;
 		
 		assert_eq(length(perms.read), 3, "Should have 3 unique read perms (r1, shared, r2)");
 		assert_eq(perms.read[0], "r1");
@@ -80,7 +82,9 @@ test('config: role - first matched role name wins', () => {
 
 	mocked.with_uci(mock_uci, (io) => {
 		let config = config_loader.load(io).data;
-		let perms = config_loader.find_roles_for_user(config, { email: "user@test.com" });
+		let res = config_loader.find_roles_for_user(config, { email: "user@test.com" });
+		assert(res.ok, "Should find roles");
+		let perms = res.data;
 		
 		assert_eq(perms.role_name, "r_operator", "Should use the first matched role name");
 	});
@@ -97,7 +101,9 @@ test('config: role - wildcard expansion check', () => {
 
 	mocked.with_uci(mock_uci, (io) => {
 		let config = config_loader.load(io).data;
-		let perms = config_loader.find_roles_for_user(config, { email: "admin@test.com" });
+		let res = config_loader.find_roles_for_user(config, { email: "admin@test.com" });
+		assert(res.ok, "Should find roles");
+		let perms = res.data;
 		
 		assert_eq(perms.read[0], "*");
 		assert_eq(perms.write[0], "*");
@@ -115,9 +121,9 @@ test('config: role - deny user with no roles', () => {
 
 	mocked.with_uci(mock_uci, (io) => {
 		let config = config_loader.load(io).data;
-		let perms = config_loader.find_roles_for_user(config, { email: "stranger@test.com" });
+		let res = config_loader.find_roles_for_user(config, { email: "stranger@test.com" });
 		
-		assert_eq(length(perms.read), 0);
-		assert_eq(length(perms.write), 0);
+		assert(!res.ok, "Should NOT find roles");
+		assert_eq(res.error, "NO_ROLES_MATCHED");
 	});
 });

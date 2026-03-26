@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
@@ -28,12 +29,12 @@ test('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => 
         .spy((io) => {
             io.http_get = (url) => {
                 if (url == f.MOCK_DISCOVERY.issuer + "/.well-known/openid-configuration") {
-                    return { status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } });
                 } else if (url == jwks_uri) {
                     call_count++;
-                    return { status: 200, body: { read: () => sprintf("%J", jwks) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", jwks) } });
                 }
-                return { status: 404, body: { read: () => "" } };
+                return Result.ok({ status: 404, body: { read: () => "" } });
             };
 
             // Create a valid handshake state
@@ -50,7 +51,7 @@ test('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => 
             let token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", null); // Passing null for kid
             let tokens = { access_token: access_token, id_token: token };
 
-            io.http_post = (url) => ({ 
+            io.http_post = (url) => Result.ok({ 
                 status: 200, 
                 body: { read: () => sprintf("%J", tokens) } 
             });

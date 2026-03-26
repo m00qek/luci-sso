@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
@@ -30,12 +31,12 @@ test('handshake: userinfo - supplements missing email when sub matches', () => {
         .spy((io) => {
             io.http_get = (url) => {
                 if (url == issuer_url + "/.well-known/openid-configuration") 
-                    return { status: 200, body: { read: () => sprintf("%J", discovery_doc) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", discovery_doc) } });
                 if (url == discovery_doc.jwks_uri) 
-                    return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
                 if (url == discovery_doc.userinfo_endpoint)
-                    return { status: 200, body: { read: () => sprintf("%J", { sub: f.MOCK_CLAIMS.sub, email: "user@example.com" }) } };
-                return { status: 404 };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { sub: f.MOCK_CLAIMS.sub, email: "user@example.com" }) } });
+                return Result.ok({ status: 404 });
             };
 
             io.http_post = (url) => {
@@ -43,7 +44,7 @@ test('handshake: userinfo - supplements missing email when sub matches', () => {
                 // ID Token WITHOUT email
                 let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data };
                 let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };
+                return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
             };
 
             let s_res = session.create_state(io);
@@ -87,19 +88,19 @@ test('handshake: userinfo - fails identity binding when sub mismatches', () => {
         .spy((io) => {
             io.http_get = (url) => {
                 if (url == discovery_doc.userinfo_endpoint)
-                    return { status: 200, body: { read: () => sprintf("%J", { sub: "EVIL-SUB", email: "evil@example.com" }) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { sub: "EVIL-SUB", email: "evil@example.com" }) } });
                 if (url == issuer_url + "/.well-known/openid-configuration") 
-                    return { status: 200, body: { read: () => sprintf("%J", discovery_doc) } };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", discovery_doc) } });
                 if (url == discovery_doc.jwks_uri) 
-                    return { status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } };
-                return { status: 404 };
+                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
+                return Result.ok({ status: 404 });
             };
 
             io.http_post = (url) => {
                 let access_token = "at-456";
                 let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data };
                 let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };
+                return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
             };
 
             let s_res = session.create_state(io);

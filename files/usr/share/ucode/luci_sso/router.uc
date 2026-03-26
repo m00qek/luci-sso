@@ -80,7 +80,11 @@ function response(status, headers, body) {
  * @private
  */
 function handle_login(io, config) {
-	session.reap_stale_handshakes(io, config.clock_tolerance);
+	let reap_res = session.reap_stale_handshakes(io, config.clock_tolerance);
+	if (reap_res.ok && reap_res.data > 0) {
+		io.log("info", `Cleaned up ${reap_res.data} stale handshakes`);
+	}
+
 	let res = handshake.initiate(io, config);
 	if (!res.ok) return res;
 
@@ -184,7 +188,9 @@ export function handle(io, config, request, policy) {
 	if (path == "/") {
 		let query = request.query || {};
 		if (query.action == "enabled") {
-			return Result.ok(response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', config_mod.is_enabled(io) ? "true" : "false")));
+			let enabled_res = config_mod.is_enabled(io);
+			let enabled = (enabled_res.ok && enabled_res.data === true);
+			return Result.ok(response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', enabled ? "true" : "false")));
 		}
 	}
 

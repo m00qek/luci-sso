@@ -1,4 +1,5 @@
 import { test, assert, assert_eq } from 'testing';
+import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
@@ -56,7 +57,7 @@ test('REPRODUCTION: handshake: userinfo fallback fails on case-mismatched sub', 
                     at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data 
                 };
                 let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                return { status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } };
+                return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
             };
 
             let s_res = handshake.initiate(io, test_config);
