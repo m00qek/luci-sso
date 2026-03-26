@@ -7,6 +7,43 @@ const SESSION_DURATION = 3600;
 const HANDSHAKE_DURATION = 300;
 const HANDSHAKE_DIR = "/var/run/luci-sso";
 const REAP_GRACE_PERIOD = 60;
+const HANDSHAKE_MAX_COUNT = 100;
+
+/**
+ * Ensures the handshake directory exists.
+ * @private
+ */
+function ensure_handshake_dir(io) {
+	try {
+		io.mkdir(HANDSHAKE_DIR, 0700);
+	} catch (e) {
+		// Might already exist or failed permissions, we'll find out on write
+	}
+};
+
+/**
+ * Performs an emergency reap of the oldest handshakes.
+ * @private
+ */
+function _emergency_reap(io, files) {
+	let candidates = [];
+	for (let f in files) {
+		if (match(f, /^handshake_.*\.json$/)) {
+			let path = `${HANDSHAKE_DIR}/${f}`;
+			let st = io.stat(path);
+			push(candidates, { path: path, mtime: (st && st.mtime) || 0 });
+		}
+	}
+
+	// Sort by oldest first
+	sort(candidates, (a, b) => a.mtime - b.mtime);
+
+	// Remove oldest 50%
+	let to_remove = int(length(candidates) / 2);
+	for (let i = 0; i < to_remove; i++) {
+		try { io.remove(candidates[i].path); } catch (e) {}
+	}
+};
 
 /**
  * Removes handshake files older than the duration.
@@ -36,18 +73,6 @@ export function reap_stale_handshakes(io, clock_tolerance) {
 		}
 	}
 	return Result.ok(reaped);
-};
-
-/**
- * Ensures the handshake directory exists.
- * @private
- */
-function ensure_handshake_dir(io) {
-	try {
-		io.mkdir(HANDSHAKE_DIR, 0700);
-	} catch (e) {
-		// Might already exist or failed permissions, we'll find out on write
-	}
 };
 
 /**
@@ -161,6 +186,18 @@ export function get_secret_key(io) {
  */
 export function create_state(io) {
 	ensure_handshake_dir(io);
+
+	// DOS PROTECTION: Check capacity before creating new state
+	let files = io.lsdir(HANDSHAKE_DIR) || [];
+	let count = 0;
+	for (let f in files) {
+		if (match(f, /^handshake_.*\.json$/)) count++;
+	}
+
+	if (count >= HANDSHAKE_MAX_COUNT) {
+		io.log("warn", `Handshake capacity reached (${count}); triggering emergency reap`);
+		_emergency_reap(io, files);
+	}
 
 	let res_p = crypto.pkce_pair();
 	let res_s = crypto.random(16);

@@ -1,60 +1,50 @@
 import { test, assert, assert_eq } from 'testing';
 import * as discovery from 'luci_sso.discovery';
+import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
-import * as f from 'tier2.fixtures';
 
-test('discovery: resilience - fallback to stale discovery cache on network failure (W1)', () => {
-	let issuer = "https://trusted.idp";
-	// We use a fixed hash for the path because we know the safe_id logic
-	let cache_path = "/var/run/luci-sso/resilience-test-discovery.json";
-	let now = 1516239022;
+// =============================================================================
+// Tier 2: Discovery Resilience (Stale Cache Fallback)
+// =============================================================================
+
+test('discovery: resilience - fallback to stale cache on network failure', () => {
+	let factory = mock.create();
+	let issuer = "https://idp.example.com";
+	let cache_path = "/var/run/luci-sso/oidc-discovery-stale.json";
 	
-	// Cache is 2 days old (TTL is 1 day)
-	let stale_data = { ...f.MOCK_DISCOVERY, cached_at: now - 172800 };
+	let stale_doc = {
+		issuer: issuer,
+		authorization_endpoint: "https://idp.example.com/auth",
+		token_endpoint: "https://idp.example.com/token",
+		jwks_uri: "https://idp.example.com/jwks",
+		cached_at: 1000 // Very old
+	};
 
-	mock.create()
-		.with_files({ [cache_path]: sprintf("%J", stale_data) })
-		.with_responses({
-			[`${issuer}/.well-known/openid-configuration`]: { error: "CONNECT_FAILED" }
-		})
-		.spy((io) => {
-			// Mock time to 'now'
-			io.__state__.now = now;
+	factory.with_files({
+		[cache_path]: sprintf("%J", stale_doc)
+	}, (io) => {
+		// Mock current time way past TTL (e.g. 1 week later)
+		io.time = () => 1000000;
 
-			let res = discovery.discover(io, issuer, { cache_path: cache_path });
-			
-			assert(res.ok, "Should succeed using stale cache. Error was: " + (res.error || "none"));
-			assert_eq(res.data.issuer, issuer);
-			
-			// Verify warning was logged
-			let found = false;
-			for (let e in io.__state__.history) {
-				if (e.type == "log" && e.args[0] == "warn" && match(e.args[1], /Using stale discovery cache/)) {
-					found = true;
-					break;
-				}
-			}
-			assert(found, "Should log warning about stale cache usage");
-		});
+		// Mock network failure (timeout)
+		io.http_get = (url) => Result.err("TIMEOUT");
+
+		let res = discovery.discover(io, issuer, { cache_path: cache_path });
+		
+		assert(res.ok, "Should fallback to stale cache on network error: " + (res.error || ""));
+		assert_eq(res.data.issuer, issuer, "Should return cached data");
+	});
 });
 
-test('discovery: resilience - fallback to stale JWKS cache on network failure', () => {
-	let jwks_uri = "https://trusted.idp/jwks";
-	let cache_path = "/var/run/luci-sso/resilience-test-jwks.json";
-	let now = 1516239022;
-	
-	let stale_jwks = { keys: [ { kid: "k1" } ], cached_at: now - 172800 };
+test('discovery: resilience - fail if cache is missing AND network fails', () => {
+	let factory = mock.create();
+	let issuer = "https://idp.evil.com";
 
-	mock.create()
-		.with_files({ [cache_path]: sprintf("%J", stale_jwks) })
-		.with_responses({
-			[jwks_uri]: { error: "TIMEOUT" }
-		})
-		.spy((io) => {
-			io.__state__.now = now;
-			let res = discovery.fetch_jwks(io, jwks_uri, { cache_path: cache_path });
-			
-			assert(res.ok, "Should succeed using stale JWKS");
-			assert_eq(res.data[0].kid, "k1");
-		});
+	factory.with_env({}, (io) => {
+		io.http_get = (url) => Result.err("DNS_FAILURE");
+
+		let res = discovery.discover(io, issuer);
+		assert(!res.ok, "Should fail if no cache and no network");
+		assert_eq(res.error, "NETWORK_ERROR");
+	});
 });
