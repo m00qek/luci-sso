@@ -45,6 +45,14 @@ define Package/$(PKG_NAME)-crypto-wolfssl
   PROVIDES:=luci-sso-crypto
 endef
 
+define Package/$(PKG_NAME)-crypto-openssl
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=OpenSSL backend for $(PKG_NAME)
+  DEPENDS:=+libucode +libopenssl
+  PROVIDES:=luci-sso-crypto
+endef
+
 define Build/Prepare
 	mkdir -p $(PKG_BUILD_DIR)
 	$(CP) ./src/* $(PKG_BUILD_DIR)/
@@ -96,6 +104,13 @@ define Package/$(PKG_NAME)-crypto-wolfssl/install
 		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_wolfssl.so $(1)/usr/lib/ucode/luci_sso/native.so || true
 endef
 
+define Package/$(PKG_NAME)-crypto-openssl/install
+	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
+	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_openssl.so ] && \
+		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_openssl.so $(1)/usr/lib/ucode/luci_sso/native.so || true
+endef
+
 $(eval $(call BuildPackage,$(PKG_NAME)))
 $(eval $(call BuildPackage,$(PKG_NAME)-crypto-mbedtls))
 $(eval $(call BuildPackage,$(PKG_NAME)-crypto-wolfssl))
+$(eval $(call BuildPackage,$(PKG_NAME)-crypto-openssl))
