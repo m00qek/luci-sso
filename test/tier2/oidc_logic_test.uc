@@ -129,8 +129,7 @@ test('oidc: ID token - support multi-audience arrays', () => {
 	let full_hash = crypto.sha256(at);
 	let ah = crypto.b64url_encode(substr(full_hash, 0, 16));
 	
-	// 1. Success: Correct ID in array
-	// RFC 7519: If aud is array, azp is mandatory.
+	// 1. Success: Correct ID in multi-audience array (azp required when aud length > 1)
 	let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], azp: f.MOCK_CONFIG.client_id, at_hash: ah };
 	let token = h.generate_id_token(payload, PRIVKEY, "RS256");
 	mock.create().with_env({}, (io) => {
@@ -451,33 +450,52 @@ test('oidc: userinfo - reject missing sub claim', () => {
 	});
 });
 
-test('oidc: ID token - enforce azp when aud is array (Blocker 1771006966)', () => {
+test('oidc: ID token - require azp when aud has multiple audiences', () => {
 	let keys = JWKS.keys;
 	let at = "mock-at";
 	let full_hash = crypto.sha256(at);
 	let ah = crypto.b64url_encode(substr(full_hash, 0, 16));
-	
-	// Create a payload with multiple audiences but NO authorized party (azp)
-	// RFC 7519 Section 3.1.3.7: If aud is array, azp is MANDATORY.
-	let payload = { 
-		...f.MOCK_CLAIMS, 
-		aud: [ f.MOCK_CONFIG.client_id, "other-service" ], 
-		at_hash: ah 
+
+	// OIDC Core 1.0 §3.1.3.7 item 4: "If the ID Token contains multiple
+	// audiences, the Client SHOULD verify that an azp Claim is present."
+	// We enforce this for multi-audience arrays.
+	let payload = {
+		...f.MOCK_CLAIMS,
+		aud: [ f.MOCK_CONFIG.client_id, "other-service" ],
+		at_hash: ah
 	};
-	// Ensure azp is undefined
 	delete payload.azp;
 
 	let token = h.generate_id_token(payload, PRIVKEY, "RS256");
 
 	mock.create().with_env({}, (io) => {
 		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		
-		// This Assertion MUST FAIL until the fix is implemented.
-		// Current behavior: Returns OK (vulnerable)
-		// Expected behavior: Returns error "MISSING_AZP"
-		assert(!res.ok, "Should fail verification when aud is array but azp is missing");
-		if (!res.ok) {
-			assert_eq(res.error, "MISSING_AZP_CLAIM");
-		}
+		assert(!res.ok, "Verification MUST fail when aud has multiple audiences but azp is missing");
+		assert_eq(res.error, "MISSING_AZP_CLAIM");
+	});
+});
+
+test('oidc: ID token - accept single-element aud array without azp', () => {
+	let keys = JWKS.keys;
+	let at = "mock-at";
+	let full_hash = crypto.sha256(at);
+	let ah = crypto.b64url_encode(substr(full_hash, 0, 16));
+
+	// OIDC Core 1.0 §3.1.3.7 item 4 only triggers for MULTIPLE audiences.
+	// An aud array with a single element is logically single-audience, so
+	// azp is not required. Spec-conforming IdPs that wrap the sole audience
+	// in an array MUST be accepted.
+	let payload = {
+		...f.MOCK_CLAIMS,
+		aud: [ f.MOCK_CONFIG.client_id ],
+		at_hash: ah
+	};
+	delete payload.azp;
+
+	let token = h.generate_id_token(payload, PRIVKEY, "RS256");
+
+	mock.create().with_env({}, (io) => {
+		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		assert(res.ok, `Verification MUST succeed for single-element aud array without azp (Error: ${res.error})`);
 	});
 });
