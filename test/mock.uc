@@ -48,7 +48,12 @@ function build_provider(state) {
 
 		time: trackable("time", () => state.now++),
 		
-		read_file: trackable("read_file", (path) => state.files[path]),
+		read_file: trackable("read_file", (path) => {
+			let f = state.files[path];
+			if (type(f) == "object" && f[".type"] == "file") return f.data;
+			if (type(f) == "object" && f[".type"] == "directory") return null;
+			return f;
+		}),
 		
 		write_file: trackable("write_file", (path, data) => {
 			if (state.read_only) {
@@ -109,7 +114,12 @@ function build_provider(state) {
 			return results;
 		}),
 		
-		stat: trackable("stat", (path) => (state.files[path] != null ? { mtime: state.now } : null)),
+		stat: trackable("stat", (path) => {
+			let f = state.files[path];
+			if (f == null) return null;
+			let mtime = (type(f) == "object" && f[".mtime"] != null) ? f[".mtime"] : state.now;
+			return { mtime: mtime };
+		}),
 		
 		getenv: trackable("getenv", (key) => state.env[key]),
 		

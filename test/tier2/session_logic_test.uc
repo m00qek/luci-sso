@@ -93,15 +93,12 @@ test('session: logic - cleanup of abandoned handshakes', () => {
 	let other_path = "/var/run/luci-sso/important.txt";
 
 	factory.with_files({
-		[old_path]: "{}",
-		[new_path]: "{}",
+		[old_path]: { ".type": "file", "data": "{}", ".mtime": now - 1000 },
+		[new_path]: { ".type": "file", "data": "{}", ".mtime": now },
 		[other_path]: "keep me"
 	}, (io) => {
-		// Custom stat mock for timing
-		io.stat = (path) => {
-			if (index(path, "old") > 0) return { mtime: now - 1000 };
-			return { mtime: now };
-		};
+		// Advance mock clock to match the 'now' we used for mtime
+		io.__state__.now = now;
 
 		let reap_res = session.reap_stale_handshakes(io, 300);
 		assert(reap_res.ok);
@@ -110,6 +107,32 @@ test('session: logic - cleanup of abandoned handshakes', () => {
 		assert(!io.read_file(old_path), "Old handshake should be reaped");
 		assert(io.read_file(new_path), "Recent handshake should remain");
 		assert(io.read_file(other_path), "Unrelated files should be ignored");
+	});
+});
+
+test('session: logic - stale secret key lock self-healing (Audit #104)', () => {
+	let factory = mock.create();
+	let lock_path = "/etc/luci-sso/secret.key.lock";
+
+	factory.with_env({}, (io) => {
+		// Capture the base time
+		let base_now = io.time();
+
+		// Setup the lock with a stale mtime using the new mock capability
+		let history = factory.using(io).with_files({
+			[lock_path]: { ".type": "directory", ".mtime": base_now - 31 }
+		}).spy((spying_io) => {
+			let res = session.get_secret_key(spying_io);
+			assert(res.ok, "Should succeed by self-healing the stale lock");
+			assert(length(res.data) == 32, "Should return a valid 32-byte key");
+		});
+
+		// Verify warning log was emitted
+		assert(history.called("log", "warn", "Stale secret key lock detected; performing self-healing cleanup"), "Should log a warning about stale lock");
+
+		// Verify lock was removed and re-created
+		assert(history.called("remove", lock_path), "Should have removed the stale lock");
+		assert(history.called("mkdir", lock_path), "Should have re-acquired the lock");
 	});
 });
 

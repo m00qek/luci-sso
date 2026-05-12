@@ -112,6 +112,30 @@ factory.with_env({ PATH_INFO: "/logout" }, (io) => {
 });
 ```
 
+### Mocking Files and Metadata
+The `with_files` method supports both raw string content and object-based metadata for advanced scenarios.
+
+```javascript
+factory.with_files({
+    "/etc/config": "raw content",
+    "/etc/stale.lock": { 
+        ".type": "directory", 
+        ".mtime": 1516230000 
+    },
+    "/etc/data.json": {
+        ".type": "file",
+        "data": '{"foo": "bar"}',
+        ".mtime": 1516230000
+    }
+}, (io) => {
+    let st = io.stat("/etc/stale.lock");
+    assert_eq(st.mtime, 1516230000);
+    
+    let content = io.read_file("/etc/data.json");
+    assert_eq(content, '{"foo": "bar"}');
+});
+```
+
 ### Surgical State Inheritance (`using`)
 If a test requires sequential operations with accumulating state, use `using(io)` to derive a new reality from a previous one.
 
