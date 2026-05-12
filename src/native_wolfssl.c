@@ -40,6 +40,30 @@ void native_crypto_deinit(void) {
 	}
 }
 
+/**
+ * Portable helper to convert PEM public key to DER.
+ * wc_PubKeyPemToDer is not consistently exported in all WolfSSL builds (e.g. Alpine).
+ * wc_PemToDer is more reliable and available in both OpenWrt and Alpine.
+ */
+static int portable_pubkey_pem_to_der(const char *pem, size_t pem_len, unsigned char *out, size_t out_len) {
+	DerBuffer *der = NULL;
+	int ret = wc_PemToDer((const unsigned char *)pem, (long)pem_len, PUBLICKEY_TYPE, &der, NULL, NULL, NULL);
+	if (ret != 0 || der == NULL) {
+		if (der) wc_FreeDer(&der);
+		return -1;
+	}
+
+	if (der->length > out_len) {
+		wc_FreeDer(&der);
+		return -1;
+	}
+
+	memcpy(out, der->buffer, der->length);
+	int final_len = (int)der->length;
+	wc_FreeDer(&der);
+	return final_len;
+}
+
 bool native_verify_rs256(const unsigned char *msg, size_t msg_len,
                          const unsigned char *sig, size_t sig_len,
                          const char *key_pem, size_t key_len) {
@@ -49,7 +73,7 @@ bool native_verify_rs256(const unsigned char *msg, size_t msg_len,
 	wc_InitRsaKey(&key, NULL);
 
 	unsigned char der[NATIVE_RSA_PEM_MAX];
-	int der_len = wc_KeyPemToDer((const unsigned char *)key_pem, key_len, der, sizeof(der), NULL);
+	int der_len = portable_pubkey_pem_to_der(key_pem, key_len, der, sizeof(der));
 	if (der_len < 0) {
 		wc_FreeRsaKey(&key);
 		return false;
@@ -83,7 +107,7 @@ bool native_verify_es256(const unsigned char *msg, size_t msg_len,
 	wc_ecc_init(&key);
 
 	unsigned char der[NATIVE_EC_PEM_MAX];
-	int der_len = wc_KeyPemToDer((const unsigned char *)key_pem, key_len, der, sizeof(der), NULL);
+	int der_len = portable_pubkey_pem_to_der(key_pem, key_len, der, sizeof(der));
 	if (der_len < 0) {
 		wc_ecc_free(&key);
 		return false;
