@@ -1,0 +1,9 @@
+# ASan suppression file for luci-sso fuzzer
+# Format: leak:<pattern>
+
+# Suppress leaks from global crypto initialization
+# These are "acceptable" as they happen once per process life
+leak:psa_crypto_init
+leak:wolfSSL_Init
+leak:mbedtls_pk_parse_public_key
+leak:psa_hash_compute

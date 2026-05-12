@@ -33,6 +33,13 @@ int native_crypto_init(void) {
 	return _rng_initialized ? 0 : -1;
 }
 
+void native_crypto_deinit(void) {
+	if (_rng_initialized) {
+		wc_FreeRng(&_global_rng);
+		_rng_initialized = 0;
+	}
+}
+
 bool native_verify_rs256(const unsigned char *msg, size_t msg_len,
                          const unsigned char *sig, size_t sig_len,
                          const char *key_pem, size_t key_len) {
@@ -42,7 +49,7 @@ bool native_verify_rs256(const unsigned char *msg, size_t msg_len,
 	wc_InitRsaKey(&key, NULL);
 
 	unsigned char der[NATIVE_RSA_PEM_MAX];
-	int der_len = wc_PubKeyPemToDer((const unsigned char *)key_pem, key_len, der, sizeof(der));
+	int der_len = wc_KeyPemToDer((const unsigned char *)key_pem, key_len, der, sizeof(der), NULL);
 	if (der_len < 0) {
 		wc_FreeRsaKey(&key);
 		return false;
@@ -76,7 +83,7 @@ bool native_verify_es256(const unsigned char *msg, size_t msg_len,
 	wc_ecc_init(&key);
 
 	unsigned char der[NATIVE_EC_PEM_MAX];
-	int der_len = wc_PubKeyPemToDer((const unsigned char *)key_pem, key_len, der, sizeof(der));
+	int der_len = wc_KeyPemToDer((const unsigned char *)key_pem, key_len, der, sizeof(der), NULL);
 	if (der_len < 0) {
 		wc_ecc_free(&key);
 		return false;
@@ -170,6 +177,8 @@ int native_jwk_rsa_to_pem(const unsigned char *n, size_t n_len,
 int native_jwk_ec_p256_to_pem(const unsigned char *x, size_t x_len,
                               const unsigned char *y, size_t y_len,
                               char *out, size_t out_len) {
+	if (x_len != NATIVE_EC_COORD_SIZE || y_len != NATIVE_EC_COORD_SIZE) return -1;
+
 	ecc_key key;
 	wc_ecc_init(&key);
 

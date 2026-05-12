@@ -98,6 +98,9 @@ run: .run
 unit-test: DOCKER_SUITE = ci
 unit-test: .unit-test
 
+fuzzer-test: DOCKER_SUITE = ci
+fuzzer-test: .fuzzer-test
+
 e2e-test: DOCKER_SUITE = ci
 e2e-test: .e2e-test
 
@@ -134,6 +137,18 @@ endef
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
+
+TIME ?= 60
+DETECT_LEAKS ?= 0
+
+.fuzzer-test:
+	$(VALIDATE_SUITE_RUNNING)
+	@echo -e " $(BLUE)🧪$(RESET) Running native fuzz tests for $(CRYPTO_LIB) ($(TIME)s)..."
+	docker compose $(COMPOSE_FLAGS) exec -e ASAN_OPTIONS="detect_leaks=$(DETECT_LEAKS)" fuzzer bash -c " \
+		mkdir -p bin/fuzz && cd bin/fuzz && \
+		cmake -DENABLE_FUZZING=ON ../../src && \
+		make -j$$(nproc) && \
+		./fuzz_$(CRYPTO_LIB) -max_total_time=$(TIME) -rss_limit_mb=2048"
 
 .e2e-test:
 	$(VALIDATE_SUITE_RUNNING)

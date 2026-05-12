@@ -50,6 +50,40 @@ Use `MODULES` to run specific test files (whitelist). This bypasses the full sui
 make unit-test MODULES='test/tier0/native_compliance_test.uc,test/tier2/oidc_logic_test.uc'
 ```
 
+---
+
+## 3. Native Fuzzing (libFuzzer)
+
+For the native C components, we use libFuzzer and AddressSanitizer to identify memory safety issues and parsing vulnerabilities.
+
+### Building Fuzzers
+Requires `clang` and a native build environment with crypto libraries installed.
+
+```bash
+mkdir -p bin/fuzz
+cd bin/fuzz
+CC=clang CXX=clang++ cmake -DENABLE_FUZZING=ON ../../src
+make
+```
+
+### Running Fuzzers
+Run a specific backend fuzzer for a set duration (default 60s) via the development environment:
+
+```bash
+# Standard run (60s)
+make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls
+
+# Faster run (5s) for quick iteration
+make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls TIME=5
+
+# Strict run (including memory leak detection)
+make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls DETECT_LEAKS=1
+```
+
+*Note: `DETECT_LEAKS` is disabled by default because crypto libraries (mbedtls/wolfssl) often leave minor, one-time global state allocations that trigger false positives at exit. Critical security bugs (overflows, UAF) will ALWAYS cause a failure regardless of this setting.*
+
+Findings (crashes) will be saved as `crash-*` files. Use AddressSanitizer output to diagnose the root cause.
+
 ### End-to-End (E2E)
 These tests run in a separate Playwright container (`browser`) and verify the full OIDC flow against the Mock IdP and LuCI.
 ```bash

@@ -160,6 +160,18 @@ services:
       - CRYPTO_LIB=${CRYPTO_LIB}
       - SDK_ARCH=${SDK_ARCH}
 
+  fuzzer:
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-fuzzer
+    build:
+      context: ./services/fuzzer
+    volumes:
+      - ..:/work
+    working_dir: /work
+    environment:
+      - CRYPTO_LIB=${CRYPTO_LIB}
+    tty: true
+    stdin_open: true
+
 networks:
   lucisso-net:
     driver: bridge

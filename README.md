@@ -162,6 +162,7 @@ This project has been hardened against modern OIDC attack vectors.
     *   Handshake states are one-time use (atomic filesystem locks).
     *   Access tokens are tracked for 24 hours to prevent replay attacks.
 *   **DoS Protection:** HTTP response bodies are capped at 256KB to prevent memory exhaustion on embedded devices.
+*   **Fuzz Tested:** Native C modules are continuously hardened using coverage-guided fuzz testing (libFuzzer + ASan) to ensure memory safety.
 *   **Audit Logging:** All security events are logged to syslog (`logread`). PII is redacted where possible.
 
 ---

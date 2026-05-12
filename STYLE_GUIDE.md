@@ -562,12 +562,10 @@ return ucv_boolean_new(ret == 0);
 return ucv_string_new_length((const char *)output, 32);
 ```
 
----
+### Memory Management & Safety
 
-### Memory Management
-
+**1. ALWAYS free resources on ALL paths**
 ```c
-// ALWAYS free resources on ALL paths
 mbedtls_md_context_t md_ctx;
 mbedtls_md_init(&md_ctx);
 
@@ -575,16 +573,27 @@ if (setup_fails) {
 	mbedtls_md_free(&md_ctx);  // ✅ Cleanup on error
 	return NULL;
 }
-
-// ... use md_ctx ...
-
 mbedtls_md_free(&md_ctx);  // ✅ Cleanup on success
-return result;
+```
+
+**2. Explicit Length Validation (MANDATORY)**
+C functions handling buffers passed from ucode MUST explicitly validate the length of those buffers against expected sizes BEFORE performing any memory operations (e.g., `memcpy`).
+
+**✅ CORRECT:**
+```c
+if (key_len != 32) return -1;
+memcpy(local, key, 32);
+```
+
+**❌ INCORRECT:**
+```c
+memcpy(local, key, 32); // Vulnerable if key_len < 32
 ```
 
 ---
 
-### Type Checking
+### Memory Hygiene
+
 
 ```c
 // ALWAYS validate input types

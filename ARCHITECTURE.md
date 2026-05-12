@@ -33,7 +33,9 @@ C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfs
 *   **Why:** Reduces the security audit surface and simplifies cross-compilation. Logic stays in memory-safe ucode.
 *   **Hardening:** To prevent buffer overflow and resource exhaustion attacks:
     *   The native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
-    *   Public key parsing correctly distinguishes between PEM (requiring NUL termination) and DER (binary) formats to prevent out-of-bounds reads.
+    *   Public key parsing (JWK) explicitly validates the length of input coordinates (e.g., exactly 32 bytes for P-256) before memory operations to prevent heap-buffer-overflows.
+    *   MbedTLS PEM parsing logic correctly accounts for the mandatory NUL terminator in length parameters, preventing out-of-bounds reads when searching for PEM headers/footers.
+    *   The native bridge correctly distinguishes between PEM (requiring NUL termination) and DER (binary) formats to prevent out-of-bounds reads.
     *   The `binary_truncate` utility enforces a strict contract requiring the truncation length to be less than or equal to the input data length to prevent undefined behavior.
     *   HTTP response bodies are limited to **256 KB** at the ucode I/O layer to prevent memory exhaustion.
 *   **Constant-Time Comparisons:** All sensitive comparisons (e.g., state, nonce, signatures, at_hash, issuer, audience, and azp claims) MUST use `constant_time_eq`. This function is designed to avoid early returns on length or content mismatch to mitigate timing side-channels. The resulting boolean MUST be propagated via Result Objects to allow the caller to handle failures (e.g., by rendering an error page) without process-level crashes.
@@ -114,13 +116,25 @@ To prevent Algorithmic Complexity DoS attacks, periodic maintenance tasks (reapi
 
 ---
 
-## 5. Session & CSRF Handling
+## 5. Fuzz Testing (libFuzzer)
+
+For high-risk native C components, the project utilizes coverage-guided fuzzing via **libFuzzer** and **AddressSanitizer (ASan)**.
+*   **Targeting:** Fuzzing is focused on untrusted input parsing (JWKs, PEM keys, Signatures).
+*   **Orchestration:** A dedicated `fuzzer` service in `devenv` provides the Clang/LLVM toolchain and sanitizer support.
+*   **Continuous Security:** Fuzzers are designed to run for a set duration (default 60s) to discover edge-case memory safety issues that manual unit tests cannot reach.
+*   **Fail-Closed:** Any crash or memory violation found by the fuzzer results in an immediate build failure.
+
+---
+
+## 6. Session & CSRF Handling
 
 ### Security Cookies
 The system utilizes the `__Host-` cookie prefix for its own session-related cookies (e.g., `__Host-luci_sso_state`). The `sysauth` and `sysauth_https` cookies retain their LuCI-native names for framework compatibility but MUST include `Secure`, `HttpOnly`, `SameSite=Strict`, and `Path=/` attributes.
 *   **Requirement:** This mandates `Secure`, `Path=/`, and prevents cookie shadowing from subdomains, fulfilling modern web security best practices.
 
-### Modern LuCI Hook (JavaScript)
+---
+
+## 7. Modern LuCI Hook (JavaScript)
 Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not use server-side Lua templates.
 *   **Injection:** A small JS hook (`luci-sso-login.js`) is injected into the global LuCI header via a `uci-defaults` patch to `header.ut`.
 *   **Lifecycle:** The hook uses a `MutationObserver` combined with a polling fallback to detect when the login modal is rendered and injects the "Login with SSO" button dynamically.
@@ -128,7 +142,7 @@ Since LuCI 24.10 uses a dynamic client-side rendering model (pure JS), we do not
 
 ---
 
-## 6. UBUS Integration & Virtual Identity
+## 8. UBUS Integration & Virtual Identity
 
 The system implements a **Zero-Knowledge Credential Model**. The router does not store or require local POSIX passwords for OIDC-authenticated users.
 
@@ -152,7 +166,7 @@ By creating a valid UBUS session and setting the `sysauth` cookies, modern LuCI 
 
 ---
 
-## 7. Session Termination (Logout)
+## 9. Session Termination (Logout)
 
 The system implements full session synchronization during logout to prevent "Local Logout" confusion.
 
@@ -166,7 +180,7 @@ The system implements full session synchronization during logout to prevent "Loc
 
 ---
 
-## 8. Testing Tiers
+## 10. Testing Tiers
 
 | Tier | Scope | Goal |
 | :--- | :--- | :--- |
@@ -176,7 +190,7 @@ The system implements full session synchronization during logout to prevent "Loc
 
 ---
 
-## 9. Development Orchestration
+## 11. Development Orchestration
 
 ### The "Builder-as-a-Service" Pattern (Authoritative SDK Model)
 To avoid massive build times and environment drift, the project uses a dedicated `sdk` service within Docker Compose.
@@ -194,7 +208,7 @@ To avoid massive build times and environment drift, the project uses a dedicated
 
 ---
 
-## 10. Secret Key Management
+## 12. Secret Key Management
 
 The system uses a 256-bit symmetric key for signing local session tokens.
 *   **Bootstrapping:** The key is generated automatically on first boot.
@@ -204,7 +218,7 @@ The system uses a 256-bit symmetric key for signing local session tokens.
 
 ---
 
-## 11. Security Considerations & Known Disclosures
+## 13. Security Considerations & Known Disclosures
 
 ### Unauthenticated Status Endpoint
 *   **Endpoint:** `/cgi-bin/luci-sso?action=enabled`

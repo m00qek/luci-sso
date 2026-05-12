@@ -21,6 +21,11 @@ int native_crypto_init(void) {
     return (_psa_init_status == PSA_SUCCESS) ? 0 : -1;
 }
 
+void native_crypto_deinit(void) {
+    mbedtls_psa_crypto_free();
+    _psa_init_status = PSA_ERROR_BAD_STATE;
+}
+
 static int ecdsa_raw_to_der_robust(const unsigned char *raw, size_t raw_len, 
                                  unsigned char *buf, size_t buf_len,
                                  unsigned char **out_der_ptr, size_t *out_der_len) {
@@ -72,13 +77,9 @@ bool native_verify_rs256(const unsigned char *msg, size_t msg_len,
 	mbedtls_pk_context pk;
 	mbedtls_pk_init(&pk);
 
-	/* MbedTLS requires NUL terminator for PEM, but not for DER. */
-	size_t parse_len = key_len;
-	if (key_len > 10 && memcmp(key_pem, "-----BEGIN", 10) == 0) {
-		parse_len++;
-	}
-
-	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, parse_len) != 0) {
+	// mbedtls_pk_parse_public_key expects a null-terminated string including the terminator in the length for PEM.
+	// We assume key_pem is null-terminated and key_len is the length WITHOUT the terminator (ucode standard).
+	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, key_len + 1) != 0) {
 		mbedtls_pk_free(&pk);
 		return false;
 	}
@@ -119,12 +120,9 @@ bool native_verify_es256(const unsigned char *msg, size_t msg_len,
 	mbedtls_pk_context pk;
 	mbedtls_pk_init(&pk);
 
-	size_t parse_len = key_len;
-	if (key_len > 10 && memcmp(key_pem, "-----BEGIN", 10) == 0) {
-		parse_len++;
-	}
-
-	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, parse_len) != 0) {
+	// mbedtls_pk_parse_public_key expects a null-terminated string including the terminator in the length for PEM.
+	// We assume key_pem is null-terminated and key_len is the length WITHOUT the terminator (ucode standard).
+	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, key_len + 1) != 0) {
 		mbedtls_pk_free(&pk);
 		return false;
 	}
@@ -234,6 +232,8 @@ int native_jwk_rsa_to_pem(const unsigned char *n, size_t n_len,
 int native_jwk_ec_p256_to_pem(const unsigned char *x, size_t x_len,
                               const unsigned char *y, size_t y_len,
                               char *out, size_t out_len) {
+	if (x_len != NATIVE_EC_COORD_SIZE || y_len != NATIVE_EC_COORD_SIZE) return -1;
+
 	mbedtls_pk_context pk;
 	mbedtls_pk_init(&pk);
 	if (mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_ECKEY)) != 0) {

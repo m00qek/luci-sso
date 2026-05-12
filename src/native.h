@@ -21,6 +21,11 @@
 int native_crypto_init(void);
 
 /**
+ * Clean up the crypto backend (primarily for testing/fuzzing).
+ */
+void native_crypto_deinit(void);
+
+/**
  * Verify RS256 signature.
  * Returns true on success, false otherwise.
  */
