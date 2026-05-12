@@ -15,11 +15,7 @@ test('encoding: url - normalize_url preservation of path', () => {
 });
 
 test('encoding: url - normalize_url handles non-string safely', () => {
-    try {
-        encoding.normalize_url(null);
-        assert(false, "Should have thrown for non-string");
-    } catch (e) {
-        assert(index(e, "CONTRACT_VIOLATION") >= 0, "Should contain CONTRACT_VIOLATION in error");
-        assert(index(e, "normalize_url expects string") >= 0, "Should contain reason in error");
-    }
+	let res = encoding.normalize_url(null);
+	assert(!res.ok, "Should return Result.err for non-string");
+	assert(index(res.error, "INVALID_ARGUMENT") >= 0, "Should contain INVALID_ARGUMENT in error");
 });

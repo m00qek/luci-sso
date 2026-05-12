@@ -77,8 +77,6 @@ function _write_cache(io, path, data) {
  * Fetches and caches OIDC discovery document.
  */
 export function discover(io, issuer, options) {
-	if (type(issuer) != "string") die("CONTRACT_VIOLATION: issuer must be a string");
-
 	if (!encoding.is_https(issuer)) return Result.err("INSECURE_ISSUER_URL");
 
 	options = options || {};

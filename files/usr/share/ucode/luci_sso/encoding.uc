@@ -165,7 +165,7 @@ export function safe_json(data) {
  */
 export function normalize_url(url) {
 	if (type(url) != "string")
-    die("CONTRACT_VIOLATION: normalize_url expects string");
+    return Result.err("INVALID_ARGUMENT", "normalize_url expects string");
 	
 	let res = url;
 	let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
@@ -199,7 +199,7 @@ export function normalize_url(url) {
  */
 export function normalize_sub(sub) {
 	if (type(sub) != "string")
-    die("CONTRACT_VIOLATION: normalize_sub expects string");
+    return Result.err("INVALID_ARGUMENT", "normalize_sub expects string");
 
 	return Result.ok(lc(sub));
 };
