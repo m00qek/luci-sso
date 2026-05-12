@@ -15,7 +15,9 @@ import * as Result from 'luci_sso.result';
  */
 function get_cache_path(id_res, prefix) {
 	if (!id_res.ok) return null;
-	let h_res = encoding.b64url_encode(crypto.hash_sha256(id_res.data));
+	let hash_res = crypto.hash_sha256(id_res.data);
+	if (!hash_res.ok) return hash_res;
+	let h_res = encoding.b64url_encode(hash_res.data);
 	if (!h_res.ok) return null;
 	return `/var/run/luci-sso/oidc-${prefix}-${substr(h_res.data, 0, 32)}.json`;
 };

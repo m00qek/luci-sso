@@ -109,7 +109,7 @@ test('Router: Callback - Successful authentication and UBUS login', () => {
 		let handshake = state_res.data;
 		
 		let at = "mock-access-token-123456";
-		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at), 0, 16)).data;
+		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
 		let payload = { ...tf.MOCK_CLAIMS, iss: "https://idp.com", email: "user-123", nonce: handshake.nonce, at_hash: at_hash };
 		let id_token = h.generate_id_token(payload, tf.MOCK_PRIVKEY, "RS256");
 
@@ -155,7 +155,7 @@ test('Router: Callback - Handle stale JWKS cache recovery', () => {
 		let handshake = state_res.data;
 		
 		let at = "mock-at";
-		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at), 0, 16)).data;
+		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
 		let payload = { ...tf.MOCK_CLAIMS, iss: "https://idp.com", nonce: handshake.nonce, at_hash: at_hash };
 		let id_token = h.generate_id_token(payload, tf.ROTATION_NEW_PRIVKEY, "RS256", tf.ROTATION_NEW_JWK.kid);
 
@@ -197,7 +197,7 @@ test('Router: Callback - Reject non-whitelisted users', () => {
 		let handshake = state_res.data;
 		
 		let at = "mock-at";
-		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at), 0, 16)).data;
+		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
 		let id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", sub: "unknown", nonce: handshake.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 		factory.using(io).with_responses({
@@ -225,7 +225,7 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 		let handshake = state_res.data;
 		let access_token = "ALREADY_USED";
 		
-		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data;
+		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
 		let id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", nonce: handshake.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 		// PRE-REGISTER the token to simulate replay

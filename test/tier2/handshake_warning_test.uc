@@ -42,7 +42,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
             let nonce_val = replace(state_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
 
             // Setup minimal environment
-            let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(tokens.access_token), 0, 16)).data;
+            let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(tokens.access_token).data, 0, 16)).data;
             let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_val, at_hash: at_hash };
             tokens.id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
 
@@ -104,7 +104,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
                 let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
                 let nonce_val = replace(state_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
 
-                let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(tokens.access_token), 0, 16)).data;
+                let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(tokens.access_token).data, 0, 16)).data;
                 let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_val, at_hash: at_hash };
                 tokens.id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
                 

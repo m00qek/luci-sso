@@ -247,8 +247,9 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 		return Result.err("MISSING_AT_HASH");
 	}
 
-	let full_hash = crypto.hash_sha256(tokens.access_token);
-	if (!full_hash) return Result.err("CRYPTO_ERROR");
+	let hash_res = crypto.hash_sha256(tokens.access_token);
+	if (!hash_res.ok) return hash_res;
+	let full_hash = hash_res.data;
 
 	let left_half_res = encoding.binary_truncate(full_hash, 16);
 	if (!left_half_res.ok) return Result.err("CRYPTO_ERROR");

@@ -126,7 +126,7 @@ test('oidc: token - handle IdP errors (401/400)', () => {
 test('oidc: ID token - support multi-audience arrays', () => {
 	let keys = JWKS.keys;
 	let at = "mock-at";
-	let full_hash = crypto.hash_sha256(at);
+	let full_hash = crypto.hash_sha256(at).data;
 	let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 	
 	// 1. Success: Correct ID in array
@@ -157,7 +157,7 @@ test('oidc: ID token - support multi-audience arrays', () => {
 test('oidc: ID token - support AZP claim', () => {
 	let keys = JWKS.keys;
 	let at = "mock-at";
-	let full_hash = crypto.hash_sha256(at);
+	let full_hash = crypto.hash_sha256(at).data;
 	let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 	let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], at_hash: ah };
 
@@ -196,7 +196,7 @@ test('oidc: ID token - reject expired ID token', () => {
 test('oidc: ID token - enforce nonce matching', () => {
 	let keys = JWKS.keys;
 	let at = "mock-at";
-	let full_hash = crypto.hash_sha256(at);
+	let full_hash = crypto.hash_sha256(at).data;
 	let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 	let payload = { ...f.MOCK_CLAIMS, at_hash: ah };
 	let token = h.generate_id_token(payload, PRIVKEY, "RS256");
@@ -294,7 +294,7 @@ test('oidc: ID token - at_hash validation ensures token binding', () => {
 	let access_token = "valid-access-token-123";
 	let keys = JWKS.keys;
 	
-	let full_hash = crypto.hash_sha256(access_token);
+	let full_hash = crypto.hash_sha256(access_token).data;
 	let left_half = encoding.binary_truncate(full_hash, 16).data;
 	let correct_hash = encoding.b64url_encode(left_half).data;
 
@@ -330,7 +330,7 @@ test('oidc: ID token - at_hash validation byte-safety torture', () => {
 	let access_token = "at-hash-torture-input-1";
 	let keys = JWKS.keys;
 	
-	let full_hash = crypto.hash_sha256(access_token);
+	let full_hash = crypto.hash_sha256(access_token).data;
 	
 	// Manually construct the left-half correctly (raw bytes)
 	let left_half = encoding.binary_truncate(full_hash, 16).data;
@@ -454,7 +454,7 @@ test('oidc: userinfo - reject missing sub claim', () => {
 test('oidc: ID token - enforce azp when aud is array (Blocker 1771006966)', () => {
 	let keys = JWKS.keys;
 	let at = "mock-at";
-	let full_hash = crypto.hash_sha256(at);
+	let full_hash = crypto.hash_sha256(at).data;
 	let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 	
 	// Create a payload with multiple audiences but NO authorized party (azp)

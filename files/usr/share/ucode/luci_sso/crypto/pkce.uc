@@ -32,11 +32,11 @@ export function generate_verifier(native, len) {
  * @returns {object} - Result Object {ok, data/error}
  */
 export function calculate_challenge(native, verifier) {
-	let hashed = hash.sha256(native, verifier);
-	if (!hashed)
-    return Result.err("CRYPTO_ERROR");
+	let res = hash.sha256(native, verifier);
+	if (!res.ok)
+    return res;
 
-	return encoding.b64url_encode(hashed);
+	return encoding.b64url_encode(res.data);
 };
 
 /**

@@ -75,7 +75,7 @@ test('handshake: split-horizon - prevents path corruption when issuer_url is in 
                         iss: issuer_url,
                         email: "admin@example.com",
                         nonce: "test-nonce",
-                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data
+                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data
                     };
                     let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
                     return Result.ok({ 
@@ -168,7 +168,7 @@ test('handshake: split-horizon - prevents corruption when internal_issuer_url is
                         iss: issuer_url,
                         email: "admin@example.com", 
                         nonce: "test-nonce",
-                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data
+                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data
                     };
                     let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
                     return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });

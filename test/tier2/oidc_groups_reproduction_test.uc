@@ -13,7 +13,7 @@ const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 test('REPRODUCTION: oidc: verify_id_token drops groups claim', () => {
 	let keys = [ f.MOCK_JWK ];
 	let at = "mock-at";
-	let ah = encoding.b64url_encode(substr(crypto.hash_sha256(at), 0, 16)).data;
+	let ah = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
 	
 	let groups = ["admin", "dev"];
 	let payload = { ...f.MOCK_CLAIMS, at_hash: ah, groups: groups };
@@ -74,7 +74,7 @@ test('REPRODUCTION: handshake: userinfo fallback drops groups claim', () => {
                         email: null, 
                         groups: null, 
                         nonce: captured_nonce, 
-                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token), 0, 16)).data 
+                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data 
                     };
                     let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
                     return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
