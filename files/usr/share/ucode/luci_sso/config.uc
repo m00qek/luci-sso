@@ -171,7 +171,7 @@ export function find_roles_for_user(config, claims) {
 		}
 	}
 
-	if (!perms.role_name) {
+	if (!perms.role_name || (length(perms.read) == 0 && length(perms.write) == 0)) {
 		return Result.err("NO_ROLES_MATCHED");
 	}
 
