@@ -57,7 +57,7 @@ jobs:
       packages: write
     strategy:
       matrix:
-        service: [openwrt, sdk]
+        service: [openwrt, sdk, fuzzer]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -134,41 +134,40 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
   test:
-    name: Run Verification Suite
+    name: Verification (${{ matrix.crypto }})
     runs-on: ubuntu-latest
     needs: [metadata, build-helpers, build-core]
     permissions:
       contents: read
       packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        crypto: [mbedtls, wolfssl]
     env:
       SDK_ARCH: ${{ needs.metadata.outputs.sdk_arch }}
+      CRYPTO_LIB: ${{ matrix.crypto }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Pull
+      - name: Pull images
         run: make -sC devenv pull
 
-      - name: Compile (mbedtls)
-        run: make -sC devenv compile CRYPTO_LIB=mbedtls
-
-      - name: Compile (wolfssl)
-        run: make -sC devenv compile CRYPTO_LIB=wolfssl
+      - name: Compile
+        run: make -sC devenv compile
 
       - name: Start environment
         run: make -sC devenv up
 
-      - name: Run unit tests (mbedtls)
-        run: make -sC devenv unit-test CRYPTO_LIB=mbedtls VERBOSE=1
+      - name: Unit Tests
+        run: make -sC devenv unit-test VERBOSE=1
 
-      - name: Run E2E tests (mbedtls)
-        run: make -sC devenv e2e-test CRYPTO_LIB=mbedtls
+      - name: Fuzz Tests (60s)
+        run: make -sC devenv fuzzer-test TIME=60
 
-      - name: Run unit tests (wolfssl)
-        run: make -sC devenv unit-test CRYPTO_LIB=wolfssl VERBOSE=1
-
-      - name: Run E2E tests (wolfssl)
-        run: make -sC devenv e2e-test CRYPTO_LIB=wolfssl
+      - name: E2E Tests
+        run: make -sC devenv e2e-test
 
       - name: Stop environment
         if: always()
