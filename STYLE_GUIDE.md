@@ -1074,3 +1074,24 @@ If you find inconsistencies or have suggestions:
 ---
 
 **End of Style Guide**
+
+---
+
+## 14. Technical Debt & Known Exceptions
+
+While the project strives for consistency, certain legacy patterns or "convenience" trade-offs exist that deviate from the primary rules. These are documented here to prevent confusion.
+
+### `encoding.safe_json` — "Dual-Mode" Result Unwrapping
+The `safe_json(data)` function in `encoding.uc` violates the principle of **Explicitness over Brevity**. It performs three distinct operations:
+1.  **I/O unwrapping:** Calls `.read()` if given a stream object.
+2.  **Result unwrapping:** Transparently extracts `.data` if given a `Result` object (passing through errors).
+3.  **JSON decoding:** Safely decodes the resulting string into a `Result`.
+
+**Why it exists:** To allow clean chaining like `safe_json(b64url_decode(jwt_part))`.
+**Debt:** The dual-mode behavior is opaque. Future refactors should consider splitting this into explicit `read_json()` and `parse_json()` functions.
+
+### API Return Type Consistency
+The project is in the process of migrating all cryptographic and encoding functions to return `Result` objects.
+- **Status:** `normalize_url`, `normalize_sub`, `sha256`, and `sha256_hex` have been migrated.
+- **Debt:** Some low-level encoding functions (e.g., `b64url_encode`) still return raw strings. These should be migrated during the next major version update.
+
