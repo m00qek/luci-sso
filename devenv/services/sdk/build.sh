@@ -8,8 +8,8 @@ ARTIFACTS_DIR="/artifacts"
 
 case "$ACTION" in
 compile)
-  echo "🔨 Compiling native components for $CRYPTO_LIB ($SDK_ARCH)..."
-  mkdir -p "$ARTIFACTS_DIR/$SDK_ARCH/$CRYPTO_LIB/luci_sso"
+  echo "🔨 Compiling native components for $CRYPTO_LIB ($SDK_ARCH/$SDK_VERSION)..."
+  mkdir -p "$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/$CRYPTO_LIB/luci_sso"
 
   # Ensure SDK is configured
   [ -f .config ] || make defconfig
@@ -20,17 +20,17 @@ compile)
 
   # Copy the .so to artifacts
   cp -v build_dir/target-*/$PKG_NAME-*/.pkgdir/$PKG_NAME-crypto-$CRYPTO_LIB/usr/lib/ucode/luci_sso/native.so \
-    "$ARTIFACTS_DIR/$SDK_ARCH/$CRYPTO_LIB/luci_sso/native.so"
+    "$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/$CRYPTO_LIB/luci_sso/native.so"
   ;;
 
 package)
-  echo "📦 Building IPK package for $SDK_ARCH..."
+  echo "📦 Building IPK package for $SDK_ARCH/$SDK_VERSION..."
   [ -f .config ] || make defconfig
   make package/$PKG_NAME/compile V=s QUICK=1 CHECK_KEY=0
 
   # Copy IPKs to artifacts
-  mkdir -p "$ARTIFACTS_DIR/$SDK_ARCH/packages"
-  find bin/ -name "*.ipk" -exec cp -v {} "$ARTIFACTS_DIR/$SDK_ARCH/packages/" \;
+  mkdir -p "$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/packages"
+  find bin/ -name "*.ipk" -exec cp -v {} "$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/packages/" \;
   ;;
 
 test)

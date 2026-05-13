@@ -1,6 +1,6 @@
 services:
   pki:
-    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-pki
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-${SDK_VERSION}-pki
     image: ${DOCKER_NAMESPACE}/luci-sso-pki:alpine${ALPINE_VERSION}
     build:
       context: ./services/pki
@@ -23,7 +23,7 @@ services:
     command: /bin/sh /usr/local/bin/gensecrets.sh
 
   idp:
-    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-idp
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-${SDK_VERSION}-idp
     image: ${DOCKER_NAMESPACE}/luci-sso-idp:node${NODE_VERSION}-alpine${ALPINE_VERSION}
     build:
       context: ./services/idp
@@ -77,7 +77,7 @@ services:
       start_period: 5s
 
   openwrt:
-    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-openwrt
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-${SDK_VERSION}-openwrt
     image: ${DOCKER_NAMESPACE}/luci-sso-openwrt:${SDK_ARCH}-${SDK_VERSION}
     stop_grace_period: 0s
     build:
@@ -121,7 +121,7 @@ services:
       - ../files/www/cgi-bin/luci-sso:/www/cgi-bin/luci-sso:ro
       - ../files/www/luci-static/resources/luci-sso-login.js:/www/luci-static/resources/luci-sso-login.js:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
-      - ../bin/lib/${SDK_ARCH}:/luci_sso/backends:ro
+      - ../bin/lib/${SDK_ARCH}/${SDK_VERSION}:/luci_sso/backends:ro
       - ../test:/usr/share/luci-sso/test:ro
     labels:
       cert.fqdn: "${FQDN_LUCI}"
@@ -139,7 +139,7 @@ services:
       start_period: 5s
 
   sdk:
-    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-sdk
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-${SDK_VERSION}-sdk
     image: ${DOCKER_NAMESPACE}/luci-sso-sdk:${SDK_ARCH}-${SDK_VERSION}
     build:
       context: ./services/sdk
@@ -159,9 +159,10 @@ services:
     environment:
       - CRYPTO_LIB=${CRYPTO_LIB}
       - SDK_ARCH=${SDK_ARCH}
+      - SDK_VERSION=${SDK_VERSION}
 
   fuzzer:
-    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-fuzzer
+    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-${SDK_VERSION}-fuzzer
     build:
       context: ./services/fuzzer
     volumes:
