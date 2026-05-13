@@ -869,76 +869,28 @@ Logic MUST NOT utilize `system()` or `popen()` for any operation. These function
 
 ## 10. Documentation Standards
 
-### README.md
+### Philosophy
+Documentation is code. It MUST be accurate, persona-aware (Diataxis), and accessible.
 
-**Target audience:** Users (operators installing on routers)
+### 1. Diataxis Quadrants
+All documentation must reside in the `docs/` directory and follow the Diataxis framework:
+*   `tutorials/`: Learning-oriented (Step-by-step success).
+*   `how-to/`: Goal-oriented (Task completion).
+*   `reference/`: Information-oriented (Technical machinery).
+*   `explanation/`: Understanding-oriented (The "Why").
 
-**Must include:**
-- What the project does
-- How to install (opkg commands)
-- How to configure (UCI examples)
-- How to test it works
+### 2. Accessibility Mandates (WCAG 2.1 AA)
+We prioritize accessibility for blind users, those with cognitive disabilities, and AI Agents.
 
----
+*   **Alt-Text Mandate:** Every image MUST have a descriptive `alt` attribute. 
+    *   *Bad:* `![Screenshot](image.png)`
+    *   *Good:* `![LuCI interface showing the 'General Settings' tab with the 'OIDC Provider' dropdown set to 'Google'.](image.png)`
+*   **Logical Hierarchy:** Heading levels (`#`, `##`, `###`) MUST be nested logically. Never skip a level (e.g., `#` followed by `###`).
+*   **Diagram Fallbacks:** Every Mermaid diagram MUST be preceded or followed by a textual summary or a table describing the flow for screen readers and AI Agents.
+*   **Plain Language:** Avoid jargon where possible. Use active voice and short sentences.
 
-### API.md
-
-**Target audience:** Developers (extending/integrating)
-
-**Must include:**
-- All exported functions
-- Parameter types and meanings
-- Return value formats
-- Error codes
-- Usage examples
-
----
-
-### SECURITY.md
-
-**Target audience:** Security auditors
-
-**Must include:**
-- Threat model
-- Cryptographic primitives used
-- Known limitations
-- Security testing methodology
-- Reporting vulnerabilities
-
----
-
-### Inline Documentation
-
-**Every exported function needs JSDoc:**
-
-```javascript
-/**
- * Verifies a JWT signature and validates claims.
- * 
- * Supports RS256 (RSA-SHA256) and ES256 (ECDSA-P256-SHA256).
- * 
- * @param {string} token - JWT string (header.payload.signature)
- * @param {string} pubkey - PEM-encoded public key
- * @param {object} options - Validation options
- * @param {string} options.alg - Required algorithm ("RS256" or "ES256")
- * @param {string} [options.iss] - Expected issuer (validates iss claim)
- * @param {string} [options.aud] - Expected audience (validates aud claim)
- * @param {number} [options.skew=300] - Clock skew tolerance (seconds)
- * 
- * @returns {object} - Decoded payload on success
- * @throws {string} - Error code on failure
- * 
- * @example
- * let payload = jwt_verify(token, pem_key, {
- *     alg: "RS256",
- *     iss: "https://accounts.google.com",
- *     aud: "my-client-id"
- * });
- */
-export function jwt_verify(token, pubkey, options) {
-	// ...
-};
-```
+### 3. AI Agent Optimization
+Reference documentation (especially `docs/reference/agent-context.md`) must be high-density and machine-readable. Avoid "fluff" in reference quadrants to minimize token waste for AI assistants.
 
 ---
 
