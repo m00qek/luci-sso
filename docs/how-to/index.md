@@ -16,3 +16,4 @@ How-to guides are recipes. They take the reader through the steps required to so
 ## 👨‍💻 Development
 *   [Running Tests](developer/testing.md) - How to execute the different test tiers.
 *   [Fuzz Testing](developer/fuzzing.md) - How to run the coverage-guided fuzzer.
+*   [Writing Documentation](developer/documentation.md) - How to use the documentation toolkit and standards.

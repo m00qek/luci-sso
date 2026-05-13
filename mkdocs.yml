@@ -58,6 +58,7 @@ nav:
       - Developer:
           - Running Tests: how-to/developer/testing.md
           - Fuzz Testing: how-to/developer/fuzzing.md
+          - Writing Documentation: how-to/developer/documentation.md
   - Reference:
       - Overview: reference/index.md
       - UCI Configuration: reference/uci-config.md
