@@ -24,7 +24,7 @@ export function sign(native, payload, secret) {
 	let p_res = encoding.b64url_encode(sprintf("%J", payload));
 
 	if (!h_res.ok || !p_res.ok)
-		return Result.err("ENCODE_ERROR");
+		return Result.err("BASE64URL_ENCODE_FAILED");
 
 	let signed_data = h_res.data + "." + p_res.data;
 
@@ -34,7 +34,7 @@ export function sign(native, payload, secret) {
 
 	let s_res = encoding.b64url_encode(signature);
 	if (!s_res.ok)
-		return Result.err("ENCODE_ERROR");
+		return Result.err("BASE64URL_ENCODE_FAILED");
 
 	return Result.ok(signed_data + "." + s_res.data);
 };

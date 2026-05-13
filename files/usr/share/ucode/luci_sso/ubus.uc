@@ -1,6 +1,7 @@
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
+import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED } from 'luci_sso.errors';
 
 /**
  * Logic for interacting with UBUS sessions.
@@ -71,7 +72,7 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	let res_create = io.ubus_call("session", "create", { timeout: 3600 });
 	if (!res_create.ok || !res_create.data.ubus_rpc_session) {
 		io.log("error", "UBUS session creation failed");
-		return Result.err("UBUS_SESSION_FAILED");
+		return Result.err(UBUS_SESSION_FAILED);
 	}
 
 	let sid = res_create.data.ubus_rpc_session;
@@ -115,12 +116,12 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 	let res_csrf = crypto.random(32);
 	if (!res_csrf.ok) {
 		io.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
-		return Result.err("CRYPTO_SYSTEM_FAILURE");
+		return Result.err(CRYPTO_INIT_FAILED);
 	}
 	let csrf_res = encoding.b64url_encode(res_csrf.data);
 	if (!csrf_res.ok) {
 		io.log("error", "CRITICAL: b64url_encode failure during CSRF token generation");
-		return Result.err("CRYPTO_SYSTEM_FAILURE");
+		return Result.err(CRYPTO_INIT_FAILED);
 	}
 	let csrf_token = csrf_res.data;
 
@@ -236,7 +237,7 @@ export function destroy_session(io, sid) {
 
 	let res = io.ubus_call("session", "destroy", { ubus_rpc_session: sid });
 	if (!res.ok) {
-		return Result.err("UBUS_ERROR", res.error);
+		return Result.err(UBUS_ERROR, res.error);
 	}
 	return Result.ok();
 };

@@ -5,6 +5,7 @@
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
+import { SSO_DISABLED, CONFIG_ERROR, UCI_ERROR } from 'luci_sso.errors';
 
 /**
  * Checks if the SSO service is enabled in UCI.
@@ -13,7 +14,7 @@ import * as crypto from 'luci_sso.crypto';
  */
 export function is_enabled(io) {
 	let cursor = io.uci_cursor();
-	if (!cursor) return Result.err("UCI_ERROR");
+	if (!cursor) return Result.err(UCI_ERROR);
 
 	let enabled = cursor.get("luci-sso", "default", "enabled");
 	return Result.ok(enabled === '1');
@@ -29,7 +30,7 @@ export function load(io) {
 	let enabled_res = is_enabled(io);
 	if (!enabled_res.ok) return enabled_res;
 	if (!enabled_res.data) {
-		return Result.err("DISABLED");
+		return Result.err(SSO_DISABLED);
 	}
 
 	let cursor = io.uci_cursor();
@@ -37,37 +38,37 @@ export function load(io) {
 	// 1. Load OIDC Provider Settings
 	let oidc_cfg = cursor.get_all("luci-sso", "default");
 	if (!oidc_cfg || oidc_cfg[".type"] !== "oidc") {
-		return Result.err("CONFIG_ERROR", "OIDC section 'default' missing in /etc/config/luci-sso");
+		return Result.err(CONFIG_ERROR, "OIDC section 'default' missing in /etc/config/luci-sso");
 	}
 
 	// 1.1 HTTPS Enforcement
 	let issuer = oidc_cfg.issuer_url;
 	if (!issuer) {
-		return Result.err("CONFIG_ERROR", "issuer_url is mandatory");
+		return Result.err(CONFIG_ERROR, "issuer_url is mandatory");
 	}
 
 	if (!encoding.is_https(issuer)) {
-		return Result.err("CONFIG_ERROR", "issuer_url must use HTTPS");
+		return Result.err(CONFIG_ERROR, "issuer_url must use HTTPS");
 	}
 
 	if (!oidc_cfg.client_id || !oidc_cfg.client_secret) {
-		return Result.err("CONFIG_ERROR", "client_id and client_secret are mandatory");
+		return Result.err(CONFIG_ERROR, "client_id and client_secret are mandatory");
 	}
 
 	if (!oidc_cfg.redirect_uri || !encoding.is_https(oidc_cfg.redirect_uri)) {
-		return Result.err("CONFIG_ERROR", "redirect_uri is mandatory and must use HTTPS");
+		return Result.err(CONFIG_ERROR, "redirect_uri is mandatory and must use HTTPS");
 	}
 
 	if (oidc_cfg.clock_tolerance == null || oidc_cfg.clock_tolerance == "") {
-		return Result.err("CONFIG_ERROR", "clock_tolerance option is mandatory");
+		return Result.err(CONFIG_ERROR, "clock_tolerance option is mandatory");
 	}
 
 	let clock_tolerance = int(oidc_cfg.clock_tolerance);
 	if (type(clock_tolerance) != "int") {
-		return Result.err("CONFIG_ERROR", "clock_tolerance must be an integer");
+		return Result.err(CONFIG_ERROR, "clock_tolerance must be an integer");
 	}
 	if (clock_tolerance < 0 || clock_tolerance > 3600) {
-		return Result.err("CONFIG_ERROR", "clock_tolerance must be between 0 and 3600 seconds");
+		return Result.err(CONFIG_ERROR, "clock_tolerance must be between 0 and 3600 seconds");
 	}
 
 	// 2. Load and Validate Roles
@@ -93,11 +94,11 @@ export function load(io) {
 	});
 
 	if (length(roles) == 0) {
-		return Result.err("CONFIG_ERROR", "No valid roles found in /etc/config/luci-sso");
+		return Result.err(CONFIG_ERROR, "No valid roles found in /etc/config/luci-sso");
 	}
 
 	if (oidc_cfg.internal_issuer_url && !encoding.is_https(oidc_cfg.internal_issuer_url)) {
-		return Result.err("CONFIG_ERROR", "internal_issuer_url must use HTTPS");
+		return Result.err(CONFIG_ERROR, "internal_issuer_url must use HTTPS");
 	}
 
 	return Result.ok({

@@ -93,7 +93,7 @@ scp -O ca.crt root@192.168.1.1:/etc/ssl/certs/my-homelab-ca.crt
 update-ca-certificates
 ```
 
-If the router cannot verify the IdP's certificate, the token exchange will fail with `SSL_INIT_FAILED` or a `NETWORK_ERROR`. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
+If the router cannot verify the IdP's certificate, the token exchange will fail with `SSL_INIT_FAILED` or a `TOKEN_ENDPOINT_NETWORK_ERROR`. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
 
 ---
 

@@ -112,10 +112,10 @@ Each phase has distinct failure modes visible in the [system log](../reference/l
 | Phase | Typical error codes |
 | :--- | :--- |
 | Discovery | `OIDC_DISCOVERY_FAILED`, `DISCOVERY_ISSUER_MISMATCH`, `JWKS_FETCH_FAILED` |
-| Callback | `STATE_MISMATCH`, `MISSING_HANDSHAKE_COOKIE`, `IDP_ERROR`, `STATE_NOT_FOUND` |
-| Token exchange | `TOKEN_EXCHANGE_FAILED`, `OIDC_INVALID_GRANT`, `NETWORK_ERROR` |
+| Callback | `STATE_PARAMETER_MISMATCH`, `MISSING_HANDSHAKE_COOKIE`, `IDP_ERROR`, `STATE_NOT_FOUND` |
+| Token exchange | `TOKEN_EXCHANGE_FAILED`, `OIDC_INVALID_GRANT`, `TOKEN_ENDPOINT_NETWORK_ERROR` |
 | Token validation | `UNSUPPORTED_ALGORITHM`, `NONCE_MISMATCH`, `AT_HASH_MISMATCH`, `ID_TOKEN_VERIFICATION_FAILED` |
-| Authorization | `NO_ROLES_MATCHED`, `USER_NOT_AUTHORIZED` |
+| Authorization | `USER_NOT_AUTHORIZED` |
 | Session injection | `UBUS_LOGIN_FAILED` |
 
 For step-by-step troubleshooting, see [How to Debug luci-sso](../how-to/sysadmin/debugging.md).

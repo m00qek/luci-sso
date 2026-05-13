@@ -42,7 +42,7 @@ test('session: handshake - traversal attempts are rejected', () => {
        mock.create().with_files({}, (io) => {
                let res = session.verify_state(io, "../../../etc/passwd", 0);
                assert(!res.ok, "Should reject traversal attempt");
-               assert_eq(res.error, "INVALID_HANDLE_FORMAT");
+               assert_eq(res.error, "MALFORMED_STATE_COOKIE");
        });
 });
 
@@ -114,5 +114,5 @@ test('security: detect CSPRNG failure during CSRF token generation (B3)', () => 
     if (err) die(err);
 
     assert(!res.ok, "MUST reject session creation if CSPRNG fails");
-    assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
+    assert_eq(res.error, "CRYPTO_INIT_FAILED");
 });

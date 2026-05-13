@@ -18,8 +18,8 @@ logread -e luci-sso
 | `SYSTEM_INIT_FAILED` | `/etc/luci-sso` directory permissions are wrong or the crypto backend failed to initialize. |
 | `OIDC_DISCOVERY_FAILED` | The router cannot reach the `issuer_url`. Check DNS and firewall rules. |
 | `SSL_INIT_FAILED` | The router does not trust the IdP's TLS certificate. Run `opkg install ca-bundle` or add your CA to `/etc/ssl/certs`. |
-| `NO_ROLES_MATCHED` | Authentication succeeded but the user's email/groups don't match any UCI role. |
-| `STATE_MISMATCH` | Browser lost the handshake cookie, or a CSRF attempt was blocked. |
+| `USER_NOT_AUTHORIZED` | Authentication succeeded but the user's email or groups match no configured role. The log line before this code will say "matched no roles". See [UCI Configuration](../../reference/uci-config.md). |
+| `STATE_PARAMETER_MISMATCH` | Browser lost the handshake cookie, or a CSRF attempt was blocked. |
 
 For the full list of every error code and what triggers it, see the [Log Messages Reference](../../reference/log-messages.md).
 

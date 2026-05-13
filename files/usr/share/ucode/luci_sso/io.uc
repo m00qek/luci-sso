@@ -9,6 +9,7 @@ import * as lucihttp from 'lucihttp';
 import * as encoding from 'luci_sso.encoding';
 import * as secure_http from 'luci_sso.secure_http';
 import * as Result from 'luci_sso.result';
+import { UBUS_CONNECT_FAILED, UBUS_ERROR } from 'luci_sso.errors';
 
 let _ubus_conn = null;
 
@@ -50,7 +51,7 @@ export function create() {
 			});
 			if (!res.ok) {
 				this.log("error", `HTTPS GET failed for ${url}: ${res.error}`);
-				return Result.err("NETWORK_ERROR", res.error);
+				return Result.err("HTTP_REQUEST_FAILED", res.error);
 			}
 			return Result.ok({ status: res.data.status, body: res.data.body });
 		},
@@ -71,7 +72,7 @@ export function create() {
 			});
 			if (!res.ok) {
 				this.log("error", `HTTPS POST failed for ${url}: ${res.error}`);
-				return Result.err("NETWORK_ERROR", res.error);
+				return Result.err("HTTP_REQUEST_FAILED", res.error);
 			}
 			return Result.ok({ status: res.data.status, body: res.data.body });
 		},
@@ -82,10 +83,10 @@ export function create() {
 		ubus_call: (obj, method, args) => {
 			if (!_ubus_conn) {
 				_ubus_conn = ubus.connect();
-				if (!_ubus_conn) return Result.err("UBUS_CONNECT_FAILED");
+				if (!_ubus_conn) return Result.err(UBUS_CONNECT_FAILED);
 			}
 			let res = _ubus_conn.call(obj, method, args);
-			if (res === null) return Result.err("UBUS_ERROR");
+			if (res === null) return Result.err(UBUS_ERROR);
 			return Result.ok(res);
 		},
 

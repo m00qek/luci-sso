@@ -95,7 +95,7 @@ Active sessions issued by the old IdP continue to work until they expire — the
 
 ## Verify roles still match after rotation
 
-If the new credentials come with a different `scope` (for example, the old client had `groups` scope and the new one does not), users may authenticate successfully but hit `NO_ROLES_MATCHED` because the group claims are missing.
+If the new credentials come with a different `scope` (for example, the old client had `groups` scope and the new one does not), users may authenticate successfully but see `USER_NOT_AUTHORIZED` in the log — the line before it will say "matched no roles", indicating the group claims are missing.
 
 Check what the IdP is returning after a successful login:
 
@@ -103,7 +103,7 @@ Check what the IdP is returning after a successful login:
 logread -e luci-sso | tail -30
 ```
 
-If you see `NO_ROLES_MATCHED`, confirm the `scope` option includes all the scopes your role mappings rely on:
+If you see `USER_NOT_AUTHORIZED` with a "matched no roles" line before it, confirm the `scope` option includes all the scopes your role mappings rely on:
 
 ```bash
 uci show luci-sso.default.scope

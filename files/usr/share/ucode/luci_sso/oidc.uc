@@ -4,6 +4,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as discovery from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
+import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, MISSING_AZP_CLAIM, AZP_MISMATCH, MISSING_ACCESS_TOKEN, MISSING_AT_HASH, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON } from 'luci_sso.errors';
 
 // --- Internal Helpers ---
 
@@ -30,25 +31,25 @@ export const find_jwk = discovery.find_jwk;
 export function get_auth_url(io, config, discovery_doc, params) {
 	// BLOCKER FIX: Enforce mandatory CSRF protection (B1)
 	if (!params.state || type(params.state) != "string" || length(params.state) < 16) {
-		return Result.err("MISSING_STATE_PARAMETER");
+		return Result.err(MISSING_STATE_PARAMETER);
 	}
 
 	if (!params.nonce || type(params.nonce) != "string" || length(params.nonce) < 16) {
-		return Result.err("MISSING_NONCE_PARAMETER");
+		return Result.err(MISSING_NONCE_PARAMETER);
 	}
 
 	if (!params.code_challenge || type(params.code_challenge) != "string") {
-		return Result.err("MISSING_PKCE_CHALLENGE");
+		return Result.err(MISSING_PKCE_CHALLENGE);
 	}
 
 	// BLOCKER FIX: Enforce HTTPS on authorization_endpoint (B3)
 	if (!encoding.is_https(discovery_doc.authorization_endpoint)) {
-		return Result.err("INSECURE_AUTH_ENDPOINT");
+		return Result.err(INSECURE_AUTH_ENDPOINT);
 	}
 	
 	// W2: RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
 	if (index(discovery_doc.authorization_endpoint, '#') != -1) {
-		return Result.err("INVALID_AUTH_ENDPOINT", "authorization_endpoint MUST NOT contain a fragment");
+		return Result.err(INVALID_AUTH_ENDPOINT, "authorization_endpoint MUST NOT contain a fragment");
 	}
 
 	let query = {
@@ -76,7 +77,7 @@ export function get_auth_url(io, config, discovery_doc, params) {
  * Exchanges authorization code for tokens.
  */
 export function exchange_code(io, config, discovery, code, verifier, session_id) {
-	if (!encoding.is_https(discovery.token_endpoint)) return Result.err("INSECURE_TOKEN_ENDPOINT");
+	if (!encoding.is_https(discovery.token_endpoint)) return Result.err(INSECURE_TOKEN_ENDPOINT);
 
 	// Audit logging for PKCE usage (Blocker #2)
 	let sid_ctx = session_id ? ` [session_id: ${session_id}]` : "";
@@ -84,7 +85,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 
 	if (type(verifier) != "string" || length(verifier) < 43 || length(verifier) > 128) {
 		io.log("error", `Rejected token exchange${sid_ctx}: PKCE verifier length out of bounds`);
-		return Result.err("INVALID_PKCE_VERIFIER");
+		return Result.err(INVALID_PKCE_VERIFIER);
 	}
 
 	let body = {
@@ -112,7 +113,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 
 	if (!res_http.ok) {
 		io.log("warn", `Token exchange network error${sid_ctx}: ${res_http.error}`);
-		return Result.err("NETWORK_ERROR");
+		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR);
 	}
 
 	let response = res_http.data;
@@ -120,16 +121,16 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 		let res_err = encoding.safe_json(response.body);
 		if (res_err.ok && res_err.data.error == "invalid_grant") {
 			io.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
-			return Result.err("OIDC_INVALID_GRANT", { http_status: 400 });
+			return Result.err(OIDC_INVALID_GRANT, { http_status: 400 });
 		}
 		io.log("warn", `Token exchange HTTP ${response.status}${sid_ctx}`);
-		return Result.err("TOKEN_EXCHANGE_FAILED", { http_status: response.status });
+		return Result.err(TOKEN_EXCHANGE_FAILED, { http_status: response.status });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
 		io.log("error", `Token exchange JSON parse error${sid_ctx}: ${res.details}`);
-		return Result.err("INVALID_JSON");
+		return Result.err(TOKEN_RESPONSE_INVALID_JSON);
 	}
 	let tokens = res.data;
 
@@ -150,7 +151,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
  * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
  */
 export function verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy) {
-	if (!tokens.id_token || type(tokens.id_token) != "string") return Result.err("MISSING_ID_TOKEN");
+	if (!tokens.id_token || type(tokens.id_token) != "string") return Result.err(MISSING_ID_TOKEN);
 
 	// 1. Policy Enforcement (Second Dimension)
 	const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
@@ -172,7 +173,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 		}
 	}
 	if (!alg_allowed) {
-		return Result.err("UNSUPPORTED_ALGORITHM", header.alg);
+		return Result.err(UNSUPPORTED_ALGORITHM, header.alg);
 	}
 
 	let jwk_res = find_jwk(keys, header.kid);
@@ -185,7 +186,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	let disc_iss_res = encoding.normalize_url(discovery.issuer);
 	let conf_iss_res = encoding.normalize_url(config.issuer_url);
 	if (!disc_iss_res.ok || !conf_iss_res.ok || !crypto.constant_time_eq(disc_iss_res.data, conf_iss_res.data)) {
-		return Result.err("DISCOVERY_ISSUER_MISMATCH", `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}`);
+		return Result.err(DISCOVERY_ISSUER_MISMATCH, `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}`);
 	}
 
 	let validation_opts = { 
@@ -210,42 +211,42 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 
 	// 3. OIDC Mandatory Claims Check
 	if (!payload.sub) {
-		return Result.err("MISSING_SUB_CLAIM");
+		return Result.err(MISSING_SUB_CLAIM);
 	}
 
 	// B1 & W2: Enforce mandatory exp and iat claims (OIDC Core 1.0 §2)
 	// These claims MUST be present for full compliance and robust token age validation.
 	if (payload.exp == null) {
-		return Result.err("MISSING_EXP_CLAIM");
+		return Result.err(MISSING_EXP_CLAIM);
 	}
 	if (payload.iat == null) {
-		return Result.err("MISSING_IAT_CLAIM");
+		return Result.err(MISSING_IAT_CLAIM);
 	}
 
 	// 3.1 Nonce Check (Blocker #3: Mandatory)
 	if (!handshake.nonce || !payload.nonce) {
-		return Result.err("MISSING_NONCE");
+		return Result.err(MISSING_NONCE);
 	}
 	if (!crypto.constant_time_eq(payload.nonce, handshake.nonce)) {
-		return Result.err("NONCE_MISMATCH");
+		return Result.err(NONCE_MISMATCH);
 	}
 
 	// 3.2 Authorized Party Check (OIDC Core 1.0 §3.1.3.7 items 4-5)
 	// azp is required only when the ID Token has MULTIPLE audiences.
 	if (type(payload.aud) == "array" && length(payload.aud) > 1 && !payload.azp) {
-		return Result.err("MISSING_AZP_CLAIM");
+		return Result.err(MISSING_AZP_CLAIM);
 	}
 	if (payload.azp && !crypto.constant_time_eq(payload.azp, config.client_id)) {
-		return Result.err("AZP_MISMATCH", `Expected ${config.client_id}, got ${payload.azp}`);
+		return Result.err(AZP_MISMATCH, `Expected ${config.client_id}, got ${payload.azp}`);
 	}
 
 	// 3.3 Access Token Hash Check
 	if (!tokens.access_token) {
-		return Result.err("MISSING_ACCESS_TOKEN");
+		return Result.err(MISSING_ACCESS_TOKEN);
 	}
 	if (!payload.at_hash) {
 		io.log("error", "ID Token missing mandatory at_hash claim (Token Binding violation)");
-		return Result.err("MISSING_AT_HASH");
+		return Result.err(MISSING_AT_HASH);
 	}
 
 	let hash_res = crypto.hash_sha256(tokens.access_token);
@@ -253,13 +254,13 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	let full_hash = hash_res.data;
 
 	let left_half_res = encoding.binary_truncate(full_hash, 16);
-	if (!left_half_res.ok) return Result.err("CRYPTO_ERROR");
+	if (!left_half_res.ok) return Result.err(CRYPTO_ERROR);
 
 	let expected_hash_res = encoding.b64url_encode(left_half_res.data);
-	if (!expected_hash_res.ok) return Result.err("CRYPTO_ERROR");
+	if (!expected_hash_res.ok) return Result.err(CRYPTO_ERROR);
 
 	if (!crypto.constant_time_eq(expected_hash_res.data, payload.at_hash)) {
-		return Result.err("AT_HASH_MISMATCH");
+		return Result.err(AT_HASH_MISMATCH);
 	}
 
 	let user_data = {
@@ -281,8 +282,8 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
  * @returns {object} - Result Object {ok, data: {sub, email, ...}}
  */
 export function fetch_userinfo(io, endpoint, access_token) {
-	if (!encoding.is_https(endpoint)) return Result.err("INSECURE_USERINFO_ENDPOINT");
-	if (!access_token) return Result.err("MISSING_ACCESS_TOKEN");
+	if (!encoding.is_https(endpoint)) return Result.err(INSECURE_USERINFO_ENDPOINT);
+	if (!access_token) return Result.err(MISSING_ACCESS_TOKEN);
 
 	io.log("info", "Fetching supplemental claims from UserInfo endpoint");
 
@@ -293,19 +294,19 @@ export function fetch_userinfo(io, endpoint, access_token) {
 
 	if (!res_http.ok) {
 		io.log("warn", `UserInfo fetch network error: ${res_http.error}`);
-		return Result.err("NETWORK_ERROR");
+		return Result.err(USERINFO_NETWORK_ERROR);
 	}
 
 	let response = res_http.data;
 	if (response.status != 200) {
 		io.log("warn", `UserInfo fetch HTTP ${response.status}`);
-		return Result.err("USERINFO_FETCH_FAILED", { http_status: response.status });
+		return Result.err(USERINFO_FETCH_FAILED, { http_status: response.status });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
 		io.log("error", `UserInfo JSON parse error: ${res.details}`);
-		return Result.err("INVALID_JSON");
+		return Result.err(USERINFO_INVALID_JSON);
 	}
 
 	let payload = res.data;
@@ -320,7 +321,7 @@ export function fetch_userinfo(io, endpoint, access_token) {
 	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2)
 	if (!payload.sub) {
 		io.log("error", "UserInfo response missing mandatory 'sub' claim");
-		return Result.err("MISSING_SUB_CLAIM");
+		return Result.err(MISSING_SUB_CLAIM);
 	}
 
 	return Result.ok(payload);

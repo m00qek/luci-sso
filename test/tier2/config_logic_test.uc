@@ -104,7 +104,7 @@ test('config: logic - handle disabled state', () => {
 		let res = config_loader.load(io);
                 assert(Result.is(res));
                 assert(!res.ok);
-                assert_eq(res.error, "DISABLED");
+                assert_eq(res.error, "SSO_DISABLED");
 	});
 });
 
@@ -114,7 +114,7 @@ test('config: logic - handle missing config', () => {
 		let res = config_loader.load(io);
                 assert(Result.is(res));
                 assert(!res.ok);
-                assert_eq(res.error, "DISABLED"); // is_enabled returns false if missing
+                assert_eq(res.error, "SSO_DISABLED"); // is_enabled returns false if missing
 	});
 });
 

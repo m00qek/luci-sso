@@ -1,0 +1,22 @@
+name: Lint
+
+on:
+  push:
+    branches: [main, master, ci]
+  pull_request:
+    branches: [main, master, ci]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  error-codes:
+    name: Error Code Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check error codes are documented
+        run: bash bin/check-error-codes.sh

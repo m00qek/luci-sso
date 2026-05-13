@@ -142,5 +142,5 @@ Common errors and their meaning are listed in the [Log Messages Reference](../..
 
 - **`DISCOVERY_ISSUER_MISMATCH`** — The `issuer_url` you configured doesn't exactly match the `issuer` field in the discovery document. Copy the value from the discovery JSON directly.
 - **`UNSUPPORTED_ALGORITHM`** — The IdP is signing tokens with HS256. Configure the client to use RS256 or ES256.
-- **`NO_ROLES_MATCHED`** — Authentication succeeded but no UCI role matched the user's email or groups. Add the user's email with `uci add_list luci-sso.admin.email='...'`.
+- **`USER_NOT_AUTHORIZED`** — Authentication succeeded but no UCI role matched the user's email or groups (the log line before this code will say "matched no roles"). Add the user's email with `uci add_list luci-sso.admin.email='...'`.
 - **`OIDC_DISCOVERY_FAILED`** — The router cannot reach the IdP. Check DNS resolution and firewall rules from the router (not just from your laptop).

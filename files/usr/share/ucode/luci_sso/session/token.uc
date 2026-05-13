@@ -52,20 +52,20 @@ export function verify(io, token_str, clock_tolerance) {
 	let secret = res.data;
 
 	let result = crypto.jws_verify(token_str, secret);
-	if (!result.ok) return Result.err("INVALID_SESSION", result.error);
-	
+	if (!result.ok) return Result.err("SESSION_SIGNATURE_INVALID", result.error);
+
 	let session = result.data;
 	let now = io.time();
-	
+
 	if (session.exp == null || type(session.exp) != "int") {
-		return Result.err("INVALID_SESSION");
+		return Result.err("MALFORMED_SESSION_TOKEN");
 	}
 	if (session.exp < (now - clock_tolerance)) {
 		return Result.err("SESSION_EXPIRED");
 	}
 
 	if (session.iat == null || type(session.iat) != "int") {
-		return Result.err("INVALID_SESSION");
+		return Result.err("MALFORMED_SESSION_TOKEN");
 	}
 	if (session.iat > (now + clock_tolerance)) {
 		return Result.err("SESSION_NOT_YET_VALID");

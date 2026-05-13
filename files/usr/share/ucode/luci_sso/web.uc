@@ -3,6 +3,7 @@
 import * as lucihttp from 'lucihttp';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
+import { INPUT_TOO_LARGE } from 'luci_sso.errors';
 
 /**
  * Maximum size for environment variables or parameter strings.
@@ -44,8 +45,10 @@ const ERROR_MAP = {
 	"OIDC_INVALID_GRANT": "The authorization code is expired or has already been used. You MUST try logging in again.",
 	"ID_TOKEN_VERIFICATION_FAILED": "The identity token provided by the IdP is invalid. You MUST contact your administrator.",
 	"USER_NOT_AUTHORIZED": "Your account is not authorized to access this device. You MUST contact your administrator.",
-	"AUTH_FAILED": "Authentication failed. You MUST try logging in again.",
-	"NETWORK_ERROR": "A network error occurred while communicating with the IdP. Contact your administrator.",
+	"TOKEN_REPLAYED": "Authentication rejected: this token has already been used. You MUST try logging in again.",
+	"TOKEN_REGISTRY_ERROR": "Authentication failed due to an internal system error. You MUST contact your administrator.",
+	"CSRF_CHECK_FAILED": "Logout request rejected: invalid or missing CSRF token.",
+	"TOKEN_ENDPOINT_NETWORK_ERROR": "A network error occurred while communicating with the IdP token endpoint. Contact your administrator.",
 	"INSECURE_ENDPOINT": "The IdP provided an insecure endpoint. Connection aborted for security. You MUST contact your administrator.",
 	"INPUT_TOO_LARGE": "The request contains too much data. You MUST reduce the size of your request (e.g. fewer cookies).",
 	"TOO_MANY_REQUESTS": "Too many requests. Please wait before trying again.",
@@ -59,7 +62,7 @@ const ERROR_MAP = {
  */
 function safe_getenv(io, key) {
 	let val = io.getenv(key);
-	if (val && length(val) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE", { http_status: 431, key: key });
+	if (val && length(val) > MAX_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431, key: key });
 	return Result.ok(val);
 };
 
@@ -69,10 +72,10 @@ function safe_getenv(io, key) {
 export function parse_params(str) {
 	let params = {};
 	if (!str || type(str) != "string") return Result.ok(params);
-	if (length(str) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE", { http_status: 431 });
+	if (length(str) > MAX_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
 
 	let pairs = split(str, "&");
-	if (length(pairs) > MAX_PARAM_COUNT) return Result.err("INPUT_TOO_LARGE", { http_status: 431 });
+	if (length(pairs) > MAX_PARAM_COUNT) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
 
 	for (let pair in pairs) {
 		let parts = split(pair, "=", 2);
@@ -93,10 +96,10 @@ export function parse_params(str) {
 export function parse_cookies(str) {
 	let cookies = {};
 	if (!str || type(str) != "string") return Result.ok(cookies);
-	if (length(str) > MAX_INPUT_LEN) return Result.err("INPUT_TOO_LARGE", { http_status: 431 });
+	if (length(str) > MAX_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
 
 	let pairs = split(str, /;[ ]*/);
-	if (length(pairs) > MAX_PARAM_COUNT) return Result.err("INPUT_TOO_LARGE", { http_status: 431 });
+	if (length(pairs) > MAX_PARAM_COUNT) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
 
 	for (let pair in pairs) {
 		let trimmed = trim(pair);

@@ -23,7 +23,7 @@ test('oidc: security - reject massive discovery response (DoS protection)', () =
             let res = oidc.discover(io, "https://massive.idp");
             
             assert(!res.ok, "Should reject massive discovery document");
-            assert_eq(res.error, "NETWORK_ERROR", "Should return network error (aborted read)");
+            assert_eq(res.error, "DISCOVERY_NETWORK_ERROR", "Should return network error (aborted read)");
             
             // Verification of the exact policy in history
             let history = io.__state__.history;

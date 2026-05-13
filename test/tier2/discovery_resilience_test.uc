@@ -45,6 +45,6 @@ test('discovery: resilience - fail if cache is missing AND network fails', () =>
 
 		let res = discovery.discover(io, issuer);
 		assert(!res.ok, "Should fail if no cache and no network");
-		assert_eq(res.error, "NETWORK_ERROR");
+		assert_eq(res.error, "DISCOVERY_NETWORK_ERROR");
 	});
 });

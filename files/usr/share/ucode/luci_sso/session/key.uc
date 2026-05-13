@@ -1,6 +1,7 @@
 import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
 import * as common from 'luci_sso.session.common';
+import { CRYPTO_INIT_FAILED } from 'luci_sso.errors';
 
 /**
  * System secret key management (locking, generation, persistence).
@@ -51,7 +52,7 @@ export function get(io) {
 				if (!res.ok) {
 					io.log("error", "CRITICAL: CSPRNG failure during secret key generation");
 					try { io.remove(lock_path); } catch (e) {}
-					return Result.err("CRYPTO_SYSTEM_FAILURE");
+					return Result.err(CRYPTO_INIT_FAILED);
 				}
 
 				let new_key = res.data;

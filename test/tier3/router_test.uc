@@ -248,7 +248,7 @@ test('Router: Callback - Reject token replay (already used access_token)', () =>
 				let res = router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
 				assert(!res.ok);
 				assert_eq(res.details.http_status, 403);
-				assert_eq(res.error, "AUTH_FAILED");
+				assert_eq(res.error, "TOKEN_REPLAYED");
 			});
 	});
 });
@@ -358,7 +358,7 @@ test('Router: Security - Access token is NOT registered if verification fails (D
 				// This proves the token wasn't persisted in the registry after the first failure.
 				assert(!res2.ok);
 				assert_eq(res2.details.http_status, 401, "Should fail verification again (NOT replay) because token wasn't registered");
-				assert(res2.error != "AUTH_FAILED", "Should NOT fail with replay error");
+				assert(res2.error != "TOKEN_REPLAYED", "Should NOT fail with replay error");
 			});
 		});
 	});

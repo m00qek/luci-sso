@@ -4,6 +4,7 @@ import * as uclient from 'uclient';
 import * as uloop from 'uloop';
 import * as fs from 'fs';
 import * as Result from 'luci_sso.result';
+import { SSL_INIT_FAILED } from 'luci_sso.errors';
 
 /**
  * Loads system CA certificates from standard OpenWrt locations.
@@ -100,20 +101,20 @@ export function request(method, url, opts) {
     };
 
     con = uclient.new(url, null, callbacks);
-    if (!con) return Result.err("CONNECTION_FAILED");
+    if (!con) return Result.err("UCLIENT_ALLOC_FAILED");
 
     // Set up SSL context using ONLY system CAs
     let ca_files = get_system_ca_files();
     
     // Strict Verification is MANDATORY
     if (!con.ssl_init({ ca_files: ca_files, verify: true })) {
-        return Result.err("SSL_INIT_FAILED");
+        return Result.err(SSL_INIT_FAILED);
     }
 
     if (opts.timeout) con.set_timeout(opts.timeout);
 
     if (!con.connect()) {
-        return Result.err("CONNECT_FAILED");
+        return Result.err("TLS_CONNECT_FAILED");
     }
 
     let req_opts = {

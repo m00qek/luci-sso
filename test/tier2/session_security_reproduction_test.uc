@@ -24,18 +24,18 @@ test('session: security - verify_session truthiness bypass (Audit B1)', () => {
 		
 		// 2. missing exp
 		// Before fix: 'if (null && ...)' skips check, returns ok: true
-		// After fix: 'null == null' is true, returns ok: false, error: INVALID_SESSION
+		// After fix: 'null == null' is true, returns ok: false, error: MALFORMED_SESSION_TOKEN
 		let payload_no_exp = { iat: now - 10, sub: "user" };
 		let token_no_exp = crypto.jws_sign(payload_no_exp, key).data;
 		let res_no_exp = session.verify(io, token_no_exp, tolerance);
 		assert(!res_no_exp.ok, "Session without exp MUST be rejected");
-		assert_eq(res_no_exp.error, "INVALID_SESSION");
+		assert_eq(res_no_exp.error, "MALFORMED_SESSION_TOKEN");
 
 		// 3. missing iat
 		let payload_no_iat = { exp: now + 3600, sub: "user" };
 		let token_no_iat = crypto.jws_sign(payload_no_iat, key).data;
 		let res_no_iat = session.verify(io, token_no_iat, tolerance);
 		assert(!res_no_iat.ok, "Session without iat MUST be rejected");
-		assert_eq(res_no_iat.error, "INVALID_SESSION");
+		assert_eq(res_no_iat.error, "MALFORMED_SESSION_TOKEN");
 	});
 });

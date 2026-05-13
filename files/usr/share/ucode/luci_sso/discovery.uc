@@ -3,6 +3,7 @@
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
+import { INSECURE_ISSUER_URL, INSECURE_FETCH_URL, DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCOVERY_MISSING_ISSUER, DISCOVERY_ISSUER_MISMATCH, DISCOVERY_MISSING_ENDPOINT, INSECURE_ENDPOINT, INSECURE_JWKS_URI, JWKS_FETCH_FAILED, JWKS_NETWORK_ERROR, INVALID_JWKS_FORMAT } from 'luci_sso.errors';
 
 /**
  * Implementation of OIDC Discovery and JWKS management.
@@ -79,7 +80,7 @@ function _write_cache(io, path, data) {
  * Fetches and caches OIDC discovery document.
  */
 export function discover(io, issuer, options) {
-	if (!encoding.is_https(issuer)) return Result.err("INSECURE_ISSUER_URL");
+	if (!encoding.is_https(issuer)) return Result.err(INSECURE_ISSUER_URL);
 
 	options = options || {};
 	let normalized_issuer_res = encoding.normalize_url(issuer);
@@ -99,7 +100,7 @@ export function discover(io, issuer, options) {
 
 	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
 	let fetch_url = options.internal_issuer_url || issuer;
-	if (!encoding.is_https(fetch_url)) return Result.err("INSECURE_FETCH_URL");
+	if (!encoding.is_https(fetch_url)) return Result.err(INSECURE_FETCH_URL);
 
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
 	fetch_url += ".well-known/openid-configuration";
@@ -120,11 +121,11 @@ export function discover(io, issuer, options) {
 
 		if (!res_http.ok) {
 			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${res_http.error}`);
-			return Result.err("NETWORK_ERROR");
+			return Result.err(DISCOVERY_NETWORK_ERROR);
 		}
 
 		io.log("warn", `Discovery fetch HTTP ${res_http.data.status} from [id: ${issuer_id}]`);
-		return Result.err("DISCOVERY_FAILED", { http_status: res_http.data.status });
+		return Result.err(DISCOVERY_FAILED, { http_status: res_http.data.status });
 	}
 
 	let response = res_http.data;
@@ -132,20 +133,20 @@ export function discover(io, issuer, options) {
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
 		io.log("error", `Discovery JSON parse error: ${res.details}`);
-		return Result.err("INVALID_DISCOVERY_DOC");
+		return Result.err(INVALID_DISCOVERY_DOC);
 	}
 	let config = res.data;
 
 	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
 	if (!config.issuer) {
 		io.log("error", `Discovery document missing issuer field from [id: ${issuer_id}]`);
-		return Result.err("DISCOVERY_MISSING_ISSUER");
+		return Result.err(DISCOVERY_MISSING_ISSUER);
 	}
 	
 	let config_issuer_res = encoding.normalize_url(config.issuer);
 	if (!config_issuer_res.ok || !crypto.constant_time_eq(config_issuer_res.data, normalized_issuer)) {
 		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(config_issuer_res.data) : "INVALID"}]`);
-		return Result.err("DISCOVERY_ISSUER_MISMATCH", 
+		return Result.err(DISCOVERY_ISSUER_MISMATCH, 
 			 `Expected issuer_id ${issuer_id}` );
 	}
 
@@ -154,10 +155,10 @@ export function discover(io, issuer, options) {
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {
 		if (type(config[field]) != "string" || length(config[field]) == 0) {
-			return Result.err("MISSING_REQUIRED_FIELD", field);
+			return Result.err(DISCOVERY_MISSING_ENDPOINT, field);
 		}
 		if (!encoding.is_https(config[field])) {
-			return Result.err("INSECURE_ENDPOINT", field);
+			return Result.err(INSECURE_ENDPOINT, field);
 		}
 	}
 
@@ -188,7 +189,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 	if (!normalized_uri_res.ok) return normalized_uri_res;
 	let normalized_uri = normalized_uri_res.data;
 
-	if (!encoding.is_https(normalized_uri)) return Result.err("INSECURE_JWKS_URI");
+	if (!encoding.is_https(normalized_uri)) return Result.err(INSECURE_JWKS_URI);
 
 	options = options || {};
 	let cache_path = options.cache_path || get_cache_path(normalized_uri_res, "jwks");
@@ -214,11 +215,11 @@ export function fetch_jwks(io, jwks_uri, options) {
 
 		if (!res_http.ok) {
 			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${res_http.error}`);
-			return Result.err("NETWORK_ERROR");
+			return Result.err(JWKS_NETWORK_ERROR);
 		}
 
 		io.log("warn", `JWKS fetch HTTP ${res_http.data.status} from [id: ${uri_id}]`);
-		return Result.err("JWKS_FETCH_FAILED", { http_status: res_http.data.status });
+		return Result.err(JWKS_FETCH_FAILED, { http_status: res_http.data.status });
 	}
 
 	let response = res_http.data;
@@ -226,7 +227,7 @@ export function fetch_jwks(io, jwks_uri, options) {
 	let res = encoding.safe_json(response.body);
 	if (!res.ok || type(res.data.keys) != "array") {
 		io.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"}`);
-		return Result.err("INVALID_JWKS_FORMAT");
+		return Result.err(INVALID_JWKS_FORMAT);
 	}
 	let jwks = res.data;
 

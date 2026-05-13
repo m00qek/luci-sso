@@ -8,6 +8,7 @@ import * as handshake from 'luci_sso.handshake';
 import * as config_mod from 'luci_sso.config';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
+import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'luci_sso.errors';
 
 /**
  * Main CGI Router for luci-sso.
@@ -137,7 +138,7 @@ function handle_logout(io, config, request) {
 	let session_token = session_res.data.token || "";
 	if (!provided_token || !session_token || !crypto.constant_time_eq(provided_token, session_token)) {
 		io.log("warn", "Logout attempt with invalid or missing CSRF token");
-		return Result.err("AUTH_FAILED", { http_status: 403 });
+		return Result.err(CSRF_CHECK_FAILED, { http_status: 403 });
 	}
 	id_token_hint = session_res.data.oidc_id_token;
 	ubus.destroy_session(io, sid);
@@ -196,12 +197,12 @@ export function handle(io, config, request, policy) {
 
 	// MANDATORY: Rate limit (Protects handshake state generation and token exchange)
 	if (!_check_rate_limit(io)) {
-		return Result.err("TOO_MANY_REQUESTS", { http_status: 429 });
+		return Result.err(TOO_MANY_REQUESTS, { http_status: 429 });
 	}
 
 	// MANDATORY: Config guard
 	if (!config) {
-		return Result.err("SSO_DISABLED", { http_status: 503 });
+		return Result.err(SSO_DISABLED, { http_status: 503 });
 	}
 	if (path == "/") {
 		return handle_login(io, config);
@@ -211,5 +212,5 @@ export function handle(io, config, request, policy) {
 		return handle_logout(io, config, request);
 	}
 
-	return Result.err("NOT_FOUND", { http_status: 404 });
+	return Result.err(NOT_FOUND, { http_status: 404 });
 };

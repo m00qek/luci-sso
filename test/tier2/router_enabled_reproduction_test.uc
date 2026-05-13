@@ -26,10 +26,10 @@ test('router: reproduction - enabled endpoint returns JSON even if disabled (W2)
         assert(res_req.ok);
         let req = res_req.data;
 
-        // 2. Load Config (will be DISABLED)
+        // 2. Load Config (will be SSO_DISABLED)
         let res_c = config_loader.load(io);
         assert(!res_c.ok);
-        assert_eq(res_c.error, "DISABLED");
+        assert_eq(res_c.error, "SSO_DISABLED");
 
         // 3. Emulate the fix in CGI entry point:
         // If disabled, we still call router.handle(io, null, req)

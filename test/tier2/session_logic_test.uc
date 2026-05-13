@@ -64,7 +64,7 @@ test('session: logic - reject malformed state handles', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		let res = session.verify_state(io, "../evil", 300);
-		assert_eq(res.error, "INVALID_HANDLE_FORMAT");
+		assert_eq(res.error, "MALFORMED_STATE_COOKIE");
 	});
 });
 
@@ -257,7 +257,7 @@ test('session: logic - detect CSPRNG failure during secret key generation (B1)',
     if (err) die(err);
 
     assert(!res.ok, "Should fail when random() returns null");
-    assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
+    assert_eq(res.error, "CRYPTO_INIT_FAILED");
 });
 
 test('session: logic - detect CSPRNG failure during handshake creation (B2)', () => {
@@ -276,7 +276,7 @@ test('session: logic - detect CSPRNG failure during handshake creation (B2)', ()
     if (err) die(err);
 
     assert(!res.ok, "Should fail when random() returns null");
-    assert_eq(res.error, "CRYPTO_SYSTEM_FAILURE");
+    assert_eq(res.error, "CRYPTO_INIT_FAILED");
 });
 
 // W1: Unchecked io.rename in get_secret_key

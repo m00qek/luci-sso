@@ -119,7 +119,7 @@ curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
 # Expected: {"enabled":true}
 ```
 
-Then log in as the user in question and confirm the LuCI navigation matches what you expect. If a user is denied despite correct credentials, check the log for `NO_ROLES_MATCHED` or `USER_NOT_AUTHORIZED`:
+Then log in as the user in question and confirm the LuCI navigation matches what you expect. If a user is denied despite correct credentials, check the log for `USER_NOT_AUTHORIZED` (the line before it will say "matched no roles" if the issue is role mapping):
 
 ```bash
 logread -e luci-sso | tail -20

@@ -97,7 +97,7 @@ export function b64url_encode(str) {
 	
 	let b64 = b64enc(str);
 	if (b64 == null)
-    return Result.err("ENCODE_ERROR");
+    return Result.err("BASE64URL_ENCODE_FAILED");
 
 	return Result.ok(_strip_padding(_map_to_url_safe(b64)));
 };

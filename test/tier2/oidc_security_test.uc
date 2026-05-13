@@ -58,7 +58,7 @@ test('oidc: security - handle network failure during exchange', () => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "code", "verifier-is-long-enough-to-pass-basic-check-123");
         assert(Result.is(res));
 		assert(!res.ok);
-		assert_eq(res.error, "NETWORK_ERROR");
+		assert_eq(res.error, "TOKEN_ENDPOINT_NETWORK_ERROR");
 	});
 });
 
