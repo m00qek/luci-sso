@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="580" viewBox="0 0 900 580">
+  <rect width="900" height="580" fill="#f5f5f5" stroke="#ccc" stroke-width="1"/>
+  <!-- Browser chrome -->
+  <rect width="900" height="40" fill="#e0e0e0"/>
+  <rect x="10" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="40" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="70" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="100" y="8" width="700" height="24" rx="12" fill="#fff" stroke="#ccc"/>
+  <text x="450" y="24" font-family="monospace" font-size="12" fill="#666" text-anchor="middle">https://192.168.1.1/cgi-bin/luci/admin/services/sso</text>
+  <!-- LuCI header -->
+  <rect y="40" width="900" height="48" fill="#1a237e"/>
+  <text x="20" y="70" font-family="sans-serif" font-size="18" font-weight="bold" fill="white">OpenWrt — LuCI</text>
+  <text x="680" y="70" font-family="sans-serif" font-size="13" fill="#90caf9">Services ▸ SSO Login</text>
+  <!-- Sidebar -->
+  <rect x="0" y="88" width="180" height="492" fill="#283593"/>
+  <rect x="0" y="88" width="180" height="36" fill="#3949ab"/>
+  <text x="16" y="112" font-family="sans-serif" font-size="13" fill="white">Services</text>
+  <rect x="0" y="124" width="180" height="36" fill="#1a237e"/>
+  <text x="28" y="148" font-family="sans-serif" font-size="13" fill="#90caf9">▶  SSO Login</text>
+  <!-- Main content -->
+  <rect x="196" y="100" width="688" height="460" fill="white" stroke="#e0e0e0"/>
+  <text x="216" y="130" font-family="sans-serif" font-size="16" font-weight="bold" fill="#1a237e">SSO Login Configuration</text>
+  <line x1="216" y1="138" x2="868" y2="138" stroke="#e0e0e0"/>
+  <!-- Standard fields -->
+  <text x="216" y="168" font-family="sans-serif" font-size="12" fill="#555">Enable SSO</text>
+  <rect x="440" y="153" width="20" height="20" rx="3" fill="#1a237e"/>
+  <text x="465" y="168" font-family="sans-serif" font-size="12" fill="#555">✓ Enabled</text>
+  <text x="216" y="208" font-family="sans-serif" font-size="12" fill="#555">Issuer URL</text>
+  <rect x="440" y="193" width="400" height="28" rx="3" fill="white" stroke="#bbb"/>
+  <text x="448" y="212" font-family="monospace" font-size="12" fill="#333">https://auth.homelab.local</text>
+  <text x="216" y="251" font-family="sans-serif" font-size="12" fill="#555">Client ID</text>
+  <rect x="440" y="236" width="400" height="28" rx="3" fill="white" stroke="#bbb"/>
+  <text x="448" y="255" font-family="monospace" font-size="12" fill="#333">luci-router</text>
+  <text x="216" y="294" font-family="sans-serif" font-size="12" fill="#555">Client Secret</text>
+  <rect x="440" y="279" width="400" height="28" rx="3" fill="white" stroke="#bbb"/>
+  <text x="448" y="298" font-family="monospace" font-size="12" fill="#aaa">••••••••••••••••</text>
+  <!-- Highlighted advanced field -->
+  <rect x="196" y="318" width="688" height="2" fill="#e0e0e0"/>
+  <text x="216" y="342" font-family="sans-serif" font-size="12" fill="#777" font-style="italic">Advanced Settings</text>
+  <text x="216" y="378" font-family="sans-serif" font-size="12" font-weight="bold" fill="#1a237e">Internal Issuer URL</text>
+  <rect x="440" y="363" width="400" height="28" rx="3" fill="#e8f5e9" stroke="#43a047" stroke-width="2"/>
+  <text x="448" y="382" font-family="monospace" font-size="12" fill="#2e7d32">https://192.168.2.10:8443</text>
+  <text x="848" y="382" font-family="sans-serif" font-size="18" fill="#43a047">←</text>
+  <text x="216" y="400" font-family="sans-serif" font-size="11" fill="#666">Used by the router for back-channel calls (token exchange, JWKS). Leave empty if the router</text>
+  <text x="216" y="414" font-family="sans-serif" font-size="11" fill="#666">can reach the Issuer URL directly.</text>
+  <!-- Callout arrow annotation -->
+  <rect x="600" y="430" width="260" height="56" rx="4" fill="#e8f5e9" stroke="#43a047"/>
+  <text x="730" y="452" font-family="sans-serif" font-size="11" fill="#1b5e20" text-anchor="middle">Internal URL = router's back-channel</text>
+  <text x="730" y="470" font-family="sans-serif" font-size="11" fill="#1b5e20" text-anchor="middle">Issuer URL = what browser uses</text>
+  <!-- Save button -->
+  <rect x="720" y="500" width="140" height="36" rx="4" fill="#1a237e"/>
+  <text x="790" y="523" font-family="sans-serif" font-size="14" fill="white" text-anchor="middle">Save &amp; Apply</text>
+  <!-- Placeholder banner -->
+  <rect x="0" y="535" width="900" height="45" fill="#fff8e1"/>
+  <text x="450" y="562" font-family="sans-serif" font-size="13" fill="#f57f17" text-anchor="middle">[ PLACEHOLDER — Replace with actual screenshot of LuCI SSO settings showing the Internal Issuer URL field ]</text>
+</svg>

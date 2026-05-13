@@ -1,0 +1,89 @@
+site_name: LuCI SSO
+site_description: Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.
+site_url: https://m00qek.github.io/luci-sso/
+site_dir: bin/site
+
+theme:
+  name: material
+  custom_dir: overrides
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - announce.dismiss
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - toc:
+      permalink: true
+
+nav:
+  - Welcome: index.md
+  - Tutorials:
+      - Overview: tutorials/index.md
+      - Your First SSO Login: tutorials/first-sso-login.md
+      - Building from Source: tutorials/building.md
+      - Developer Onboarding: tutorials/dev-onboarding.md
+  - How-to Guides:
+      - Overview: how-to/index.md
+      - Providers:
+          - Generic OIDC Provider: how-to/providers/generic-oidc.md
+          - Google: how-to/providers/google.md
+          - Github: how-to/providers/github.md
+          - Authelia: how-to/providers/authelia.md
+      - Sysadmin:
+          - Installation: how-to/sysadmin/installation.md
+          - Upgrading: how-to/sysadmin/upgrade.md
+          - Rotating Credentials: how-to/sysadmin/rotate-credentials.md
+          - Role-Based Access Control: how-to/sysadmin/rbac.md
+          - Split-Horizon Networking: how-to/sysadmin/split-horizon.md
+          - Debugging: how-to/sysadmin/debugging.md
+          - Removing luci-sso: how-to/sysadmin/uninstall.md
+      - Developer:
+          - Development Workflow: how-to/developer/development-workflow.md
+          - Running Tests: how-to/developer/testing.md
+          - Running the Fuzzer: how-to/developer/fuzzing.md
+          - Writing Documentation: how-to/developer/documentation.md
+  - Reference:
+      - Overview: reference/index.md
+      - Log Messages: reference/log-messages.md
+      - HTTP API: reference/http-api.md
+      - UCI Configuration: reference/uci-config.md
+      - Internal API: reference/internal-api.md
+      - Style Guide: reference/style-guide.md
+      - Testing Architecture: reference/testing-architecture.md
+      - RFC Compliance: reference/rfc-compliance.md
+  - Explanation:
+      - Overview: explanation/index.md
+      - About LuCI SSO: explanation/about.md
+      - Design Philosophy: explanation/design-philosophy.md
+      - About the OIDC Login Flow: explanation/oidc-flow.md
+      - Security Model: explanation/security-model.md
+      - Architecture: explanation/architecture.md
+      - Threat Model: explanation/threat-model.md
