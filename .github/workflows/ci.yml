@@ -3,6 +3,8 @@ name: Continuous Integration
 on:
   push:
     branches: [main, master, ci]
+  pull_request:
+    branches: [main, master, ci]
   workflow_dispatch:
     inputs:
       force_rebuild:
