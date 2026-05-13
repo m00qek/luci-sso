@@ -5,6 +5,7 @@ site_dir: bin/site
 
 theme:
   name: material
+  custom_dir: overrides
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -21,6 +22,7 @@ theme:
         icon: material/brightness-4
         name: Switch to light mode
   features:
+    - announce.dismiss
     - navigation.tabs
     - navigation.sections
     - navigation.top
