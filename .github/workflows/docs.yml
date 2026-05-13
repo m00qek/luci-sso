@@ -36,7 +36,7 @@ jobs:
           path: .cache
           restore-keys: |
             mkdocs-material-
-      - run: pip install mkdocs-material
+      - run: pip install mkdocs-material==9.5.17
       - name: Build Docs
         run: mkdocs build
       - name: Deploy to GitHub Pages

@@ -13,8 +13,8 @@ YELLOW:= \033[1;33m
 RED   := \033[1;31m
 RESET := \033[0m
 
-# Docker Image
-MKDOCS_IMAGE := squidfunk/mkdocs-material:latest
+# Docker Image (Pinned to 9.x to avoid MkDocs 2.0 breaking changes)
+MKDOCS_IMAGE := squidfunk/mkdocs-material:9.5.17
 
 # --- 2. PUBLIC INTERFACE ---
 .PHONY: build serve dev clean help
@@ -22,7 +22,7 @@ MKDOCS_IMAGE := squidfunk/mkdocs-material:latest
 help:
 	@echo -e "$(BLUE)LuCI SSO Documentation Toolkit$(RESET)"
 	@echo -e "Usage:"
-	@echo -e "  make build  - Generate the static site in $(PROJECT_ROOT)/site/"
+	@echo -e "  make build  - Generate the static site in $(PROJECT_ROOT)/bin/site/"
 	@echo -e "  make serve  - Run a live-reloading dev server on http://localhost:8000"
 	@echo -e "  make clean  - Remove the generated site directory"
 
@@ -38,4 +38,4 @@ dev:
 
 clean:
 	@echo -e " $(YELLOW)🧹$(RESET) Cleaning up generated documentation..."
-	rm -rf $(PROJECT_ROOT)/site
+	rm -rf $(PROJECT_ROOT)/bin/site

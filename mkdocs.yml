@@ -1,6 +1,7 @@
 site_name: LuCI SSO
 site_description: Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.
 site_url: https://m00qek.github.io/luci-sso/
+site_dir: bin/site
 
 theme:
   name: material
