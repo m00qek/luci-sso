@@ -9,7 +9,7 @@ RUN mkdir -p /var/lock && \
 
 RUN mkdir -p /var/lock && \
   opkg update && \
-  opkg install --force-reinstall libmbedtls libwolfssl
+  opkg install --force-reinstall libmbedtls libwolfssl libopenssl
 
 # DEV dependencies
 RUN mkdir -p /var/lock && \

@@ -19,15 +19,17 @@ RUN MAJOR_MINOR=$(echo ${SDK_VERSION} | cut -d. -f1,2) && \
     ./scripts/feeds update base packages
 
 # Layer 2: Install Packages into SDK (Metadata only)
-RUN ./scripts/feeds install ucode libmbedtls libwolfssl
+RUN ./scripts/feeds install ucode libmbedtls libwolfssl libopenssl
 
 # Layer 3: Warming up dependencies (CPU intensive)
 RUN echo 'CONFIG_PACKAGE_libmbedtls=y' >> .config \
   && echo 'CONFIG_PACKAGE_libwolfssl=y' >> .config \
+  && echo 'CONFIG_PACKAGE_libopenssl=y' >> .config \
   && echo "CONFIG_PACKAGE_ucode=y" >> .config \
   && make defconfig \
   && make package/mbedtls/compile -j$(nproc) \
   && make package/wolfssl/compile -j$(nproc) \
+  && make package/openssl/compile -j$(nproc) \
   && make package/ucode/compile -j$(nproc)
 
 # Pre-create the package directory
