@@ -2,6 +2,8 @@
 
 **Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.**
 
+<img width="1119" height="588" alt="LuCI web interface login screen showing a blue 'Login with SSO' button prominently displayed above the standard OpenWrt password prompt." src="https://github.com/user-attachments/assets/cbe996a7-fc25-4f63-bd91-0d57dddcab75" />
+
 ---
 
 ## 📖 What is this?

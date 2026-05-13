@@ -64,6 +64,7 @@ nav:
       - Overview: reference/index.md
       - UCI Configuration: reference/uci-config.md
       - Internal API: reference/internal-api.md
+      - Style Guide: reference/style-guide.md
       - RFC Compliance: reference/rfc-compliance.md
       - Agent Context (AI): reference/agent-context.md
   - Explanation:
