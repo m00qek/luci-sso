@@ -49,8 +49,10 @@ export DOCKER_NAMESPACE := ghcr.io/m00qek
 
 # Lazy variables (=) evaluated at runtime
 export RESOLVED_DOCKER_COMPOSE = $(DEVENV_DIR)/.resolved.docker-compose.$(DOCKER_SUITE).yaml
-# Use SDK_ARCH in project name to ensure isolated containers per architecture
-COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
+# Use SDK_ARCH and SDK_VERSION in project name to ensure isolated containers per environment
+# We replace dots with hyphens because dots are invalid in Docker Compose project names
+SAFE_SDK_VERSION = $(subst .,-,$(SDK_VERSION))
+COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
 
 # Helper: Command to return container IDs if any service in the suite is running
 # We use --all to ensure we detect the project even if one-shot services (pki) have exited
@@ -61,8 +63,8 @@ SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
 .PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests
 .PHONY: local-up local-down local-ps local-shell local-run
 
-# Sentinel file tracks the last successful build for a specific arch/crypto combo
-SENTINEL := $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/.built-$(CRYPTO_LIB)
+# Sentinel file tracks the last successful build for a specific arch/version/crypto combo
+SENTINEL := $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/.built-$(CRYPTO_LIB)
 
 # Wrappers sets the context and calls the implementation
 local-up: DOCKER_SUITE = local
@@ -125,26 +127,26 @@ print-env:
 # Macro: Abort if the current DOCKER_SUITE is not running
 define VALIDATE_SUITE_RUNNING
 	@if [ -z "$$($(SUITE_IS_RUNNING_CMD))" ]; then \
-		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING (Project: $(DOCKER_SUITE)-$(SDK_ARCH))."; \
+		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING (Project: $(DOCKER_SUITE)-$(SDK_ARCH)-$(SDK_VERSION))."; \
 		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"; \
-		echo -e "\n      make up"; \
+		echo -e "\n      make up SDK_VERSION=$(SDK_VERSION)"; \
 		exit 1; \
 	fi
 endef
 
 .unit-test:
 	$(VALIDATE_SUITE_RUNNING)
-	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
-	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
 TIME ?= 60
 DETECT_LEAKS ?= 0
 
 .fuzzer-test:
-	$(VALIDATE_SUITE_RUNNING)
 	@echo -e " $(BLUE)🧪$(RESET) Running native fuzz tests for $(CRYPTO_LIB) ($(TIME)s)..."
-	docker compose $(COMPOSE_FLAGS) exec -e ASAN_OPTIONS="detect_leaks=$(DETECT_LEAKS)" fuzzer bash -c " \
+	docker compose $(COMPOSE_FLAGS) pull fuzzer || true
+	docker compose $(COMPOSE_FLAGS) run --rm -e ASAN_OPTIONS="detect_leaks=$(DETECT_LEAKS)" fuzzer bash -c " \
 		mkdir -p bin/fuzz && cd bin/fuzz && \
 		cmake -DENABLE_FUZZING=ON ../../src && \
 		make -j$$(nproc) && \
@@ -152,14 +154,14 @@ DETECT_LEAKS ?= 0
 
 .e2e-test:
 	$(VALIDATE_SUITE_RUNNING)
-	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
-	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
 
 .watch-tests:
 	$(VALIDATE_SUITE_RUNNING)
-	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
-	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
 .build-images:
@@ -177,7 +179,7 @@ DETECT_LEAKS ?= 0
 	@echo -e " $(BLUE)⚙️$(RESET)  Generating configuration for '$(DOCKER_SUITE)'..."
 	docker compose $(COMPOSE_FLAGS) config > $(RESOLVED_DOCKER_COMPOSE)
 
-	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) pull
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) pull || true
 	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) build
 	
 	@echo -e " $(GREEN)🚀$(RESET) Starting '$(DOCKER_SUITE)' environment..."
@@ -215,14 +217,14 @@ compile: $(SENTINEL)
 
 $(SENTINEL): $(wildcard $(PROJECT_ROOT)/src/*.c) $(wildcard $(PROJECT_ROOT)/src/*.h) $(PROJECT_ROOT)/src/CMakeLists.txt
 	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(SDK_ARCH)/$(CRYPTO_LIB)..."
-	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB)
-	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(CRYPTO_LIB) 2>/dev/null || true
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
 
 	@touch $(SENTINEL)
 
 package:
 	@echo -e " $(BLUE)📦$(RESET) Building IPK package for $(SDK_ARCH)..."
-	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/packages
-	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH) 2>/dev/null || true
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/packages
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION) 2>/dev/null || true
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh package

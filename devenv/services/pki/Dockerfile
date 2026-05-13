@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+# check=skip=InvalidDefaultArgInFrom
 ARG ALPINE_VERSION
 FROM alpine:${ALPINE_VERSION}
 

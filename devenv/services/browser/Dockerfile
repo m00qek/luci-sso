@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+# check=skip=InvalidDefaultArgInFrom
 ARG NODE_VERSION
 ARG ALPINE_VERSION
 FROM node:${NODE_VERSION}-alpine${ALPINE_VERSION}
