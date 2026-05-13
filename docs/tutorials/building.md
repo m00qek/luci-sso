@@ -16,17 +16,17 @@ Run the following command in the project root. Replace `SDK_ARCH` with your targ
 
 ### For Raspberry Pi 4 / NanoPi (ARM64):
 ```bash
-make package SDK_ARCH=aarch64_generic
+make -C devenv package SDK_ARCH=aarch64_generic
 ```
 
 ### For x86 routers (Intel/AMD):
 ```bash
-make package SDK_ARCH=x86-64
+make -C devenv package SDK_ARCH=x86-64
 ```
 
 ### For MIPS routers (e.g., GL.iNet, Ubiquiti):
 ```bash
-make package SDK_ARCH=mips_24kc
+make -C devenv package SDK_ARCH=mips_24kc
 ```
 
 *The build system will automatically download the correct OpenWrt SDK container and compile the package.*

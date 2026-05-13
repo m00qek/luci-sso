@@ -25,7 +25,7 @@ Our documentation is organized using the **Diataxis Framework** to serve differe
 If you have Docker and `make`, you can build the package for your architecture immediately:
 
 ```bash
-make package SDK_ARCH=x86-64
+make -C devenv package SDK_ARCH=x86-64
 ```
 
 See [Building from Source](https://m00qek.github.io/luci-sso/tutorials/building/) for other architectures.
