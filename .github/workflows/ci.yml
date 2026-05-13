@@ -71,7 +71,7 @@ jobs:
             makefile: 'devenv/Makefile'
 
   build-versioned:
-    name: Build OpenWrt Images (${{ matrix.openwrt_version }})
+    name: Build ${{ matrix.service }} (${{ matrix.openwrt_version }})
     needs: metadata
     runs-on: ubuntu-latest
     permissions:
@@ -112,7 +112,7 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.openwrt_version }}
 
   build-helpers:
-    name: Build Helper Images
+    name: Build ${{ matrix.service }}
     needs: metadata
     runs-on: ubuntu-latest
     permissions:
