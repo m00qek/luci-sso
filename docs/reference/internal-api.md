@@ -1,6 +1,6 @@
 # Internal API Reference
 
-This document provides a technical overview of the `luci-sso` internal modules for developers and AI agents.
+This document provides a technical overview of the `luci-sso` internal modules.
 
 ---
 

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500">
+  <rect width="900" height="500" fill="#f5f5f5" stroke="#ccc" stroke-width="1"/>
+
+  <!-- Browser chrome -->
+  <rect width="900" height="40" fill="#e0e0e0"/>
+  <rect x="10" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="40" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="70" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="100" y="8" width="700" height="24" rx="12" fill="#fff" stroke="#ccc"/>
+  <text x="450" y="24" font-family="monospace" font-size="12" fill="#666" text-anchor="middle">https://&lt;your-idp&gt;/admin/clients/new</text>
+
+  <!-- Content area -->
+  <rect y="40" width="900" height="460" fill="white"/>
+
+  <!-- Page title -->
+  <rect y="40" width="900" height="48" fill="#f8f9fa" stroke="#e0e0e0" stroke-width="0" stroke-dasharray="0"/>
+  <text x="24" y="70" font-family="sans-serif" font-size="16" font-weight="bold" fill="#333">Create OAuth Client / Application</text>
+
+  <!-- Form -->
+  <text x="40" y="120" font-family="sans-serif" font-size="13" font-weight="bold" fill="#555">Client / Application Name</text>
+  <rect x="40" y="128" width="400" height="32" rx="4" fill="white" stroke="#bbb"/>
+  <text x="52" y="149" font-family="sans-serif" font-size="13" fill="#aaa">e.g. "OpenWrt Router"</text>
+
+  <text x="40" y="190" font-family="sans-serif" font-size="13" font-weight="bold" fill="#555">Application Type</text>
+  <rect x="40" y="198" width="260" height="32" rx="4" fill="white" stroke="#bbb"/>
+  <text x="52" y="219" font-family="sans-serif" font-size="13" fill="#333">Web Application  ▾</text>
+
+  <text x="40" y="260" font-family="sans-serif" font-size="13" font-weight="bold" fill="#555">Redirect URI  <tspan fill="#e53935">*</tspan></text>
+  <rect x="40" y="268" width="600" height="32" rx="4" fill="#fff8e1" stroke="#f9a825"/>
+  <text x="52" y="289" font-family="monospace" font-size="12" fill="#333">https://192.168.1.1/cgi-bin/luci-sso/callback</text>
+
+  <text x="40" y="330" font-family="sans-serif" font-size="13" font-weight="bold" fill="#555">Scopes</text>
+  <rect x="40" y="338" width="600" height="32" rx="4" fill="white" stroke="#bbb"/>
+  <text x="52" y="359" font-family="monospace" font-size="12" fill="#333">openid  profile  email  groups</text>
+
+  <!-- Result fields (grayed out) -->
+  <rect x="500" y="110" width="360" height="120" rx="6" fill="#e8f5e9" stroke="#a5d6a7"/>
+  <text x="680" y="135" font-family="sans-serif" font-size="12" font-weight="bold" fill="#2e7d32" text-anchor="middle">After saving, copy these values:</text>
+  <text x="520" y="160" font-family="sans-serif" font-size="12" fill="#555">Client ID:</text>
+  <rect x="600" y="148" width="240" height="24" rx="3" fill="white" stroke="#a5d6a7"/>
+  <text x="616" y="165" font-family="monospace" font-size="11" fill="#aaa">generated-client-id</text>
+  <text x="520" y="200" font-family="sans-serif" font-size="12" fill="#555">Client Secret:</text>
+  <rect x="600" y="188" width="240" height="24" rx="3" fill="white" stroke="#a5d6a7"/>
+  <text x="616" y="205" font-family="monospace" font-size="11" fill="#aaa">••••••••••••••••</text>
+
+  <!-- Save button -->
+  <rect x="40" y="400" width="160" height="40" rx="6" fill="#1976d2"/>
+  <text x="120" y="425" font-family="sans-serif" font-size="14" fill="white" text-anchor="middle">Save</text>
+
+  <!-- Placeholder banner -->
+  <rect y="455" width="900" height="45" fill="#fff8e1"/>
+  <text x="450" y="482" font-family="sans-serif" font-size="13" fill="#f57f17" text-anchor="middle">[ PLACEHOLDER — Replace with screenshot of your IdP's "Create OAuth Client" page ]</text>
+</svg>

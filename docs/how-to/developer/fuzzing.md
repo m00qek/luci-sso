@@ -1,11 +1,8 @@
-# Fuzz Testing
+# How to Run the Fuzzer
 
-This guide describes how to use the coverage-guided fuzzer to harden native C components.
+This guide describes how to use the coverage-guided fuzzer (**libFuzzer** + **AddressSanitizer**) to test native C components against malformed inputs. For context on why fuzzing is required for new C code, see the [Security Model](../../explanation/security-model.md).
 
 ---
-
-## 🧠 Why Fuzz?
-OIDC handshakes involve parsing untrusted data (JWTs, JWKs, Signatures). We use **libFuzzer** and **AddressSanitizer (ASan)** to identify buffer overflows, use-after-free, and other memory safety issues that standard unit tests might miss.
 
 ## 🚀 Running the Fuzzer
 

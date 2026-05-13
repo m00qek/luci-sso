@@ -1,5 +1,7 @@
 # RFC Compliance Matrix
 
+All project documents use RFC 2119 key words ("MUST", "SHOULD", "MAY", etc.) as defined in [RFC 2119](https://tools.ietf.org/html/rfc2119).
+
 This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2 standards.
 
 ---

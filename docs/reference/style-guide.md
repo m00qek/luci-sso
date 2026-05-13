@@ -1,195 +1,34 @@
 # LuCI SSO Style Guide
 
-This document defines coding standards, architectural patterns, and design decisions for the luci-sso project.
+This document is the technical reference for coding standards in the luci-sso project. For the reasoning behind these standards, see [Design Philosophy](../explanation/design-philosophy.md).
 
----
-
-## ⚠️ Important Notes
-
-### About Code Examples
-
-All code examples in this guide follow the style rules defined herein. Examples are formatted with:
-- **Tabs for indentation** (may render as spaces in some viewers)
-- **snake_case naming** (OpenWrt convention)
-- **Trailing semicolons on exports** (ucode requirement)
-
-For real-world implementations, see:
-- [`files/usr/share/ucode/luci_sso/`](../files/usr/share/ucode/luci_sso/) - Production code
-- [`test/tier*/`](../test/) - Test code (Tier 0 to Tier 4)
-
-### Living Document
-
-This guide evolves with the project. When you find inconsistencies or have questions:
-1. Check existing code for precedent
-2. Open an issue or PR with your question
-3. Update this guide with the decision
+Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, and trailing semicolons on exported functions. For real-world implementations, see `files/usr/share/ucode/luci_sso/` (production) and `test/tier*/` (tests).
 
 ---
 
 ## Table of Contents
 
-1. [Philosophy](#philosophy)
-2. [Terminology](#terminology)
-3. [Architecture Principles](#architecture-principles)
-4. [Error Handling](#error-handling)
-5. [Testing Standards](#testing-standards)
-6. [ucode Style](#ucode-style)
-7. [C Code Style](#c-code-style)
-8. [Module Organization](#module-organization)
-9. [Security Guidelines](#security-guidelines)
-10. [Documentation Standards](#documentation-standards)
-11. [Commit Messages](#commit-messages)
-12. [Code Review Checklist](#code-review-checklist)
-13. [Development Workflow](#development-workflow)
+1. [Terminology](#terminology)
+2. [Error Handling](#error-handling)
+3. [Testing Standards](#testing-standards)
+4. [ucode Style](#ucode-style)
+5. [C Code Style](#c-code-style)
+6. [Module Organization](#module-organization)
+7. [Security Guidelines](#security-guidelines)
+8. [Documentation Standards](#documentation-standards)
+9. [Commit Messages](#commit-messages)
+10. [Code Review Checklist](#code-review-checklist)
+11. [Technical Debt & Known Exceptions](#technical-debt--known-exceptions)
 
 ---
 
-## 1. Philosophy
-
-### Core Tenets
-
-1. **Security First** - All authentication/authorization code MUST be paranoid.
-2. **Minimal Dependencies** - The footprint SHALL remain small for embedded systems.
-3. **Testability** - All logic MUST be unit-testable without a real IdP.
-4. **OpenWrt Native** - Code MUST follow OpenWrt/ucode conventions, NOT Node.js patterns.
-5. **Explicit Over Implicit** - Code SHOULD be obvious, not clever.
-
-### Design Goals
-
-- ✅ Work on resource-constrained routers (64MB RAM, 16MB flash)
-- ✅ Support major OIDC providers (Google, Microsoft, generic)
-- ✅ Be auditable (security-critical code should be simple)
-- ✅ Fail safely (reject invalid auth rather than allow)
-
----
-
-## 2. Terminology
+## Terminology
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document and all other project documentation are to be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
 
 ---
 
-## 3. Architecture Principles
-
-### 1. Dependency Injection for I/O
-
-Developers MUST use dependency injection for all I/O operations to enable offline verification.
-
-**✅ CORRECT:**
-
-```javascript
-export function discover(io, issuer, options) {
-	let response = io.http_get(discovery_url);
-	let now = io.time();
-	// ...
-};
-
-// Production
-let io = create_io();
-discover(io, "https://idp.com");
-
-// Test
-let mock_io = create_mock_io();
-discover(mock_io, "https://idp.com");
-```
-
-**❌ INCORRECT:**
-
-```javascript
-import * as fs from 'fs';
-
-export function discover(issuer, options) {
-	let response = uclient.new(discovery_url);  // Hard to mock
-	let now = time();  // Hard to mock
-};
-```
-
-**Rationale:** OpenWrt routers can't run real network tests. All tests must work offline with mocks.
-
----
-
-### 2. What Belongs in IO Object
-
-Methods representing non-deterministic or external state MUST be part of the `io` provider.
-
-**MANDATORY Scopes (External State):**
-
-```javascript
-let io = {
-	time: function() { return time(); },           // ✅ Current timestamp
-	random: function(n) { return crypto.random(n); },  // ✅ Unpredictable
-	log: function(level, msg) { /* ... */ },       // ✅ Mandatory Auditing
-	http_get: function(url) { /* ... */ },         // ✅ Network I/O
-	http_post: function(url, opts) { /* ... */ },  // ✅ Network I/O
-	read_file: function(path) { /* ... */ },       // ✅ Filesystem I/O
-	write_file: function(path, data) { /* ... */ } // ✅ Filesystem I/O
-};
-```
-
-**DON'T include (pure functions, deterministic):**
-
-```javascript
-// Import as utilities, don't put in IO object
-import { urlencode } from 'luci_sso.utils';  // ❌ String transformation
-// Use built-ins directly
-let parsed = json(str);     // ❌ String parsing
-let hash = hash_sha256(msg);     // ❌ Cryptographic hash (deterministic)
-let result = replace(s, p, r);  // ❌ String manipulation
-```
-
-**Rule of Thumb:** If the function always returns the same output for the same input and has no side effects, it's NOT I/O.
-
-**Contractual Obligation:** The `log` function MUST be present in all `io` provider implementations. Logs are NOT optional in this security-critical application.
-
----
-
-### 3. Two-Dimensional Config (Policy Pattern)
-
-**ALWAYS** use the policy dimension for internal security enforcement that should NOT be editable by the system administrator.
-
-```javascript
-// Dimension 1: config (UCI) - Admin controlled
-// Dimension 2: policy (Internal) - Logic controlled
-export function verify(tokens, config, policy) {
-    const DEFAULT_POLICY = { allowed_algs: ["RS256"] };
-    let p = policy || DEFAULT_POLICY;
-    
-    // Use p.allowed_algs for verification
-};
-```
-
-**Rationale:** Prevents "Algorithm Confusion" and "Reflective Trust" vulnerabilities by keeping critical whitelists out of UCI.
-
----
-
-### 4. Minimal C Code
-
-Cryptographic operations SHALL be implemented in C. Higher-level business logic MUST remain in ucode.
-
-**C code SHALL contain:**
-- Cryptographic primitives (RSA/EC verification, HMAC, CSPRNG).
-- Performance-critical code (if profiling identifies a bottleneck).
-
-**C code MUST NOT contain:**
-- Business logic (OAuth2 state machines, role merging).
-- String manipulation or JSON parsing.
-- Direct I/O operations (HTTP or File access).
-
-### 5. Backend Abstraction
-
-Cryptographic backends MUST be swappable. Code MUST NOT import a backend directly (e.g. `native_mbedtls`). All logic MUST utilize the `luci_sso.native` wrapper.
-
-```javascript
-// ❌ INCORRECT
-import * as mbedtls from 'native_mbedtls';
-
-// ✅ CORRECT
-import * as native from 'luci_sso.native';
-```
-
----
-
-## 4. Error Handling
+## Error Handling
 
 ### Contract Bugs vs. Runtime Realities
 
@@ -306,16 +145,9 @@ use(result.session);
 
 ---
 
-## 5. Testing Standards
+## Testing Standards
 
-### Reference Implementation Tests
-
-**All tests in `test/unit/` serve as reference implementations.**
-
-Tests are not just validation—they are:
-- ✅ **Documentation** - Show how to use the API
-- ✅ **Specification** - Define correct behavior
-- ✅ **Safety net** - Prevent regressions
+### Test Requirements
 
 ### Test Requirements
 
@@ -405,7 +237,7 @@ test('Security: Alg=none attack rejected', () => { /* ... */ });
 
 ---
 
-## 6. ucode Style
+## ucode Style
 
 ### General Formatting
 
@@ -511,7 +343,7 @@ function validate(input) {
 
 ---
 
-## 7. C Code Style
+## C Code Style
 
 ### Standards: MbedTLS 3.x / PSA Crypto
 This project exclusively uses **MbedTLS 3.x**. All new cryptographic operations MUST be implemented using the **PSA Crypto API** (`psa/crypto.h`).
@@ -735,7 +567,7 @@ if (substr(url, 0, 8) !== "https://") ...
 
 ---
 
-## 8. Module Organization
+## Module Organization
 
 ### File Structure
 
@@ -769,7 +601,7 @@ luci-sso/
 │   ├── lib/           # Test helpers
 │   ├── mock.uc        # Mock I/O provider
 │   └── runner.uc      # Test harness
-└── ARCHITECTURE.md    # System architecture and security model
+└── docs/              # Documentation (Diátaxis framework)
 ```
 
 ---
@@ -814,7 +646,7 @@ export function pkce_pair(len) {
 
 ---
 
-## 9. Security Guidelines
+## Security Guidelines
 
 ### 1. Constant-Time Operations
 
@@ -867,7 +699,7 @@ Logic MUST NOT utilize `system()` or `popen()` for any operation. These function
 
 ---
 
-## 10. Documentation Standards
+## Documentation Standards
 
 ### Philosophy
 Documentation is code. It MUST be accurate, persona-aware (Diataxis), and accessible.
@@ -889,12 +721,12 @@ We prioritize accessibility for blind users, those with cognitive disabilities, 
 *   **Diagram Fallbacks:** Every Mermaid diagram MUST be preceded or followed by a textual summary or a table describing the flow for screen readers and AI Agents.
 *   **Plain Language:** Avoid jargon where possible. Use active voice and short sentences.
 
-### 3. AI Agent Optimization
-Reference documentation (especially `docs/reference/agent-context.md`) must be high-density and machine-readable. Avoid "fluff" in reference quadrants to minimize token waste for AI assistants.
+### 3. Machine-Readable Reference
+Reference documentation must be high-density and unambiguous. Avoid narrative prose in reference quadrants — describe, don't explain.
 
 ---
 
-## 11. Commit Messages
+## Commit Messages
 
 ### Format
 
@@ -949,7 +781,7 @@ More accurate naming for future P-384 support.
 
 ---
 
-## 12. Code Review Checklist
+## Code Review Checklist
 
 Before submitting PR, verify:
 
@@ -963,53 +795,6 @@ Before submitting PR, verify:
 - [ ] Commit messages follow format
 - [ ] Documentation updated (if API changed)
 - [ ] No TODOs without issue number
-
----
-
-## 13. Development Workflow
-
-### Orchestration
-The primary entry point for development is `devenv/Makefile`, which delegates complex logic to `devenv/scripts/test.sh`.
-*   **`make compile`**: Triggers the SDK container to build native C components.
-*   **`make up`**: Lifts the CI/E2E OIDC stack.
-*   **`make local-up`**: Lifts the local development stack.
-*   **`make unit-test` / `make e2e-test`**: Executes tests with support for `MODULES="..."` and `FILTER="..."`.
-*   **`make watch-tests`**: Polyglot watcher that runs unit or E2E tests automatically on change.
-
-### Source of Truth
-Never hardcode environment-specific values (versions, domains) in Dockerfiles or Javascript tests. Always derive them from the `devenv/Makefile` variables, which are passed through as `ARG` or `ENV` via Docker Compose.
-
-### Incremental C Builds
-Native C compilation is guarded by a sentinel file in `bin/lib/.built`. If you modify `src/` files, the sentinel is invalidated, and the next `make compile` will trigger a rebuild.
-
----
-
-## Questions and Improvements
-
-### When You're Unsure
-
-**Can't remember the formatting rule?**
-→ Look at existing code in `files/usr/share/ucode/luci_sso/`
-
-**Not sure if this should throw or return `{ error }`?**
-→ Check the "Error Handling" decision tree
-
-**Tests pass but code looks different from examples?**
-→ Follow existing code style, update guide if needed
-
-### Improving This Guide
-
-If you find inconsistencies or have suggestions:
-
-1. Open an issue or PR
-2. Propose the change with rationale
-3. Update affected code to match new rule
-4. Update this guide
-
-**When in doubt, favor:**
-- Simplicity over cleverness
-- Explicitness over brevity
-- Security over performance
 
 ---
 
@@ -1038,7 +823,7 @@ If you find inconsistencies or have suggestions:
 
 ---
 
-## 14. Technical Debt & Known Exceptions
+## Technical Debt & Known Exceptions
 
 While the project strives for consistency, certain legacy patterns or "convenience" trade-offs exist that deviate from the primary rules. These are documented here to prevent confusion.
 

@@ -25,7 +25,7 @@ Add a new client to your Authelia `configuration.yml` under `identity_providers:
 
 ## 2. Router Configuration
 
-### Using CLI (SYSADMIN)
+### Using the CLI
 ```bash
 uci set luci-sso.default.issuer_url='https://auth.example.com'
 uci set luci-sso.default.client_id='luci-router'
@@ -43,3 +43,7 @@ Authelia allows you to map LDAP/AD groups to LuCI roles. Ensure you map the `gro
 uci add_list luci-sso.admin.group='router-admins'
 uci commit luci-sso
 ```
+
+## ✅ Verify
+
+Visit `https://<YOUR_ROUTER_IP>/cgi-bin/luci-sso?action=enabled` — it should return `{"enabled":true}`. Then navigate to the LuCI login page and confirm the "Login with SSO" button appears. Clicking it should redirect you to your Authelia instance.

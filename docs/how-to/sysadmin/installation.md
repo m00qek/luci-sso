@@ -1,4 +1,4 @@
-# Installation Guide
+# How to Install luci-sso
 
 This guide describes how to install the `luci-sso` package and its required dependencies on your OpenWrt router.
 
@@ -8,7 +8,7 @@ This guide describes how to install the `luci-sso` package and its required depe
 Upload the compiled `.ipk` file to your router (e.g., via `scp`):
 
 ```bash
-scp -O bin/lib/.../luci-sso*.ipk root@192.168.1.1:/tmp/
+scp -O bin/lib/<ARCH>/packages/luci-sso*.ipk root@192.168.1.1:/tmp/
 ```
 
 ## Step 2: Install Dependencies

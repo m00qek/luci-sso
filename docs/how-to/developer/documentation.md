@@ -1,4 +1,4 @@
-# Documentation Development
+# How to Write Documentation
 
 This guide describes how to contribute to the `luci-sso` documentation using the provided toolkit.
 
@@ -38,7 +38,7 @@ make -C docs clean
 ---
 
 ## 📐 Standards & Style
-Before submitting a PR, ensure your changes follow our [Documentation Standards](../../reference/style-guide.md#10-documentation-standards):
+Before submitting a PR, ensure your changes follow our [Documentation Standards](../../reference/style-guide.md#documentation-standards):
 *   **Diataxis:** Place your file in the correct quadrant (Tutorial, How-to, Reference, or Explanation).
 *   **Accessibility:** Add descriptive `alt` text to all images.
 *   **Diagrams:** Use Mermaid.js for diagrams and provide a textual fallback.

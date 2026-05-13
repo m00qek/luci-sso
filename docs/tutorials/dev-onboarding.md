@@ -1,42 +1,65 @@
 # Developer Onboarding
 
-This tutorial will take you through setting up your local development environment and running your first integration test.
+In this tutorial, we will set up a local development environment, run the full test suite, and verify a working SSO login flow against a mock Identity Provider. By the end, we'll have a running stack we can develop against.
 
 ---
 
-## 🛠️ Prerequisites
+## Prerequisites
+
 *   **Docker** and **Docker Compose** (V2).
 *   **make** utility.
 
-## Step 1: Clone and Build
-First, ensure you can build the native C components for the default architecture:
+## Step 1: Build the native components
+
+First, let's compile the native C crypto bridge for the default architecture:
 
 ```bash
 make -C devenv compile
 ```
 
-## Step 2: Launch the Development Stack
-We provide a "Mock Environment" that includes a fake Identity Provider (IdP) and a running OpenWrt instance.
+You should see the build system produce a `.so` file in `bin/lib/`. This C bridge is what `ucode` loads for cryptographic operations.
+
+## Step 2: Launch the development stack
+
+Now we'll start the "Mock Environment" — a fake Identity Provider (IdP) and a simulated OpenWrt instance running in containers:
 
 ```bash
 make -C devenv up
 ```
-*This will pull the required images and start the containers in the background.*
 
-## Step 3: Run the Verification Suite
-To ensure everything is working correctly, run the full test suite:
+After a moment, you should see all containers report as healthy. The mock IdP is pre-configured with test credentials so we don't need a real Google or Authelia account.
+
+## Step 3: Run the test suite
+
+Let's verify everything is working correctly:
 
 ```bash
 make -C devenv unit-test
 ```
-*You should see a series of green checkmarks for Tiers 0 through 4.*
 
-## Step 4: Access the Router UI
-You can now access the LuCI web interface of the running container:
+You should see a series of green checkmarks for Tiers 0 through 4, ending with a summary like:
+
+```
+All tests passed. (Tier 0: 12, Tier 1: 8, Tier 2: 24, Tier 3: 9, Tier 4: 3)
+```
+
+If any tier fails, the output will identify the failing test and the module it belongs to.
+
+## Step 4: Try the login flow
+
+We can now access the LuCI web interface running inside the container:
+
 *   **URL:** `https://localhost:8443`
-*   **Login:** Choose "Login with SSO" to trigger the flow against the Mock IdP.
+*   Choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
+
+Notice that the login redirects to the mock IdP, then back to LuCI — the same flow a real user experiences with Google or Authelia. The mock IdP accepts any credentials, so any username/password will work.
 
 ---
 
-## 🎓 Next Steps
-Now that you have a working environment, learn how to [Run specific tests](../how-to/developer/testing.md) or [Contribute to documentation](../how-to/developer/documentation.md).
+## Next steps
+
+We now have a working development environment. From here:
+
+- Learn how to [run specific tests or filter by module](../how-to/developer/testing.md)
+- Understand the daily [development workflow](../how-to/developer/development-workflow.md)
+- Read the [Architecture explanation](../explanation/architecture.md) to understand how the pieces fit together

@@ -10,7 +10,7 @@
 `luci-sso` replaces the standard LuCI password prompt with an **OpenID Connect (OIDC)** flow, allowing you to secure your router with modern identity providers like Google, GitHub, or Authelia.
 
 ## 📚 Documentation
-Our documentation is organized using the **Diataxis Framework** to serve different personas (Users, Sysadmins, Auditors, Developers, and AI Agents).
+Our documentation is organized using the **Diataxis Framework** to serve different personas: Router Admins, Developers, and Security Auditors.
 
 ### [👉 Read the Documentation](https://m00qek.github.io/luci-sso/)
 
