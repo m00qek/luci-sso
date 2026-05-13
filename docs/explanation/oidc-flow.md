@@ -34,7 +34,7 @@ sequenceDiagram
     R->>I: POST /token (code + PKCE verifier) — back-channel
     I-->>R: {id_token, access_token}
     R->>R: Validate id_token: algorithm, signature, iss, aud, exp, nonce, at_hash
-    opt Groups claim missing from ID token
+    opt Email claim missing from ID token
         R->>I: GET /userinfo — back-channel
         I-->>R: {email, groups, …}
     end

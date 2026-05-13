@@ -15,7 +15,7 @@ The configuration for `luci-sso` is stored in `/etc/config/luci-sso`.
 | `client_secret` | string | The Client Secret registered with your IdP. |
 | `redirect_uri` | string (URL) | Must match exactly what is configured in your IdP. |
 | `scope` | string | Space-separated list of scopes (e.g., `openid profile email`). |
-| `clock_tolerance` | integer | Allowed clock skew in seconds for JWT validation (default: `300`). |
+| `clock_tolerance` | integer | **Required.** Allowed clock skew in seconds for JWT validation. Valid range: `0`–`3600`. The shipped default configuration sets this to `60`. |
 
 ## 👥 Role Mapping (`config role`)
 
@@ -40,7 +40,7 @@ config oidc 'default'
     option client_secret 'YOUR_SECRET_HERE'
     option redirect_uri 'https://192.168.1.1/cgi-bin/luci-sso/callback'
     option scope 'openid profile email'
-    option clock_tolerance '300'
+    option clock_tolerance '60'
 
 config role 'admin'
     list email 'admin@example.com'

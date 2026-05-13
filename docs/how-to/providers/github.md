@@ -1,49 +1,26 @@
-# How-to: Configure GitHub OAuth2
+# GitHub is Not a Supported Provider
 
-This guide describes how to use GitHub as an authentication provider for `luci-sso`.
-
----
-
-## 1. GitHub Developer Setup
-1.  Log in to GitHub and go to **Settings > Developer settings > OAuth Apps**.
-2.  Click **New OAuth App**.
-3.  **Homepage URL:** `https://<YOUR_ROUTER_IP_OR_DOMAIN>`
-4.  **Authorization callback URL:** `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback`
-5.  Click **Register application**.
-6.  Generate a **Client Secret** and save both the **Client ID** and **Secret**.
-
-## 2. Router Configuration
-
-Run the following commands via SSH:
-
-```bash
-uci set luci-sso.default.issuer_url='https://github.com'
-uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
-uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
-uci set luci-sso.default.enabled='1'
-uci commit luci-sso
-```
+GitHub OAuth Apps are **not compatible** with `luci-sso`. This page explains why.
 
 ---
 
-## 🛡️ Role Mapping
+## Why GitHub does not work
 
-GitHub provides email and organization membership, but not group claims. Mapping is email-based:
+`luci-sso` implements strict OIDC Core 1.0. GitHub's OAuth2 service fails two mandatory requirements:
 
-```bash
-uci add_list luci-sso.admin.email='your-github-email@example.com'
-uci commit luci-sso
-```
+**1. No OIDC discovery.**
+`luci-sso` fetches `<issuer_url>/.well-known/openid-configuration` on every login to locate the token endpoint and JWKS. GitHub does not serve this document — the request returns a 404. The login fails immediately with `OIDC_DISCOVERY_FAILED` before any credentials are exchanged.
 
-If you need group-based access control, consider using [Authelia](authelia.md), which supports LDAP group mapping.
-
----
-
-## ✅ Verify
-
-Visit `https://<YOUR_ROUTER_IP>/cgi-bin/luci-sso?action=enabled` — it should return `{"enabled":true}`. Then navigate to the LuCI login page and confirm the "Login with SSO" button appears. Clicking it should redirect you to GitHub's OAuth authorization screen.
+**2. No `at_hash` claim.**
+`luci-sso` enforces access token binding: the ID Token must contain an `at_hash` claim whose value is the base64url-encoded first half of SHA256 of the access token. This check is mandatory and cannot be disabled. GitHub OAuth2 token responses do not include `at_hash`. Any login attempt that somehow passed discovery would fail with `MISSING_AT_HASH`.
 
 ---
 
-## ⚠️ Known Limitation
-GitHub uses **OAuth2** rather than full **OIDC**. `luci-sso` implements OIDC-compatible logic that handles GitHub's `/user` endpoint for identity extraction, but some advanced OIDC claims may not be available.
+## Alternatives
+
+If you need SSO backed by GitHub identity, place a full OIDC provider in front of GitHub's OAuth2:
+
+- **[Authelia](authelia.md)** — Supports GitHub as a social upstream while exposing a fully compliant OIDC interface to `luci-sso`.
+- **[Dex](generic-oidc.md)** — An OIDC bridge that can federate GitHub, Google, and LDAP behind a single compliant issuer. Use the generic OIDC guide after configuring Dex.
+
+These providers handle the GitHub OAuth2 handshake on their side and issue properly formed OIDC tokens — including `at_hash` — to `luci-sso`.

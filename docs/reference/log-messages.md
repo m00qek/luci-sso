@@ -56,7 +56,7 @@ These occur when the browser returns from the IdP with an authorization code.
 | `STATE_MISMATCH` | `state` parameter does not match the stored handshake state | Possible CSRF attempt, or the user completed the flow in a different browser tab. |
 | `STATE_NOT_FOUND` | Handshake state file does not exist on the router filesystem | State was already consumed (replay attempt) or expired and was cleaned up. |
 | `STATE_CORRUPTED` | Handshake state file exists but contains invalid data | Filesystem corruption or truncated write during state creation. |
-| `STATE_SAVE_FAILED` | Router could not write the handshake state file | Check disk space and write permissions on `/etc/luci-sso/`. |
+| `STATE_SAVE_FAILED` | Router could not write the handshake state file | Check disk space and write permissions on `/var/run/luci-sso/`. |
 
 ---
 
@@ -114,8 +114,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
-| `NO_ROLES_MATCHED` | User's email and groups match no configured `config role` section | The authenticated user has no matching UCI role. Add their email or group to `/etc/config/luci-sso`. See [UCI Configuration](uci-config.md). |
-| `USER_NOT_AUTHORIZED` | Matched role has no `read` or `write` permissions defined | A matching role exists but grants no LuCI access groups. Check the `read`/`write` options in the matched role. |
+| `USER_NOT_AUTHORIZED` | User's email and groups match no configured `config role` section, **or** a matching role exists but has no `read` or `write` permissions defined | Check the log line immediately before this code — it will say "matched no roles" to distinguish the two cases. For the first: add the user's email or group to `/etc/config/luci-sso`. For the second: ensure the matched role has at least one `read` or `write` entry. See [UCI Configuration](uci-config.md). |
 | `AUTH_FAILED` | Access token registration in the local session registry failed | Internal failure registering the token for replay protection. Check disk space on the router. |
 
 ---
@@ -139,13 +138,10 @@ These indicate infrastructure-level failures unrelated to the OIDC flow.
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
-| `SYSTEM_INIT_FAILED` | `/etc/luci-sso/` directory is missing or has wrong permissions, or the crypto backend failed to initialize | Check that the package was installed correctly. Re-run `opkg install luci-sso`. |
-| `SYSTEM_KEY_GENERATION_FAILED` | Router could not generate the session signing key | Entropy source unavailable or filesystem write failure. |
-| `SYSTEM_KEY_UNAVAILABLE` | Session signing key file does not exist and could not be created | Filesystem issue on the router. |
-| `SYSTEM_KEY_WRITE_FAILED` | Session signing key could not be persisted to disk | Disk full or permission error on `/etc/luci-sso/`. |
+| `SYSTEM_INIT_FAILED` | Secret key subsystem failed during the first login attempt — covers key generation failures, write failures, and lock-wait timeouts | The log will contain a descriptive `CRITICAL:` message immediately before this code identifying the specific cause (e.g. `Failed to write secret key`, `CSPRNG failure`). Check that the package was installed correctly, that `/etc/luci-sso/` is writable, and that disk space is available. Re-run `opkg install luci-sso` if needed. |
 | `SSL_INIT_FAILED` | TLS initialization failed | The router's CA bundle is missing or corrupt. Run `opkg install ca-bundle`. |
 | `CRYPTO_ERROR` | A cryptographic operation returned an unexpected error | Internal error in the native C crypto bridge. |
 | `CRYPTO_SYSTEM_FAILURE` | The PSA Crypto subsystem failed to initialize | MbedTLS PSA layer unavailable. May indicate a missing `mbedtls` package. |
-| `TOO_MANY_REQUESTS` | More than 50 requests in a 60-second window from a single source | Rate limit hit. Indicates automated scanning or a misconfigured client retrying rapidly. |
+| `TOO_MANY_REQUESTS` | More than 50 requests in a 60-second window across all sources (global counter) | Rate limit hit. Indicates automated scanning or a misconfigured client retrying rapidly. |
 | `INPUT_TOO_LARGE` | Query string, cookies, or environment variable exceeds 16 KB | Request exceeded the hard input limit. Rejects excessively large inputs as a hardening measure. |
 

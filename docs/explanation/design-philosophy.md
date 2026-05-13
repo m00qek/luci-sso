@@ -48,7 +48,7 @@ Configuration has two dimensions: UCI (admin-controlled) and policy (logic-contr
 
 ```javascript
 export function verify(tokens, config, policy) {
-    const DEFAULT_POLICY = { allowed_algs: ["RS256"] };
+    const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
     let p = policy || DEFAULT_POLICY;
     // p.allowed_algs is not user-editable
 };

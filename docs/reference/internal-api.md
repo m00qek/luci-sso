@@ -8,7 +8,7 @@ This document provides a technical overview of the `luci-sso` internal modules.
 
 ### `handshake.uc`
 Manages the OIDC state machine and UBUS session injection.
-*   **Entry Point:** `handle_request(io, req)`
+*   **Entry Points:** `initiate(io, config)` — starts the login flow; `authenticate(io, config, request, policy)` — processes the IdP callback.
 *   **Security:** Enforces atomic state consumption via POSIX `rename`.
 
 ### `oidc.uc`

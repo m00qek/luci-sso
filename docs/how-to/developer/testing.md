@@ -10,13 +10,13 @@ These tests run natively using the `ucode` interpreter. No network or router har
 
 ```bash
 # Run all tests
-make unit-test
+make -C devenv unit-test
 
 # Run with detailed output
-make unit-test VERBOSE=1
+make -C devenv unit-test VERBOSE=1
 
 # Run tests matching a pattern
-make unit-test FILTER='oidc.*discovery'
+make -C devenv unit-test FILTER='oidc.*discovery'
 ```
 
 ---
@@ -27,10 +27,10 @@ These tests run in a Playwright-enabled Docker container and verify the full bro
 
 ```bash
 # Start the test stack
-make up
+make -C devenv up
 
 # Execute browser tests
-make e2e-test
+make -C devenv e2e-test
 ```
 
 ---

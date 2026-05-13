@@ -125,7 +125,7 @@ Then log in as the user in question and confirm the LuCI navigation matches what
 logread -e luci-sso | tail -20
 ```
 
-If you see `NO_ROLES_MATCHED`, the user's email or group claims do not match any configured role. Verify the exact claim value the IdP is sending — email addresses are matched case-insensitively, but must otherwise be exact.
+If you see `USER_NOT_AUTHORIZED`, the user's email or group claims do not match any configured role, or the matched role has no `read` or `write` entries. Verify the exact claim value the IdP is sending — email addresses are matched case-insensitively, but must otherwise be exact.
 
 ---
 

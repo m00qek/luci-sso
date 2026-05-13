@@ -16,7 +16,7 @@ The reason this matters: OpenWrt routers can't run network tests. Without this s
 
 *   **`handshake.uc`** — The OIDC state machine. Orchestrates the full authorization code flow: generates state and nonce, exchanges the code for tokens, validates them, and injects the resulting identity into LuCI's session.
 *   **`oidc.uc`** — Pure protocol validation. Given a token and claims, checks: is the issuer right? Is the audience right? Is it expired? Does the nonce match? All of this with no I/O.
-*   **`discovery.uc`** — Fetches and caches OIDC metadata from the IdP's `/.well-known/openid-configuration`. Caches to disk for 24 hours, because a router boot shouldn't require reaching an IdP.
+*   **`discovery.uc`** — Fetches and caches OIDC metadata from the IdP's `/.well-known/openid-configuration`. Caches to `/var/run/luci-sso/` (tmpfs) for 24 hours. The cache survives the router staying up but is cleared on every reboot — the first login after a reboot always fetches fresh discovery data. A stale cache is used as a fallback only when the IdP becomes temporarily unreachable while the router is already running.
 *   **`crypto.uc`** — High-level cryptographic API. Wraps the native C bridge, exposes JWS signing/verification and constant-time comparisons.
 *   **`config.uc`** — Reads UCI configuration and maps OIDC claims to LuCI roles.
 
@@ -54,4 +54,4 @@ The injection grants:
 - **Wildcard grants** for admin roles (dynamically discovers all `luci-*` access groups)
 - **A 256-bit CSRF token** that satisfies LuCI's write protection
 
-The session lives exactly as long as the OIDC ID Token's expiry allows. When it expires, the user is redirected back to the IdP — there is no separate session expiry to manage, and no way for a session to outlive the token that created it.
+The session is created with a fixed 1-hour (3600-second) timeout via UBUS. The ID Token's `exp` claim is validated at login time — an already-expired token is rejected — but it does not dynamically set the session duration. A token with a short expiry does not shorten the session below one hour, and a token with a long expiry does not extend it beyond one hour.
