@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+# check=skip=InvalidDefaultArgInFrom
 ARG SDK_ARCH
 ARG SDK_VERSION
 FROM ghcr.io/openwrt/sdk:${SDK_ARCH}-${SDK_VERSION}
