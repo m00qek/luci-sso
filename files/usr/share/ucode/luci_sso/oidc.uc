@@ -230,8 +230,9 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 		return Result.err("NONCE_MISMATCH");
 	}
 
-	// 3.2 Authorized Party Check
-	if (type(payload.aud) == "array" && !payload.azp) {
+	// 3.2 Authorized Party Check (OIDC Core 1.0 §3.1.3.7 items 4-5)
+	// azp is required only when the ID Token has MULTIPLE audiences.
+	if (type(payload.aud) == "array" && length(payload.aud) > 1 && !payload.azp) {
 		return Result.err("MISSING_AZP_CLAIM");
 	}
 	if (payload.azp && !crypto.constant_time_eq(payload.azp, config.client_id)) {

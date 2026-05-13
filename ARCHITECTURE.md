@@ -103,7 +103,7 @@ The client-side status check (`?action=enabled`) utilizes relative URLs to inher
 *   **Algorithm Enforcement:** The system MUST ONLY accept asymmetric signatures (RS256, ES256) for OIDC ID Tokens. Symmetric algorithms (HS256) are strictly limited to internal session management via dedicated symmetric-only APIs. This separation prevents Algorithm Confusion attacks where a Public Key might be misused as an HMAC secret.
     *   For RSA (RS256), the system MUST enforce a minimum key size of **2048 bits** to mitigate factorizing attacks.
 *   **Authorization Parameters:** Authorization URL generation MUST enforce the presence of `state` (min 16 chars), `nonce` (min 16 chars), and `code_challenge` (PKCE).
-*   **Claims Validation:** The system MUST verify `exp` (Expiry), `iat` (Issued At), `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party). Both `exp` and `iat` MUST be present and valid to satisfy strict OIDC Core 1.0 §2 compliance and ensure robust token age validation.
+*   **Claims Validation:** The system MUST verify `exp` (Expiry), `iat` (Issued At), `nonce` (Replay), `iss` (Issuer), `aud` (Audience), and `azp` (Authorized Party). Both `exp` and `iat` MUST be present and valid to satisfy strict OIDC Core 1.0 §2 compliance. Following §3.1.3.7, the `azp` claim is mandatory only if `aud` contains multiple values; if `azp` is present, it MUST match the `client_id`. This ensures robust token age validation and authorized party enforcement.
 
 ---
 
