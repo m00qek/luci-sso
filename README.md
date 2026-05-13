@@ -6,23 +6,24 @@
 
 ---
 
-## 📖 What is this?
-`luci-sso` replaces the standard LuCI password prompt with an **OpenID Connect (OIDC)** flow, allowing you to secure your router with modern identity providers like Google, GitHub, or Authelia.
+## What is this?
 
-## 📚 Documentation
-Our documentation is organized using the **Diataxis Framework** to serve different personas: Router Admins, Developers, and Security Auditors.
+`luci-sso` replaces the standard LuCI password prompt with an **OpenID Connect (OIDC)** flow, letting you secure your router with identity providers like Google, GitHub, or Authelia.
 
-### [👉 Read the Documentation](https://m00qek.github.io/luci-sso/)
+## Documentation
 
-*   **[Tutorials](https://m00qek.github.io/luci-sso/tutorials/)**: Building from source and getting started.
-*   **[How-to Guides](https://m00qek.github.io/luci-sso/how-to/)**: Configuring providers and debugging.
-*   **[Reference](https://m00qek.github.io/luci-sso/reference/)**: UCI schemas and RFC compliance.
-*   **[Explanation](https://m00qek.github.io/luci-sso/explanation/)**: Architecture and Security Model deep-dives.
+### [Read the Documentation](https://m00qek.github.io/luci-sso/)
+
+*   **[Tutorials](https://m00qek.github.io/luci-sso/tutorials/)**: Start here — [Your First SSO Login](https://m00qek.github.io/luci-sso/tutorials/first-sso-login/) walks you through a complete setup in minutes.
+*   **[How-to Guides](https://m00qek.github.io/luci-sso/how-to/)**: Provider configuration, RBAC, split-horizon, debugging, and more.
+*   **[Reference](https://m00qek.github.io/luci-sso/reference/)**: UCI schema, HTTP API, log messages, and RFC compliance.
+*   **[Explanation](https://m00qek.github.io/luci-sso/explanation/)**: Architecture, security model, OIDC flow, and threat model.
 
 ---
 
-## 🚀 Quick Build
-If you have Docker and `make`, you can build the package for your architecture immediately:
+## Quick Build
+
+If you have Docker and `make`:
 
 ```bash
 make -C devenv package SDK_ARCH=x86-64
@@ -32,5 +33,6 @@ See [Building from Source](https://m00qek.github.io/luci-sso/tutorials/building/
 
 ---
 
-## 📜 License
+## License
+
 MIT License. See [LICENSE](LICENSE) for details.

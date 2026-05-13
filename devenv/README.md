@@ -1,106 +1,53 @@
-# LuCI SSO Development Environment
+# Development Environment
 
-This directory contains a fully containerized OIDC/OAuth2 stack for developing and testing `luci-sso` without a physical router.
+A fully containerized OIDC/OAuth2 stack for developing and testing `luci-sso` without a physical router.
 
-## 🏗️ Environment Stacks
+For a full walkthrough, see [Development Workflow](https://m00qek.github.io/luci-sso/how-to/developer/development-workflow/).
 
-The environment is split into two distinct **suites** (Docker Compose projects). While you can run one of each simultaneously, you cannot run two instances of the same suite.
+---
 
-### 1. Local Stack (`DOCKER_SUITE=local`)
-*   **Purpose:** Manual development, hot-reloading code, and interactive debugging.
-*   **Ports:** Maps services to `localhost` (e.g., 8443, 5556).
-*   **Commands:** `make local-up`, `make local-down`, `make local-shell`.
+## Two stacks
 
-### 2. CI Stack (`DOCKER_SUITE=ci`)
-*   **Purpose:** Automated browser testing and CI simulation.
-*   **Isolation:** Uses internal DNS names (e.g., `luci.luci-sso.test`) and does not map ports to the host.
-*   **Commands:** `make up`, `make down`, `make test`, `make ps`.
+| Stack | Purpose | Start | Stop |
+| :--- | :--- | :--- | :--- |
+| **Local** (`DOCKER_SUITE=local`) | Manual dev, hot-reload, interactive shell | `make local-up` | `make local-down` |
+| **CI** (`DOCKER_SUITE=ci`) | Automated browser tests, CI simulation | `make up` | `make down` |
 
-> **Note on Concurrency:** You **CAN** have the Local stack running while you execute CI tests. However, you **CANNOT** run `make up` twice simultaneously.
+You can run Local and CI simultaneously. You cannot run two instances of the same stack.
 
-## 🌐 Accessing Services
+## Services (local stack)
 
-The environment is designed to work via `localhost` using specific ports. All TLS certificates are generated with `localhost` in the Subject Alternative Name (SAN).
+| Service | URL |
+| :--- | :--- |
+| OpenWrt / LuCI | https://localhost:8443 |
+| Mock IdP | https://localhost:5556 |
 
-| Service | Local URL | Description |
-| :--- | :--- | :--- |
-| **OpenWrt** | [https://localhost:8443](https://localhost:8443) | The target OpenWrt web interface (LuCI). |
-| **Mock IdP** | [https://localhost:5556](https://localhost:5556) | The OIDC Identity Provider. |
+All TLS certificates are generated with `localhost` in the SAN. Import `devenv/.pki/CA.crt` into your browser to avoid TLS warnings.
 
-## 🧪 Manual Testing & Debugging
+## Common commands
 
-Manual verification is highly encouraged during development to inspect token contents and redirection flows.
-
-### 1. Verify OIDC Discovery
-Check if the Mock IdP is serving its configuration correctly:
 ```bash
-curl -k https://localhost:5556/.well-known/openid-configuration
+make local-up          # Start local stack
+make local-shell       # SSH into the OpenWrt container
+make unit-test         # Run unit tests (no stack needed)
+make up && make e2e-test  # Start CI stack and run browser tests
+make package SDK_ARCH=x86-64  # Build IPK for x86-64
 ```
 
-### 2. Inspect Issued Tokens & Keys
-The Mock IdP stores its runtime state (including generated signing keys) in:
-*   `devenv/.pki/idp/signing_key.pem`
-*   `devenv/.pki/idp/tokens.json` (if persistent storage is enabled in `index.js`)
+## Architecture support
 
-### 3. Log Inspection
-To follow logs for a specific component:
+| `SDK_ARCH` | Example hardware |
+| :--- | :--- |
+| `x86-64` | Proxmox VMs, Intel NUC, PC Engines APU |
+| `aarch64_generic` | Raspberry Pi 4/5, NanoPi R4S |
+
+`CRYPTO_LIB` selects the backend: `mbedtls` (default) or `wolfssl`.
+
+## Troubleshooting
+
+**`Permission denied` on `bin/`** — Docker created `bin/lib` as root before compilation. Fix:
 ```bash
-docker logs -f ci-x86-64-idp     # Mock IdP logs (Node.js)
-docker exec ci-x86-64-openwrt logread -f # Follow system logs
+make down && sudo rm -rf bin && make compile && make up
 ```
 
-Typical successful login trace:
-```text
-user.info luci-sso: OIDC callback received
-user.info luci-sso: Token exchange successful
-user.info luci-sso: Successful Passwordless SSO login for [oidc_id: ...] mapped to role=admin
-```
-
-### 4. Interactive Shell
-If you need to inspect the LuCI state (UCI configs, UBUS) directly:
-```bash
-make local-shell
-```
-
-## 🏗️ Multi-Architecture Support
-
-The environment follows an **Authoritative SDK** model. You define the SDK you want to build with, and the environment automatically selects a compatible Rootfs for metadata mapping.
-
-### Beta Limitation: Build vs. Test
-*   **Cross-Compilation (Supported):** You can build IPKs for any architecture (e.g., `make package SDK_ARCH=aarch64_generic`).
-*   **Local Testing (Host-Only):** Running the full environment (`make up`) is currently restricted to your host's native architecture. Cross-architecture emulation is not supported in the beta phase.
-
-### Architecture Support Matrix
-
-| SDK Architecture (`SDK_ARCH`) | Runtime Rootfs (`ROOTFS_ARCH`) | Compatible Hardware Examples |
-| :--- | :--- | :--- |
-| **`x86-64`** | `x86-64` | Proxmox VMs, Intel NUC, PC Engines APU |
-| **`aarch64_generic`** | `aarch64_generic` | Raspberry Pi 4/5, Yuncore AX835, NanoPi R4S |
-
-*   **Variables:**
-    *   **`CRYPTO_LIB`**: The backend to use (`mbedtls` or `wolfssl`).
-    *   `SDK_ARCH`: The build authority (must match a tag in `ghcr.io/openwrt/sdk`).
-    *   `ROOTFS_ARCH`: The runtime target (derived automatically from `SDK_ARCH`).
-*   **Auto-detection:** The `Makefile` automatically detects your host architecture and selects the matching `SDK_ARCH` for testing.
-*   **Artifact Segregation:** Binaries are stored in `bin/lib/${SDK_ARCH}/${CRYPTO_LIB}/`.
-*   **Manual Override (Building Only):**
-    Force a specific SDK or backend for packaging:
-    ```bash
-    make package SDK_ARCH=aarch64_generic CRYPTO_LIB=wolfssl
-    ```
-
-## 🔐 PKI & Trust
-
-The `pki` service automatically generates a development CA and per-service certificates on startup.
-*   **CA Certificate:** Located at `devenv/.pki/CA.crt`.
-*   **Trust:** To avoid browser TLS warnings, you can manually import `CA.crt` into your browser's trust store.
-*   **Reset:** To regenerate all certificates, run `make local-down` and delete the `devenv/.pki` directory.
-
-## 🛠 Troubleshooting
-
-*   **Permission Denied on `bin/`:** This usually occurs if the environment is started (`make up`) before the initial compilation (`make compile`). If the `bin/lib` directories do not exist, Docker will create them as `root` when mounting volumes, which prevents your host user from writing to them later. 
-    *   **Fix:** Run `make down`, delete the `bin/` directory if it exists (`sudo rm -rf bin`), and then run `make compile` followed by `make up`.
-    *   **Automation:** The `Makefile` now automatically exports your host `UID` and `GID` and applies `chmod a+rwx` to the build directories to mitigate these issues in multi-user or CI environments.
-*   **Port Conflicts:** If ports 8443 or 5556 are in use, you can override them in `devenv/Makefile` or via environment variables.
-*   **`native.so` is a directory:** If you see an error like `Error loading shared library ... native.so: Is a directory`, it means the environment was started before the native components were compiled. Docker automatically creates a directory when a volume source file is missing. 
-    *   **Fix:** Follow the same steps as the "Permission Denied" issue above: `make down`, `make compile`, then `make up`.
+**`native.so` is a directory** — Same root cause. Same fix as above.
