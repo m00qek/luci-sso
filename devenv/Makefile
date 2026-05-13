@@ -144,9 +144,9 @@ TIME ?= 60
 DETECT_LEAKS ?= 0
 
 .fuzzer-test:
-	$(VALIDATE_SUITE_RUNNING)
 	@echo -e " $(BLUE)🧪$(RESET) Running native fuzz tests for $(CRYPTO_LIB) ($(TIME)s)..."
-	docker compose $(COMPOSE_FLAGS) exec -e ASAN_OPTIONS="detect_leaks=$(DETECT_LEAKS)" fuzzer bash -c " \
+	docker compose $(COMPOSE_FLAGS) pull fuzzer || true
+	docker compose $(COMPOSE_FLAGS) run --rm -e ASAN_OPTIONS="detect_leaks=$(DETECT_LEAKS)" fuzzer bash -c " \
 		mkdir -p bin/fuzz && cd bin/fuzz && \
 		cmake -DENABLE_FUZZING=ON ../../src && \
 		make -j$$(nproc) && \

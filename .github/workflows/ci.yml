@@ -177,23 +177,13 @@ jobs:
     env:
       SDK_ARCH: ${{ needs.metadata.outputs.sdk_arch }}
       CRYPTO_LIB: ${{ matrix.crypto }}
-      SDK_VERSION: "25.12.3" # Required to start the environment correctly
+      SDK_VERSION: "25.12.3"
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Pull images
-        run: make -sC devenv pull
-
-      - name: Start environment
-        run: make -sC devenv up
-
       - name: Fuzz Tests (60s)
-        run: make -sC devenv fuzzer-test TIME=60
-
-      - name: Stop environment
-        if: always()
-        run: make -sC devenv down
+        run: make -sC devenv fuzzer-test
 
   test-integration:
     name: Verification (${{ matrix.crypto }} / ${{ matrix.openwrt_version }})
