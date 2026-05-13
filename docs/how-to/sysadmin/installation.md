@@ -4,37 +4,79 @@ This guide describes how to install the `luci-sso` package and its required depe
 
 ---
 
-## Step 1: Upload the Package
-Upload the compiled `.ipk` file to your router (e.g., via `scp`):
+## 1. Choose a Crypto Backend
 
-```bash
-scp -O bin/lib/<ARCH>/packages/luci-sso*.ipk root@192.168.1.1:/tmp/
-```
+`luci-sso` requires a native crypto bridge to handle secure tokens. You must choose one backend during installation.
 
-## Step 2: Install Dependencies
-`luci-sso` relies on several `ucode` modules and libraries. Run the following commands on the router:
+| Backend | Recommendation |
+| :--- | :--- |
+| **mbedTLS** | **Default.** Lightweight and already present on most OpenWrt systems. |
+| **wolfSSL** | Alternative lightweight backend. |
+| **OpenSSL** | For systems that already use OpenSSL for other services (e.g., VPNs). |
 
-```bash
-opkg update
-opkg install \
-    ucode \
-    libucode \
-    ucode-mod-fs \
-    ucode-mod-ubus \
-    ucode-mod-uci \
-    ucode-mod-math \
-    ucode-mod-uclient \
-    ucode-mod-uloop \
-    ucode-mod-log \
-    liblucihttp-ucode
-```
+---
 
-## Step 3: Install LuCI SSO
-Install the package you uploaded in Step 1:
+## 2. Install the Package
 
-```bash
-opkg install /tmp/luci-sso*.ipk
-```
+Choose your preferred method below to install the `.ipk` file.
+
+=== "Browser (LuCI)"
+
+    1.  **Log in** to your router's LuCI web interface.
+    2.  Navigate to **System** -> **Software**.
+
+    ![LuCI interface showing the Software page with the 'Update lists...' and 'Upload Package...' buttons highlighted](../../assets/screenshots/luci-software-install.svg "LuCI Software installation page")
+
+    3.  Click **Update lists...** to refresh package information.
+    4.  Click **Upload Package...** and select your local `luci-sso` file.
+    5.  **Installation**: When prompted, confirm the installation.
+    6.  **Backend**: If `luci-sso-crypto-mbedtls` is not automatically installed, search for it in the **Filter** box and install it manually.
+
+=== "Terminal (SSH)"
+
+    1.  **Upload the Package**: Copy the `.ipk` file to your router (e.g., via `scp`). If you used the `devenv` build, the path will look like this:
+        ```bash
+        scp -O bin/lib/<ARCH>/<VERSION>/packages/luci-sso*.ipk root@192.168.1.1:/tmp/
+        ```
+    2.  **Install via opkg**: Run the following commands on the router:
+        ```bash
+        opkg update
+        opkg install /tmp/luci-sso*.ipk
+        ```
+    3.  **Verify Backend**: By default, `opkg` will attempt to pull in `luci-sso-crypto-mbedtls`. To use a different one:
+        ```bash
+        opkg install luci-sso-crypto-wolfssl
+        ```
+
+---
+
+## 3. Verify the Installation
+
+After installing, check that the `luci-sso` service is responsive and active.
+
+=== "Browser (LuCI)"
+
+    Navigate to the following URL in your browser:
+    `https://192.168.1.1/cgi-bin/luci-sso?action=enabled`
+
+    It should return a JSON response: `{"enabled": true}`.
+
+=== "Terminal (SSH)"
+
+    You can simulate a web request directly from the SSH terminal to verify the service is alive:
+
+    ```bash
+    # On the router
+    QUERY_STRING="action=enabled" /www/cgi-bin/luci-sso
+    ```
+
+    **Expected Output:**
+    ```http
+    Status: 200 OK
+    Content-Type: application/json
+
+    {"enabled": true}
+    ```
 
 ---
 

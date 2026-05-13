@@ -84,6 +84,7 @@ nav:
       - About LuCI SSO: explanation/about.md
       - Design Philosophy: explanation/design-philosophy.md
       - About the OIDC Login Flow: explanation/oidc-flow.md
+      - About Crypto Backends: explanation/crypto-backends.md
       - Security Model: explanation/security-model.md
       - Architecture: explanation/architecture.md
       - Threat Model: explanation/threat-model.md

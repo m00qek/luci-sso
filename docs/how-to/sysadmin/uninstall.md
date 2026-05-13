@@ -4,49 +4,48 @@ This guide covers completely removing `luci-sso` from your router and restoring 
 
 ---
 
-## What happens on removal
+## Step 1: Remove the Packages
 
-Running `opkg remove luci-sso` triggers a pre-removal script that automatically:
+Choose your preferred method below to remove the software.
 
-- Removes the daily cleanup cron job from `/etc/crontabs/root`.
-- Reverts the LuCI login template (`sysauth.ut`) — the SSO button is removed from the login page.
-- Clears the LuCI module cache so the change is reflected immediately.
+=== "Browser (LuCI)"
 
-The standard username/password login is restored as soon as the package is removed. Users do not need to reboot.
+    1.  **Log in** to your router's LuCI web interface.
+    2.  Navigate to **System** -> **Software**.
+    3.  Click the **Installed** tab.
+    4.  In the **Filter** box, type `luci-sso`.
+    5.  Click **Remove** next to `luci-sso`.
+    6.  Find your crypto backend (e.g., `luci-sso-crypto-mbedtls`) and click **Remove**.
 
----
+    ![LuCI Software page showing the 'Installed' tab and the filter box used to find luci-sso packages](../../assets/screenshots/luci-software-uninstall.svg "Removing packages via LuCI")
 
-## Step 1: Remove the packages
+=== "Terminal (SSH)"
 
-Remove the main package and its crypto backend:
-
-```bash
-opkg remove luci-sso luci-sso-crypto-mbedtls
-```
-
-If you installed a different backend, replace `luci-sso-crypto-mbedtls` with the one you used:
-
-```bash
-# WolfSSL backend
-opkg remove luci-sso luci-sso-crypto-wolfssl
-
-# OpenSSL backend
-opkg remove luci-sso luci-sso-crypto-openssl
-```
+    1.  **Remove the main package and its crypto backend**:
+        ```bash
+        opkg remove luci-sso luci-sso-crypto-mbedtls
+        ```
+    2.  If you installed a different backend, replace `luci-sso-crypto-mbedtls` with the one you used (e.g., `luci-sso-crypto-wolfssl`).
 
 ---
 
 ## Step 2: Confirm the login page is restored
 
-Open a browser and navigate to `https://<YOUR_ROUTER>/cgi-bin/luci/`. The SSO button should be gone and only the standard username and password fields should be visible.
+Navigate to `https://<YOUR_ROUTER>/cgi-bin/luci/`. The SSO button should be gone, and only the standard username and password fields should be visible.
 
-If the SSO button is still showing, the LuCI cache may not have cleared. Run:
+If the SSO button is still showing, the LuCI cache may not have cleared automatically. You can force a refresh:
 
-```bash
-rm -rf /tmp/luci-modulecache/ /tmp/luci-indexcache
-```
+=== "Browser (LuCI)"
 
-Then reload the page.
+    1.  In **System** -> **Software**, click **Update lists...** (this often triggers a cache check).
+    2.  Or simply clear your browser's site data/cache for the router's IP.
+
+=== "Terminal (SSH)"
+
+    Run the following command to clear the LuCI template cache:
+    ```bash
+    rm -rf /tmp/luci-modulecache/ /tmp/luci-indexcache
+    ```
 
 ---
 
@@ -54,23 +53,29 @@ Then reload the page.
 
 `opkg remove` does not delete two categories of files: conffiles and files created at runtime.
 
-**Configuration** — `/etc/config/luci-sso` is preserved by opkg's conffile mechanism. Remove it if you do not plan to reinstall:
+=== "Browser (LuCI)"
 
-```bash
-rm /etc/config/luci-sso
-```
+    Most cleanup is easier via the terminal, but you can remove the main configuration file:
+    1.  Navigate to **System** -> **Backup / Flash Firmware**.
+    2.  Click the **Configuration** tab.
+    3.  If `/etc/config/luci-sso` is listed, you can exclude it from future backups or use a file manager plugin to delete it.
 
-**Session signing key** — `/etc/luci-sso/secret.key` is generated at runtime on first use, so opkg does not track it. Remove the entire directory:
+=== "Terminal (SSH)"
 
-```bash
-rm -rf /etc/luci-sso
-```
+    **Configuration** — `/etc/config/luci-sso` is preserved by opkg's conffile mechanism. Remove it manually:
+    ```bash
+    rm /etc/config/luci-sso
+    ```
 
-**Runtime state** — `/var/run/luci-sso/` lives on tmpfs and disappears on the next reboot. If you want to clear it immediately:
+    **Session signing key** — `/etc/luci-sso/secret.key` is generated at runtime on first use. Remove the entire directory:
+    ```bash
+    rm -rf /etc/luci-sso
+    ```
 
-```bash
-rm -rf /var/run/luci-sso
-```
+    **Runtime state** — `/var/run/luci-sso/` disappears on the next reboot. To clear it immediately:
+    ```bash
+    rm -rf /var/run/luci-sso
+    ```
 
 **Custom CA certificates** — If you added a private CA certificate for a self-hosted IdP during split-horizon setup, remove it manually:
 
@@ -85,10 +90,21 @@ update-ca-certificates
 
 Users who are currently logged in via SSO remain logged in until their UBUS session expires. `opkg remove` does not invalidate existing sessions — that would require a UBUS restart, which would also log out any password-authenticated users.
 
-If you need to immediately revoke all active sessions, restart the UBUS session manager:
+If you need to immediately revoke all active sessions, restart the UBUS session manager (`rpcd`):
 
-```bash
-/etc/init.d/rpcd restart
-```
+=== "Browser (LuCI)"
+
+    1.  Navigate to **System** -> **Startup**.
+    2.  Find `rpcd` in the list of Init Scripts.
+    3.  Click **Restart**.
+    
+    *Note: This will immediately log you out of the current session.*
+
+=== "Terminal (SSH)"
+
+    Run the following command to restart the session manager:
+    ```bash
+    /etc/init.d/rpcd restart
+    ```
 
 This logs out all users, including those authenticated with a password.
