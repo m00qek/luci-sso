@@ -3,8 +3,22 @@ name: Continuous Integration
 on:
   push:
     branches: [main, master, ci]
+    paths-ignore:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'README.md'
+      - 'STYLE_GUIDE.md'
+      - 'LICENSE'
+      - '.github/workflows/docs.yml'
   pull_request:
     branches: [main, master, ci]
+    paths-ignore:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - 'README.md'
+      - 'STYLE_GUIDE.md'
+      - 'LICENSE'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
     inputs:
       force_rebuild:
@@ -66,6 +80,19 @@ jobs:
         id: filter
         with:
           filters: |
+            native:
+              - 'src/**'
+              - 'test/fuzz_test.c'
+              - 'devenv/services/fuzzer/**'
+            code:
+              - 'src/**'
+              - 'files/**/*.uc'
+              - 'test/**'
+              - 'devenv/services/idp/**'
+              - 'devenv/services/browser/**'
+              - 'devenv/services/pki/**'
+              - 'devenv/services/openwrt/**'
+              - 'devenv/Makefile'
             fuzzer: 'devenv/services/fuzzer/**'
             openwrt: 'devenv/services/openwrt/**'
             sdk: 'devenv/services/sdk/**'
@@ -165,6 +192,7 @@ jobs:
 
   test-fuzz:
     name: Fuzz Tests (${{ matrix.crypto }})
+    if: ${{ needs.metadata.outputs.changed_native == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: [metadata, build-helpers]
     permissions:
@@ -187,6 +215,7 @@ jobs:
 
   test-integration:
     name: Verification (${{ matrix.crypto }} / ${{ matrix.openwrt_version }})
+    if: ${{ needs.metadata.outputs.changed_code == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: [metadata, build-helpers, build-versioned]
     permissions:

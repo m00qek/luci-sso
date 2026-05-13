@@ -3,6 +3,17 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
 permissions:
   contents: write
 jobs:
@@ -11,6 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure Git Credentials
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
@@ -25,4 +37,8 @@ jobs:
           restore-keys: |
             mkdocs-material-
       - run: pip install mkdocs-material
-      - run: mkdocs gh-pages --force
+      - name: Build Docs
+        run: mkdocs build
+      - name: Deploy to GitHub Pages
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: mkdocs gh-pages --force
