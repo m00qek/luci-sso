@@ -143,7 +143,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crypto: [mbedtls, wolfssl]
+        crypto: [mbedtls, wolfssl, openssl]
     env:
       SDK_ARCH: ${{ needs.metadata.outputs.sdk_arch }}
       CRYPTO_LIB: ${{ matrix.crypto }}

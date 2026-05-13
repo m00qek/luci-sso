@@ -8,6 +8,7 @@ PKG_MAINTAINER:=António Móra <m00qek@gmail.com>
 PKG_LICENSE:=MIT
 
 PKG_INSTALL:=1
+PKG_BUILD_DEPENDS:=libucode/host
 PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode
 
 include $(INCLUDE_DIR)/package.mk
@@ -21,8 +22,7 @@ define Package/$(PKG_NAME)
 endef
 
 define Package/$(PKG_NAME)/description
-  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal
-	dependencies.
+  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
 endef
 
 define Package/$(PKG_NAME)/conffiles
@@ -42,6 +42,14 @@ define Package/$(PKG_NAME)-crypto-wolfssl
   CATEGORY:=Utilities
   TITLE:=WolfSSL backend for $(PKG_NAME)
   DEPENDS:=+libucode +libwolfssl
+  PROVIDES:=luci-sso-crypto
+endef
+
+define Package/$(PKG_NAME)-crypto-openssl
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=OpenSSL backend for $(PKG_NAME)
+  DEPENDS:=+libucode +libopenssl
   PROVIDES:=luci-sso-crypto
 endef
 
@@ -96,6 +104,13 @@ define Package/$(PKG_NAME)-crypto-wolfssl/install
 		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_wolfssl.so $(1)/usr/lib/ucode/luci_sso/native.so || true
 endef
 
+define Package/$(PKG_NAME)-crypto-openssl/install
+	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
+	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_openssl.so ] && \
+		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_openssl.so $(1)/usr/lib/ucode/luci_sso/native.so || true
+endef
+
 $(eval $(call BuildPackage,$(PKG_NAME)))
 $(eval $(call BuildPackage,$(PKG_NAME)-crypto-mbedtls))
 $(eval $(call BuildPackage,$(PKG_NAME)-crypto-wolfssl))
+$(eval $(call BuildPackage,$(PKG_NAME)-crypto-openssl))

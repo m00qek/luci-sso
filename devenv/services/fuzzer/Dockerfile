@@ -8,7 +8,8 @@ RUN apk add --no-cache \
     compiler-rt \
     cmake \
     mbedtls-dev \
-    wolfssl-dev
+    wolfssl-dev \
+    openssl-dev
 
 # Set clang-19 as the default compiler
 ENV CC=clang-19

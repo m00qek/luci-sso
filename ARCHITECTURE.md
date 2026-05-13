@@ -29,11 +29,12 @@ The project strictly follows the pattern of keeping business logic (OIDC, Sessio
 *   **Benefit:** Enables 100% offline unit testing without mocks for the logic itself.
 
 ### Minimal C Surface
-C code is reserved exclusively for cryptographic primitives (`mbedtls` or `wolfssl`). 
+C code is reserved exclusively for cryptographic primitives (`mbedtls`, `wolfssl`, or `openssl`). 
 *   **Why:** Reduces the security audit surface and simplifies cross-compilation. Logic stays in memory-safe ucode.
 *   **Hardening:** To prevent buffer overflow and resource exhaustion attacks:
     *   The native bridge enforces a strict **16 KB** size limit on all input parameters (messages, signatures, keys).
     *   Public key parsing (JWK) explicitly validates the length of input coordinates (e.g., exactly 32 bytes for P-256) before memory operations to prevent heap-buffer-overflows.
+    *   MbedTLS and OpenSSL point-on-curve validation ensures that EC public keys are valid before use.
     *   MbedTLS PEM parsing logic correctly accounts for the mandatory NUL terminator in length parameters, preventing out-of-bounds reads when searching for PEM headers/footers.
     *   The native bridge correctly distinguishes between PEM (requiring NUL termination) and DER (binary) formats to prevent out-of-bounds reads.
     *   The `binary_truncate` utility enforces a strict contract requiring the truncation length to be less than or equal to the input data length to prevent undefined behavior.

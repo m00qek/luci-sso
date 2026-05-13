@@ -72,12 +72,10 @@ Run a specific backend fuzzer for a set duration (default 60s) via the developme
 ```bash
 # Standard run (60s)
 make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls
+make -sC devenv fuzzer-test CRYPTO_LIB=openssl
 
 # Faster run (5s) for quick iteration
-make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls TIME=5
-
-# Strict run (including memory leak detection)
-make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls DETECT_LEAKS=1
+make -sC devenv fuzzer-test CRYPTO_LIB=wolfssl TIME=5
 ```
 
 *Note: `DETECT_LEAKS` is disabled by default because crypto libraries (mbedtls/wolfssl) often leave minor, one-time global state allocations that trigger false positives at exit. Critical security bugs (overflows, UAF) will ALWAYS cause a failure regardless of this setting.*
