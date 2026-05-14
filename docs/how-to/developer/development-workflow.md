@@ -31,6 +31,12 @@ Native C compilation is guarded by a sentinel file in `bin/lib/.built`. If you m
 
 ## Test
 
+Unit tests run inside the `openwrt` container, so the CI stack must be up first:
+
+```bash
+make -C devenv up
+```
+
 ```bash
 # Run all unit and integration tests (Tiers 0–4)
 make -C devenv unit-test

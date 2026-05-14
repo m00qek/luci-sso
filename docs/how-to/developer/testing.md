@@ -6,7 +6,13 @@
 
 ## Unit & Integration Tests (Tiers 0–4)
 
-These tests run natively using the `ucode` interpreter. No network or router hardware required.
+These tests run inside the `openwrt` container using the `ucode` interpreter. No real router or network access is required, but the CI stack must be running:
+
+```bash
+make -C devenv up
+```
+
+Then run the tests:
 
 ```bash
 # Run all tests

@@ -67,10 +67,13 @@ If any tier fails, the output will identify the failing test and the module it b
 
 ## Step 4: Try the login flow
 
-We can now access the LuCI web interface running inside the container:
+The CI stack from Step 2 runs entirely inside Docker with no ports exposed to your machine — it is designed for automated tests. To interact with LuCI from a browser, start the local suite, which binds ports on `localhost`:
 
-* **URL:** `https://localhost:8443`
-* Choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
+```bash
+make -C devenv local-up
+```
+
+Then open `https://localhost:8443` in your browser and choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
 
 Notice that the login redirects to the mock IdP, then back to LuCI — the same flow a real user experiences with Google or Authelia. The mock IdP accepts any credentials, so any username/password will work.
 
@@ -80,7 +83,7 @@ Notice that the login redirects to the mock IdP, then back to LuCI — the same 
 
 * A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
 * A mock Identity Provider pre-configured with test credentials that accepts any username and password.
-* A simulated OpenWrt instance running `luci-sso` in a container, accessible at `https://localhost:8443`.
+* A CI stack (`make up`) for running the test suite, and a local stack (`make local-up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
 * A full test suite covering Tiers 0–4, runnable without a physical router or a real IdP.
 
 ---
