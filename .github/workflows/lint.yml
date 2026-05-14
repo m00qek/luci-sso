@@ -19,4 +19,4 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Check error codes are documented
-        run: bash bin/check-error-codes.sh
+        run: bash devenv/scripts/check-error-codes.sh
