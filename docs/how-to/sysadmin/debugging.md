@@ -64,6 +64,48 @@ To see the exact claim values the IdP is sending, check the log lines preceding 
 
 ---
 
+## The callback fails with HANDSHAKE_NOT_YET_VALID
+
+The router's clock is ahead of the browser's by more than `clock_tolerance`. The handshake state cookie contains an `iat` timestamp that the router considers to be in the future.
+
+Check the router's current time:
+
+```bash
+date
+```
+
+If the time is wrong, synchronize it with NTP:
+
+```bash
+# Check whether ntpd is running
+ps | grep ntpd
+
+# Start it if it is not
+service ntp start
+
+# Or force a one-shot sync and check the result
+ntpd -n -q -p pool.ntp.org && date
+```
+
+If the router has no NTP client installed, install one:
+
+```bash
+opkg update && opkg install ntp
+service ntp enable
+service ntp start
+```
+
+After synchronization, try logging in again. If clock drift is a recurring problem on this hardware (common on devices without a hardware real-time clock), increase `clock_tolerance` to accommodate it:
+
+```bash
+uci set luci-sso.default.clock_tolerance='120'
+uci commit luci-sso
+```
+
+The valid range is `0`–`3600` seconds.
+
+---
+
 ## Login succeeds but the session has no access
 
 The log will show `UBUS_LOGIN_FAILED` or `UBUS_SESSION_FAILED`.

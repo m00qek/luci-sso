@@ -74,5 +74,11 @@ After installing, check that the `luci-sso` service is responsive and active.
 
 ---
 
-## 🏁 Next Steps
-Once installed, you need to [Configure the Service](../../reference/uci-config.md).
+## Next Steps
+
+Configure `luci-sso` with an identity provider:
+
+- **[Your First SSO Login: Public IdP](../../tutorials/first-sso-login.md)** — Google. Requires a domain name and a publicly trusted certificate.
+- **[Your First SSO Login: Self-hosted IdP](../../tutorials/pocket-id-sso-login.md)** — Pocket ID on your LAN. No public infrastructure required.
+
+If you already know which provider you are using, go directly to the [How-to Guides](../index.md#identity-providers) for provider-specific configuration.

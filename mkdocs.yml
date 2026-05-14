@@ -58,14 +58,18 @@ nav:
           - Google: how-to/providers/google.md
           - Github: how-to/providers/github.md
           - Authelia: how-to/providers/authelia.md
+          - Keycloak: how-to/providers/keycloak.md
+          - Authentik: how-to/providers/authentik.md
           - Pocket ID: how-to/providers/pocket-id.md
       - Sysadmin:
           - Installation: how-to/sysadmin/installation.md
+          - Installing a Private CA Certificate: how-to/sysadmin/install-ca-certificate.md
           - Upgrading: how-to/sysadmin/upgrade.md
           - Rotating Credentials: how-to/sysadmin/rotate-credentials.md
           - Role-Based Access Control: how-to/sysadmin/rbac.md
           - Split-Horizon Networking: how-to/sysadmin/split-horizon.md
           - Debugging: how-to/sysadmin/debugging.md
+          - Backing Up and Restoring: how-to/sysadmin/backup-restore.md
           - Removing luci-sso: how-to/sysadmin/uninstall.md
       - Developer:
           - Development Workflow: how-to/developer/development-workflow.md
@@ -83,11 +87,13 @@ nav:
       - Style Guide: reference/style-guide.md
       - Testing Architecture: reference/testing-architecture.md
       - RFC Compliance: reference/rfc-compliance.md
+      - devenv Targets: reference/devenv-targets.md
   - Explanation:
       - Overview: explanation/index.md
       - About LuCI SSO: explanation/about.md
       - Design Philosophy: explanation/design-philosophy.md
       - About the OIDC Login Flow: explanation/oidc-flow.md
+      - About the Session Lifecycle: explanation/session-lifecycle.md
       - About Crypto Backends: explanation/crypto-backends.md
       - Security Model: explanation/security-model.md
       - Architecture: explanation/architecture.md

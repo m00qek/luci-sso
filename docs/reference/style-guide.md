@@ -664,7 +664,7 @@ The system MUST validate all external inputs. Contract violations MUST trigger `
 
 State handles (handshake state) MUST be consumed BEFORE performing expensive verification operations. OIDC Access Tokens MUST be registered in the local session registry AFTER successful cryptographic verification of the ID Token.
 
-**Rationale:** Early consumption of state handles prevents replay attacks. Late registration of access tokens ensures the local registry is not polluted with unverified data from unauthenticated sources (DoS mitigation).
+See [Security Model](../explanation/security-model.md) and [Threat Model](../explanation/threat-model.md) for the reasoning behind this ordering.
 
 ---
 
@@ -692,9 +692,9 @@ The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be imp
 
 ### 8. No Shell Execution (system() / popen())
 
-Logic MUST NOT utilize `system()` or `popen()` for any operation. These functions are unnecessarily heavy and introduce command injection risks.
+Logic MUST NOT use `system()` or `popen()` for any operation.
 
-- **Delays:** Use `io.sleep()` (which utilizes `uloop.timer()`) instead of `system("sleep X")`.
+- **Delays:** Use `io.sleep()` (which uses `uloop.timer()`) instead of `system("sleep X")`.
 - **System Calls:** Use ucode built-ins or native C bindings for all system operations.
 
 ---

@@ -77,7 +77,7 @@ The `issuer_url` is the base URL of your Pocket ID instance. The `redirect_uri` 
 ## Step 3: Confirm the service is running
 
 ```bash
-curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
+curl -s https://192.168.1.1/cgi-bin/luci-sso?action=enabled
 ```
 
 Expected response:

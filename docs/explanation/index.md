@@ -12,6 +12,7 @@ Explanation is "understanding-oriented". It deepens the reader's understanding o
 
 ## 🔐 Authentication
 *   [About the OIDC Login Flow](oidc-flow.md) - What happens when a user clicks "Login with SSO".
+*   [About the Session Lifecycle](session-lifecycle.md) - How sessions are created, why they last one hour, and what happens at logout.
 
 ## 🛡️ Security
 *   [Security Model](security-model.md) - Our "Paranoid" approach to OIDC.
