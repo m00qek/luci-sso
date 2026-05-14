@@ -50,4 +50,4 @@ done <<< "$doc_cookies"
     printf '\nKeep cookie name strings in source and ### `name` headings in ## Cookies sections in docs in sync.\n'
     exit 1
 }
-echo "OK: cookie names — files/**/*.uc ↔ docs/**/*.md"
+echo "OK: cookie names — files/**/*.uc ↔ docs/reference/*.md"

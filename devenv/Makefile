@@ -177,7 +177,7 @@ DETECT_LEAKS ?= 0
 
 .up:
 	@# VALIDATION: Check if already running
-	@if [ -n "$(SUITE_IS_RUNNING)" ]; then
+	@if [ -n "$$($(SUITE_IS_RUNNING_CMD))" ]; then
 		echo -e " $(GREEN)✅$(RESET) The '$(DOCKER_SUITE)' environment is ALREADY RUNNING."
 		echo -e " $(BLUE)ℹ️$(RESET)  Nothing to do."
 		exit 0

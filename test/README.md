@@ -9,12 +9,12 @@ For architecture details and writing guidance, see [Testing Architecture](https:
 ## Running tests
 
 ```bash
-make unit-test                          # All tiers
-make unit-test VERBOSE=1                # With per-test output
-make unit-test FILTER='compliance.*SHA' # Regex filter on test names
-make unit-test MODULES='test/tier2/oidc_logic_test.uc'  # Specific file
+make -C devenv unit-test                          # All tiers
+make -C devenv unit-test VERBOSE=1                # With per-test output
+make -C devenv unit-test FILTER='compliance.*SHA' # Regex filter on test names
+make -C devenv unit-test MODULES='test/tier2/oidc_logic_test.uc'  # Specific file
 
-make up && make e2e-test                # Full E2E (requires Docker)
+make -C devenv up && make -C devenv e2e-test      # Full E2E (requires Docker)
 make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls  # Fuzz (60s)
 ```
 

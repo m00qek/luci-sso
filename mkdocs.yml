@@ -69,6 +69,7 @@ nav:
           - Removing luci-sso: how-to/sysadmin/uninstall.md
       - Developer:
           - Development Workflow: how-to/developer/development-workflow.md
+          - Adding a New Crypto Backend: how-to/developer/adding-crypto-backend.md
           - Running Tests: how-to/developer/testing.md
           - Running the Fuzzer: how-to/developer/fuzzing.md
           - Writing Documentation: how-to/developer/documentation.md

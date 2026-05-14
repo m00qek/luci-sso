@@ -44,6 +44,8 @@ OpenSSL is the industry standard. While it is the most performant and feature-co
 
 At installation time, the `luci-sso-crypto-*` package you choose installs the corresponding `.so` file to `/usr/lib/ucode/luci_sso/native.so`. This allows the high-level code to remain entirely agnostic of which library is actually doing the work.
 
+If you need to implement support for a library not listed here, see [How to Add a New Crypto Backend](../how-to/developer/adding-crypto-backend.md).
+
 ---
 
 ## Performance vs. Size

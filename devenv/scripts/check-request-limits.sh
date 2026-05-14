@@ -52,4 +52,4 @@ done <<< "$doc_limits"
     printf '\nKeep LIMIT_* constants in source and <!-- LIMIT_*=VALUE --> comments in docs in sync.\n'
     exit 1
 }
-echo "OK: request limits — files/**/*.uc ↔ docs/**/*.md"
+echo "OK: request limits — files/**/*.uc ↔ docs/reference/*.md"

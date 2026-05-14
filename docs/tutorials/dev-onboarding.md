@@ -83,7 +83,7 @@ Notice that the login redirects to the mock IdP, then back to LuCI — the same 
 
 * A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
 * A mock Identity Provider pre-configured with test credentials that accepts any username and password.
-* A CI stack (`make up`) for running the test suite, and a local stack (`make local-up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
+* A CI stack (`make -C devenv up`) for running the test suite, and a local stack (`make -C devenv local-up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
 * A full test suite covering Tiers 0–4, runnable without a physical router or a real IdP.
 
 ---

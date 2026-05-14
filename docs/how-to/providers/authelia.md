@@ -4,7 +4,7 @@ This guide describes how to connect `luci-sso` to an [Authelia](https://www.auth
 
 ---
 
-## 1. Authelia Configuration
+## Authelia Configuration
 Add a new client to your Authelia `configuration.yml` under `identity_providers: oidc: clients`:
 
 ```yaml
@@ -23,7 +23,7 @@ Add a new client to your Authelia `configuration.yml` under `identity_providers:
   userinfo_signed_response_alg: none
 ```
 
-## 2. Router Configuration
+## Router Configuration
 
 !!! note
     Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
@@ -38,7 +38,7 @@ uci commit luci-sso
 
 ---
 
-## 👥 Group Mapping
+## Group Mapping
 
 !!! note
     Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
@@ -50,6 +50,6 @@ uci add_list luci-sso.admin.group='router-admins'
 uci commit luci-sso
 ```
 
-## ✅ Verify
+## Verify
 
 Visit `https://<YOUR_ROUTER_IP>/cgi-bin/luci-sso?action=enabled` — it should return `{"enabled":true}`. Then navigate to the LuCI login page and confirm the "Login with SSO" button appears. Clicking it should redirect you to your Authelia instance.

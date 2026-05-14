@@ -787,7 +787,7 @@ More accurate naming for future P-384 support.
 Before submitting PR, verify:
 
 - [ ] All functions have tests
-- [ ] All tests pass (`make test`)
+- [ ] All tests pass (`make -C devenv test`)
 - [ ] No secrets in code/logs
 - [ ] Error handling follows guide (exceptions vs result objects)
 - [ ] I/O uses dependency injection

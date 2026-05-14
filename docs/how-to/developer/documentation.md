@@ -4,11 +4,11 @@ This guide describes how to contribute to the `luci-sso` documentation using the
 
 ---
 
-## 🛠️ Prerequisites
+## Prerequisites
 *   **Docker** (or Podman) installed on your machine.
 *   **make** utility.
 
-## 🚀 Working Locally
+## Working Locally
 
 The documentation uses **MkDocs** with the **Material** theme. We provide a `docs/Makefile` that wraps these tools in a Docker container, so you don't need to install Python locally.
 
@@ -39,7 +39,7 @@ make -C docs clean
 
 ---
 
-## 📐 Standards & Style
+## Standards & Style
 Before submitting a PR, ensure your changes follow our [Documentation Standards](../../reference/style-guide.md#documentation-standards):
 
 - **Diataxis:** Place your file in the correct quadrant (Tutorial, How-to, Reference, or Explanation).

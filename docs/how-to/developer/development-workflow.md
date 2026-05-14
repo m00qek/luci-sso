@@ -25,7 +25,7 @@ make -C devenv package SDK_ARCH=aarch64_generic
 make -C devenv package SDK_ARCH=mipsel_24kc
 ```
 
-Native C compilation is guarded by a sentinel file in `bin/lib/.built`. If you modify files in `src/`, the sentinel is invalidated and the next `make compile` rebuilds the C components.
+Native C compilation is guarded by a sentinel file in `bin/lib/.built`. If you modify files in `src/`, the sentinel is invalidated and the next `make -C devenv compile` rebuilds the C components.
 
 ---
 

@@ -6,8 +6,9 @@ Built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/). Stru
 
 ## Build and preview
 
+Both commands run inside a Docker container, so no local Python installation is required.
+
 ```bash
-make -C docs install   # Install Python dependencies (first time only)
 make -C docs serve     # Live preview at http://localhost:8000
 make -C docs build     # Build static site to bin/site/
 ```

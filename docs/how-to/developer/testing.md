@@ -21,8 +21,14 @@ make -C devenv unit-test
 # Run with detailed output
 make -C devenv unit-test VERBOSE=1
 
-# Run tests matching a pattern
+# Run tests matching a pattern (regex on test name)
 make -C devenv unit-test FILTER='oidc.*discovery'
+
+# Run a specific test file or directory
+make -C devenv unit-test MODULES='test/tier2/oidc_logic_test.uc'
+
+# Select the crypto backend to test (mbedtls, wolfssl, openssl)
+make -C devenv unit-test CRYPTO_LIB=wolfssl
 ```
 
 ---
@@ -35,8 +41,28 @@ These tests run in a Playwright-enabled Docker container and verify the full bro
 # Start the test stack
 make -C devenv up
 
-# Execute browser tests
+# Execute all browser tests
 make -C devenv e2e-test
+
+# Run tests matching a pattern
+make -C devenv e2e-test FILTER='login'
+
+# Run a specific spec file
+make -C devenv e2e-test MODULES='test/e2e/01-login.spec.js'
+```
+
+---
+
+## Automated Watcher
+
+You can run tests automatically whenever a file is changed in the `files/`, `src/`, or `test/` directories. This requires `inotify-tools` installed on your host machine.
+
+```bash
+# Watch and re-run both unit and E2E tests
+make -C devenv watch-tests
+
+# Watch with filters
+make -C devenv watch-tests FILTER='oidc' MODULES='test/tier2'
 ```
 
 ---
