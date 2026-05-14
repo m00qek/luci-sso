@@ -57,6 +57,7 @@ nav:
           - Google: how-to/providers/google.md
           - Github: how-to/providers/github.md
           - Authelia: how-to/providers/authelia.md
+          - Pocket ID: how-to/providers/pocket-id.md
       - Sysadmin:
           - Installation: how-to/sysadmin/installation.md
           - Upgrading: how-to/sysadmin/upgrade.md
@@ -70,6 +71,7 @@ nav:
           - Running Tests: how-to/developer/testing.md
           - Running the Fuzzer: how-to/developer/fuzzing.md
           - Writing Documentation: how-to/developer/documentation.md
+          - Documented Interfaces: how-to/developer/documented-interfaces.md
   - Reference:
       - Overview: reference/index.md
       - Log Messages: reference/log-messages.md

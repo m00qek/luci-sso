@@ -6,7 +6,19 @@ All `luci-sso` events are written to the system log. Read them with:
 logread -e luci-sso
 ```
 
-Each log entry contains an error code in `SCREAMING_SNAKE_CASE`. The tables below describe every code, what triggers it, and what it indicates. For steps to resolve common errors, see [How to Debug luci-sso](../how-to/sysadmin/debugging.md). For the HTTP endpoints that produce these codes, see the [HTTP API Reference](http-api.md).
+Each error code entry follows this structure:
+
+```
+luci-sso[<pid>]: [<http-status>] <CODE>
+```
+
+For example:
+
+```
+luci-sso[1234]: [503] SSO_DISABLED
+```
+
+Some codes are preceded by a diagnostic line that provides additional context; those cases are noted in the Description column. The tables below describe every code, what triggers it, and what it indicates. For steps to resolve common errors, see [How to Debug luci-sso](../how-to/sysadmin/debugging.md). For the HTTP endpoints that produce these codes, see the [HTTP API Reference](http-api.md).
 
 ---
 
@@ -16,7 +28,7 @@ These occur before any OIDC flow begins, during startup or on the first request.
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
-| `SSO_DISABLED` | `enabled` option is not `1` in UCI, or no valid configuration exists when a request arrives | SSO is installed but not activated, or the configuration failed to load. Set `uci set luci-sso.default.enabled='1'` and verify `uci show luci-sso`. |
+| `SSO_DISABLED` | `enabled` option is not `1` in UCI, or no valid configuration exists when a request arrives | The `enabled` option is not set to `1` in the UCI configuration, or no valid configuration exists. |
 | `CONFIG_ERROR` | `issuer_url`, `client_id`, `client_secret`, or `clock_tolerance` is missing or invalid | Required UCI option is absent or malformed. Check `uci show luci-sso`. |
 | `UCI_ERROR` | UCI cursor could not be created | The UCI system itself is unavailable — indicates a deeper OpenWrt system problem. |
 
@@ -136,7 +148,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
-| `USER_NOT_AUTHORIZED` | User's email and groups match no configured `config role` section, **or** a matching role exists but has no `read` or `write` permissions defined | Check the log line immediately before this code — it will say "matched no roles" to distinguish the two cases. For the first: add the user's email or group to `/etc/config/luci-sso`. For the second: ensure the matched role has at least one `read` or `write` entry. See [UCI Configuration](uci-config.md). |
+| `USER_NOT_AUTHORIZED` | User's email and groups match no configured `config role` section, **or** a matching role exists but has no `read` or `write` permissions defined | The user's identity matched no role, or the matched role defines no permissions. The log line immediately preceding this code identifies which condition was triggered. |
 | `TOKEN_REPLAYED` | The access token is already present in the local replay-protection registry | A previously used token was submitted again. This is either a replay attack or the user completed two logins with the same token. |
 | `TOKEN_REGISTRY_ERROR` | The router could not write the access token to the local replay-protection registry | Check disk space and write permissions on `/var/run/luci-sso/tokens/`. |
 | `CSRF_CHECK_FAILED` | Logout request is missing or has an invalid `stoken` CSRF parameter | Possible CSRF attack on the logout endpoint, or an expired/replayed logout link. |
@@ -162,8 +174,8 @@ These indicate infrastructure-level failures unrelated to the OIDC flow.
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
-| `SYSTEM_INIT_FAILED` | Secret key subsystem failed during the first login attempt — covers key generation failures, write failures, and lock-wait timeouts | The log will contain a descriptive `CRITICAL:` message immediately before this code identifying the specific cause (e.g. `Failed to write secret key`, `CSPRNG failure`). Check that the package was installed correctly, that `/etc/luci-sso/` is writable, and that disk space is available. Re-run `opkg install luci-sso` if needed. |
-| `SSL_INIT_FAILED` | TLS initialization failed | The router's CA bundle is missing or corrupt. Run `opkg install ca-bundle`. |
+| `SYSTEM_INIT_FAILED` | Secret key subsystem failed during the first login attempt — covers key generation failures, write failures, and lock-wait timeouts | The secret key subsystem failed on first use. A `CRITICAL:` diagnostic line immediately precedes this code in the log, identifying the specific cause (e.g. `Failed to write secret key`, `CSPRNG failure`). |
+| `SSL_INIT_FAILED` | TLS initialization failed | TLS context initialization failed. The system CA certificate store is missing or inaccessible. |
 | `CRYPTO_ERROR` | A cryptographic operation returned an unexpected error | Internal error in the native C crypto bridge. |
 | `CRYPTO_INIT_FAILED` | The PSA Crypto subsystem failed to initialize | MbedTLS PSA layer unavailable. May indicate a missing `mbedtls` package. |
 | `TOO_MANY_REQUESTS` | More than 50 requests in a 60-second window across all sources (global counter) | Rate limit hit. Indicates automated scanning or a misconfigured client retrying rapidly. |
