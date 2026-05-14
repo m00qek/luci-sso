@@ -706,10 +706,11 @@ Documentation is code. It MUST be accurate, persona-aware (Diataxis), and access
 
 ### 1. Diataxis Quadrants
 All documentation must reside in the `docs/` directory and follow the Diataxis framework:
-*   `tutorials/`: Learning-oriented (Step-by-step success).
-*   `how-to/`: Goal-oriented (Task completion).
-*   `reference/`: Information-oriented (Technical machinery).
-*   `explanation/`: Understanding-oriented (The "Why").
+
+- `tutorials/`: Learning-oriented (Step-by-step success).
+- `how-to/`: Goal-oriented (Task completion).
+- `reference/`: Information-oriented (Technical machinery).
+- `explanation/`: Understanding-oriented (The "Why").
 
 ### 2. Accessibility Mandates (WCAG 2.1 AA)
 We prioritize accessibility for blind users, those with cognitive disabilities, and AI Agents.

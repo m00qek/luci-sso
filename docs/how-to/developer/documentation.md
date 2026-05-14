@@ -18,7 +18,8 @@ This is the best way to write documentation. It will automatically refresh your 
 ```bash
 make -C docs serve
 ```
-*   Then open **http://localhost:8000** in your browser.
+
+Then open **http://localhost:8000** in your browser.
 
 ### 2. Build the Static Site
 If you want to verify the final production output:
@@ -26,7 +27,8 @@ If you want to verify the final production output:
 ```bash
 make -C docs build
 ```
-*   The output will be generated in the `site/` directory in the project root.
+
+The output will be generated in the `site/` directory in the project root.
 
 ### 3. Clean Up
 To remove the generated `site/` directory:
@@ -39,6 +41,7 @@ make -C docs clean
 
 ## 📐 Standards & Style
 Before submitting a PR, ensure your changes follow our [Documentation Standards](../../reference/style-guide.md#documentation-standards):
-*   **Diataxis:** Place your file in the correct quadrant (Tutorial, How-to, Reference, or Explanation).
-*   **Accessibility:** Add descriptive `alt` text to all images.
-*   **Diagrams:** Use Mermaid.js for diagrams and provide a textual fallback.
+
+- **Diataxis:** Place your file in the correct quadrant (Tutorial, How-to, Reference, or Explanation).
+- **Accessibility:** Add descriptive `alt` text to all images.
+- **Diagrams:** Use Mermaid.js for diagrams and provide a textual fallback.

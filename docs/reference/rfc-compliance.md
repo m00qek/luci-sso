@@ -30,6 +30,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 
 ## 🔍 Audit Trail
 Security auditors can verify these claims by inspecting the following modules:
-*   **Protocol Logic:** `files/usr/share/ucode/luci_sso/oidc.uc`
-*   **Crypto Primitives:** `files/usr/share/ucode/luci_sso/crypto.uc`
-*   **Native Bridge:** `src/native_common.c`
+
+- **Protocol Logic:** `files/usr/share/ucode/luci_sso/oidc.uc`
+- **Crypto Primitives:** `files/usr/share/ucode/luci_sso/crypto.uc`
+- **Native Bridge:** `src/native_common.c`
