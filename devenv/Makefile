@@ -60,7 +60,7 @@ COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_D
 SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
 
 # --- 3. PUBLIC INTERFACE ---
-.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests
+.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint
 .PHONY: local-up local-down local-ps local-shell local-run
 
 # Sentinel file tracks the last successful build for a specific arch/version/crypto combo
@@ -111,6 +111,13 @@ watch-tests: DOCKER_SUITE = ci
 watch-tests: .watch-tests
 
 test: unit-test e2e-test
+
+lint:
+	@echo -e " $(BLUE)🔍$(RESET) Running documentation lint checks..."
+	@bash $(DEVENV_DIR)/scripts/check-error-codes.sh
+	@bash $(DEVENV_DIR)/scripts/check-request-limits.sh
+	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
+	@echo -e " $(GREEN)✅$(RESET) All lint checks passed."
 
 pull: DOCKER_SUITE = ci
 pull: .pull

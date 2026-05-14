@@ -2,7 +2,7 @@ import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as base from 'luci_sso.crypto.base';
 
-const MAX_TOKEN_SIZE = 16384; // 16 KB
+const LIMIT_TOKEN_SIZE = 16384; // 16 KB
 
 /**
  * Signs a payload using HMAC-SHA256 and returns a JWS (Compact Serialization).
@@ -54,7 +54,7 @@ export function verify(native, token, secret) {
 	if (type(secret) != "string")
 		die("CONTRACT_VIOLATION: jws.verify expects string secret");
 
-	if (length(token) > MAX_TOKEN_SIZE)
+	if (length(token) > LIMIT_TOKEN_SIZE)
 		return Result.err("TOKEN_TOO_LARGE");
 
 	let parts = split(token, ".", 4);

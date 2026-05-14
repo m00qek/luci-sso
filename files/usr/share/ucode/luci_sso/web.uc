@@ -8,12 +8,12 @@ import { INPUT_TOO_LARGE } from 'luci_sso.errors';
 /**
  * Maximum size for environment variables or parameter strings.
  */
-const MAX_INPUT_LEN = 16384;
+const LIMIT_INPUT_LEN = 16384;
 
 /**
  * Maximum number of parameters allowed to prevent memory exhaustion.
  */
-const MAX_PARAM_COUNT = 100;
+const LIMIT_PARAM_COUNT = 100;
 
 /**
  * Maps HTTP status codes to their standard reason phrases.
@@ -62,7 +62,7 @@ const ERROR_MAP = {
  */
 function safe_getenv(io, key) {
 	let val = io.getenv(key);
-	if (val && length(val) > MAX_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431, key: key });
+	if (val && length(val) > LIMIT_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431, key: key });
 	return Result.ok(val);
 };
 
@@ -72,10 +72,10 @@ function safe_getenv(io, key) {
 export function parse_params(str) {
 	let params = {};
 	if (!str || type(str) != "string") return Result.ok(params);
-	if (length(str) > MAX_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
+	if (length(str) > LIMIT_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
 
 	let pairs = split(str, "&");
-	if (length(pairs) > MAX_PARAM_COUNT) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
+	if (length(pairs) > LIMIT_PARAM_COUNT) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
 
 	for (let pair in pairs) {
 		let parts = split(pair, "=", 2);
@@ -96,10 +96,10 @@ export function parse_params(str) {
 export function parse_cookies(str) {
 	let cookies = {};
 	if (!str || type(str) != "string") return Result.ok(cookies);
-	if (length(str) > MAX_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
+	if (length(str) > LIMIT_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
 
 	let pairs = split(str, /;[ ]*/);
-	if (length(pairs) > MAX_PARAM_COUNT) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
+	if (length(pairs) > LIMIT_PARAM_COUNT) return Result.err(INPUT_TOO_LARGE, { http_status: 431 });
 
 	for (let pair in pairs) {
 		let trimmed = trim(pair);

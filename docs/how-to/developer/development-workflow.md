@@ -70,12 +70,24 @@ Never hardcode environment-specific values (versions, domains) in Dockerfiles or
 
 ---
 
+## Lint
+
+Three documentation contracts are enforced by CI. Run them locally before pushing:
+
+```bash
+make -sC devenv lint
+```
+
+If a check fails, see [How to add error codes, limit constants, and cookies](documented-interfaces.md) for what to update.
+
+---
+
 ## Git Workflow
 
 1. Create a branch: `git checkout -b feat/my-feature`
-2. Make changes, run `make unit-test` locally
+2. Make changes, run `make unit-test` and `make -sC devenv lint` locally
 3. Commit following the [commit message format](../../reference/style-guide.md#commit-messages)
-4. Open a PR — CI runs the full test suite automatically
+4. Open a PR — CI runs the full test suite and lint checks automatically
 
 ---
 

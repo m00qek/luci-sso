@@ -9,7 +9,7 @@ import * as c_base from 'luci_sso.crypto.base';
 import * as c_hash from 'luci_sso.crypto.hash';
 import * as c_pkce from 'luci_sso.crypto.pkce';
 
-const MAX_TOKEN_SIZE = 16384; // 16 KB
+const LIMIT_TOKEN_SIZE = 16384; // 16 KB
 
 let native = _native;
 

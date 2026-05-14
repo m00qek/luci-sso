@@ -166,6 +166,11 @@ For the mapping from internal error codes to HTTP statuses, see [Log Messages](l
 
 These constraints apply to all rate-limited endpoints:
 
+<!-- LIMIT_REQUESTS=50 -->
+<!-- LIMIT_WINDOW=60 -->
+<!-- LIMIT_INPUT_LEN=16384 -->
+<!-- LIMIT_PARAM_COUNT=100 -->
+
 | Limit | Value |
 | :--- | :--- |
 | Maximum query string length | 16 384 bytes |
@@ -177,3 +182,19 @@ These constraints apply to all rate-limited endpoints:
 The rate limit is global — it counts all requests across all source addresses. It does not apply to `?action=enabled`.
 
 Requests that exceed the size limits return `431`. Requests that exceed the rate limit return `429`.
+
+---
+
+## Back-channel limits
+
+These constraints apply to the router's outbound requests to the IdP (discovery, JWKS, token endpoint, UserInfo).
+
+<!-- LIMIT_RESPONSE_SIZE=262144 -->
+<!-- LIMIT_TOKEN_SIZE=16384 -->
+
+| Limit | Value |
+| :--- | :--- |
+| Maximum IdP response body (discovery, JWKS, token, UserInfo) | 256 KB |
+| Maximum ID Token size | 16 KB |
+
+Responses that exceed the response size limit are rejected before being parsed — the router logs `OIDC_DISCOVERY_FAILED`, `JWKS_FETCH_FAILED`, `TOKEN_ENDPOINT_NETWORK_ERROR`, or `USERINFO_NETWORK_ERROR` depending on which back-channel call triggered it. ID Tokens that exceed the token size limit cause `ID_TOKEN_VERIFICATION_FAILED`.

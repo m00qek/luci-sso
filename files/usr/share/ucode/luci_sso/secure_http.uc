@@ -42,7 +42,7 @@ function get_system_ca_files() {
     return keys(cas_map);
 }
 
-const MAX_RESPONSE_SIZE = 262144; // 256 KB
+const LIMIT_RESPONSE_SIZE = 262144; // 256 KB
 
 /**
  * Performs a synchronous-looking HTTPS request using ONLY system-trusted CAs.
@@ -83,7 +83,7 @@ export function request(method, url, opts) {
                     return;
                 }
 
-                if ((length(response.body) + length(data)) > MAX_RESPONSE_SIZE) {
+                if ((length(response.body) + length(data)) > LIMIT_RESPONSE_SIZE) {
                     error = "RESPONSE_TOO_LARGE";
                     uloop.end();
                     return;

@@ -17,8 +17,8 @@ import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'l
 
 const RATELIMIT_DIR = "/var/run/luci-sso";
 const RATELIMIT_FILE = RATELIMIT_DIR + "/ratelimit.json";
-const WINDOW = 60;   // 60 seconds
-const THRESHOLD = 50; // 50 requests per window
+const LIMIT_WINDOW = 60;   // 60 seconds
+const LIMIT_REQUESTS = 50; // 50 requests per window
 
 /**
  * Checks and updates the global rate limit state.
@@ -37,7 +37,7 @@ function _check_rate_limit(io) {
 	}
 
 	// Reset window if it has expired
-	if (now - state.window_start > WINDOW) {
+	if (now - state.window_start > LIMIT_WINDOW) {
 		state.count = 1;
 		state.window_start = now;
 	} else {
@@ -56,8 +56,8 @@ function _check_rate_limit(io) {
 		io.log("error", "Failed to write rate limit state file");
 	}
 
-	if (state.count > THRESHOLD) {
-		io.log("warn", `Rate limit exceeded: ${state.count} requests in current window [limit: ${THRESHOLD}]`);
+	if (state.count > LIMIT_REQUESTS) {
+		io.log("warn", `Rate limit exceeded: ${state.count} requests in current window [limit: ${LIMIT_REQUESTS}]`);
 		return false;
 	}
 

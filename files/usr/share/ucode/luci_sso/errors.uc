@@ -5,7 +5,7 @@
  *
  * Every constant exported here must be documented in docs/reference/log-messages.md,
  * and every code in that document must be exported here.
- * CI enforces this bidirectional constraint via bin/check-error-codes.sh.
+ * CI enforces this bidirectional constraint via devenv/scripts/check-error-codes.sh.
  *
  * Internal codes used only inside a single subsystem do not belong here.
  */

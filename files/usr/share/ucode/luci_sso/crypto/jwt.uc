@@ -2,7 +2,7 @@ import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as base from 'luci_sso.crypto.base';
 
-const MAX_TOKEN_SIZE = 16384; // 16 KB
+const LIMIT_TOKEN_SIZE = 16384; // 16 KB
 
 function decode_header(raw_header, alg) {
 	let h_res = encoding.b64url_decode(raw_header);
@@ -45,7 +45,7 @@ export function verify(native, token, pubkey, options) {
 	if (type(options.clock_tolerance) != "int")
 		die("CONTRACT_VIOLATION: jwt.verify expects mandatory integer options.clock_tolerance");
 
-	if (length(token) > MAX_TOKEN_SIZE)
+	if (length(token) > LIMIT_TOKEN_SIZE)
 		return Result.err("TOKEN_TOO_LARGE");
 
 	if (!options.alg)
