@@ -53,6 +53,25 @@ The IdP's discovery document must still declare the public `issuer_url` as its `
 
 ---
 
+## Prerequisites
+
+The internal address must:
+
+- Use **HTTPS** — plain HTTP is rejected even for internal addresses.
+- Have a certificate the router trusts. If the IdP uses a self-signed or private CA certificate, install it on the router:
+
+```bash
+# Copy your CA certificate to the router
+scp -O ca.crt root@192.168.1.1:/etc/ssl/certs/my-homelab-ca.crt
+
+# Update the CA bundle
+update-ca-certificates
+```
+
+If the router cannot verify the IdP's certificate, the token exchange will fail with `SSL_INIT_FAILED` or a `TOKEN_ENDPOINT_NETWORK_ERROR`. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
+
+---
+
 ## Configuration
 
 !!! note
@@ -72,25 +91,6 @@ uci set luci-sso.default.internal_issuer_url='https://192.168.2.10:8443'
 
 uci commit luci-sso
 ```
-
----
-
-## Prerequisites
-
-The internal address must:
-
-- Use **HTTPS** — plain HTTP is rejected even for internal addresses.
-- Have a certificate the router trusts. If the IdP uses a self-signed or private CA certificate, install it on the router:
-
-```bash
-# Copy your CA certificate to the router
-scp -O ca.crt root@192.168.1.1:/etc/ssl/certs/my-homelab-ca.crt
-
-# Update the CA bundle
-update-ca-certificates
-```
-
-If the router cannot verify the IdP's certificate, the token exchange will fail with `SSL_INIT_FAILED` or a `TOKEN_ENDPOINT_NETWORK_ERROR`. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
 
 ---
 

@@ -1,45 +1,78 @@
 # How to Debug luci-sso
 
-This guide describes how to troubleshoot authentication failures in `luci-sso`.
+This guide describes how to diagnose and resolve authentication failures in `luci-sso`. Each section maps a visible symptom to the likely cause and the steps to fix it.
 
 ---
 
-## 🔍 System Logs
+## Read the system log first
 
-All security events and authentication traces are logged to syslog.
+All authentication events are written to syslog. Check this before anything else.
 
 === "Browser (LuCI)"
 
-    Navigate to **Status > System Log**. Use the browser's find-in-page (`Ctrl+F`) to filter for `luci-sso`.
+    Navigate to **Status > System Log** and filter for `luci-sso`.
 
 === "Terminal (SSH)"
 
     ```bash
-    logread -e luci-sso
+    logread -e luci-sso | tail -30
     ```
 
-### Common Log Messages
+Each entry follows this format:
 
-| Code | Likely cause |
-| :--- | :--- |
-| `SYSTEM_INIT_FAILED` | `/etc/luci-sso` directory permissions are wrong or the crypto backend failed to initialize. |
-| `OIDC_DISCOVERY_FAILED` | The router cannot reach the `issuer_url`. Check DNS and firewall rules. |
-| `SSL_INIT_FAILED` | The router does not trust the IdP's TLS certificate. Run `opkg install ca-bundle` or add your CA to `/etc/ssl/certs`. |
-| `USER_NOT_AUTHORIZED` | Authentication succeeded but the user's email or groups match no configured role. The log line before this code will say "matched no roles". See [UCI Configuration](../../reference/uci-config.md). |
-| `STATE_PARAMETER_MISMATCH` | Browser lost the handshake cookie, or a CSRF attempt was blocked. |
-
-For the full list of every error code and what triggers it, see the [Log Messages Reference](../../reference/log-messages.md).
-
-## 🧪 Testing the Endpoint
-You can check if the SSO service is logically enabled and reachable by visiting:
-
-```text
-https://<YOUR_ROUTER_IP>/cgi-bin/luci-sso?action=enabled
+```
+luci-sso[<pid>]: [<http-status>] <CODE>
 ```
 
-It should return `{"enabled":true}` if the service is correctly configured and enabled in UCI.
+For every error code and its trigger, see the [Log Messages Reference](../../reference/log-messages.md).
 
 ---
 
-## 🛡️ Security Note
-When sharing logs for troubleshooting, **always redact sensitive information** like tokens or IP addresses that might be specific to your internal network.
+## The SSO button does not appear
+
+Check that the service is enabled and responding:
+
+```bash
+curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
+```
+
+- If it returns `{"enabled":false}`: run `uci show luci-sso.default.enabled` — the value must be `'1'`. If it is missing, set it: `uci set luci-sso.default.enabled='1' && uci commit luci-sso`.
+- If the request fails entirely: the CGI script is not running. Verify the package is installed: `opkg list-installed | grep luci-sso`.
+- If the log shows `CONFIG_ERROR`: a required option is missing or malformed. Run `uci show luci-sso` and check every option against the [UCI Configuration Reference](../../reference/uci-config.md).
+
+---
+
+## The browser redirects to the IdP but the login never completes
+
+The router sent the user to the IdP but the callback back to the router failed.
+
+- **Log shows `OIDC_DISCOVERY_FAILED`**: the router cannot reach `issuer_url`. Test connectivity from the router: `curl -s <issuer_url>/.well-known/openid-configuration`. Check DNS resolution and firewall rules. If the router must reach the IdP at a different internal address, see [How to Configure Split-Horizon Networking](split-horizon.md).
+- **Log shows `SSL_INIT_FAILED`**: the router does not trust the IdP's TLS certificate. Install the system CA bundle (`opkg install ca-bundle`) or add your private CA certificate to `/etc/ssl/certs/` and run `update-ca-certificates`.
+- **Log shows `STATE_PARAMETER_MISMATCH`**: the browser's handshake cookie was lost, or the user completed the flow in a second tab. This is normal; the user can retry.
+- **Log shows `HANDSHAKE_EXPIRED`**: the user took more than five minutes to complete the IdP login. The browser will restart the flow automatically on the next attempt.
+
+---
+
+## Authentication succeeds but the user is denied
+
+The log will show `USER_NOT_AUTHORIZED`. The line immediately before it identifies the cause.
+
+- **"matched no roles"**: the user's email and groups match no `config role` section. Run `uci show luci-sso` and verify the user's exact email or group name appears in a role. Email matching is case-insensitive; group matching is case-sensitive. For Pocket ID, the `@PocketID` suffix is required.
+- **"role has no permissions"**: a matching role exists but has no `read` or `write` entries. Add at least one permission to the role.
+
+To see the exact claim values the IdP is sending, check the log lines preceding `USER_NOT_AUTHORIZED` — they include the matched email and groups.
+
+---
+
+## Login succeeds but the session has no access
+
+The log will show `UBUS_LOGIN_FAILED` or `UBUS_SESSION_FAILED`.
+
+- Verify `rpcd` is running: `ps | grep rpcd`. If it is not, start it: `service rpcd start`.
+- Verify LuCI ACL files are present: `ls /usr/share/rpcd/acl.d/`. Missing files indicate an incomplete LuCI installation.
+
+---
+
+## Security note
+
+When sharing logs for troubleshooting, redact tokens and internal IP addresses before posting them publicly.

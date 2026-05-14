@@ -6,13 +6,7 @@ This guide describes how to install the `luci-sso` package and its required depe
 
 ## 1. Choose a Crypto Backend
 
-`luci-sso` requires a native crypto bridge to handle secure tokens. You must choose one backend during installation.
-
-| Backend | Recommendation |
-| :--- | :--- |
-| **mbedTLS** | **Default.** Lightweight and already present on most OpenWrt systems. |
-| **wolfSSL** | Alternative lightweight backend. |
-| **OpenSSL** | For systems that already use OpenSSL for other services (e.g., VPNs). |
+`luci-sso` requires a native crypto bridge to handle secure tokens. Use **mbedTLS** unless you have a reason not to — it is lightweight and already present on most OpenWrt systems. Use **wolfSSL** as an alternative lightweight option, or **OpenSSL** if the router already uses it for other services such as VPNs.
 
 ---
 

@@ -33,7 +33,7 @@ We need:
 - **LuCI accessible over HTTPS with a certificate the browser trusts.** If using a self-signed certificate, navigate to LuCI in the browser and click through the certificate warning to trust it before continuing — the SSO callback will fail otherwise.
 
 !!! warning "Accepting certificate warnings is a security risk"
-    Clicking through a certificate warning trains users to dismiss security indicators, which makes them more vulnerable when a warning signals a real threat. A [large-scale field study](https://www.usenix.org/conference/usenixsecurity13/technical-sessions/presentation/akhawe) found that users clicked through 70% of browser SSL warnings. If possible, use a certificate signed by a local CA rather than a bare self-signed certificate — that way users never see a warning at all.
+    Clicking through a certificate warning trains users to dismiss security indicators, which makes them more vulnerable when a warning signals a real threat. If possible, use a certificate signed by a local CA rather than a bare self-signed certificate — that way users never see a warning at all.
 
 ---
 
