@@ -77,7 +77,7 @@ nav:
           - Running Tests: how-to/developer/testing.md
           - Running the Fuzzer: how-to/developer/fuzzing.md
           - Writing Documentation: how-to/developer/documentation.md
-          - Documented Interfaces: how-to/developer/documented-interfaces.md
+          - Adding Error Codes, Limits, and Cookies: how-to/developer/adding-documented-interfaces.md
   - Reference:
       - Overview: reference/index.md
       - Log Messages: reference/log-messages.md

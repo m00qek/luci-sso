@@ -84,7 +84,7 @@ Three documentation contracts are enforced by CI. Run them locally before pushin
 make -sC devenv lint
 ```
 
-If a check fails, see [How to add error codes, limit constants, and cookies](documented-interfaces.md) for what to update.
+If a check fails, see [How to add error codes, limit constants, and cookies](adding-documented-interfaces.md) for what to update.
 
 ---
 

@@ -1,6 +1,6 @@
 # How to Configure a Generic OIDC Provider
 
-This guide covers connecting `luci-sso` to any OIDC-compliant identity provider — Keycloak, Azure AD, Authentik, Okta, Dex, Zitadel, or others. If your provider appears in the sidebar (Google, GitHub, Authelia), use that guide instead; it includes provider-specific screenshots and gotchas.
+This guide covers connecting `luci-sso` to any standards-compliant OIDC provider — Azure AD, Okta, Dex, Zitadel, or others. If your provider has a dedicated guide in the sidebar (Google, GitHub, Authelia, Keycloak, Authentik, Pocket ID), use that instead; it covers provider-specific setup steps and gotchas.
 
 ---
 
@@ -24,9 +24,7 @@ Common patterns:
 
 | Provider | Issuer URL pattern |
 | :--- | :--- |
-| Keycloak | `https://keycloak.example.com/realms/<realm>` |
 | Azure AD | `https://login.microsoftonline.com/<tenant-id>/v2.0` |
-| Authentik | `https://authentik.example.com/application/o/<slug>/` |
 | Okta | `https://<org>.okta.com` or `https://<org>.okta.com/oauth2/<server>` |
 | Dex | `https://dex.example.com` |
 | Zitadel | `https://zitadel.example.com` |
@@ -64,15 +62,20 @@ After saving, copy the generated **Client ID** and **Client Secret**.
 !!! note
     Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
 
+A minimal working configuration:
+
 ```bash
 uci set luci-sso.default.issuer_url='https://<your-issuer-url>'
 uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
 uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
+uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
+uci set luci-sso.default.scope='openid profile email'
+uci set luci-sso.default.clock_tolerance='60'
 uci set luci-sso.default.enabled='1'
 uci commit luci-sso
 ```
 
-For a full list of available options (including `clock_tolerance`, `scope`, and `internal_issuer_url` for split-horizon setups), see the [UCI Configuration Reference](../../reference/uci-config.md).
+For all available options (including `internal_issuer_url` for split-horizon setups), see the [UCI Configuration Reference](../../reference/uci-config.md).
 
 ---
 

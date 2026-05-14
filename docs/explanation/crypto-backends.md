@@ -34,17 +34,7 @@ OpenSSL is the industry standard. While it is the most performant and feature-co
 
 ---
 
-## The Native Bridge Architecture
-
-`luci-sso` does not interact with these libraries directly from its core logic. Instead, it uses a **Native Bridge** pattern.
-
-1.  **Core Logic (ucode):** All OIDC and session logic is written in `ucode`. When it needs to verify a signature, it calls a generic `luci_sso.native` module.
-2.  **Native Interface (C):** A thin C layer defines a consistent API for `ucode`.
-3.  **Backends (C):** Three separate shared objects (`native_mbedtls.so`, `native_wolfssl.so`, `native_openssl.so`) implement that API.
-
-At installation time, the `luci-sso-crypto-*` package you choose installs the corresponding `.so` file to `/usr/lib/ucode/luci_sso/native.so`. This allows the high-level code to remain entirely agnostic of which library is actually doing the work.
-
-If you need to implement support for a library not listed here, see [How to Add a New Crypto Backend](../how-to/developer/adding-crypto-backend.md).
+For the bridge architecture, see [About the Architecture](architecture.md). If you need to implement a new backend, see [How to Add a New Crypto Backend](../how-to/developer/adding-crypto-backend.md).
 
 ---
 

@@ -14,11 +14,43 @@ The reason this matters: OpenWrt routers can't run network tests. Without this s
 
 ### Module responsibilities
 
+*   **`router.uc`** — HTTP dispatcher and rate limiter. Receives every request from the CGI entry point, enforces the global rate limit, and routes to the correct handler (`/` → login, `/callback` → code exchange, `/logout` → session teardown).
 *   **`handshake.uc`** — The OIDC state machine. Orchestrates the full authorization code flow: generates state and nonce, exchanges the code for tokens, validates them, and injects the resulting identity into LuCI's session.
 *   **`oidc.uc`** — Pure protocol validation. Given a token and claims, checks: is the issuer right? Is the audience right? Is it expired? Does the nonce match? All of this with no I/O.
 *   **`discovery.uc`** — Fetches and caches OIDC metadata from the IdP's `/.well-known/openid-configuration`. Caches to `/var/run/luci-sso/` (tmpfs) for 24 hours. The cache survives the router staying up but is cleared on every reboot — the first login after a reboot always fetches fresh discovery data. A stale cache is used as a fallback only when the IdP becomes temporarily unreachable while the router is already running.
+*   **`session.uc`** — Manages handshake state files (creation, consumption, and reaping of stale entries) and session tokens. Acts as a facade over the modular `session/` sub-package.
 *   **`crypto.uc`** — High-level cryptographic API. Wraps the native C bridge, exposes JWS signing/verification and constant-time comparisons.
 *   **`config.uc`** — Reads UCI configuration and maps OIDC claims to LuCI roles.
+
+```mermaid
+graph TD
+    CGI["CGI entry point<br/>(luci-sso)"]
+
+    subgraph core["Functional Core (ucode)"]
+        router["router.uc<br/>HTTP dispatch &amp; rate limiting"]
+        handshake["handshake.uc<br/>OIDC state machine"]
+        oidc["oidc.uc<br/>token validation"]
+        discovery["discovery.uc<br/>IdP metadata cache"]
+        session["session.uc<br/>handshake state &amp; tokens"]
+        crypto["crypto.uc<br/>cryptographic API"]
+        config["config.uc<br/>UCI config &amp; role mapping"]
+    end
+
+    native["luci_sso.native<br/>(C bridge)"]
+
+    CGI --> router
+    router --> handshake
+    router --> session
+    router --> discovery
+    router --> crypto
+    router --> config
+    handshake --> oidc
+    handshake --> discovery
+    handshake --> session
+    handshake --> crypto
+    handshake --> config
+    crypto --> native
+```
 
 ---
 
@@ -41,7 +73,21 @@ Most of `luci-sso` is ucode. The exception is cryptography: RSA and EC signature
 
 The reason for this boundary is not performance — ucode is fast enough for the authentication overhead. The reason is correctness. Cryptographic primitives require guaranteed memory behavior (constant-time comparisons, buffer zeroization) that is hard to guarantee in a higher-level language. MbedTLS, WolfSSL, and OpenSSL provide these guarantees; a hand-rolled ucode implementation would not.
 
-The bridge is designed to be swappable: all code uses `luci_sso.native` rather than importing a backend directly. The correct `.so` is selected at build time based on `SDK_ARCH` and available libraries.
+The bridge is designed to be swappable: all code uses `luci_sso.native` rather than importing a backend directly. At install time, whichever `luci-sso-crypto-*` package is chosen copies its `.so` to `/usr/lib/ucode/luci_sso/native.so` — there is no runtime dispatcher.
+
+```mermaid
+graph LR
+    crypto["crypto.uc"]
+    native["luci_sso/native.so"]
+    mbedtls["native_mbedtls.so<br/>(luci-sso-crypto-mbedtls)"]
+    wolfssl["native_wolfssl.so<br/>(luci-sso-crypto-wolfssl)"]
+    openssl["native_openssl.so<br/>(luci-sso-crypto-openssl)"]
+
+    crypto --> native
+    mbedtls -.->|"installed as"| native
+    wolfssl -.->|"installed as"| native
+    openssl -.->|"installed as"| native
+```
 
 ---
 

@@ -66,7 +66,7 @@ If you change the value of an existing constant, update the metadata comment to 
 
 The lint check (`check-cookie-names.sh`) scans all `.uc` files under `files/` for `__Host-*` and `sysauth*` string patterns. If your cookie follows a different naming convention, add it to the grep pattern in `devenv/scripts/check-cookie-names.sh`.
 
-**2. Add a `### \`name\`` heading inside a `## Cookies` section in a doc:**
+**2. Add a cookie heading inside a `## Cookies` section in a doc:**
 
 ```markdown
 ## Cookies
