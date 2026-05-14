@@ -124,9 +124,15 @@ curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
 
 Then log in as the user in question and confirm the LuCI navigation matches what you expect. If a user is denied despite correct credentials, check the log for `USER_NOT_AUTHORIZED` (the line before it will say "matched no roles" if the issue is role mapping):
 
-```bash
-logread -e luci-sso | tail -20
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Status > System Log** and filter for `luci-sso`.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    logread -e luci-sso | tail -20
+    ```
 
 If you see `USER_NOT_AUTHORIZED`, the user's email or group claims do not match any configured role, or the matched role has no `read` or `write` entries. Verify the exact claim value the IdP is sending — email addresses are matched case-insensitively, but must otherwise be exact.
 

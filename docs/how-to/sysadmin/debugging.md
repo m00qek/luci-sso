@@ -5,11 +5,18 @@ This guide describes how to troubleshoot authentication failures in `luci-sso`.
 ---
 
 ## 🔍 System Logs
-All security events and authentication traces are logged to syslog. Use `logread` to view them:
 
-```bash
-logread -e luci-sso
-```
+All security events and authentication traces are logged to syslog.
+
+=== "Browser (LuCI)"
+
+    Navigate to **Status > System Log**. Use the browser's find-in-page (`Ctrl+F`) to filter for `luci-sso`.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    logread -e luci-sso
+    ```
 
 ### Common Log Messages
 

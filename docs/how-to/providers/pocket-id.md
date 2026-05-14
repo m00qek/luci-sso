@@ -85,9 +85,15 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 
 ## Troubleshooting
 
-```bash
-logread -e luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Status > System Log** and filter for `luci-sso`.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    logread -e luci-sso
+    ```
 
 | Symptom | Likely cause |
 | :--- | :--- |

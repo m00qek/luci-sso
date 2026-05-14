@@ -1,10 +1,16 @@
 # Log Messages and Error Codes
 
-All `luci-sso` events are written to the system log. Read them with:
+All `luci-sso` events are written to the system log.
 
-```bash
-logread -e luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Status > System Log** and filter for `luci-sso`.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    logread -e luci-sso
+    ```
 
 Each error code entry follows this structure:
 

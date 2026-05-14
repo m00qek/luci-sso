@@ -37,9 +37,15 @@ Then attempt a fresh login from a browser. If the token exchange succeeds, the n
 
 If login fails with `TOKEN_EXCHANGE_FAILED` in the log, the new secret was not accepted by the IdP. Double-check it was copied correctly — it is case-sensitive and may contain special characters that need quoting:
 
-```bash
-logread -e luci-sso | grep TOKEN_EXCHANGE
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Status > System Log** and filter for `TOKEN_EXCHANGE`.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    logread -e luci-sso | grep TOKEN_EXCHANGE
+    ```
 
 ---
 
@@ -102,9 +108,15 @@ If the new credentials come with a different `scope` (for example, the old clien
 
 Check what the IdP is returning after a successful login:
 
-```bash
-logread -e luci-sso | tail -30
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Status > System Log** and filter for `luci-sso`.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    logread -e luci-sso | tail -30
+    ```
 
 If you see `USER_NOT_AUTHORIZED` with a "matched no roles" line before it, confirm the `scope` option includes all the scopes your role mappings rely on:
 

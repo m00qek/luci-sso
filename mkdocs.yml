@@ -47,7 +47,8 @@ nav:
   - Welcome: index.md
   - Tutorials:
       - Overview: tutorials/index.md
-      - Your First SSO Login: tutorials/first-sso-login.md
+      - First SSO Login (Public IdP): tutorials/first-sso-login.md
+      - First SSO Login (Self-hosted): tutorials/pocket-id-sso-login.md
       - Building from Source: tutorials/building.md
       - Developer Onboarding: tutorials/dev-onboarding.md
   - How-to Guides:

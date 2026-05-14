@@ -124,9 +124,15 @@ The **Login with SSO** button should appear. Clicking it redirects to your IdP's
 
 If the login fails, check the system log:
 
-```bash
-logread -e luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Status > System Log** and filter for `luci-sso`.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    logread -e luci-sso
+    ```
 
 Common errors and their meaning are listed in the [Log Messages Reference](../../reference/log-messages.md). The most frequent issues with new providers are:
 

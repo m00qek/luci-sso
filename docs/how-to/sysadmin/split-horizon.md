@@ -13,22 +13,24 @@ Split-horizon applies when:
 - Your IdP's DNS name is only resolvable from your LAN, but your router uses a different DNS server or sits on a separate network segment.
 
 ```mermaid
-flowchart LR
-    subgraph LAN["Your LAN"]
-        B["Browser"]
-        R["Router\n(luci-sso)"]
-        I["Identity Provider\n(Authelia / Keycloak)"]
-    end
+sequenceDiagram
+    participant B as Browser
+    participant I as Identity Provider
+    participant R as Router (luci-sso)
 
-    B -- "1. Redirect to\nauth.homelab.local" --> I
-    I -- "2. Code via\nbrowser redirect" --> B
-    B -- "3. Callback with code" --> R
-    R -- "4. Back-channel:\ntoken exchange\n192.168.2.10:8443" --> I
-    I -- "5. Tokens" --> R
-    R -- "6. Session\ncookie" --> B
+    note over B,I: Front-channel<br/>browser → auth.homelab.local
+    B->>I: 1. Redirect to login
+    I->>B: 2. Authorization code (via redirect)
+    B->>R: 3. Callback with code
+
+    note over R,I: Back-channel<br/>router → 192.168.2.10:8443
+    R->>I: 4. Token exchange
+    I->>R: 5. Tokens
+
+    R->>B: 6. Session cookie
 ```
 
-The browser follows the public `issuer_url` (steps 1–3). The router uses `internal_issuer_url` for back-channel calls that never touch the browser (step 4).
+The browser uses the public `issuer_url` for steps 1–3. The router uses `internal_issuer_url` for the back-channel token exchange (step 4), which never involves the browser.
 
 ---
 
@@ -103,9 +105,15 @@ curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
 
 Then attempt a login from your browser. If the browser redirects to the IdP correctly but the router fails to exchange the code, the problem is in the back-channel. Check the log:
 
-```bash
-logread -e luci-sso | tail -30
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Status > System Log** and filter for `luci-sso`.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    logread -e luci-sso | tail -30
+    ```
 
 Back-channel failures typically appear as `TOKEN_EXCHANGE_FAILED`, `OIDC_DISCOVERY_FAILED`, or `JWKS_FETCH_FAILED`. All three indicate the router cannot reach the internal address. Check:
 
