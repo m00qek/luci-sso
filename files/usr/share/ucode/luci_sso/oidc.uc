@@ -81,7 +81,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 
 	// Audit logging for PKCE usage (Blocker #2)
 	let sid_ctx = session_id ? ` [session_id: ${session_id}]` : "";
-	io.log("info", `Initiating token exchange${sid_ctx} with PKCE verifier (len: ${length(verifier)})`);
+	io.log("info", `Initiating token exchange${sid_ctx}`);
 
 	if (type(verifier) != "string" || length(verifier) < 43 || length(verifier) > 128) {
 		io.log("error", `Rejected token exchange${sid_ctx}: PKCE verifier length out of bounds`);
@@ -207,7 +207,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	for (let k, v in payload) {
 		push(claim_names, k);
 	}
-	io.log("info", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
+	io.log("debug", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
 
 	// 3. OIDC Mandatory Claims Check
 	if (!payload.sub) {
@@ -316,7 +316,7 @@ export function fetch_userinfo(io, endpoint, access_token) {
 	for (let k, v in payload) {
 		push(claim_names, k);
 	}
-	io.log("info", `UserInfo claims received: ${join(", ", claim_names)}`);
+	io.log("debug", `UserInfo claims received: ${join(", ", claim_names)}`);
 
 	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2)
 	if (!payload.sub) {

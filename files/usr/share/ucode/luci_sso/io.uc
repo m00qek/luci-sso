@@ -34,23 +34,23 @@ export function create() {
 		stat: (path) => fs.stat(path),
 		
 		log: function(level, msg) {
-			let priority = (level == "error") ? log.LOG_ERR : (level == "warn") ? log.LOG_WARNING : log.LOG_INFO;
+			let priority = (level == "error") ? log.LOG_ERR : (level == "warn") ? log.LOG_WARNING : (level == "debug") ? log.LOG_DEBUG : log.LOG_INFO;
 			log.syslog(priority, msg);
 		},
 
 		http_get: function(url, opts) {
 			// MANDATORY: HTTPS only (Blocker #6)
 			if (!encoding.is_https(url)) {
-				this.log("error", `Security violation: Blocked insecure HTTP GET to ${url}`);
+				this.log("debug", `Security violation: Blocked insecure HTTP GET to ${url}`);
 				return Result.err("HTTPS_REQUIRED");
 			}
 			let headers = (opts && opts.headers) ? opts.headers : {};
-			let res = secure_http.request('GET', url, { 
+			let res = secure_http.request('GET', url, {
 				timeout: 10000,
 				headers: headers
 			});
 			if (!res.ok) {
-				this.log("error", `HTTPS GET failed for ${url}: ${res.error}`);
+				this.log("debug", `HTTPS GET failed for ${url}: ${res.error}`);
 				return Result.err("HTTP_REQUEST_FAILED", res.error);
 			}
 			return Result.ok({ status: res.data.status, body: res.data.body });
@@ -59,19 +59,19 @@ export function create() {
 		http_post: function(url, opts) {
 			// MANDATORY: HTTPS only (Blocker #6)
 			if (!encoding.is_https(url)) {
-				this.log("error", `Security violation: Blocked insecure HTTP POST to ${url}`);
+				this.log("debug", `Security violation: Blocked insecure HTTP POST to ${url}`);
 				return Result.err("HTTPS_REQUIRED");
 			}
 			let headers = (opts && opts.headers) ? opts.headers : {};
 			let post_data = (opts && opts.body) ? opts.body : null;
-			
-			let res = secure_http.request('POST', url, { 
-				timeout: 10000, 
+
+			let res = secure_http.request('POST', url, {
+				timeout: 10000,
 				headers: headers,
-				post_data: post_data 
+				post_data: post_data
 			});
 			if (!res.ok) {
-				this.log("error", `HTTPS POST failed for ${url}: ${res.error}`);
+				this.log("debug", `HTTPS POST failed for ${url}: ${res.error}`);
 				return Result.err("HTTP_REQUEST_FAILED", res.error);
 			}
 			return Result.ok({ status: res.data.status, body: res.data.body });
