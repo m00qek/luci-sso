@@ -25,6 +25,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | **Algorithm Restriction** | Security Best Practices | Only `RS256` and `ES256` accepted. |
 | **Token Binding** | OIDC §3.1.3.7 | `at_hash` validation enforced. |
 | **Expiry Enforcement** | RFC 7519 §4.1.4 | `exp` and `iat` claims are mandatory. |
+| **Split-Horizon Back-Channel** | OIDC §3.1.3.1, Discovery 1.0 §4 | `internal_issuer_url` rewrites transport endpoints only (`token_endpoint`, `jwks_uri`, `userinfo_endpoint`). `iss` claim validation always uses the public `issuer_url`. See [Split-Horizon Networking](../how-to/sysadmin/split-horizon.md). |
 
 ---
 

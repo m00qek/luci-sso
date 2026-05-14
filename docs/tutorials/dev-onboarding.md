@@ -10,11 +10,11 @@ In this tutorial, we will set up a local development environment, run the full t
 ┌──────────────────────────────────────────────────────┐
 │  Local machine                                       │
 │                                                      │
-│  ┌─────────────────────┐   ┌────────────────────┐   │
-│  │  Mock OpenWrt        │   │  Mock IdP          │   │
-│  │  (container)         │◄──│  (container)       │   │
-│  │  luci-sso @ :8443   │   │  pre-configured    │   │
-│  └─────────────────────┘   └────────────────────┘   │
+│  ┌─────────────────────┐     ┌────────────────────┐  │
+│  │  Mock OpenWrt       │     │  Mock IdP          │  │
+│  │  (container)        │ ◄── │  (container)       │  │
+│  │  luci-sso @ :8443   │     │  pre-configured    │  │
+│  └─────────────────────┘     └────────────────────┘  │
 │           ▲                                          │
 │    browser / test suite                              │
 └──────────────────────────────────────────────────────┘
@@ -26,8 +26,8 @@ The mock IdP is pre-configured with test credentials — no real Google or Authe
 
 ## Prerequisites
 
-*   **Docker** and **Docker Compose** (V2).
-*   **make** utility.
+* **Docker** and **Docker Compose** (V2).
+* **make** utility.
 
 ## Step 1: Build the native components
 
@@ -69,8 +69,8 @@ If any tier fails, the output will identify the failing test and the module it b
 
 We can now access the LuCI web interface running inside the container:
 
-*   **URL:** `https://localhost:8443`
-*   Choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
+* **URL:** `https://localhost:8443`
+* Choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
 
 Notice that the login redirects to the mock IdP, then back to LuCI — the same flow a real user experiences with Google or Authelia. The mock IdP accepts any credentials, so any username/password will work.
 
@@ -78,10 +78,10 @@ Notice that the login redirects to the mock IdP, then back to LuCI — the same 
 
 ## What we just built
 
-- A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
-- A mock Identity Provider pre-configured with test credentials that accepts any username and password.
-- A simulated OpenWrt instance running `luci-sso` in a container, accessible at `https://localhost:8443`.
-- A full test suite covering Tiers 0–4, runnable without a physical router or a real IdP.
+* A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
+* A mock Identity Provider pre-configured with test credentials that accepts any username and password.
+* A simulated OpenWrt instance running `luci-sso` in a container, accessible at `https://localhost:8443`.
+* A full test suite covering Tiers 0–4, runnable without a physical router or a real IdP.
 
 ---
 
@@ -89,6 +89,6 @@ Notice that the login redirects to the mock IdP, then back to LuCI — the same 
 
 We now have a working development environment. From here:
 
-- Learn how to [run specific tests or filter by module](../how-to/developer/testing.md)
-- Understand the daily [development workflow](../how-to/developer/development-workflow.md)
-- Read the [Architecture explanation](../explanation/architecture.md) to understand how the pieces fit together
+* Learn how to [run specific tests or filter by module](../how-to/developer/testing.md)
+* Understand the daily [development workflow](../how-to/developer/development-workflow.md)
+* Read the [Architecture explanation](../explanation/architecture.md) to understand how the pieces fit together
