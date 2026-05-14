@@ -45,6 +45,8 @@ jobs:
       node_version: ${{ steps.vars.outputs.node_version }}
       alpine_version: ${{ steps.vars.outputs.alpine_version }}
       repo_owner: ${{ steps.vars.outputs.repo_owner }}
+      changed_native: ${{ steps.filter.outputs.native }}
+      changed_code: ${{ steps.filter.outputs.code }}
       changed_fuzzer: ${{ steps.filter.outputs.fuzzer }}
       changed_openwrt: ${{ steps.filter.outputs.openwrt }}
       changed_sdk: ${{ steps.filter.outputs.sdk }}
