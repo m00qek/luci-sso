@@ -16,17 +16,8 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
 
 ## 2. Router Configuration
 
-### Option A: Using the LuCI web interface
-1.  Log in to your router.
-2.  Navigate to **Services > SSO Login**.
-3.  Enter the following:
-    *   **Issuer URL:** `https://accounts.google.com`
-    *   **Client ID:** `<YOUR_CLIENT_ID>`
-    *   **Client Secret:** `<YOUR_CLIENT_SECRET>`
-4.  Click **Save & Apply**.
-
-### Option B: Using the CLI
-Run the following commands via SSH:
+!!! note
+    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
 
 ```bash
 uci set luci-sso.default.issuer_url='https://accounts.google.com'
@@ -39,6 +30,10 @@ uci commit luci-sso
 ---
 
 ## 🛡️ Role Mapping
+
+!!! note
+    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+
 To grant yourself admin access, ensure your OIDC email is mapped to the admin role:
 
 ```bash

@@ -4,6 +4,9 @@ This guide covers updating the OIDC client credentials on your router — either
 
 ---
 
+!!! note
+    Router configuration is not yet available in the LuCI web interface. All steps in this guide require SSH.
+
 ## How credential changes take effect
 
 `luci-sso` reads UCI configuration on every request. There is no daemon to restart — changes committed with `uci commit` take effect on the next login attempt. Active LuCI sessions are not affected: UBUS sessions do not carry the client secret, so users who are already logged in remain logged in until their session expires naturally.

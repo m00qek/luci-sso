@@ -53,13 +53,8 @@ The IdP's discovery document must still declare the public `issuer_url` as its `
 
 ## Configuration
 
-### Option A: Using the LuCI web interface
-
-Navigate to **Services > SSO Login** and fill in the **Internal Issuer URL** field alongside the standard configuration.
-
-![LuCI SSO settings page showing the standard Issuer URL field set to "https://auth.homelab.local" and the highlighted Internal Issuer URL field set to "https://192.168.2.10:8443", with a callout explaining the difference between the two fields](../../assets/screenshots/luci-sso-settings-advanced.svg "LuCI SSO settings — Internal Issuer URL field highlighted for split-horizon configuration")
-
-### Option B: Using the CLI
+!!! note
+    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
 
 Set `internal_issuer_url` alongside the standard configuration:
 

@@ -25,17 +25,8 @@ If you want to restrict which Pocket ID groups are allowed to authenticate to th
 
 ## 2. Configure the router
 
-### Option A: Using the LuCI web interface
-
-Navigate to **Services > SSO Login** on your router and fill in:
-
-- **Issuer URL** — the base URL of your Pocket ID instance (e.g. `https://id.example.com`)
-- **Client ID** — from Step 1
-- **Client Secret** — from Step 1
-
-Click **Save & Apply**.
-
-### Option B: Using the CLI
+!!! note
+    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
 
 ```bash
 uci set luci-sso.default.issuer_url='https://id.example.com'
@@ -50,6 +41,9 @@ Replace `https://id.example.com` with the actual URL of your Pocket ID instance.
 ---
 
 ## 3. Configure role mapping
+
+!!! note
+    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
 
 ### Map by email
 

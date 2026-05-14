@@ -4,6 +4,9 @@ This guide describes how to define who can access the router and what they can d
 
 ---
 
+!!! note
+    Role configuration is not yet available in the LuCI web interface. All steps in this guide require SSH.
+
 ## How roles work
 
 A **role** is a UCI `config role` section in `/etc/config/luci-sso`. When a user logs in, `luci-sso` checks their OIDC claims (email and groups) against every configured role. If any role matches, the user gets the permissions defined by that role. Multiple roles can match — permissions are merged with OR logic.

@@ -61,21 +61,8 @@ After saving, copy the generated **Client ID** and **Client Secret**.
 
 ## Step 3: Configure the router
 
-### Option A: Using the LuCI web interface
-
-Navigate to **Services > SSO Login** on your router.
-
-![LuCI Services > SSO Login configuration page showing form fields for Issuer URL, Client ID, Client Secret, and Redirect URI with a Save & Apply button](../../assets/screenshots/luci-sso-settings.svg "LuCI SSO settings page — Services > SSO Login")
-
-Fill in:
-
-- **Issuer URL** — the URL from Step 1
-- **Client ID** — from Step 2
-- **Client Secret** — from Step 2
-
-Click **Save & Apply**.
-
-### Option B: Using the CLI
+!!! note
+    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
 
 ```bash
 uci set luci-sso.default.issuer_url='https://<your-issuer-url>'
@@ -92,6 +79,9 @@ For a full list of available options (including `clock_tolerance`, `scope`, and 
 ## Step 4: Configure role mapping
 
 After a successful login, `luci-sso` maps the user's OIDC claims to a LuCI role. Without a matching role, the user is denied access even if authentication succeeds.
+
+!!! note
+    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
 
 ### Map by email
 

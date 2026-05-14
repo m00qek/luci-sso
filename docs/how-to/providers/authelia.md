@@ -25,7 +25,9 @@ Add a new client to your Authelia `configuration.yml` under `identity_providers:
 
 ## 2. Router Configuration
 
-### Using the CLI
+!!! note
+    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+
 ```bash
 uci set luci-sso.default.issuer_url='https://auth.example.com'
 uci set luci-sso.default.client_id='luci-router'
@@ -37,6 +39,10 @@ uci commit luci-sso
 ---
 
 ## 👥 Group Mapping
+
+!!! note
+    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+
 Authelia allows you to map LDAP/AD groups to LuCI roles. Ensure you map the `groups` claim in your `config role`:
 
 ```bash
