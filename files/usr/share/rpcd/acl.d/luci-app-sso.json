@@ -1,0 +1,11 @@
+{
+	"luci-app-sso": {
+		"description": "Grant access to SSO configuration",
+		"read": {
+			"uci": [ "luci-sso" ]
+		},
+		"write": {
+			"uci": [ "luci-sso" ]
+		}
+	}
+}

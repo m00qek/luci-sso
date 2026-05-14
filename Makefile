@@ -18,7 +18,7 @@ define Package/$(PKG_NAME)
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=OIDC/OAuth2 SSO for LuCI
-  DEPENDS:=$(PKG_DEPENDS) +luci-sso-crypto
+  DEPENDS:=$(PKG_DEPENDS) +luci-sso-crypto +luci-base
 endef
 
 define Package/$(PKG_NAME)/description
@@ -73,6 +73,12 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) ./files/www/cgi-bin/luci-sso $(1)/www/cgi-bin/luci-sso
 	$(INSTALL_DIR) $(1)/www/luci-static/resources
 	$(CP) ./files/www/luci-static/resources/luci-sso-login.js $(1)/www/luci-static/resources/
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/services
+	$(CP) ./files/www/luci-static/resources/view/services/sso.js $(1)/www/luci-static/resources/view/services/
+	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(CP) ./files/usr/share/luci/menu.d/luci-app-sso.json $(1)/usr/share/luci/menu.d/
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
+	$(CP) ./files/usr/share/rpcd/acl.d/luci-app-sso.json $(1)/usr/share/rpcd/acl.d/
 endef
 
 define Package/$(PKG_NAME)/prerm

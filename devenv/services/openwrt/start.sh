@@ -56,6 +56,11 @@ mkdir -p /usr/sbin
 cp /usr/share/luci-sso/test/../files/usr/sbin/luci-sso-cleanup /usr/sbin/ 2>/dev/null || true
 chmod +x /usr/sbin/luci-sso-cleanup 2>/dev/null || true
 
+# 7a. Link native crypto backend to the path ucode expects
+: ${CRYPTO_LIB:?CRYPTO_LIB must be set}
+mkdir -p /usr/lib/ucode/luci_sso
+ln -sf /luci_sso/backends/${CRYPTO_LIB}/luci_sso/native.so /usr/lib/ucode/luci_sso/native.so
+
 # 8. Core Daemons
 /sbin/ubusd &
 sleep 1

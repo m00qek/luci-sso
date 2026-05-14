@@ -120,6 +120,9 @@ services:
       - ../files/usr/share/ucode/luci_sso:/usr/share/ucode/luci_sso:ro
       - ../files/www/cgi-bin/luci-sso:/www/cgi-bin/luci-sso:ro
       - ../files/www/luci-static/resources/luci-sso-login.js:/www/luci-static/resources/luci-sso-login.js:ro
+      - ../files/www/luci-static/resources/view/services:/www/luci-static/resources/view/services:ro
+      - ../files/usr/share/luci/menu.d/luci-app-sso.json:/usr/share/luci/menu.d/luci-app-sso.json:ro
+      - ../files/usr/share/rpcd/acl.d/luci-app-sso.json:/usr/share/rpcd/acl.d/luci-app-sso.json:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
       - ../bin/lib/${SDK_ARCH}/${SDK_VERSION}:/luci_sso/backends:ro
       - ../test:/usr/share/luci-sso/test:ro

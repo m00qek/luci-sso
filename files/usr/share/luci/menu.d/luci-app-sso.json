@@ -1,0 +1,13 @@
+{
+	"admin/services/sso": {
+		"title": "Single Sign-On",
+		"order": 65,
+		"action": {
+			"type": "view",
+			"path": "services/sso"
+		},
+		"depends": {
+			"acl": [ "luci-app-sso" ]
+		}
+	}
+}
