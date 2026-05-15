@@ -104,8 +104,12 @@ jobs:
               - 'devenv/services/openwrt/**'
               - 'devenv/Makefile'
             fuzzer: 'devenv/services/fuzzer/**'
-            openwrt: 'devenv/services/openwrt/**'
-            sdk: 'devenv/services/sdk/**'
+            openwrt:
+              - 'devenv/services/openwrt/**'
+              - '.github/workflows/ci.yml'
+            sdk:
+              - 'devenv/services/sdk/**'
+              - '.github/workflows/ci.yml'
             idp: 'devenv/services/idp/**'
             browser: 'devenv/services/browser/**'
             pki: 'devenv/services/pki/**'
