@@ -51,9 +51,11 @@ endif()
     make -C devenv compile CRYPTO_LIB=boringssl
     ```
 
-2.  **Run** Tier 0 compliance tests:
+2.  **Start infrastructure** and **run** Tier 0 compliance tests:
     ```bash
-    make -C devenv unit-test FILTER=native_compliance
+    make -C devenv infra-up DOCKER_SUITE=ci
+    make -C devenv test FILTER=native_compliance
+    make -C devenv infra-down DOCKER_SUITE=ci
     ```
 
 If the compliance tests pass, the backend is correctly mapping its internal library functions to the `luci-sso` expected interface.
@@ -74,7 +76,7 @@ endif()
 
 Run the fuzzer to verify:
 ```bash
-make -sC devenv fuzzer-test CRYPTO_LIB=boringssl
+make -sC devenv fuzz CRYPTO_LIB=boringssl
 ```
 
 ---

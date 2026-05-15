@@ -31,25 +31,27 @@ Native C compilation is guarded by a sentinel file in `bin/lib/.built`. If you m
 
 ## Test
 
-Test targets always run against the CI stack, which includes a headless Playwright browser container. Start it first:
+Start the shared CI infrastructure first (IdP + headless Playwright browser):
 
 ```bash
-make -C devenv up DOCKER_SUITE=ci
+make -C devenv infra-up DOCKER_SUITE=ci
 ```
 
 ```bash
 # Run all unit and integration tests (Tiers 0–4)
-make -C devenv unit-test
+make -C devenv test
 
 # Run with detailed output
-make -C devenv unit-test VERBOSE=1
+make -C devenv test VERBOSE=1
 
 # Run tests matching a pattern
-make -C devenv unit-test FILTER='oidc.*discovery'
+make -C devenv test FILTER='oidc.*discovery'
 
-# Auto-run tests on file change
+# Watch for file changes and re-run tests automatically
 make -C devenv watch-tests
 ```
+
+Each test target starts a fresh OpenWrt container, runs the tests against the shared infrastructure, and stops the container automatically. `watch-tests` keeps the container running across re-runs and tears it down on exit.
 
 See [Running Tests](testing.md) for how to run individual tiers, and [Testing Architecture](../../reference/testing-architecture.md) for what each tier covers.
 
@@ -58,14 +60,14 @@ See [Running Tests](testing.md) for how to run individual tiers, and [Testing Ar
 ## E2E Tests
 
 ```bash
-# Start the CI stack (if not already up)
-make -C devenv up DOCKER_SUITE=ci
+# Start CI infrastructure (if not already up)
+make -C devenv infra-up DOCKER_SUITE=ci
 
 # Run browser tests
-make -C devenv e2e-test
+make -C devenv e2e
 
 # Tear down
-make -C devenv down DOCKER_SUITE=ci
+make -C devenv infra-down DOCKER_SUITE=ci
 ```
 
 ---
@@ -91,7 +93,7 @@ If a check fails, see [How to add error codes, limit constants, and cookies](add
 ## Git Workflow
 
 1. Create a branch: `git checkout -b feat/my-feature`
-2. Make changes, run `make -C devenv unit-test` and `make -sC devenv lint` locally
+2. Make changes, run `make -C devenv test` and `make -sC devenv lint` locally
 3. Commit following the [commit message format](../../reference/style-guide.md#commit-messages)
 4. Open a PR — CI runs the full test suite and lint checks automatically
 

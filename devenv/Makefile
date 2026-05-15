@@ -47,20 +47,24 @@ export PORT_LUCI := 8443
 export DOCKER_SUITE ?= local
 export DOCKER_NAMESPACE := ghcr.io/m00qek
 
-# Lazy variables (=) evaluated at runtime
-export RESOLVED_DOCKER_COMPOSE = $(DEVENV_DIR)/.resolved.docker-compose.$(DOCKER_SUITE).yaml
 # Use SDK_ARCH and SDK_VERSION in project name to ensure isolated containers per environment
 # We replace dots with hyphens because dots are invalid in Docker Compose project names
 SAFE_SDK_VERSION = $(subst .,-,$(SDK_VERSION))
-COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
 
-# Helper: Command to return container IDs if any service in the suite is running
-# We use --all to ensure we detect the project even if one-shot services (pki) have exited
-# This is a raw string, NOT wrapped in $(shell), so it's evaluated at recipe runtime.
-SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
+# Openwrt project: per SDK version, no DOCKER_SUITE prefix (suite differences handled by overlays)
+COMPOSE_FLAGS = -p $(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
+
+# Infra project: fixed name, shared across all OpenWrt versions
+INFRA_COMPOSE_FLAGS = -p luci-sso-infra -f $(DEVENV_DIR)/docker-compose.infra.yaml -f $(DEVENV_DIR)/docker-compose.infra.$(DOCKER_SUITE).yaml
+
+# Helper: Command to return container IDs if any service in the openwrt project is running
+SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -q 2>/dev/null
+
+# Helper: Command to check if the shared infra idp is running
+INFRA_IS_RUNNING_CMD = docker compose $(INFRA_COMPOSE_FLAGS) ps -q idp 2>/dev/null
 
 # --- 3. PUBLIC INTERFACE ---
-.PHONY: build-images up down ps shell run unit-test fuzzer-test e2e-test test watch-tests lint pull
+.PHONY: build-images up down ps shell run infra-up infra-down test fuzz e2e watch-tests lint pull
 
 # Sentinel file tracks the last successful build for a specific arch/version/crypto combo
 SENTINEL := $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/.built-$(CRYPTO_LIB)
@@ -72,20 +76,20 @@ ps: .ps
 shell: .shell
 run: .run
 pull: .pull
+infra-up: .infra-up
+infra-down: .infra-down
 
-unit-test: DOCKER_SUITE = ci
-unit-test: .unit-test
+test: DOCKER_SUITE = ci
+test: .unit-test
 
-fuzzer-test: DOCKER_SUITE = ci
-fuzzer-test: .fuzzer-test
+fuzz: DOCKER_SUITE = ci
+fuzz: .fuzzer-test
 
-e2e-test: DOCKER_SUITE = ci
-e2e-test: .e2e-test
+e2e: DOCKER_SUITE = ci
+e2e: .e2e-test
 
 watch-tests: DOCKER_SUITE = ci
 watch-tests: .watch-tests
-
-test: unit-test e2e-test
 
 lint:
 	@echo -e " $(BLUE)🔍$(RESET) Running documentation lint checks..."
@@ -95,29 +99,51 @@ lint:
 	@echo -e " $(GREEN)✅$(RESET) All lint checks passed."
 
 VAR ?= ""
-print-env: 
+print-env:
 	@echo "$${$(VAR)}"
 
 .pull:
+	@docker compose $(INFRA_COMPOSE_FLAGS) pull
 	@docker compose $(COMPOSE_FLAGS) pull
 
 # --- 4. IMPLEMENTATION (Private Targets) ---
 
-# Macro: Abort if the current DOCKER_SUITE is not running
+# Macro: Abort if the openwrt project is not running
 define VALIDATE_SUITE_RUNNING
 	@if [ -z "$$($(SUITE_IS_RUNNING_CMD))" ]; then \
-		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING (Project: $(DOCKER_SUITE)-$(SDK_ARCH)-$(SDK_VERSION))."; \
-		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"; \
-		echo -e "\n      make up SDK_VERSION=$(SDK_VERSION)"; \
+		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING."; \
+		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:"; \
+		echo -e "\n      make up"; \
 		exit 1; \
 	fi
 endef
 
+# Macro: Abort if shared infra is not running
+define VALIDATE_INFRA_RUNNING
+	@if [ -z "$$($(INFRA_IS_RUNNING_CMD))" ]; then \
+		echo -e " $(RED)⛔$(RESET) Infrastructure is NOT RUNNING."; \
+		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:"; \
+		echo -e "\n      make infra-up DOCKER_SUITE=ci"; \
+		exit 1; \
+	fi
+endef
+
+.infra-up:
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(INFRA_COMPOSE_FLAGS) pull || true
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(INFRA_COMPOSE_FLAGS) build
+	@echo -e " $(GREEN)🚀$(RESET) Starting infrastructure..."
+	docker compose $(INFRA_COMPOSE_FLAGS) up -d --wait --remove-orphans
+	@echo -e " $(GREEN)✨$(RESET) Done!"
+
+.infra-down:
+	@echo -e " $(YELLOW)🛑$(RESET) Stopping infrastructure..."
+	docker compose $(INFRA_COMPOSE_FLAGS) down --remove-orphans
+
 .unit-test:
-	$(VALIDATE_SUITE_RUNNING)
+	$(VALIDATE_INFRA_RUNNING)
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
-	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" INFRA_COMPOSE_FLAGS="$(INFRA_COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
 TIME ?= 60
 DETECT_LEAKS ?= 0
@@ -132,43 +158,38 @@ DETECT_LEAKS ?= 0
 		./fuzz_$(CRYPTO_LIB) -max_total_time=$(TIME) -rss_limit_mb=2048"
 
 .e2e-test:
-	$(VALIDATE_SUITE_RUNNING)
+	$(VALIDATE_INFRA_RUNNING)
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
-	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" INFRA_COMPOSE_FLAGS="$(INFRA_COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
 
 .watch-tests:
-	$(VALIDATE_SUITE_RUNNING)
+	$(VALIDATE_INFRA_RUNNING)
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
-	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" INFRA_COMPOSE_FLAGS="$(INFRA_COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
 .build-images:
-	@echo -e " $(BLUE)🔨$(RESET) Building images for '$(DOCKER_SUITE)'..."
+	@echo -e " $(BLUE)🔨$(RESET) Building images..."
+	docker compose $(INFRA_COMPOSE_FLAGS) build --pull=false
 	docker compose $(COMPOSE_FLAGS) build --pull=false
 
 .up:
-	@# VALIDATION: Check if already running
-	@if [ -n "$$($(SUITE_IS_RUNNING_CMD))" ]; then
-		echo -e " $(GREEN)✅$(RESET) The '$(DOCKER_SUITE)' environment is ALREADY RUNNING."
-		echo -e " $(BLUE)ℹ️$(RESET)  Nothing to do."
-		exit 0
-	fi
-	
-	@echo -e " $(BLUE)⚙️$(RESET)  Generating configuration for '$(DOCKER_SUITE)'..."
-	docker compose $(COMPOSE_FLAGS) config > $(RESOLVED_DOCKER_COMPOSE)
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(INFRA_COMPOSE_FLAGS) pull || true
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(INFRA_COMPOSE_FLAGS) build
+	docker compose $(INFRA_COMPOSE_FLAGS) up -d --wait --remove-orphans
 
 	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) pull || true
 	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) build
-	
 	@echo -e " $(GREEN)🚀$(RESET) Starting '$(DOCKER_SUITE)' environment..."
-	docker compose $(COMPOSE_FLAGS) up --remove-orphans -d
-	
-	@echo -e " $(GREEN)✨$(RESET) Done!$(RESET)"
+	docker compose $(COMPOSE_FLAGS) up -d --wait --remove-orphans openwrt
+
+	@echo -e " $(GREEN)✨$(RESET) Done!"
 
 .down:
 	@echo -e " $(YELLOW)🛑$(RESET) Stopping '$(DOCKER_SUITE)' environment..."
 	docker compose $(COMPOSE_FLAGS) down --remove-orphans
+	docker compose $(INFRA_COMPOSE_FLAGS) down --remove-orphans
 
 .ps:
 	@docker compose $(COMPOSE_FLAGS) ps
@@ -177,13 +198,13 @@ CONTAINER ?= openwrt
 
 .shell:
 	$(VALIDATE_SUITE_RUNNING)
-	
+
 	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER) ($(DOCKER_SUITE))..."
 	docker compose $(COMPOSE_FLAGS) exec $(CONTAINER) /bin/sh
 
 .run:
 	$(VALIDATE_SUITE_RUNNING)
-	
+
 	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER) ($(DOCKER_SUITE))..."
 	docker compose $(COMPOSE_FLAGS) run -it --rm $(CONTAINER) /bin/sh
 

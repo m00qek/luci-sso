@@ -1,8 +1,4 @@
 services:
-  idp:
-    environment:
-      - ISSUER=https://${FQDN_IDP}
-
   openwrt:
     environment:
       - REDIRECT_URL=https://${FQDN_LUCI}
@@ -11,45 +7,3 @@ services:
       nofile:
         soft: 65536
         hard: 65536
-
-  # The Browser is ONLY needed for E2E
-  browser:
-    container_name: ${DOCKER_SUITE}-${SDK_ARCH}-${SDK_VERSION}-browser
-    image: ${DOCKER_NAMESPACE}/luci-sso-browser:node${NODE_VERSION}-alpine${ALPINE_VERSION}
-    stop_grace_period: 0s
-    build:
-      context: ./services/browser
-      cache_from:
-        - type=gha
-      cache_to:
-        - type=gha,mode=max
-      args:
-        NODE_VERSION: ${NODE_VERSION}
-        ALPINE_VERSION: ${ALPINE_VERSION}
-    networks:
-      lucisso-net:
-        aliases:
-          - "${FQDN_BROWSER}"
-    environment:
-      - BASE_URL=https://${FQDN_LUCI}
-      - FQDN_IDP=${FQDN_IDP}
-      - FQDN_LUCI=${FQDN_LUCI}
-      - NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/CA.crt
-    command: /bin/sh /usr/local/bin/start.sh
-    volumes:
-      - ./.pki/CA.crt:/usr/local/share/ca-certificates/CA.crt:ro
-      - ./services/browser/start.sh:/usr/local/bin/start.sh:ro
-      - ./base-startup.sh:/usr/local/bin/base-startup.sh:ro
-      - ../test/e2e:/app/tests:ro
-      - ../files/www/luci-static/resources/luci-sso-login.js:/app/luci-sso-login.js:ro
-      - ./services/browser/playwright.config.js:/app/playwright.config.js:ro
-      - ./services/browser/reporter.js:/app/reporter.js:ro
-    labels:
-      cert.fqdn: "${FQDN_BROWSER}"
-    depends_on:
-      pki:
-        condition: service_completed_successfully
-      idp:
-        condition: service_healthy
-      openwrt:
-        condition: service_healthy

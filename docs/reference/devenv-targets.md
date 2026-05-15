@@ -4,28 +4,48 @@ All development commands run through `devenv/Makefile`. Invoke them as `make -C 
 
 ---
 
+## Architecture
+
+The devenv runs two independent Docker Compose projects:
+
+| Project | Compose files | Contents | Lifetime |
+| :--- | :--- | :--- | :--- |
+| **Infra** (`luci-sso-infra`) | `docker-compose.infra.yaml` + `docker-compose.infra.<DOCKER_SUITE>.yaml` | PKI, IdP, Browser (CI only) | Long-lived: start once per session |
+| **OpenWrt** (`<SDK_ARCH>-<SDK_VERSION>`) | `docker-compose.yaml` + `docker-compose.<DOCKER_SUITE>.yaml` | OpenWrt, SDK, Fuzzer | Short-lived: started/stopped per test run |
+
+Both projects share the `luci-sso-net` Docker network. Infra must be running before tests are executed. Test targets (`test`, `e2e`, `watch-tests`) start and stop the OpenWrt container automatically.
+
+---
+
 ## Modes
 
-The devenv runs in one of two modes, controlled by the `DOCKER_SUITE` variable:
+The `DOCKER_SUITE` variable controls which overlay is applied to both projects:
 
-| Mode | `DOCKER_SUITE` | Ports exposed | Includes browser container |
-| :--- | :--- | :--- | :--- |
-| **Local** (default) | `local` | `8443` (router), `5556` (IdP) | No — you are the browser |
-| **CI** | `ci` | None | Yes — Playwright runs headlessly |
+| Mode | `DOCKER_SUITE` | IdP ISSUER | OpenWrt ports | Browser container |
+| :--- | :--- | :--- | :--- | :--- |
+| **Local** (default) | `local` | `https://localhost:5556` | `8443` exposed | No — you are the browser |
+| **CI** | `ci` | `https://idp.luci-sso.test` | None | Yes — Playwright runs headlessly |
 
-Local mode is the default. Test targets (`unit-test`, `e2e-test`, `watch-tests`, `fuzzer-test`) always run in CI mode regardless of what is currently up.
+Test targets (`test`, `e2e`, `watch-tests`) always use CI mode regardless of the environment variable.
 
 ---
 
 ## Targets
 
+### Infrastructure management
+
+| Target | Description |
+| :--- | :--- |
+| `infra-up` | Start shared infrastructure (PKI, IdP, and Browser in CI mode). |
+| `infra-down` | Stop shared infrastructure. Pass the same `DOCKER_SUITE` used when starting. |
+
 ### Environment management
 
 | Target | Description |
 | :--- | :--- |
-| `up` | Start the stack (mock IdP + simulated router). Defaults to local mode — pass `DOCKER_SUITE=ci` for the headless test stack. |
-| `down` | Stop and remove stack containers. Pass the same `DOCKER_SUITE` used when starting. |
-| `ps` | List running containers and their status. |
+| `up` | Start the full local stack (infra + OpenWrt). Defaults to local mode — use `DOCKER_SUITE=ci` for headless test browsing. |
+| `down` | Stop and remove all stack containers (OpenWrt + infra). Pass the same `DOCKER_SUITE` used when starting. |
+| `ps` | List running containers in the OpenWrt project and their status. |
 | `shell` | Open an interactive shell in the `openwrt` container. |
 | `run` | Run a one-shot interactive shell (container is removed on exit). |
 | `build-images` | Build Docker images from local Dockerfiles without pulling. |
@@ -33,15 +53,14 @@ Local mode is the default. Test targets (`unit-test`, `e2e-test`, `watch-tests`,
 
 ### Testing
 
-Test targets always use CI mode — start the CI stack with `make -C devenv up DOCKER_SUITE=ci` first.
+Test targets use CI mode and start/stop the OpenWrt container automatically. Start CI infrastructure first with `make infra-up DOCKER_SUITE=ci`.
 
 | Target | Description |
 | :--- | :--- |
-| `unit-test` | Run unit and integration tests (Tiers 0–4). |
-| `e2e-test` | Run browser-based end-to-end tests via Playwright. |
-| `test` | Alias for `unit-test` followed by `e2e-test`. |
-| `watch-tests` | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. |
-| `fuzzer-test` | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. |
+| `test` | Run unit and integration tests (Tiers 0–4). Starts and stops OpenWrt automatically. |
+| `e2e` | Run browser-based end-to-end tests via Playwright. Starts and stops OpenWrt automatically. |
+| `watch-tests` | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. Starts OpenWrt at launch and stops it on exit. |
+| `fuzz` | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. |
 | `lint` | Run the three documentation lint checks (error codes, request limits, cookies). No stack required. |
 
 ### Build
@@ -89,9 +108,9 @@ Common `SDK_ARCH` values:
 
 | Variable | Applies to | Description |
 | :--- | :--- | :--- |
-| `FILTER` | `unit-test`, `e2e-test`, `watch-tests` | Regex matched against test names. Only matching tests run. Example: `FILTER='oidc.*discovery'` |
-| `MODULES` | `unit-test`, `e2e-test`, `watch-tests` | Path to a specific test file or directory. Example: `MODULES='test/tier2/oidc_logic_test.uc'` |
-| `VERBOSE` | `unit-test`, `e2e-test` | Set to `1` for detailed per-test output. |
+| `FILTER` | `test`, `e2e`, `watch-tests` | Regex matched against test names. Only matching tests run. Example: `FILTER='oidc.*discovery'` |
+| `MODULES` | `test`, `e2e`, `watch-tests` | Path to a specific test file or directory. Example: `MODULES='test/tier2/oidc_logic_test.uc'` |
+| `VERBOSE` | `test`, `e2e` | Set to `1` for detailed per-test output. |
 
 ### Fuzzer
 
@@ -117,24 +136,30 @@ make -C devenv up
 # Open a shell in the running openwrt container
 make -C devenv shell
 
-# Start the CI stack and run all tests
-make -C devenv up DOCKER_SUITE=ci
-make -C devenv unit-test
-make -C devenv down DOCKER_SUITE=ci
+# Start CI infrastructure and run all tests
+make -C devenv infra-up DOCKER_SUITE=ci
+make -C devenv test
+make -C devenv e2e
+make -C devenv infra-down DOCKER_SUITE=ci
+
+# Watch tests (infrastructure must be started first)
+make -C devenv infra-up DOCKER_SUITE=ci
+make -C devenv watch-tests
+make -C devenv infra-down DOCKER_SUITE=ci
 
 # Run only OIDC discovery tests, with verbose output
-make -C devenv unit-test FILTER='oidc.*discovery' VERBOSE=1
+make -C devenv test FILTER='oidc.*discovery' VERBOSE=1
 
 # Run a single test file
-make -C devenv unit-test MODULES='test/tier2/oidc_logic_test.uc'
+make -C devenv test MODULES='test/tier2/oidc_logic_test.uc'
 
 # Build and test with the wolfssl backend
 make -C devenv compile CRYPTO_LIB=wolfssl
-make -C devenv unit-test CRYPTO_LIB=wolfssl
+make -C devenv test CRYPTO_LIB=wolfssl
 
 # Build an IPK for a MIPS router
 make -C devenv package SDK_ARCH=mipsel_24kc
 
 # Fuzz the mbedtls backend for 10 minutes with leak detection
-make -C devenv fuzzer-test CRYPTO_LIB=mbedtls TIME=600 DETECT_LEAKS=1
+make -C devenv fuzz CRYPTO_LIB=mbedtls TIME=600 DETECT_LEAKS=1
 ```

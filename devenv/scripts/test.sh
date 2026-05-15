@@ -3,11 +3,10 @@ set -e
 
 # test.sh: Smart Test Orchestrator for LuCI SSO
 # Responsibilities: Validation, Path Translation, Execution, Watching.
+# COMPOSE_FLAGS and INFRA_COMPOSE_FLAGS MUST be passed from the environment (Makefile).
 
 # --- CONFIGURATION ---
 BASE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-DEVENV_DIR="$BASE_DIR/devenv"
-# COMPOSE_FLAGS MUST be passed from the environment (Makefile)
 
 # Colors
 RED='\033[1;31m'
@@ -53,6 +52,29 @@ translate_e2e_paths() {
   echo "$translated"
 }
 
+# --- OPENWRT LIFECYCLE ---
+
+start_openwrt() {
+  log_info "🚀 Starting openwrt..."
+  docker compose $COMPOSE_FLAGS up -d --wait openwrt
+}
+
+guard_single_openwrt() {
+  local running
+  running=$(docker ps --format "{{.Names}}" --filter "network=luci-sso-net" 2>/dev/null | grep '\-openwrt$' || true)
+  if [ -n "$running" ]; then
+    log_error "Another openwrt container is already running: $running"
+    log_error "E2E tests require exclusive access to the network. Only one run at a time."
+    log_error "Wait for it to finish, or stop it manually: docker stop $running"
+    exit 1
+  fi
+}
+
+stop_openwrt() {
+  log_info "🛑 Stopping openwrt..."
+  docker compose $COMPOSE_FLAGS down
+}
+
 # --- EXECUTION ---
 
 run_unit() {
@@ -80,21 +102,20 @@ run_e2e() {
 
   docker compose $COMPOSE_FLAGS exec openwrt \
     sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
-  docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test $(translate_e2e_paths "$modules") $grep_flag
+  docker compose $INFRA_COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test $(translate_e2e_paths "$modules") $grep_flag
 }
 
 # --- MAIN ---
 
 COMMAND=$1
 if [ -z "$COMMAND" ]; then
-  echo "Usage: $0 {unit|e2e|watch} [--modules \"paths\"] [--filter \"string\"] [--watch]"
+  echo "Usage: $0 {unit|e2e|watch} [--modules \"paths\"] [--filter \"string\"]"
   exit 1
 fi
 shift
 
 MODULES=""
 FILTER=""
-WATCH=false
 
 while [[ "$#" -gt 0 ]]; do
   case $1 in
@@ -106,7 +127,6 @@ while [[ "$#" -gt 0 ]]; do
     FILTER="$2"
     shift
     ;;
-  --watch) WATCH=true ;;
   *)
     echo "Unknown parameter: $1"
     exit 1
@@ -117,24 +137,15 @@ done
 
 case "$COMMAND" in
 unit)
-  if [ "$WATCH" = true ]; then
-    if ! command -v inotifywait >/dev/null 2>&1; then
-      log_error "'inotifywait' not found. Please install 'inotify-tools'."
-      exit 1
-    fi
-    WATCH_PATHS="$BASE_DIR/files $BASE_DIR/src ${MODULES:-$BASE_DIR/test}"
-    log_info "Watching for changes in $WATCH_PATHS..."
-    while true; do
-      run_unit "$MODULES" "$FILTER" || true
-      inotifywait -r -q -e modify,move,create,delete $WATCH_PATHS
-      echo -e "\n ${YELLOW}🔄${RESET} Change detected. Re-running...\n"
-    done
-  else
-    run_unit "$MODULES" "$FILTER"
-  fi
+  start_openwrt
+  trap "stop_openwrt || true" EXIT
+  run_unit "$MODULES" "$FILTER"
   ;;
 
 e2e)
+  guard_single_openwrt
+  start_openwrt
+  trap "stop_openwrt || true" EXIT
   run_e2e "$MODULES" "$FILTER"
   ;;
 
@@ -143,6 +154,9 @@ watch)
     log_error "'inotifywait' not found. Please install 'inotify-tools'."
     exit 1
   fi
+  guard_single_openwrt
+  start_openwrt
+  trap "stop_openwrt || true" EXIT
   WATCH_PATHS="$BASE_DIR/files $BASE_DIR/src ${MODULES:-$BASE_DIR/test}"
   log_info "Watching for changes in $WATCH_PATHS..."
   while true; do
@@ -154,8 +168,7 @@ watch)
   ;;
 
 *)
-  echo "Usage: $0 {unit|e2e|watch} [--modules \"paths\"] [--filter \"string\"] [--watch]"
+  echo "Usage: $0 {unit|e2e|watch} [--modules \"paths\"] [--filter \"string\"]"
   exit 1
   ;;
 esac
-

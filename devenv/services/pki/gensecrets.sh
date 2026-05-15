@@ -2,7 +2,6 @@
 set -e
 
 # --- CONFIG ---
-COMPOSE_FILE="/work/${RESOLVED_DOCKER_COMPOSE}"
 TARGET_DIR="/out"
 CURVE_NAME="${PKI_CURVE}"
 
@@ -78,9 +77,9 @@ EOF
 
 ensure_ca
 
-echo "🔎 Scanning $COMPOSE_FILE for 'cert.fqdn' labels..."
+echo "🔐 Generating certificates for: $FQDNS"
 
-yq '.services[].labels."cert.fqdn" | select(. != null)' "$COMPOSE_FILE" | while read -r FQDN; do
+for FQDN in $FQDNS; do
   ensure_cert "$FQDN"
 done
 

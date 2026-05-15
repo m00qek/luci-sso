@@ -1,0 +1,6 @@
+services:
+  idp:
+    ports:
+      - "${PORT_IDP}:443"
+    environment:
+      - ISSUER=https://localhost:${PORT_IDP}

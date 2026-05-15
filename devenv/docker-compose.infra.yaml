@@ -1,0 +1,78 @@
+networks:
+  lucisso-net:
+    name: luci-sso-net
+    driver: bridge
+
+services:
+  pki:
+    container_name: luci-sso-infra-pki
+    image: ${DOCKER_NAMESPACE}/luci-sso-pki:alpine${ALPINE_VERSION}
+    build:
+      context: ./services/pki
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
+      args:
+        ALPINE_VERSION: ${ALPINE_VERSION}
+    volumes:
+      - ./.pki:/out
+      - ./services/pki/gensecrets.sh:/usr/local/bin/gensecrets.sh:ro
+    environment:
+      - TARGET_UID=${UID:-1000}
+      - TARGET_GID=${GID:-1000}
+      - PKI_CURVE=${PKI_CURVE}
+      - FQDNS=${FQDN_IDP} ${FQDN_LUCI} ${FQDN_BROWSER}
+    stop_grace_period: 0s
+    command: /bin/sh /usr/local/bin/gensecrets.sh
+
+  idp:
+    container_name: luci-sso-infra-idp
+    image: ${DOCKER_NAMESPACE}/luci-sso-idp:node${NODE_VERSION}-alpine${ALPINE_VERSION}
+    build:
+      context: ./services/idp
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
+      args:
+        NODE_VERSION: ${NODE_VERSION}
+        ALPINE_VERSION: ${ALPINE_VERSION}
+    working_dir: /app
+    stop_grace_period: 0s
+    networks:
+      lucisso-net:
+        aliases:
+          - "${FQDN_IDP}"
+    volumes:
+      - ./.pki/CA.crt:/usr/local/share/ca-certificates/CA.crt:ro
+      - ./.pki/${FQDN_IDP}.crt:/app/https.crt:ro
+      - ./.pki/${FQDN_IDP}.key:/app/https.key:ro
+      - ./.pki/idp:/app/secrets:rw
+      - ./services/idp/package.json:/app/package.json:ro
+      - ./services/idp/index.js:/app/index.js:ro
+      - ./services/idp/start.sh:/usr/local/bin/start.sh:ro
+      - ./base-startup.sh:/usr/local/bin/base-startup.sh:ro
+    environment:
+      - NODE_EXTRA_CA_CERTS=/usr/local/share/ca-certificates/CA.crt
+      - NPM_CONFIG_LOGLEVEL=warn
+      - NPM_CONFIG_FUND=false
+      - NPM_CONFIG_AUDIT=false
+      - NPM_CONFIG_UPDATE_NOTIFIER=false
+      - APP_NAME=MockIdP
+    labels:
+      cert.fqdn: "${FQDN_IDP}"
+    depends_on:
+      pki:
+        condition: service_completed_successfully
+    command: /bin/sh /usr/local/bin/start.sh --foreground
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -sSf https://${FQDN_IDP}/.well-known/openid-configuration > /dev/null",
+        ]
+      interval: 2s
+      timeout: 2s
+      retries: 10
+      start_period: 5s

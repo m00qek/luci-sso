@@ -53,19 +53,19 @@ Notice that the login redirects to the mock IdP, then back to LuCI — the same 
 
 ## Step 3: Run the test suite
 
-The automated test suite runs in a separate headless stack that includes a Playwright browser container. Start it with `DOCKER_SUITE=ci`:
+The automated test suite runs against a CI infrastructure stack that includes a headless Playwright browser container. Start it first:
 
 ```bash
-make -C devenv up DOCKER_SUITE=ci
+make -C devenv infra-up DOCKER_SUITE=ci
 ```
 
 Then run the tests:
 
 ```bash
-make -C devenv unit-test
+make -C devenv test
 ```
 
-You should see a series of green checkmarks for Tiers 0 through 4, ending with a summary like:
+Each test target starts a fresh OpenWrt container, runs the tests, and stops it automatically. You should see a series of green checkmarks for Tiers 0 through 4, ending with a summary like:
 
 ```
 All tests passed. (Tier 0: 12, Tier 1: 8, Tier 2: 24, Tier 3: 9, Tier 4: 3)
@@ -73,7 +73,13 @@ All tests passed. (Tier 0: 12, Tier 1: 8, Tier 2: 24, Tier 3: 9, Tier 4: 3)
 
 If any tier fails, the output will identify the failing test and the module it belongs to.
 
-Both stacks run as separate Docker Compose projects, so the local stack from Step 2 and the CI stack can be up simultaneously without interfering.
+When done, stop the infrastructure:
+
+```bash
+make -C devenv infra-down DOCKER_SUITE=ci
+```
+
+The local stack from Step 2 and the CI infrastructure can run simultaneously without interfering — they are separate Docker Compose projects sharing a private network.
 
 ---
 
@@ -82,8 +88,8 @@ Both stacks run as separate Docker Compose projects, so the local stack from Ste
 * A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
 * A mock Identity Provider pre-configured with test credentials that accepts any username and password.
 * A local stack (`make -C devenv up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
-* A CI stack (`make -C devenv up DOCKER_SUITE=ci`) that runs the full automated test suite headlessly via Playwright.
-* A full test suite covering Tiers 0–4, runnable without a physical router or a real IdP.
+* A CI infrastructure stack (`make -C devenv infra-up DOCKER_SUITE=ci`) that runs the IdP and headless Playwright browser, shared across all test runs.
+* A full test suite covering Tiers 0–4, where each test target manages its own OpenWrt container lifecycle.
 
 ---
 

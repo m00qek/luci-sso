@@ -14,7 +14,7 @@
 | **Tier 3** | Integration | Full system simulation (CGI headers, UBUS, I/O) using mocks. |
 | **Tier 4** | Framework | Self-tests for the testing library itself. |
 
-Tests live in `test/tier*/`. Run all tiers with `make -C devenv unit-test`.
+Tests live in `test/tier*/`. Run all tiers with `make -C devenv test` (requires `make -C devenv infra-up DOCKER_SUITE=ci` first — see [Running Tests](../how-to/developer/testing.md)).
 
 ---
 
