@@ -52,6 +52,9 @@ case "$SDK_ARCH" in
     "mips_24kc")
         echo "mips_24kc"
         ;;
+    "armsr-armv7")
+        echo "armsr-armv7"
+        ;;
     "mipsel_24kc")
         echo "mipsel_24kc"
         ;;

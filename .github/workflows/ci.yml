@@ -42,7 +42,7 @@ jobs:
       pkg_depends: ${{ steps.vars.outputs.pkg_depends }}
       sdk_version: ${{ steps.vars.outputs.sdk_version }}
       sdk_arch: ${{ steps.vars.outputs.sdk_arch }}
-      sdk_archs: ${{ steps.vars.outputs.sdk_archs }}
+      targets: ${{ steps.vars.outputs.targets }}
       node_version: ${{ steps.vars.outputs.node_version }}
       alpine_version: ${{ steps.vars.outputs.alpine_version }}
       repo_owner: ${{ steps.vars.outputs.repo_owner }}
@@ -70,15 +70,15 @@ jobs:
           ARCH="x86-64"
 
           if [ "${{ github.event_name }}" = "pull_request" ]; then
-            ARCHS='["x86-64"]'
+            TARGETS='[{"sdk_arch":"x86-64","openwrt_version":"24.10.5"},{"sdk_arch":"x86-64","openwrt_version":"25.12.3"}]'
           else
-            ARCHS='["x86-64", "aarch64_generic", "arm_cortex-a7_neon-vfpv4", "mipsel_24kc", "mips_24kc"]'
+            TARGETS='[{"sdk_arch":"x86-64","openwrt_version":"24.10.5"},{"sdk_arch":"x86-64","openwrt_version":"25.12.3"},{"sdk_arch":"aarch64_generic","openwrt_version":"25.12.3"},{"sdk_arch":"armsr-armv7","openwrt_version":"25.12.3"},{"sdk_arch":"mips_24kc","openwrt_version":"25.12.3"}]'
           fi
 
           echo "pkg_depends=$DEPENDS" >> $GITHUB_OUTPUT
           echo "sdk_version=$VERSION" >> $GITHUB_OUTPUT
           echo "sdk_arch=$ARCH" >> $GITHUB_OUTPUT
-          echo "sdk_archs=$ARCHS" >> $GITHUB_OUTPUT
+          echo "targets=$TARGETS" >> $GITHUB_OUTPUT
           echo "node_version=$NODE_V" >> $GITHUB_OUTPUT
           echo "alpine_version=$ALPINE_V" >> $GITHUB_OUTPUT
 
@@ -112,7 +112,7 @@ jobs:
             makefile: 'devenv/Makefile'
 
   build-versioned:
-    name: Build ${{ matrix.service }} (${{ matrix.sdk_arch }} / ${{ matrix.openwrt_version }})
+    name: Build ${{ matrix.service }} (${{ matrix.target.sdk_arch }} / ${{ matrix.target.openwrt_version }})
     needs: metadata
     runs-on: ubuntu-latest
     permissions:
@@ -121,14 +121,13 @@ jobs:
     strategy:
       matrix:
         service: [openwrt, sdk]
-        sdk_arch: ${{ fromJson(needs.metadata.outputs.sdk_archs) }}
-        openwrt_version: [24.10.5, 25.12.3]
+        target: ${{ fromJson(needs.metadata.outputs.targets) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Set up QEMU
-        if: matrix.sdk_arch != 'x86-64'
+        if: matrix.target.sdk_arch != 'x86-64'
         uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
@@ -142,7 +141,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Resolve Docker platform
-        run: echo "DOCKER_PLATFORM=$(devenv/scripts/resolve-arch.sh --platform ${{ matrix.sdk_arch }})" >> $GITHUB_ENV
+        run: echo "DOCKER_PLATFORM=$(devenv/scripts/resolve-arch.sh --platform ${{ matrix.target.sdk_arch }})" >> $GITHUB_ENV
 
       - name: Build and Push
         if: ${{ needs.metadata.outputs[format('changed_{0}', matrix.service)] == 'true' || needs.metadata.outputs.changed_makefile == 'true' || github.event.inputs.force_rebuild == 'true' }}
@@ -152,14 +151,14 @@ jobs:
           file: devenv/services/${{ matrix.service }}/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:${{ matrix.sdk_arch }}-${{ matrix.openwrt_version }}
+            ${{ env.REGISTRY }}/${{ needs.metadata.outputs.repo_owner }}/luci-sso-${{ matrix.service }}:${{ matrix.target.sdk_arch }}-${{ matrix.target.openwrt_version }}
           build-args: |
-            SDK_ARCH=${{ matrix.sdk_arch }}
-            SDK_VERSION=${{ matrix.openwrt_version }}
+            SDK_ARCH=${{ matrix.target.sdk_arch }}
+            SDK_VERSION=${{ matrix.target.openwrt_version }}
             PKG_DEPENDS=${{ needs.metadata.outputs.pkg_depends }}
             DOCKER_PLATFORM=${{ env.DOCKER_PLATFORM }}
-          cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.sdk_arch }}-${{ matrix.openwrt_version }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.sdk_arch }}-${{ matrix.openwrt_version }}
+          cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.target.sdk_arch }}-${{ matrix.target.openwrt_version }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.target.sdk_arch }}-${{ matrix.target.openwrt_version }}
 
   build-helpers:
     name: Build ${{ matrix.service }}
@@ -234,7 +233,7 @@ jobs:
         run: make -sC devenv fuzz
 
   test-integration:
-    name: Verification (${{ matrix.crypto }} / ${{ matrix.sdk_arch }} / ${{ matrix.openwrt_version }})
+    name: Verification (${{ matrix.crypto }} / ${{ matrix.target.sdk_arch }} / ${{ matrix.target.openwrt_version }})
     if: ${{ needs.metadata.outputs.changed_code == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     needs: [metadata, build-helpers, build-versioned]
@@ -245,19 +244,18 @@ jobs:
       fail-fast: false
       matrix:
         crypto: [mbedtls, wolfssl, openssl]
-        sdk_arch: ${{ fromJson(needs.metadata.outputs.sdk_archs) }}
-        openwrt_version: [24.10.5, 25.12.3]
+        target: ${{ fromJson(needs.metadata.outputs.targets) }}
     env:
       DOCKER_SUITE: ci
-      SDK_ARCH: ${{ matrix.sdk_arch }}
+      SDK_ARCH: ${{ matrix.target.sdk_arch }}
       CRYPTO_LIB: ${{ matrix.crypto }}
-      SDK_VERSION: ${{ matrix.openwrt_version }}
+      SDK_VERSION: ${{ matrix.target.openwrt_version }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
       - name: Set up QEMU
-        if: matrix.sdk_arch != 'x86-64'
+        if: matrix.target.sdk_arch != 'x86-64'
         uses: docker/setup-qemu-action@v3
 
       - name: Pull images
@@ -273,7 +271,7 @@ jobs:
         run: make -sC devenv test
 
       - name: E2E Tests
-        if: matrix.sdk_arch == 'x86-64'
+        if: matrix.target.sdk_arch == 'x86-64'
         run: make -sC devenv e2e
 
       - name: Stop infrastructure
