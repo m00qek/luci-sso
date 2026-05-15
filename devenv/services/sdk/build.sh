@@ -35,18 +35,8 @@ package)
   find bin/ -name "*.ipk" -exec cp -v {} "$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/packages/" \;
   ;;
 
-test)
-  echo "🧪 Running unit tests inside SDK..."
-  # Add ucode testing logic here
-  ucode -L /sdk/package/$PKG_NAME/test/mocks \
-    -L "$ARTIFACTS_DIR/$CRYPTO_LIB" \
-    -L /sdk/package/$PKG_NAME/files/usr/share/ucode \
-    -L /sdk/package/$PKG_NAME/test \
-    /sdk/package/$PKG_NAME/test/runner.uc
-  ;;
-
 *)
-  echo "Usage: $0 {compile|package|test}"
+  echo "Usage: $0 {compile|package}"
   exit 1
   ;;
 esac

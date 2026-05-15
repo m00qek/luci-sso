@@ -2,8 +2,7 @@
 
 # Multi-Architecture Resolver for Luci-SSO
 # 1. Mode --host: Return default SDK_ARCH for current machine.
-# 2. Mode --platform <SDK_ARCH>: Return Docker platform string.
-# 3. Mode <SDK_ARCH>: Return compatible ROOTFS_ARCH.
+# 2. Mode <SDK_ARCH>: Return compatible ROOTFS_ARCH.
 
 ARG1=$1
 
@@ -19,29 +18,6 @@ if [ "$ARG1" == "--host" ]; then
         *)
             # Standard OpenWrt SDK fallback
             echo "x86-64"
-            ;;
-    esac
-    exit 0
-fi
-
-if [ "$ARG1" == "--platform" ]; then
-    VAL=$2
-    case "$VAL" in
-        "x86-64")
-            echo "linux/amd64"
-            ;;
-        "aarch64_generic"|"aarch64_cortex-a53")
-            echo "linux/arm64"
-            ;;
-        "mips_24kc")
-            echo "linux/mips"
-            ;;
-        "mipsel_24kc")
-            echo "linux/mipsle"
-            ;;
-        *)
-            # Fallback to host architecture
-            echo "linux/amd64"
             ;;
     esac
     exit 0
