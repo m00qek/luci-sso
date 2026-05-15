@@ -1,0 +1,2038 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.">
+      
+      
+      
+        <link rel="canonical" href="https://m00qek.github.io/luci-sso/how-to/sysadmin/debugging/">
+      
+      
+        <link rel="prev" href="../split-horizon/">
+      
+      
+        <link rel="next" href="../backup-restore/">
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Debugging - LuCI SSO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#how-to-debug-luci-sso" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+              <button class="md-banner__button md-icon" aria-label="Don't show this again">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+              </button>
+            
+            
+  <strong>Beta:</strong> This project and its documentation are under active development. APIs and configuration options may change before the 1.0 release.
+
+          </div>
+          
+            <script>var content,el=document.querySelector("[data-md-component=announce]");el&&(content=el.querySelector(".md-typeset"),__md_hash(content.innerHTML)===__md_get("__announce")&&(el.hidden=!0))</script>
+          
+        </aside>
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="LuCI SSO" class="md-header__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LuCI SSO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Debugging
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+    
+  
+  Welcome
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../tutorials/" class="md-tabs__link">
+          
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../" class="md-tabs__link">
+          
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../explanation/" class="md-tabs__link">
+          
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="LuCI SSO" class="md-nav__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    LuCI SSO
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Welcome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/first-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Public IdP)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/pocket-id-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Self-hosted)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/building/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building from Source
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/dev-onboarding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Developer Onboarding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How-to Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            How-to Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Providers
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            Providers
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/generic-oidc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Generic OIDC Provider
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/google/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Google
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/github/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Github
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/authelia/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authelia
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/keycloak/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keycloak
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/authentik/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authentik
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/pocket-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pocket ID
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Sysadmin
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Sysadmin
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../install-ca-certificate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing a Private CA Certificate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrading
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rotate-credentials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Rotating Credentials
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rbac/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Role-Based Access Control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../split-horizon/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Split-Horizon Networking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Debugging
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Debugging
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#read-the-system-log-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read the system log first
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-sso-button-does-not-appear" class="md-nav__link">
+    <span class="md-ellipsis">
+      The SSO button does not appear
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-browser-redirects-to-the-idp-but-the-login-never-completes" class="md-nav__link">
+    <span class="md-ellipsis">
+      The browser redirects to the IdP but the login never completes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication-succeeds-but-the-user-is-denied" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication succeeds but the user is denied
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-callback-fails-with-handshake_not_yet_valid" class="md-nav__link">
+    <span class="md-ellipsis">
+      The callback fails with HANDSHAKE_NOT_YET_VALID
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#login-succeeds-but-the-session-has-no-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      Login succeeds but the session has no access
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security note
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backup-restore/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Backing Up and Restoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../uninstall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Removing luci-sso
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Developer
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            Developer
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/development-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Development Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/adding-crypto-backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a New Crypto Backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running Tests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/fuzzing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running the Fuzzer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/documentation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Writing Documentation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/adding-documented-interfaces/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding Error Codes, Limits, and Cookies
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/log-messages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Log Messages
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/http-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HTTP API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/uci-config/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UCI Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/internal-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Internal API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/style-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Style Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/testing-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/rfc-compliance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RFC Compliance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/devenv-targets/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    devenv Targets
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Explanation
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Explanation
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/about/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About LuCI SSO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/design-philosophy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design Philosophy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/oidc-flow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the OIDC Login Flow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/session-lifecycle/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Session Lifecycle
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/crypto-backends/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About Crypto Backends
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/security-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Security Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#read-the-system-log-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      Read the system log first
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-sso-button-does-not-appear" class="md-nav__link">
+    <span class="md-ellipsis">
+      The SSO button does not appear
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-browser-redirects-to-the-idp-but-the-login-never-completes" class="md-nav__link">
+    <span class="md-ellipsis">
+      The browser redirects to the IdP but the login never completes
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authentication-succeeds-but-the-user-is-denied" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authentication succeeds but the user is denied
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-callback-fails-with-handshake_not_yet_valid" class="md-nav__link">
+    <span class="md-ellipsis">
+      The callback fails with HANDSHAKE_NOT_YET_VALID
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#login-succeeds-but-the-session-has-no-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      Login succeeds but the session has no access
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security note
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<h1 id="how-to-debug-luci-sso">How to Debug luci-sso<a class="headerlink" href="#how-to-debug-luci-sso" title="Permanent link">&para;</a></h1>
+<p>This guide describes how to diagnose and resolve authentication failures in <code>luci-sso</code>. Each section maps a visible symptom to the likely cause and the steps to fix it.</p>
+<hr />
+<h2 id="read-the-system-log-first">Read the system log first<a class="headerlink" href="#read-the-system-log-first" title="Permanent link">&para;</a></h2>
+<p>All authentication events are written to syslog. Check this before anything else.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Browser (LuCI)</label><label for="__tabbed_1_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Status &gt; System Log</strong> and filter for <code>luci-sso</code>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>logread<span class="w"> </span>-e<span class="w"> </span>luci-sso<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-30
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>Each entry follows this format:</p>
+<div class="highlight"><pre><span></span><code>luci-sso[&lt;pid&gt;]: [&lt;http-status&gt;] &lt;CODE&gt;
+</code></pre></div>
+<p>For every error code and its trigger, see the <a href="../../../reference/log-messages/">Log Messages Reference</a>.</p>
+<hr />
+<h2 id="the-sso-button-does-not-appear">The SSO button does not appear<a class="headerlink" href="#the-sso-button-does-not-appear" title="Permanent link">&para;</a></h2>
+<p>Check that the service is enabled and responding:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-sk<span class="w"> </span>https://192.168.1.1/cgi-bin/luci-sso?action<span class="o">=</span>enabled
+</code></pre></div>
+<ul>
+<li>If it returns <code>{"enabled":false}</code>: SSO is disabled. Enable it in <strong>Services &gt; SSO Login</strong> (toggle <strong>Enable SSO</strong> on and click <strong>Save &amp; Apply</strong>), or via SSH: <code>uci set luci-sso.default.enabled='1' &amp;&amp; uci commit luci-sso</code>.</li>
+<li>If the request fails entirely: the CGI script is not running. Verify the package is installed: <code>opkg list-installed | grep luci-sso</code>.</li>
+<li>If the log shows <code>CONFIG_ERROR</code>: a required option is missing or malformed. Run <code>uci show luci-sso</code> and check every option against the <a href="../../../reference/uci-config/">UCI Configuration Reference</a>.</li>
+</ul>
+<hr />
+<h2 id="the-browser-redirects-to-the-idp-but-the-login-never-completes">The browser redirects to the IdP but the login never completes<a class="headerlink" href="#the-browser-redirects-to-the-idp-but-the-login-never-completes" title="Permanent link">&para;</a></h2>
+<p>The router sent the user to the IdP but the callback back to the router failed.</p>
+<ul>
+<li><strong>Log shows <code>OIDC_DISCOVERY_FAILED</code></strong>: the router cannot reach <code>issuer_url</code>. Test connectivity from the router: <code>curl -s &lt;issuer_url&gt;/.well-known/openid-configuration</code>. Check DNS resolution and firewall rules. If the router must reach the IdP at a different internal address, see <a href="../split-horizon/">How to Configure Split-Horizon Networking</a>.</li>
+<li><strong>Log shows <code>SSL_INIT_FAILED</code></strong>: the router does not trust the IdP's TLS certificate. Install the system CA bundle (<code>opkg install ca-bundle</code>) or add your private CA certificate to <code>/etc/ssl/certs/</code> and run <code>update-ca-certificates</code>.</li>
+<li><strong>Log shows <code>STATE_PARAMETER_MISMATCH</code></strong>: the browser's handshake cookie was lost, or the user completed the flow in a second tab. This is normal; the user can retry.</li>
+<li><strong>Log shows <code>HANDSHAKE_EXPIRED</code></strong>: the user took more than five minutes to complete the IdP login. The browser will restart the flow automatically on the next attempt.</li>
+</ul>
+<hr />
+<h2 id="authentication-succeeds-but-the-user-is-denied">Authentication succeeds but the user is denied<a class="headerlink" href="#authentication-succeeds-but-the-user-is-denied" title="Permanent link">&para;</a></h2>
+<p>The log will show <code>USER_NOT_AUTHORIZED</code>. The line immediately before it identifies the cause.</p>
+<ul>
+<li><strong>"matched no roles"</strong>: the user's email and groups match no <code>config role</code> section. Run <code>uci show luci-sso</code> and verify the user's exact email or group name appears in a role. Email matching is case-insensitive; group matching is case-sensitive. For Pocket ID, the <code>@PocketID</code> suffix is required.</li>
+<li><strong>"role has no permissions"</strong>: a matching role exists but has no <code>read</code> or <code>write</code> entries. Add at least one permission to the role.</li>
+</ul>
+<p>To see the exact claim values the IdP is sending, check the log lines preceding <code>USER_NOT_AUTHORIZED</code> — they include the matched email and groups.</p>
+<hr />
+<h2 id="the-callback-fails-with-handshake_not_yet_valid">The callback fails with HANDSHAKE_NOT_YET_VALID<a class="headerlink" href="#the-callback-fails-with-handshake_not_yet_valid" title="Permanent link">&para;</a></h2>
+<p>The router's clock is ahead of the browser's by more than <code>clock_tolerance</code>. The handshake state cookie contains an <code>iat</code> timestamp that the router considers to be in the future.</p>
+<p>Check the router's current time:</p>
+<div class="highlight"><pre><span></span><code>date
+</code></pre></div>
+<p>If the time is wrong, synchronize it with NTP:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Check whether ntpd is running</span>
+ps<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>ntpd
+
+<span class="c1"># Start it if it is not</span>
+service<span class="w"> </span>ntp<span class="w"> </span>start
+
+<span class="c1"># Or force a one-shot sync and check the result</span>
+ntpd<span class="w"> </span>-n<span class="w"> </span>-q<span class="w"> </span>-p<span class="w"> </span>pool.ntp.org<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>date
+</code></pre></div>
+<p>If the router has no NTP client installed, install one:</p>
+<div class="highlight"><pre><span></span><code>opkg<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>opkg<span class="w"> </span>install<span class="w"> </span>ntp
+service<span class="w"> </span>ntp<span class="w"> </span><span class="nb">enable</span>
+service<span class="w"> </span>ntp<span class="w"> </span>start
+</code></pre></div>
+<p>After synchronization, try logging in again. If clock drift is a recurring problem on this hardware (common on devices without a hardware real-time clock), increase <code>clock_tolerance</code> to accommodate it:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Browser (LuCI)</label><label for="__tabbed_2_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Services &gt; SSO Login</strong>. Set <strong>Clock Tolerance</strong> to <code>120</code>, then click <strong>Save &amp; Apply</strong>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.clock_tolerance<span class="o">=</span><span class="s1">&#39;120&#39;</span>
+uci<span class="w"> </span>commit<span class="w"> </span>luci-sso
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>The valid range is <code>0</code>–<code>3600</code> seconds.</p>
+<hr />
+<h2 id="login-succeeds-but-the-session-has-no-access">Login succeeds but the session has no access<a class="headerlink" href="#login-succeeds-but-the-session-has-no-access" title="Permanent link">&para;</a></h2>
+<p>The log will show <code>UBUS_LOGIN_FAILED</code> or <code>UBUS_SESSION_FAILED</code>.</p>
+<ul>
+<li>Verify <code>rpcd</code> is running: <code>ps | grep rpcd</code>. If it is not, start it: <code>service rpcd start</code>.</li>
+<li>Verify LuCI ACL files are present: <code>ls /usr/share/rpcd/acl.d/</code>. Missing files indicate an incomplete LuCI installation.</li>
+</ul>
+<hr />
+<h2 id="security-note">Security note<a class="headerlink" href="#security-note" title="Permanent link">&para;</a></h2>
+<p>When sharing logs for troubleshooting, redact tokens and internal IP addresses before posting them publicly.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../../..", "features": ["announce.dismiss", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

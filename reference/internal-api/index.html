@@ -1,0 +1,3336 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.">
+      
+      
+      
+        <link rel="canonical" href="https://m00qek.github.io/luci-sso/reference/internal-api/">
+      
+      
+        <link rel="prev" href="../uci-config/">
+      
+      
+        <link rel="next" href="../style-guide/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Internal API - LuCI SSO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#internal-api-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+              <button class="md-banner__button md-icon" aria-label="Don't show this again">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+              </button>
+            
+            
+  <strong>Beta:</strong> This project and its documentation are under active development. APIs and configuration options may change before the 1.0 release.
+
+          </div>
+          
+            <script>var content,el=document.querySelector("[data-md-component=announce]");el&&(content=el.querySelector(".md-typeset"),__md_hash(content.innerHTML)===__md_get("__announce")&&(el.hidden=!0))</script>
+          
+        </aside>
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LuCI SSO" class="md-header__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LuCI SSO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Internal API
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+    
+  
+  Welcome
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../how-to/" class="md-tabs__link">
+          
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../explanation/" class="md-tabs__link">
+          
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LuCI SSO" class="md-nav__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    LuCI SSO
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Welcome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/first-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Public IdP)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/pocket-id-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Self-hosted)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/building/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building from Source
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/dev-onboarding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Developer Onboarding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    How-to Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            How-to Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Providers
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            Providers
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/generic-oidc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Generic OIDC Provider
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/google/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Google
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/github/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Github
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/authelia/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authelia
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/keycloak/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keycloak
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/authentik/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authentik
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/pocket-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pocket ID
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Sysadmin
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Sysadmin
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/install-ca-certificate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing a Private CA Certificate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrading
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/rotate-credentials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Rotating Credentials
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/rbac/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Role-Based Access Control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/split-horizon/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Split-Horizon Networking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/backup-restore/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Backing Up and Restoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/uninstall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Removing luci-sso
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Developer
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            Developer
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/development-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Development Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/adding-crypto-backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a New Crypto Backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running Tests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/fuzzing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running the Fuzzer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/documentation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Writing Documentation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/adding-documented-interfaces/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding Error Codes, Limits, and Cookies
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../log-messages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Log Messages
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HTTP API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../uci-config/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UCI Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Internal API
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Internal API
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-result-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Result type
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssoresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.result
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.result">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#okdata-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      ok(data) → Result
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#errerror-details-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      err(error, details?) → Result
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#isobj-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      is(obj) → bool
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssohandshake" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.handshake
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.handshake">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#initiateio-config-resulturl-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      initiate(io, config) → Result&lt;{url, token}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authenticateio-config-request-policy-resultsid-email" class="md-nav__link">
+    <span class="md-ellipsis">
+      authenticate(io, config, request, policy?) → Result&lt;{sid, email}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssocrypto" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.crypto
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.crypto">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constant_time_eqa-b-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      constant_time_eq(a, b) → bool
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jws_signpayload-secret-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      jws_sign(payload, secret) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jws_verifytoken-secret-resultobject" class="md-nav__link">
+    <span class="md-ellipsis">
+      jws_verify(token, secret) → Result&lt;object&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jwt_verifytoken-pubkey-options-resultobject" class="md-nav__link">
+    <span class="md-ellipsis">
+      jwt_verify(token, pubkey, options) → Result&lt;object&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#randomlen-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      random(len) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hash_sha256str-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      hash_sha256(str) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hash_sha256_hexstr-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      hash_sha256_hex(str) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pkce_pairlen-verifier-challenge" class="md-nav__link">
+    <span class="md-ellipsis">
+      pkce_pair(len) → {verifier, challenge}
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jwk_to_pemjwk-resultstring" class="md-nav__link">
+    <span class="md-ellipsis">
+      jwk_to_pem(jwk) → Result&lt;string&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safe_idtoken-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      safe_id(token) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#set_nativen-void" class="md-nav__link">
+    <span class="md-ellipsis">
+      set_native(n) → void
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssooidc" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.oidc
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.oidc">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_auth_urlio-config-discovery_doc-params-resultstring" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_auth_url(io, config, discovery_doc, params) → Result&lt;string&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exchange_codeio-config-discovery-code-verifier-session_id-resultid_token-access_token" class="md-nav__link">
+    <span class="md-ellipsis">
+      exchange_code(io, config, discovery, code, verifier, session_id) → Result&lt;{id_token, access_token, ...}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verify_id_tokenio-tokens-keys-config-handshake-discovery-now-policy-resultclaims" class="md-nav__link">
+    <span class="md-ellipsis">
+      verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy) → Result&lt;claims&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_userinfoio-endpoint-access_token-resultobject" class="md-nav__link">
+    <span class="md-ellipsis">
+      fetch_userinfo(io, endpoint, access_token) → Result&lt;object&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssoconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.config
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.config">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#is_enabledio-resultbool" class="md-nav__link">
+    <span class="md-ellipsis">
+      is_enabled(io) → Result&lt;bool&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loadio-resultconfig_object" class="md-nav__link">
+    <span class="md-ellipsis">
+      load(io) → Result&lt;config_object&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find_roles_for_userconfig-claims-resultrole_name-read-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      find_roles_for_user(config, claims) → Result&lt;{role_name, read, write}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssodiscovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.discovery
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.discovery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#discoverio-issuer-options-resultdiscovery_doc" class="md-nav__link">
+    <span class="md-ellipsis">
+      discover(io, issuer, options) → Result&lt;discovery_doc&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_jwksio-jwks_uri-options-resultkeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      fetch_jwks(io, jwks_uri, options) → Result&lt;{keys}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find_jwkkeys-kid-resultjwk" class="md-nav__link">
+    <span class="md-ellipsis">
+      find_jwk(keys, kid) → Result&lt;jwk&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#native-c-bridge-srcnativeh" class="md-nav__link">
+    <span class="md-ellipsis">
+      Native C bridge (src/native.h)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Native C bridge (src/native.h)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#native_crypto_init-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_crypto_init() → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_crypto_deinit-void" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_crypto_deinit() → void
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_verify_rs256msg-msg_len-sig-sig_len-key_pem-key_len-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_verify_rs256(msg, msg_len, sig, sig_len, key_pem, key_len) → bool
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_verify_es256msg-msg_len-sig-sig_len-key_pem-key_len-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_verify_es256(msg, msg_len, sig, sig_len, key_pem, key_len) → bool
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_sha256input-input_len-output-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_sha256(input, input_len, output) → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_hmac_sha256key-key_len-msg-msg_len-output-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_hmac_sha256(key, key_len, msg, msg_len, output) → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_randombuf-len-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_random(buf, len) → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_memzerop-len-void" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_memzero(p, len) → void
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_jwk_rsa_to_pemn-n_len-e-e_len-out-out_len-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_jwk_rsa_to_pem(n, n_len, e, e_len, out, out_len) → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_jwk_ec_p256_to_pemx-x_len-y-y_len-out-out_len-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_jwk_ec_p256_to_pem(x, x_len, y, y_len, out, out_len) → int
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-utilities-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing utilities (test/)
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../style-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Style Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfc-compliance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RFC Compliance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../devenv-targets/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    devenv Targets
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Explanation
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Explanation
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/about/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About LuCI SSO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/design-philosophy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design Philosophy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/oidc-flow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the OIDC Login Flow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/session-lifecycle/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Session Lifecycle
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/crypto-backends/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About Crypto Backends
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/security-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Security Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-result-type" class="md-nav__link">
+    <span class="md-ellipsis">
+      The Result type
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssoresult" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.result
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.result">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#okdata-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      ok(data) → Result
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#errerror-details-result" class="md-nav__link">
+    <span class="md-ellipsis">
+      err(error, details?) → Result
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#isobj-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      is(obj) → bool
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssohandshake" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.handshake
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.handshake">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#initiateio-config-resulturl-token" class="md-nav__link">
+    <span class="md-ellipsis">
+      initiate(io, config) → Result&lt;{url, token}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#authenticateio-config-request-policy-resultsid-email" class="md-nav__link">
+    <span class="md-ellipsis">
+      authenticate(io, config, request, policy?) → Result&lt;{sid, email}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssocrypto" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.crypto
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.crypto">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#constant_time_eqa-b-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      constant_time_eq(a, b) → bool
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jws_signpayload-secret-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      jws_sign(payload, secret) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jws_verifytoken-secret-resultobject" class="md-nav__link">
+    <span class="md-ellipsis">
+      jws_verify(token, secret) → Result&lt;object&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jwt_verifytoken-pubkey-options-resultobject" class="md-nav__link">
+    <span class="md-ellipsis">
+      jwt_verify(token, pubkey, options) → Result&lt;object&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#randomlen-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      random(len) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hash_sha256str-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      hash_sha256(str) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hash_sha256_hexstr-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      hash_sha256_hex(str) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pkce_pairlen-verifier-challenge" class="md-nav__link">
+    <span class="md-ellipsis">
+      pkce_pair(len) → {verifier, challenge}
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jwk_to_pemjwk-resultstring" class="md-nav__link">
+    <span class="md-ellipsis">
+      jwk_to_pem(jwk) → Result&lt;string&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#safe_idtoken-string" class="md-nav__link">
+    <span class="md-ellipsis">
+      safe_id(token) → string
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#set_nativen-void" class="md-nav__link">
+    <span class="md-ellipsis">
+      set_native(n) → void
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssooidc" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.oidc
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.oidc">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get_auth_urlio-config-discovery_doc-params-resultstring" class="md-nav__link">
+    <span class="md-ellipsis">
+      get_auth_url(io, config, discovery_doc, params) → Result&lt;string&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exchange_codeio-config-discovery-code-verifier-session_id-resultid_token-access_token" class="md-nav__link">
+    <span class="md-ellipsis">
+      exchange_code(io, config, discovery, code, verifier, session_id) → Result&lt;{id_token, access_token, ...}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verify_id_tokenio-tokens-keys-config-handshake-discovery-now-policy-resultclaims" class="md-nav__link">
+    <span class="md-ellipsis">
+      verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy) → Result&lt;claims&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_userinfoio-endpoint-access_token-resultobject" class="md-nav__link">
+    <span class="md-ellipsis">
+      fetch_userinfo(io, endpoint, access_token) → Result&lt;object&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssoconfig" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.config
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.config">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#is_enabledio-resultbool" class="md-nav__link">
+    <span class="md-ellipsis">
+      is_enabled(io) → Result&lt;bool&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#loadio-resultconfig_object" class="md-nav__link">
+    <span class="md-ellipsis">
+      load(io) → Result&lt;config_object&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find_roles_for_userconfig-claims-resultrole_name-read-write" class="md-nav__link">
+    <span class="md-ellipsis">
+      find_roles_for_user(config, claims) → Result&lt;{role_name, read, write}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#luci_ssodiscovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      luci_sso.discovery
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="luci_sso.discovery">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#discoverio-issuer-options-resultdiscovery_doc" class="md-nav__link">
+    <span class="md-ellipsis">
+      discover(io, issuer, options) → Result&lt;discovery_doc&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fetch_jwksio-jwks_uri-options-resultkeys" class="md-nav__link">
+    <span class="md-ellipsis">
+      fetch_jwks(io, jwks_uri, options) → Result&lt;{keys}&gt;
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#find_jwkkeys-kid-resultjwk" class="md-nav__link">
+    <span class="md-ellipsis">
+      find_jwk(keys, kid) → Result&lt;jwk&gt;
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#native-c-bridge-srcnativeh" class="md-nav__link">
+    <span class="md-ellipsis">
+      Native C bridge (src/native.h)
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Native C bridge (src/native.h)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#native_crypto_init-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_crypto_init() → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_crypto_deinit-void" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_crypto_deinit() → void
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_verify_rs256msg-msg_len-sig-sig_len-key_pem-key_len-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_verify_rs256(msg, msg_len, sig, sig_len, key_pem, key_len) → bool
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_verify_es256msg-msg_len-sig-sig_len-key_pem-key_len-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_verify_es256(msg, msg_len, sig, sig_len, key_pem, key_len) → bool
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_sha256input-input_len-output-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_sha256(input, input_len, output) → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_hmac_sha256key-key_len-msg-msg_len-output-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_hmac_sha256(key, key_len, msg, msg_len, output) → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_randombuf-len-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_random(buf, len) → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_memzerop-len-void" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_memzero(p, len) → void
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_jwk_rsa_to_pemn-n_len-e-e_len-out-out_len-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_jwk_rsa_to_pem(n, n_len, e, e_len, out, out_len) → int
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#native_jwk_ec_p256_to_pemx-x_len-y-y_len-out-out_len-int" class="md-nav__link">
+    <span class="md-ellipsis">
+      native_jwk_ec_p256_to_pem(x, x_len, y, y_len, out, out_len) → int
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-utilities-test" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing utilities (test/)
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<h1 id="internal-api-reference">Internal API Reference<a class="headerlink" href="#internal-api-reference" title="Permanent link">&para;</a></h1>
+<p>This document describes the exported public API of each <code>luci-sso</code> module. It is intended for developers extending the system, writing tests, or implementing a new crypto backend.</p>
+<p>For the rationale behind the architectural boundaries described here, see <a href="../../explanation/architecture/">About the Architecture</a>.</p>
+<hr />
+<h2 id="the-result-type">The Result type<a class="headerlink" href="#the-result-type" title="Permanent link">&para;</a></h2>
+<p>All fallible functions return a <strong>Result object</strong> rather than throwing. The shape is:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">    </span><span class="nx">ok</span><span class="o">:</span><span class="w">      </span><span class="nx">bool</span><span class="p">,</span><span class="w">    </span><span class="c1">// true = success, false = failure</span>
+<span class="w">    </span><span class="nx">data</span><span class="o">:</span><span class="w">    </span><span class="nx">any</span><span class="p">,</span><span class="w">     </span><span class="c1">// present when ok == true</span>
+<span class="w">    </span><span class="nx">error</span><span class="o">:</span><span class="w">   </span><span class="nx">string</span><span class="p">,</span><span class="w">  </span><span class="c1">// error code from luci_sso.errors; present when ok == false</span>
+<span class="w">    </span><span class="nx">details</span><span class="o">:</span><span class="w"> </span><span class="nx">any</span><span class="w">      </span><span class="c1">// optional diagnostic context; present when ok == false</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Check <code>result.ok</code> before using <code>result.data</code>. Never access <code>.data</code> on a failed result.</p>
+<hr />
+<h2 id="luci_ssoresult"><code>luci_sso.result</code><a class="headerlink" href="#luci_ssoresult" title="Permanent link">&para;</a></h2>
+<p>Constructors for the Result type.</p>
+<h3 id="okdata-result"><code>ok(data)</code> → <code>Result</code><a class="headerlink" href="#okdata-result" title="Permanent link">&para;</a></h3>
+<p>Creates a successful result.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>data</code></td>
+<td style="text-align: left;">any</td>
+<td style="text-align: left;">The success value.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="errerror-details-result"><code>err(error, details?)</code> → <code>Result</code><a class="headerlink" href="#errerror-details-result" title="Permanent link">&para;</a></h3>
+<p>Creates a failed result.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>error</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">An error code constant from <code>luci_sso.errors</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>details</code></td>
+<td style="text-align: left;">any</td>
+<td style="text-align: left;">Optional. Additional context (string, object, or <code>{http_status: int}</code>).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="isobj-bool"><code>is(obj)</code> → <code>bool</code><a class="headerlink" href="#isobj-bool" title="Permanent link">&para;</a></h3>
+<p>Returns <code>true</code> if <code>obj</code> is a Result instance. Use this before duck-typing <code>.ok</code>.</p>
+<hr />
+<h2 id="luci_ssohandshake"><code>luci_sso.handshake</code><a class="headerlink" href="#luci_ssohandshake" title="Permanent link">&para;</a></h2>
+<p>The OIDC state machine. This is the top-level entry point for both legs of the authorization code flow.</p>
+<h3 id="initiateio-config-resulturl-token"><code>initiate(io, config)</code> → <code>Result&lt;{url, token}&gt;</code><a class="headerlink" href="#initiateio-config-resulturl-token" title="Permanent link">&para;</a></h3>
+<p>Starts the login flow. Generates PKCE, state, and nonce; writes a handshake file; and returns the IdP redirect URL.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>io</code></td>
+<td style="text-align: left;">io provider</td>
+<td style="text-align: left;">The I/O provider from <code>luci_sso.io</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>config</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Loaded UCI config from <code>luci_sso.config.load()</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>On success, <code>result.data</code> contains:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>url</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">Full redirect URL to the IdP's <code>authorization_endpoint</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>token</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">State token. Set this as the value of the <code>__Host-luci_sso_state</code> cookie.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="authenticateio-config-request-policy-resultsid-email"><code>authenticate(io, config, request, policy?)</code> → <code>Result&lt;{sid, email}&gt;</code><a class="headerlink" href="#authenticateio-config-request-policy-resultsid-email" title="Permanent link">&para;</a></h3>
+<p>Processes the IdP callback. Verifies state and nonce, exchanges the code for tokens, validates the ID Token, maps claims to a role, and injects a UBUS session.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>io</code></td>
+<td style="text-align: left;">io provider</td>
+<td style="text-align: left;">The I/O provider.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>config</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Loaded UCI config.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>request</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Parsed request from <code>luci_sso.web.request()</code>. Contains <code>params</code> and <code>cookies</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>policy</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Optional. Security policy overrides. Defaults to <code>{allowed_algs: ["RS256", "ES256"]}</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>On success, <code>result.data</code> contains:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>sid</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">UBUS session ID. Set this as the <code>sysauth_https</code> and <code>sysauth</code> cookie values.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>email</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">Authenticated user's email address.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="luci_ssocrypto"><code>luci_sso.crypto</code><a class="headerlink" href="#luci_ssocrypto" title="Permanent link">&para;</a></h2>
+<p>High-level cryptographic operations. Wraps the native C bridge — all calls go through the loaded <code>luci_sso.native</code> backend.</p>
+<h3 id="constant_time_eqa-b-bool"><code>constant_time_eq(a, b)</code> → <code>bool</code><a class="headerlink" href="#constant_time_eqa-b-bool" title="Permanent link">&para;</a></h3>
+<p>Compares two strings in constant time. Use this for all security-sensitive comparisons (nonces, states, tokens).</p>
+<h3 id="jws_signpayload-secret-string"><code>jws_sign(payload, secret)</code> → <code>string</code><a class="headerlink" href="#jws_signpayload-secret-string" title="Permanent link">&para;</a></h3>
+<p>Creates a JWS compact serialization (HS256) of <code>payload</code>. Returns the signed token string.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>payload</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">JSON-serializable object to sign.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>secret</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">HMAC key (raw bytes).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="jws_verifytoken-secret-resultobject"><code>jws_verify(token, secret)</code> → <code>Result&lt;object&gt;</code><a class="headerlink" href="#jws_verifytoken-secret-resultobject" title="Permanent link">&para;</a></h3>
+<p>Verifies a JWS token and returns the decoded payload.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>token</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">JWS compact serialization.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>secret</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">HMAC key (raw bytes).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="jwt_verifytoken-pubkey-options-resultobject"><code>jwt_verify(token, pubkey, options)</code> → <code>Result&lt;object&gt;</code><a class="headerlink" href="#jwt_verifytoken-pubkey-options-resultobject" title="Permanent link">&para;</a></h3>
+<p>Verifies a JWT using an asymmetric public key and returns the decoded claims object.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>token</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">JWT compact serialization.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>pubkey</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">PEM-encoded public key (RSA or EC).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>options</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Options object. <code>options.alg</code> constrains the accepted algorithm.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="randomlen-string"><code>random(len)</code> → <code>string</code><a class="headerlink" href="#randomlen-string" title="Permanent link">&para;</a></h3>
+<p>Returns <code>len</code> cryptographically random bytes (raw binary string) from the CSPRNG.</p>
+<h3 id="hash_sha256str-string"><code>hash_sha256(str)</code> → <code>string</code><a class="headerlink" href="#hash_sha256str-string" title="Permanent link">&para;</a></h3>
+<p>Returns the SHA-256 digest of <code>str</code> as 32 raw bytes.</p>
+<h3 id="hash_sha256_hexstr-string"><code>hash_sha256_hex(str)</code> → <code>string</code><a class="headerlink" href="#hash_sha256_hexstr-string" title="Permanent link">&para;</a></h3>
+<p>Returns the SHA-256 digest of <code>str</code> as a 64-character lowercase hex string.</p>
+<h3 id="pkce_pairlen-verifier-challenge"><code>pkce_pair(len)</code> → <code>{verifier, challenge}</code><a class="headerlink" href="#pkce_pairlen-verifier-challenge" title="Permanent link">&para;</a></h3>
+<p>Generates a PKCE verifier and its S256 code challenge.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>verifier</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">Base64URL-encoded random string of length <code>len</code> (43–128).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>challenge</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">Base64URL-encoded SHA256 of the verifier. Send this to the IdP.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="jwk_to_pemjwk-resultstring"><code>jwk_to_pem(jwk)</code> → <code>Result&lt;string&gt;</code><a class="headerlink" href="#jwk_to_pemjwk-resultstring" title="Permanent link">&para;</a></h3>
+<p>Converts a JSON Web Key object (RSA or EC P-256) to a PEM-encoded public key string.</p>
+<h3 id="safe_idtoken-string"><code>safe_id(token)</code> → <code>string</code><a class="headerlink" href="#safe_idtoken-string" title="Permanent link">&para;</a></h3>
+<p>Returns the first 8 characters of the hex SHA-256 of <code>token</code>. Safe to include in log messages as a non-reversible token identifier.</p>
+<h3 id="set_nativen-void"><code>set_native(n)</code> → <code>void</code><a class="headerlink" href="#set_nativen-void" title="Permanent link">&para;</a></h3>
+<p>Replaces the active native backend. <strong>Testing use only</strong> — allows tests to substitute a mock crypto implementation.</p>
+<hr />
+<h2 id="luci_ssooidc"><code>luci_sso.oidc</code><a class="headerlink" href="#luci_ssooidc" title="Permanent link">&para;</a></h2>
+<p>Pure OIDC protocol logic. No I/O except where an <code>io</code> parameter is explicitly required. Also re-exports <code>discover</code>, <code>fetch_jwks</code>, and <code>find_jwk</code> from <code>luci_sso.discovery</code>.</p>
+<h3 id="get_auth_urlio-config-discovery_doc-params-resultstring"><code>get_auth_url(io, config, discovery_doc, params)</code> → <code>Result&lt;string&gt;</code><a class="headerlink" href="#get_auth_urlio-config-discovery_doc-params-resultstring" title="Permanent link">&para;</a></h3>
+<p>Constructs the full authorization URL (including PKCE challenge, state, nonce, scope, and redirect URI).</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>io</code></td>
+<td style="text-align: left;">io provider</td>
+<td style="text-align: left;">Used for logging only.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>config</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">UCI config.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>discovery_doc</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Parsed OIDC discovery document.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>params</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Handshake state object from <code>luci_sso.session.create_state()</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="exchange_codeio-config-discovery-code-verifier-session_id-resultid_token-access_token"><code>exchange_code(io, config, discovery, code, verifier, session_id)</code> → <code>Result&lt;{id_token, access_token, ...}&gt;</code><a class="headerlink" href="#exchange_codeio-config-discovery-code-verifier-session_id-resultid_token-access_token" title="Permanent link">&para;</a></h3>
+<p>Exchanges an authorization code for tokens via the IdP's token endpoint (back-channel).</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>io</code></td>
+<td style="text-align: left;">io provider</td>
+<td style="text-align: left;">Used for HTTP and logging.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>config</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">UCI config.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>discovery</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Parsed OIDC discovery document.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>code</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">Authorization code from the IdP callback.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>verifier</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">PKCE code verifier generated at flow initiation.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>session_id</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">Handshake session ID (for log correlation).</td>
+</tr>
+</tbody>
+</table>
+<h3 id="verify_id_tokenio-tokens-keys-config-handshake-discovery-now-policy-resultclaims"><code>verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy)</code> → <code>Result&lt;claims&gt;</code><a class="headerlink" href="#verify_id_tokenio-tokens-keys-config-handshake-discovery-now-policy-resultclaims" title="Permanent link">&para;</a></h3>
+<p>Validates an ID Token against all OIDC Core §3.1.3.7 requirements: algorithm, signature, <code>iss</code>, <code>aud</code>, <code>exp</code>, <code>iat</code>, <code>nonce</code>, and <code>at_hash</code>.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>io</code></td>
+<td style="text-align: left;">io provider</td>
+<td style="text-align: left;">Used for JWKS refresh on signature failure and logging.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tokens</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Token response object containing <code>id_token</code> and <code>access_token</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>keys</code></td>
+<td style="text-align: left;">array</td>
+<td style="text-align: left;">Array of JWK objects from <code>fetch_jwks()</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>config</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">UCI config. Provides <code>issuer_url</code>, <code>client_id</code>, <code>clock_tolerance</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>handshake</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Handshake state. Provides the expected <code>nonce</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>discovery</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Discovery document. Provides <code>jwks_uri</code> for refresh.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>now</code></td>
+<td style="text-align: left;">int</td>
+<td style="text-align: left;">Current Unix timestamp (from <code>io.time()</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>policy</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Security policy. <code>policy.allowed_algs</code> lists accepted algorithms.</td>
+</tr>
+</tbody>
+</table>
+<p>On success, <code>result.data</code> is the decoded JWT claims object.</p>
+<h3 id="fetch_userinfoio-endpoint-access_token-resultobject"><code>fetch_userinfo(io, endpoint, access_token)</code> → <code>Result&lt;object&gt;</code><a class="headerlink" href="#fetch_userinfoio-endpoint-access_token-resultobject" title="Permanent link">&para;</a></h3>
+<p>Fetches user profile claims from the IdP's UserInfo endpoint. Called when the ID Token does not contain an <code>email</code> claim.</p>
+<hr />
+<h2 id="luci_ssoconfig"><code>luci_sso.config</code><a class="headerlink" href="#luci_ssoconfig" title="Permanent link">&para;</a></h2>
+<p>UCI configuration loader and role mapper.</p>
+<h3 id="is_enabledio-resultbool"><code>is_enabled(io)</code> → <code>Result&lt;bool&gt;</code><a class="headerlink" href="#is_enabledio-resultbool" title="Permanent link">&para;</a></h3>
+<p>Returns <code>Result.ok(true)</code> if the <code>enabled</code> option is <code>'1'</code> in UCI.</p>
+<h3 id="loadio-resultconfig_object"><code>load(io)</code> → <code>Result&lt;config_object&gt;</code><a class="headerlink" href="#loadio-resultconfig_object" title="Permanent link">&para;</a></h3>
+<p>Reads and validates the full UCI configuration. Returns a config object suitable for passing to <code>handshake.initiate()</code> and <code>handshake.authenticate()</code>. Fails with <code>CONFIG_ERROR</code> if any required option is missing or invalid.</p>
+<p>The returned config object shape:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>issuer_url</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;"><code>luci-sso.default.issuer_url</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>internal_issuer_url</code></td>
+<td style="text-align: left;">string | null</td>
+<td style="text-align: left;"><code>luci-sso.default.internal_issuer_url</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>client_id</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;"><code>luci-sso.default.client_id</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>client_secret</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;"><code>luci-sso.default.client_secret</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>redirect_uri</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;"><code>luci-sso.default.redirect_uri</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>scope</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;"><code>luci-sso.default.scope</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>clock_tolerance</code></td>
+<td style="text-align: left;">int</td>
+<td style="text-align: left;"><code>luci-sso.default.clock_tolerance</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>roles</code></td>
+<td style="text-align: left;">array</td>
+<td style="text-align: left;">All <code>config role</code> sections</td>
+</tr>
+</tbody>
+</table>
+<h3 id="find_roles_for_userconfig-claims-resultrole_name-read-write"><code>find_roles_for_user(config, claims)</code> → <code>Result&lt;{role_name, read, write}&gt;</code><a class="headerlink" href="#find_roles_for_userconfig-claims-resultrole_name-read-write" title="Permanent link">&para;</a></h3>
+<p>Matches a user's OIDC claims against the configured roles. Returns the merged permissions of all matching roles.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>config</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Loaded config from <code>load()</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>claims</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">JWT claims object. Uses <code>claims.email</code> and <code>claims.groups</code>.</td>
+</tr>
+</tbody>
+</table>
+<p>On success, <code>result.data</code> contains:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>role_name</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">Name of the first matched role. Used as the UBUS session label.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>read</code></td>
+<td style="text-align: left;">array</td>
+<td style="text-align: left;">Merged list of LuCI access groups granted read access.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>write</code></td>
+<td style="text-align: left;">array</td>
+<td style="text-align: left;">Merged list of LuCI access groups granted write access.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="luci_ssodiscovery"><code>luci_sso.discovery</code><a class="headerlink" href="#luci_ssodiscovery" title="Permanent link">&para;</a></h2>
+<p>OIDC metadata fetching and caching. Also exported from <code>luci_sso.oidc</code>.</p>
+<h3 id="discoverio-issuer-options-resultdiscovery_doc"><code>discover(io, issuer, options)</code> → <code>Result&lt;discovery_doc&gt;</code><a class="headerlink" href="#discoverio-issuer-options-resultdiscovery_doc" title="Permanent link">&para;</a></h3>
+<p>Fetches and validates the OIDC discovery document from <code>&lt;issuer&gt;/.well-known/openid-configuration</code>. Caches the result in <code>/var/run/luci-sso/</code> for 24 hours.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>io</code></td>
+<td style="text-align: left;">io provider</td>
+<td style="text-align: left;">Used for HTTP and filesystem.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>issuer</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">The public OIDC issuer URL.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>options</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Optional. <code>options.internal_issuer_url</code> overrides the fetch origin for split-horizon setups.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="fetch_jwksio-jwks_uri-options-resultkeys"><code>fetch_jwks(io, jwks_uri, options)</code> → <code>Result&lt;{keys}&gt;</code><a class="headerlink" href="#fetch_jwksio-jwks_uri-options-resultkeys" title="Permanent link">&para;</a></h3>
+<p>Fetches the JWK Set from the IdP. Caches in <code>/var/run/luci-sso/</code> for 24 hours.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Parameter</th>
+<th style="text-align: left;">Type</th>
+<th style="text-align: left;">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>io</code></td>
+<td style="text-align: left;">io provider</td>
+<td style="text-align: left;">Used for HTTP and filesystem.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>jwks_uri</code></td>
+<td style="text-align: left;">string</td>
+<td style="text-align: left;">The <code>jwks_uri</code> from the discovery document.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>options</code></td>
+<td style="text-align: left;">object</td>
+<td style="text-align: left;">Optional. <code>options.force</code> bypasses the cache.</td>
+</tr>
+</tbody>
+</table>
+<p>On success, <code>result.data.keys</code> is an array of JWK objects.</p>
+<h3 id="find_jwkkeys-kid-resultjwk"><code>find_jwk(keys, kid)</code> → <code>Result&lt;jwk&gt;</code><a class="headerlink" href="#find_jwkkeys-kid-resultjwk" title="Permanent link">&para;</a></h3>
+<p>Finds a JWK by <code>kid</code> (key ID). If <code>kid</code> is absent, returns the first key.</p>
+<hr />
+<h2 id="native-c-bridge-srcnativeh">Native C bridge (<code>src/native.h</code>)<a class="headerlink" href="#native-c-bridge-srcnativeh" title="Permanent link">&para;</a></h2>
+<p>The C interface that all crypto backends must implement. See <a href="../../how-to/developer/adding-crypto-backend/">How to Add a New Crypto Backend</a> for the full walkthrough.</p>
+<p>All input buffers are subject to the <code>NATIVE_MAX_INPUT_SIZE</code> (16 384 bytes) limit enforced by <code>web.uc</code> before data reaches the C layer.</p>
+<h3 id="native_crypto_init-int"><code>native_crypto_init()</code> → <code>int</code><a class="headerlink" href="#native_crypto_init-int" title="Permanent link">&para;</a></h3>
+<p>Initializes the crypto backend (e.g., PSA Crypto for mbedTLS). Called once at startup. Returns <code>0</code> on success.</p>
+<h3 id="native_crypto_deinit-void"><code>native_crypto_deinit()</code> → <code>void</code><a class="headerlink" href="#native_crypto_deinit-void" title="Permanent link">&para;</a></h3>
+<p>Releases backend resources. Called during test teardown and fuzzing cleanup.</p>
+<h3 id="native_verify_rs256msg-msg_len-sig-sig_len-key_pem-key_len-bool"><code>native_verify_rs256(msg, msg_len, sig, sig_len, key_pem, key_len)</code> → <code>bool</code><a class="headerlink" href="#native_verify_rs256msg-msg_len-sig-sig_len-key_pem-key_len-bool" title="Permanent link">&para;</a></h3>
+<p>Verifies an RS256 signature. Rejects RSA keys shorter than <code>NATIVE_RSA_MIN_BITS</code> (2048 bits).</p>
+<h3 id="native_verify_es256msg-msg_len-sig-sig_len-key_pem-key_len-bool"><code>native_verify_es256(msg, msg_len, sig, sig_len, key_pem, key_len)</code> → <code>bool</code><a class="headerlink" href="#native_verify_es256msg-msg_len-sig-sig_len-key_pem-key_len-bool" title="Permanent link">&para;</a></h3>
+<p>Verifies an ES256 (ECDSA P-256) signature using constant-time comparison.</p>
+<h3 id="native_sha256input-input_len-output-int"><code>native_sha256(input, input_len, output)</code> → <code>int</code><a class="headerlink" href="#native_sha256input-input_len-output-int" title="Permanent link">&para;</a></h3>
+<p>Computes SHA-256. <code>output</code> must be at least <code>NATIVE_SHA256_SIZE</code> (32) bytes. Returns <code>0</code> on success.</p>
+<h3 id="native_hmac_sha256key-key_len-msg-msg_len-output-int"><code>native_hmac_sha256(key, key_len, msg, msg_len, output)</code> → <code>int</code><a class="headerlink" href="#native_hmac_sha256key-key_len-msg-msg_len-output-int" title="Permanent link">&para;</a></h3>
+<p>Computes HMAC-SHA256. <code>output</code> must be at least 32 bytes. Returns <code>0</code> on success.</p>
+<h3 id="native_randombuf-len-int"><code>native_random(buf, len)</code> → <code>int</code><a class="headerlink" href="#native_randombuf-len-int" title="Permanent link">&para;</a></h3>
+<p>Fills <code>buf</code> with <code>len</code> cryptographically random bytes from a CSPRNG. Returns <code>0</code> on success. <strong>Must not use a predictable source.</strong></p>
+<h3 id="native_memzerop-len-void"><code>native_memzero(p, len)</code> → <code>void</code><a class="headerlink" href="#native_memzerop-len-void" title="Permanent link">&para;</a></h3>
+<p>Zeroizes <code>len</code> bytes at <code>p</code> using a compiler-safe method (e.g., <code>explicit_bzero</code>) that cannot be optimized away.</p>
+<h3 id="native_jwk_rsa_to_pemn-n_len-e-e_len-out-out_len-int"><code>native_jwk_rsa_to_pem(n, n_len, e, e_len, out, out_len)</code> → <code>int</code><a class="headerlink" href="#native_jwk_rsa_to_pemn-n_len-e-e_len-out-out_len-int" title="Permanent link">&para;</a></h3>
+<p>Converts RSA JWK modulus (<code>n</code>) and exponent (<code>e</code>) to a PEM-encoded public key. <code>out</code> must be at least <code>NATIVE_RSA_PEM_MAX</code> (4096) bytes.</p>
+<h3 id="native_jwk_ec_p256_to_pemx-x_len-y-y_len-out-out_len-int"><code>native_jwk_ec_p256_to_pem(x, x_len, y, y_len, out, out_len)</code> → <code>int</code><a class="headerlink" href="#native_jwk_ec_p256_to_pemx-x_len-y-y_len-out-out_len-int" title="Permanent link">&para;</a></h3>
+<p>Converts EC P-256 JWK coordinates (<code>x</code>, <code>y</code>) to a PEM-encoded public key. Validates coordinate lengths against <code>NATIVE_EC_COORD_SIZE</code> (32 bytes) before use. <code>out</code> must be at least <code>NATIVE_EC_PEM_MAX</code> (2048) bytes.</p>
+<hr />
+<h2 id="testing-utilities-test">Testing utilities (<code>test/</code>)<a class="headerlink" href="#testing-utilities-test" title="Permanent link">&para;</a></h2>
+<p>The test framework lives in <code>test/</code> and is not part of the installed package.</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Module</th>
+<th style="text-align: left;">Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>test/testing/</code></td>
+<td style="text-align: left;">Test runner, <code>test()</code>, <code>assert()</code>, <code>assert_eq()</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test/mock.uc</code></td>
+<td style="text-align: left;">Mock I/O provider factory — <code>mock.create()</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>test/lib/</code></td>
+<td style="text-align: left;">Shared fixtures (valid JWTs, JWKS, discovery docs)</td>
+</tr>
+</tbody>
+</table>
+<p>See <a href="../testing-architecture/">Testing Architecture</a> for the tier structure and <a href="../../how-to/developer/testing/">How to Run Tests</a> for usage.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["announce.dismiss", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

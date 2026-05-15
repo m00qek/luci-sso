@@ -1,0 +1,3828 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.">
+      
+      
+      
+        <link rel="canonical" href="https://m00qek.github.io/luci-sso/reference/style-guide/">
+      
+      
+        <link rel="prev" href="../internal-api/">
+      
+      
+        <link rel="next" href="../testing-architecture/">
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Style Guide - LuCI SSO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#luci-sso-style-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+              <button class="md-banner__button md-icon" aria-label="Don't show this again">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+              </button>
+            
+            
+  <strong>Beta:</strong> This project and its documentation are under active development. APIs and configuration options may change before the 1.0 release.
+
+          </div>
+          
+            <script>var content,el=document.querySelector("[data-md-component=announce]");el&&(content=el.querySelector(".md-typeset"),__md_hash(content.innerHTML)===__md_get("__announce")&&(el.hidden=!0))</script>
+          
+        </aside>
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LuCI SSO" class="md-header__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LuCI SSO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Style Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+    
+  
+  Welcome
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../how-to/" class="md-tabs__link">
+          
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../explanation/" class="md-tabs__link">
+          
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LuCI SSO" class="md-nav__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    LuCI SSO
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Welcome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/first-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Public IdP)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/pocket-id-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Self-hosted)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/building/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building from Source
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/dev-onboarding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Developer Onboarding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    How-to Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            How-to Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Providers
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            Providers
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/generic-oidc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Generic OIDC Provider
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/google/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Google
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/github/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Github
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/authelia/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authelia
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/keycloak/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keycloak
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/authentik/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authentik
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/pocket-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pocket ID
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Sysadmin
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Sysadmin
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/install-ca-certificate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing a Private CA Certificate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrading
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/rotate-credentials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Rotating Credentials
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/rbac/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Role-Based Access Control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/split-horizon/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Split-Horizon Networking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/backup-restore/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Backing Up and Restoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/uninstall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Removing luci-sso
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Developer
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            Developer
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/development-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Development Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/adding-crypto-backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a New Crypto Backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running Tests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/fuzzing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running the Fuzzer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/documentation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Writing Documentation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/adding-documented-interfaces/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding Error Codes, Limits, and Cookies
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../log-messages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Log Messages
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../http-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HTTP API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../uci-config/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UCI Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../internal-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Internal API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Style Guide
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Style Guide
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Table of Contents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      Terminology
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Handling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#contract-bugs-vs-runtime-realities" class="md-nav__link">
+    <span class="md-ellipsis">
+      Contract Bugs vs. Runtime Realities
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Contract Bugs vs. Runtime Realities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-contract-bugs-programming-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Contract Bugs (Programming Errors)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-runtime-realities-expected-failures" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Runtime Realities (Expected Failures)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exception-vs-result-object-decision-tree" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exception vs. Result Object Decision Tree
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#context-object-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      Context Object Pattern
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-code-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Code Format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#never-silently-fail" class="md-nav__link">
+    <span class="md-ellipsis">
+      Never Silently Fail
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing Standards
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Standards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Requirements
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-requirements_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Requirements
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-naming-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Naming Convention
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-coverage-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Coverage Requirements
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ucode-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      ucode Style
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ucode Style">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#general-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      General Formatting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function-declarations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Function Declarations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#variable-declarations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Variable Declarations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#string-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      String Formatting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      Imports
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comments" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comments
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#control-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Control Flow
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#c-code-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      C Code Style
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="C Code Style">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#standards-mbedtls-3x-psa-crypto" class="md-nav__link">
+    <span class="md-ellipsis">
+      Standards: MbedTLS 3.x / PSA Crypto
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minimize-c-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      Minimize C Code
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      Function Naming
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-handling-in-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Handling in C
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-management-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Management &amp; Safety
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-hygiene" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Hygiene
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-hygiene_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Hygiene
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Documentation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ucode-syntax-limitations-and-gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      ucode Syntax Limitations and Gotchas
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ucode Syntax Limitations and Gotchas">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-avoid-optional-chaining" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Avoid Optional Chaining (?.)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-no-destructuring-let-a-obj" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. No Destructuring (let { a } = obj)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-arrow-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Arrow Functions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-shorthand-properties-a" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Shorthand Properties ({ a })
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-handling-nan" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Handling NaN
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-url-encoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. URL Encoding
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-protocol-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Protocol Enforcement
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Module Organization
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Module Organization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      File Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#module-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      Module Naming
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exports" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exports
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-guidelines" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security Guidelines
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Guidelines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-constant-time-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Constant-Time Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-cryptographic-randomness" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Cryptographic Randomness
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-input-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Input Validation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-fail-safe-execution-order-consumption-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Fail-Safe Execution Order (Consumption First)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-no-secrets-in-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. No Secrets in Logs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-algorithm-whitelisting" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Algorithm Whitelisting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-no-shell-execution-system-popen" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. No Shell Execution (system() / popen())
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      Documentation Standards
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Documentation Standards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#philosophy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Philosophy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1-diataxis-quadrants" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Diataxis Quadrants
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-accessibility-mandates-wcag-21-aa" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Accessibility Mandates (WCAG 2.1 AA)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-machine-readable-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Machine-Readable Reference
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commit-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Commit Messages
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Commit Messages">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#types" class="md-nav__link">
+    <span class="md-ellipsis">
+      Types
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Examples
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-review-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      Code Review Checklist
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-of-key-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary of Key Rules
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-debt-known-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Technical Debt &amp; Known Exceptions
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technical Debt & Known Exceptions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#encodingsafe_json-dual-mode-result-unwrapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      encoding.safe_json — "Dual-Mode" Result Unwrapping
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-return-type-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      API Return Type Consistency
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../testing-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rfc-compliance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RFC Compliance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../devenv-targets/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    devenv Targets
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Explanation
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Explanation
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/about/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About LuCI SSO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/design-philosophy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design Philosophy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/oidc-flow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the OIDC Login Flow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/session-lifecycle/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Session Lifecycle
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/crypto-backends/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About Crypto Backends
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/security-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Security Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../explanation/threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Threat Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#table-of-contents" class="md-nav__link">
+    <span class="md-ellipsis">
+      Table of Contents
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#terminology" class="md-nav__link">
+    <span class="md-ellipsis">
+      Terminology
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Handling
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Error Handling">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#contract-bugs-vs-runtime-realities" class="md-nav__link">
+    <span class="md-ellipsis">
+      Contract Bugs vs. Runtime Realities
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Contract Bugs vs. Runtime Realities">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-contract-bugs-programming-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Contract Bugs (Programming Errors)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-runtime-realities-expected-failures" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Runtime Realities (Expected Failures)
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exception-vs-result-object-decision-tree" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exception vs. Result Object Decision Tree
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#context-object-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      Context Object Pattern
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-code-format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Code Format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#never-silently-fail" class="md-nav__link">
+    <span class="md-ellipsis">
+      Never Silently Fail
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      Testing Standards
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Standards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Requirements
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-requirements_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Requirements
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-naming-convention" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Naming Convention
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-coverage-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      Test Coverage Requirements
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ucode-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      ucode Style
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ucode Style">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#general-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      General Formatting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function-declarations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Function Declarations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#variable-declarations" class="md-nav__link">
+    <span class="md-ellipsis">
+      Variable Declarations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#string-formatting" class="md-nav__link">
+    <span class="md-ellipsis">
+      String Formatting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#imports" class="md-nav__link">
+    <span class="md-ellipsis">
+      Imports
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comments" class="md-nav__link">
+    <span class="md-ellipsis">
+      Comments
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#control-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      Control Flow
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#c-code-style" class="md-nav__link">
+    <span class="md-ellipsis">
+      C Code Style
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="C Code Style">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#standards-mbedtls-3x-psa-crypto" class="md-nav__link">
+    <span class="md-ellipsis">
+      Standards: MbedTLS 3.x / PSA Crypto
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#minimize-c-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      Minimize C Code
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#function-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      Function Naming
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-handling-in-c" class="md-nav__link">
+    <span class="md-ellipsis">
+      Error Handling in C
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-management-safety" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Management &amp; Safety
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-hygiene" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Hygiene
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#memory-hygiene_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory Hygiene
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Documentation
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ucode-syntax-limitations-and-gotchas" class="md-nav__link">
+    <span class="md-ellipsis">
+      ucode Syntax Limitations and Gotchas
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="ucode Syntax Limitations and Gotchas">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-avoid-optional-chaining" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Avoid Optional Chaining (?.)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-no-destructuring-let-a-obj" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. No Destructuring (let { a } = obj)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-arrow-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Arrow Functions
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-shorthand-properties-a" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Shorthand Properties ({ a })
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-handling-nan" class="md-nav__link">
+    <span class="md-ellipsis">
+      5. Handling NaN
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-url-encoding" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. URL Encoding
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-protocol-enforcement" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Protocol Enforcement
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-organization" class="md-nav__link">
+    <span class="md-ellipsis">
+      Module Organization
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Module Organization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      File Structure
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#module-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      Module Naming
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#exports" class="md-nav__link">
+    <span class="md-ellipsis">
+      Exports
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-guidelines" class="md-nav__link">
+    <span class="md-ellipsis">
+      Security Guidelines
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security Guidelines">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-constant-time-operations" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Constant-Time Operations
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-cryptographic-randomness" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Cryptographic Randomness
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-input-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Input Validation
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-fail-safe-execution-order-consumption-first" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Fail-Safe Execution Order (Consumption First)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-no-secrets-in-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      6. No Secrets in Logs
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-algorithm-whitelisting" class="md-nav__link">
+    <span class="md-ellipsis">
+      7. Algorithm Whitelisting
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-no-shell-execution-system-popen" class="md-nav__link">
+    <span class="md-ellipsis">
+      8. No Shell Execution (system() / popen())
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#documentation-standards" class="md-nav__link">
+    <span class="md-ellipsis">
+      Documentation Standards
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Documentation Standards">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#philosophy" class="md-nav__link">
+    <span class="md-ellipsis">
+      Philosophy
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#1-diataxis-quadrants" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Diataxis Quadrants
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-accessibility-mandates-wcag-21-aa" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Accessibility Mandates (WCAG 2.1 AA)
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-machine-readable-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Machine-Readable Reference
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commit-messages" class="md-nav__link">
+    <span class="md-ellipsis">
+      Commit Messages
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Commit Messages">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#format" class="md-nav__link">
+    <span class="md-ellipsis">
+      Format
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#types" class="md-nav__link">
+    <span class="md-ellipsis">
+      Types
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      Examples
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#code-review-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      Code Review Checklist
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary-of-key-rules" class="md-nav__link">
+    <span class="md-ellipsis">
+      Summary of Key Rules
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technical-debt-known-exceptions" class="md-nav__link">
+    <span class="md-ellipsis">
+      Technical Debt &amp; Known Exceptions
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technical Debt & Known Exceptions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#encodingsafe_json-dual-mode-result-unwrapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      encoding.safe_json — "Dual-Mode" Result Unwrapping
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#api-return-type-consistency" class="md-nav__link">
+    <span class="md-ellipsis">
+      API Return Type Consistency
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<h1 id="luci-sso-style-guide">LuCI SSO Style Guide<a class="headerlink" href="#luci-sso-style-guide" title="Permanent link">&para;</a></h1>
+<p>This document is the technical reference for coding standards in the luci-sso project. For the reasoning behind these standards, see <a href="../../explanation/design-philosophy/">Design Philosophy</a>.</p>
+<p>Code examples use tabs for indentation (OpenWrt standard), <code>snake_case</code> naming, and trailing semicolons on exported functions. For real-world implementations, see <code>files/usr/share/ucode/luci_sso/</code> (production) and <code>test/tier*/</code> (tests).</p>
+<hr />
+<h2 id="table-of-contents">Table of Contents<a class="headerlink" href="#table-of-contents" title="Permanent link">&para;</a></h2>
+<ol>
+<li><a href="#terminology">Terminology</a></li>
+<li><a href="#error-handling">Error Handling</a></li>
+<li><a href="#testing-standards">Testing Standards</a></li>
+<li><a href="#ucode-style">ucode Style</a></li>
+<li><a href="#c-code-style">C Code Style</a></li>
+<li><a href="#module-organization">Module Organization</a></li>
+<li><a href="#security-guidelines">Security Guidelines</a></li>
+<li><a href="#documentation-standards">Documentation Standards</a></li>
+<li><a href="#commit-messages">Commit Messages</a></li>
+<li><a href="#code-review-checklist">Code Review Checklist</a></li>
+<li><a href="#technical-debt--known-exceptions">Technical Debt &amp; Known Exceptions</a></li>
+</ol>
+<hr />
+<h2 id="terminology">Terminology<a class="headerlink" href="#terminology" title="Permanent link">&para;</a></h2>
+<p>The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document and all other project documentation are to be interpreted as described in <a href="https://tools.ietf.org/html/rfc2119">RFC 2119</a>.</p>
+<hr />
+<h2 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
+<h3 id="contract-bugs-vs-runtime-realities">Contract Bugs vs. Runtime Realities<a class="headerlink" href="#contract-bugs-vs-runtime-realities" title="Permanent link">&para;</a></h3>
+<p>We distinguish between errors caused by the programmer (Contract Bugs) and errors caused by the environment or user (Runtime Realities).</p>
+<h4 id="1-contract-bugs-programming-errors">1. Contract Bugs (Programming Errors)<a class="headerlink" href="#1-contract-bugs-programming-errors" title="Permanent link">&para;</a></h4>
+<p><strong>Action: Use <code>die()</code></strong>
+If a function is called with the wrong types or in an invalid state, this is a bug in the calling code. The system should "fail fast" to prevent undefined behavior.</p>
+<div class="highlight"><pre><span></span><code><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">jws_sign</span><span class="p">(</span><span class="nx">payload</span><span class="p">,</span><span class="w"> </span><span class="nx">secret</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">type</span><span class="p">(</span><span class="nx">payload</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s2">&quot;object&quot;</span><span class="p">)</span><span class="w"> </span><span class="nx">die</span><span class="p">(</span><span class="s2">&quot;CONTRACT_VIOLATION: payload must be an object&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">type</span><span class="p">(</span><span class="nx">secret</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">)</span><span class="w"> </span><span class="nx">die</span><span class="p">(</span><span class="s2">&quot;CONTRACT_VIOLATION: secret must be a string&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">};</span>
+</code></pre></div>
+<h4 id="2-runtime-realities-expected-failures">2. Runtime Realities (Expected Failures)<a class="headerlink" href="#2-runtime-realities-expected-failures" title="Permanent link">&para;</a></h4>
+<p><strong>Action: Use Result Objects or Exceptions</strong>
+If an operation fails due to external factors (expired token, network down, invalid signature), this is a valid state that the application might want to handle.</p>
+<ul>
+<li><strong>Exceptions:</strong> Use for "stop the world" failures where the caller likely can't recover easily (e.g., malformed discovery response).</li>
+<li><strong>Result Objects:</strong> Use for all runtime failures and common business logic branches (e.g., token expired vs. invalid signature). These MUST be created using the <code>luci_sso.result</code> module.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="k">import</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="nx">Result</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;luci_sso.result&#39;</span><span class="p">;</span>
+
+<span class="c1">// Result Object Pattern (MANDATORY)</span>
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">verify_session</span><span class="p">(</span><span class="nx">io</span><span class="p">,</span><span class="w"> </span><span class="nx">token</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ... logic ...</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">expired</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">Result</span><span class="p">.</span><span class="nx">err</span><span class="p">(</span><span class="s2">&quot;EXPIRED&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">bad_sig</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">Result</span><span class="p">.</span><span class="nx">err</span><span class="p">(</span><span class="s2">&quot;INVALID_SIGNATURE&quot;</span><span class="p">);</span>
+
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">Result</span><span class="p">.</span><span class="nx">ok</span><span class="p">(</span><span class="nx">payload</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3 id="exception-vs-result-object-decision-tree">Exception vs. Result Object Decision Tree<a class="headerlink" href="#exception-vs-result-object-decision-tree" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>Is the failure a programming error (wrong types, null pointer, invalid internal state)?
+├─ YES → Use die() (Fail Fast - CONTRACT_VIOLATION)
+└─ NO  → Is it a runtime failure (Expired token, network error, config error)?
+   └─ ALWAYS → Return Result.err(&quot;CODE&quot;, context_object)
+</code></pre></div>
+<p><strong>Rationale:</strong> In a CGI environment, <code>die()</code> causes a process crash which results in a generic 500 error. To provide a better user experience and robust error reporting, all runtime failures MUST return a <code>Result</code> object.</p>
+<h3 id="context-object-pattern">Context Object Pattern<a class="headerlink" href="#context-object-pattern" title="Permanent link">&para;</a></h3>
+<p>When returning an error, developers SHOULD use a "context object" for the <code>details</code> parameter if more than one piece of information is needed.</p>
+<p><strong>Standard Fields:</strong>
+- <code>http_status</code>: The recommended HTTP status code for the web layer.
+- <code>details</code>: A developer-friendly message or raw error from a sub-operation.</p>
+<p><strong>✅ CORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">return</span><span class="w"> </span><span class="nx">Result</span><span class="p">.</span><span class="nx">err</span><span class="p">(</span><span class="s2">&quot;DISCOVERY_FAILED&quot;</span><span class="p">,</span><span class="w"> </span><span class="p">{</span><span class="w"> </span>
+<span class="w">    </span><span class="nx">http_status</span><span class="o">:</span><span class="w"> </span><span class="mf">502</span><span class="p">,</span><span class="w"> </span>
+<span class="w">    </span><span class="nx">details</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;Connection timed out&quot;</span><span class="w"> </span>
+<span class="p">});</span>
+</code></pre></div></p>
+<hr />
+<h3 id="error-code-format">Error Code Format<a class="headerlink" href="#error-code-format" title="Permanent link">&para;</a></h3>
+<p><strong>Structure:</strong> <code>CATEGORY_SPECIFIC_REASON</code> (MUST be SCREAMING_SNAKE_CASE)</p>
+<p><strong>Categories:</strong>
+- <code>INVALID_*</code> - Bad input (caller error)
+- <code>*_FAILED</code> - Operation failed (transient)
+- <code>*_MISMATCH</code> - Validation failed (security)
+- <code>MISSING_*</code> - Required data absent
+- <code>UNSUPPORTED_*</code> - Feature not implemented</p>
+<p><strong>Examples:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="s2">&quot;INVALID_ARGUMENT&quot;</span><span class="w">      </span><span class="c1">// Bad function argument</span>
+<span class="s2">&quot;DISCOVERY_FAILED&quot;</span><span class="w">      </span><span class="c1">// HTTP request failed</span>
+<span class="s2">&quot;ISSUER_MISMATCH&quot;</span><span class="w">       </span><span class="c1">// JWT iss claim doesn&#39;t match</span>
+<span class="s2">&quot;MISSING_ID_TOKEN&quot;</span><span class="w">      </span><span class="c1">// OAuth2 response lacks id_token</span>
+<span class="s2">&quot;UNSUPPORTED_ALGORITHM&quot;</span><span class="w"> </span><span class="c1">// JWT alg not supported</span>
+</code></pre></div>
+<hr />
+<h3 id="never-silently-fail">Never Silently Fail<a class="headerlink" href="#never-silently-fail" title="Permanent link">&para;</a></h3>
+<p><strong>❌ INCORRECT:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">jwt_verify</span><span class="p">(</span><span class="nx">token</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">opts</span><span class="p">);</span>
+<span class="c1">// Forgot to check result.error</span>
+<span class="nx">use</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">payload</span><span class="p">);</span><span class="w">  </span><span class="c1">// Undefined if error occurred</span>
+</code></pre></div>
+<p><strong>✅ CORRECT:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1">// With exceptions (automatic propagation)</span>
+<span class="kd">let</span><span class="w"> </span><span class="nx">payload</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">jwt_verify</span><span class="p">(</span><span class="nx">token</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="p">,</span><span class="w"> </span><span class="nx">opts</span><span class="p">);</span>
+<span class="nx">use</span><span class="p">(</span><span class="nx">payload</span><span class="p">);</span><span class="w">  </span><span class="c1">// Exception thrown if verification failed</span>
+
+<span class="c1">// With result objects (explicit check)</span>
+<span class="kd">let</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">verify_session</span><span class="p">(</span><span class="nx">io</span><span class="p">,</span><span class="w"> </span><span class="nx">token</span><span class="p">);</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">error</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">handle_error</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">error</span><span class="p">);</span>
+<span class="p">}</span>
+<span class="nx">use</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">session</span><span class="p">);</span>
+</code></pre></div>
+<hr />
+<h2 id="testing-standards">Testing Standards<a class="headerlink" href="#testing-standards" title="Permanent link">&para;</a></h2>
+<h3 id="test-requirements">Test Requirements<a class="headerlink" href="#test-requirements" title="Permanent link">&para;</a></h3>
+<h3 id="test-requirements_1">Test Requirements<a class="headerlink" href="#test-requirements_1" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Mandatory Coverage:</strong> Every exported function MUST have unit tests.</li>
+<li><strong>Failure Verification:</strong> Every error path MUST be verified by a corresponding test case.</li>
+<li><strong>Attack Simulation:</strong> Security-critical code MUST have specialized attack tests.</li>
+<li><strong>Offline Purity:</strong> All tests MUST be runnable offline without external network dependencies.</li>
+</ol>
+<h3 id="test-structure">Test Structure<a class="headerlink" href="#test-structure" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">test</span><span class="p">,</span><span class="w"> </span><span class="nx">assert</span><span class="p">,</span><span class="w"> </span><span class="nx">assert_eq</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;testing&#39;</span><span class="p">;</span>
+<span class="k">import</span><span class="w"> </span><span class="o">*</span><span class="w"> </span><span class="kr">as</span><span class="w"> </span><span class="nx">module_under_test</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;luci_sso.module&#39;</span><span class="p">;</span>
+<span class="k">import</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">create_mock_io</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="kr">from</span><span class="w"> </span><span class="s1">&#39;helpers&#39;</span><span class="p">;</span>
+
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;Feature: Success case&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="nx">io</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">create_mock_io</span><span class="p">();</span>
+
+<span class="w">    </span><span class="c1">// Setup</span>
+<span class="w">    </span><span class="nx">io</span><span class="p">.</span><span class="nx">_responses</span><span class="p">[</span><span class="s2">&quot;https://idp.com/.well-known&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="mf">200</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;{}&quot;</span>
+<span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="c1">// Execute</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="nx">result</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">module_under_test</span><span class="p">.</span><span class="kd">function</span><span class="p">(</span><span class="nx">io</span><span class="p">,</span><span class="w"> </span><span class="nx">args</span><span class="p">);</span>
+
+<span class="w">    </span><span class="c1">// Assert</span>
+<span class="w">    </span><span class="nx">assert</span><span class="p">(</span><span class="o">!</span><span class="nx">result</span><span class="p">.</span><span class="nx">error</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Should succeed&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="nx">assert_eq</span><span class="p">(</span><span class="nx">result</span><span class="p">.</span><span class="nx">data</span><span class="p">,</span><span class="w"> </span><span class="nx">expected</span><span class="p">);</span>
+<span class="p">});</span>
+
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;Feature: Error case&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="nx">io</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">create_mock_io</span><span class="p">();</span>
+<span class="w">    </span><span class="nx">io</span><span class="p">.</span><span class="nx">_responses</span><span class="p">[</span><span class="s2">&quot;https://idp.com/.well-known&quot;</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">status</span><span class="o">:</span><span class="w"> </span><span class="mf">500</span><span class="p">,</span>
+<span class="w">        </span><span class="nx">body</span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span>
+<span class="w">    </span><span class="p">};</span>
+
+<span class="w">    </span><span class="k">try</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">module_under_test</span><span class="p">.</span><span class="kd">function</span><span class="p">(</span><span class="nx">io</span><span class="p">,</span><span class="w"> </span><span class="nx">args</span><span class="p">);</span>
+<span class="w">        </span><span class="nx">assert</span><span class="p">(</span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;Should have thrown&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span><span class="w"> </span><span class="k">catch</span><span class="w"> </span><span class="p">(</span><span class="nx">e</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">assert</span><span class="p">(</span><span class="nx">index</span><span class="p">(</span><span class="nx">e</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;EXPECTED_ERROR&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">&gt;=</span><span class="w"> </span><span class="mf">0</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">});</span>
+</code></pre></div>
+<hr />
+<h3 id="test-naming-convention">Test Naming Convention<a class="headerlink" href="#test-naming-convention" title="Permanent link">&para;</a></h3>
+<p><strong>Pattern:</strong> <code>test('Module: Feature - Condition', () =&gt; { ... })</code></p>
+<p><strong>Examples:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Verify RS256 signature&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Reject expired token&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Handle missing algorithm&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;OIDC: Discovery caching&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;Security: Reject alg=none attack&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+</code></pre></div>
+<hr />
+<h3 id="test-coverage-requirements">Test Coverage Requirements<a class="headerlink" href="#test-coverage-requirements" title="Permanent link">&para;</a></h3>
+<p><strong>Minimum coverage per function:</strong>
+- ✅ 1 success case (happy path)
+- ✅ 1 error case per error type
+- ✅ Edge cases (empty input, null, boundary values)
+- ✅ Security cases (tampering, injection, bypass attempts)</p>
+<p><strong>Example for <code>jwt_verify()</code>:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Valid token succeeds&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Expired token rejected&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Invalid signature rejected&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Malformed token rejected&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Wrong algorithm rejected&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Missing header rejected&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;JWT: Tampered payload rejected&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+<span class="nx">test</span><span class="p">(</span><span class="s1">&#39;Security: Alg=none attack rejected&#39;</span><span class="p">,</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="cm">/* ... */</span><span class="w"> </span><span class="p">});</span>
+</code></pre></div>
+<hr />
+<h2 id="ucode-style">ucode Style<a class="headerlink" href="#ucode-style" title="Permanent link">&para;</a></h2>
+<h3 id="general-formatting">General Formatting<a class="headerlink" href="#general-formatting" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// Indentation: TABS (OpenWrt standard, matches C code)</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">example</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">let</span><span class="w"> </span><span class="nx">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1</span><span class="p">;</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">x</span><span class="w"> </span><span class="o">&gt;</span><span class="w"> </span><span class="mf">0</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nx">print</span><span class="p">(</span><span class="s2">&quot;positive\n&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="c1">// Line length: 100 characters (soft limit)</span>
+<span class="c1">// Exceptions allowed for URLs, long strings</span>
+</code></pre></div>
+<hr />
+<h3 id="function-declarations">Function Declarations<a class="headerlink" href="#function-declarations" title="Permanent link">&para;</a></h3>
+<p><strong>Exported functions need trailing semicolon:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">function_name</span><span class="p">(</span><span class="nx">arg1</span><span class="p">,</span><span class="w"> </span><span class="nx">arg2</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// body</span>
+<span class="p">};</span><span class="w">  </span><span class="c1">// ← Note trailing semicolon</span>
+</code></pre></div>
+<p><strong>Private functions don't:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="kd">function</span><span class="w"> </span><span class="nx">helper_function</span><span class="p">(</span><span class="nx">arg</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// body</span>
+<span class="p">}</span><span class="w">  </span><span class="c1">// ← No semicolon</span>
+</code></pre></div>
+<p><strong>Rationale:</strong> Export statements are expressions in ucode. Consistency with OpenWrt's ucode codebase.</p>
+<hr />
+<h3 id="variable-declarations">Variable Declarations<a class="headerlink" href="#variable-declarations" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Mandatory Let:</strong> All variables MUST be declared using <code>let</code> (never <code>var</code>).</li>
+<li><strong>Constants:</strong> TRUE constants MUST use <code>UPPERCASE</code> naming.</li>
+<li><strong>Naming Convention:</strong> All other variables and functions MUST use <code>snake_case</code>.</li>
+</ul>
+<h3 id="string-formatting">String Formatting<a class="headerlink" href="#string-formatting" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Interpolation:</strong> Logic SHOULD use template literals for string building.</li>
+<li><strong>Quotes:</strong> Double quotes MUST be used for standard strings.</li>
+</ul>
+<h3 id="imports">Imports<a class="headerlink" href="#imports" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Ordering:</strong> Imports MUST follow the order: Standard Library, External Dependencies, Internal Modules.</li>
+</ul>
+<hr />
+<h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// Single-line comments for inline notes</span>
+<span class="kd">let</span><span class="w"> </span><span class="nx">x</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">compute</span><span class="p">();</span><span class="w">  </span><span class="c1">// Cache for performance</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Multi-line JSDoc-style for exported functions.</span>
+<span class="cm"> * </span>
+<span class="cm"> * @param {object} io - I/O provider { http_get, time, ... }</span>
+<span class="cm"> * @param {string} issuer - IdP issuer URL</span>
+<span class="cm"> * @param {object} [options] - Optional configuration</span>
+<span class="cm"> * @returns {object} - Decoded payload</span>
+<span class="cm"> * @throws {string} - Error code on failure</span>
+<span class="cm"> */</span>
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">discover</span><span class="p">(</span><span class="nx">io</span><span class="p">,</span><span class="w"> </span><span class="nx">issuer</span><span class="p">,</span><span class="w"> </span><span class="nx">options</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">};</span>
+
+<span class="c1">// TODO comments for planned work</span>
+<span class="c1">// TODO: Add support for P-384 curve</span>
+</code></pre></div>
+<hr />
+<h3 id="control-flow">Control Flow<a class="headerlink" href="#control-flow" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// Always use braces, even for single statements</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">do_something</span><span class="p">();</span>
+<span class="p">}</span>
+
+<span class="c1">// NOT:</span>
+<span class="c1">// if (condition) do_something();  // ❌</span>
+
+<span class="c1">// Early returns for error cases</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">validate</span><span class="p">(</span><span class="nx">input</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">input</span><span class="p">)</span><span class="w"> </span><span class="nx">die</span><span class="p">(</span><span class="s2">&quot;MISSING_INPUT&quot;</span><span class="p">);</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">type</span><span class="p">(</span><span class="nx">input</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s2">&quot;string&quot;</span><span class="p">)</span><span class="w"> </span><span class="nx">die</span><span class="p">(</span><span class="s2">&quot;INVALID_TYPE&quot;</span><span class="p">);</span>
+
+<span class="w">    </span><span class="c1">// Happy path at end</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nx">process</span><span class="p">(</span><span class="nx">input</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div>
+<hr />
+<h2 id="c-code-style">C Code Style<a class="headerlink" href="#c-code-style" title="Permanent link">&para;</a></h2>
+<h3 id="standards-mbedtls-3x-psa-crypto">Standards: MbedTLS 3.x / PSA Crypto<a class="headerlink" href="#standards-mbedtls-3x-psa-crypto" title="Permanent link">&para;</a></h3>
+<p>This project exclusively uses <strong>MbedTLS 3.x</strong>. All new cryptographic operations MUST be implemented using the <strong>PSA Crypto API</strong> (<code>psa/crypto.h</code>).</p>
+<p><strong>Requirements:</strong>
+- ✅ Call <code>psa_crypto_init()</code> in <code>uc_module_init</code>.
+- ✅ Check <code>psa_status_t</code> for ALL operations.
+- ✅ Use opaque handles (<code>psa_key_id_t</code>) where possible.
+- ✅ Destroy keys (<code>psa_destroy_key</code>) on all return paths.
+- ✅ Use <code>MBEDTLS_PRIVATE()</code> macro if direct structure access is unavoidable (deprecated).</p>
+<hr />
+<h3 id="minimize-c-code">Minimize C Code<a class="headerlink" href="#minimize-c-code" title="Permanent link">&para;</a></h3>
+<p><strong>Ask first:</strong> "Can this be done in ucode?"
+- If YES → Do it in ucode
+- If NO (crypto/performance) → Write minimal C</p>
+<hr />
+<h3 id="function-naming">Function Naming<a class="headerlink" href="#function-naming" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// Pattern: uc_&lt;backend&gt;_&lt;operation&gt;</span>
+<span class="k">static</span><span class="w"> </span><span class="n">uc_value_t</span><span class="w"> </span><span class="o">*</span><span class="nf">uc_mbedtls_verify_rs256</span><span class="p">(</span><span class="n">uc_vm_t</span><span class="w"> </span><span class="o">*</span><span class="n">vm</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">nargs</span><span class="p">);</span>
+<span class="k">static</span><span class="w"> </span><span class="n">uc_value_t</span><span class="w"> </span><span class="o">*</span><span class="nf">uc_mbedtls_hmac_sha256</span><span class="p">(</span><span class="n">uc_vm_t</span><span class="w"> </span><span class="o">*</span><span class="n">vm</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">nargs</span><span class="p">);</span>
+
+<span class="c1">// NOT generic names (backend might be swapped)</span>
+<span class="c1">// ❌ uc_verify_rs256</span>
+</code></pre></div>
+<hr />
+<h3 id="error-handling-in-c">Error Handling in C<a class="headerlink" href="#error-handling-in-c" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// Return NULL for errors (ucode convention)</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">error_condition</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">mbedtls_pk_free</span><span class="p">(</span><span class="o">&amp;</span><span class="n">pk</span><span class="p">);</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="c1">// Return boolean for success/failure</span>
+<span class="k">return</span><span class="w"> </span><span class="n">ucv_boolean_new</span><span class="p">(</span><span class="n">ret</span><span class="w"> </span><span class="o">==</span><span class="w"> </span><span class="mi">0</span><span class="p">);</span>
+
+<span class="c1">// Return string for data</span>
+<span class="k">return</span><span class="w"> </span><span class="n">ucv_string_new_length</span><span class="p">((</span><span class="k">const</span><span class="w"> </span><span class="kt">char</span><span class="w"> </span><span class="o">*</span><span class="p">)</span><span class="n">output</span><span class="p">,</span><span class="w"> </span><span class="mi">32</span><span class="p">);</span>
+</code></pre></div>
+<h3 id="memory-management-safety">Memory Management &amp; Safety<a class="headerlink" href="#memory-management-safety" title="Permanent link">&para;</a></h3>
+<p><strong>1. ALWAYS free resources on ALL paths</strong>
+<div class="highlight"><pre><span></span><code><span class="n">mbedtls_md_context_t</span><span class="w"> </span><span class="n">md_ctx</span><span class="p">;</span>
+<span class="n">mbedtls_md_init</span><span class="p">(</span><span class="o">&amp;</span><span class="n">md_ctx</span><span class="p">);</span>
+
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">setup_fails</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="n">mbedtls_md_free</span><span class="p">(</span><span class="o">&amp;</span><span class="n">md_ctx</span><span class="p">);</span><span class="w">  </span><span class="c1">// ✅ Cleanup on error</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+<span class="n">mbedtls_md_free</span><span class="p">(</span><span class="o">&amp;</span><span class="n">md_ctx</span><span class="p">);</span><span class="w">  </span><span class="c1">// ✅ Cleanup on success</span>
+</code></pre></div></p>
+<p><strong>2. Explicit Length Validation (MANDATORY)</strong>
+C functions handling buffers passed from ucode MUST explicitly validate the length of those buffers against expected sizes BEFORE performing any memory operations (e.g., <code>memcpy</code>).</p>
+<p><strong>✅ CORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">key_len</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="mi">32</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="mi">-1</span><span class="p">;</span>
+<span class="n">memcpy</span><span class="p">(</span><span class="n">local</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="mi">32</span><span class="p">);</span>
+</code></pre></div></p>
+<p><strong>❌ INCORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="n">memcpy</span><span class="p">(</span><span class="n">local</span><span class="p">,</span><span class="w"> </span><span class="n">key</span><span class="p">,</span><span class="w"> </span><span class="mi">32</span><span class="p">);</span><span class="w"> </span><span class="c1">// Vulnerable if key_len &lt; 32</span>
+</code></pre></div></p>
+<hr />
+<h3 id="memory-hygiene">Memory Hygiene<a class="headerlink" href="#memory-hygiene" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1">// ALWAYS validate input types</span>
+<span class="n">uc_value_t</span><span class="w"> </span><span class="o">*</span><span class="n">v_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">uc_fn_arg</span><span class="p">(</span><span class="mi">0</span><span class="p">);</span>
+<span class="n">uc_value_t</span><span class="w"> </span><span class="o">*</span><span class="n">v_msg</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="n">uc_fn_arg</span><span class="p">(</span><span class="mi">1</span><span class="p">);</span>
+
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="n">ucv_type</span><span class="p">(</span><span class="n">v_key</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">UC_STRING</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="n">ucv_type</span><span class="p">(</span><span class="n">v_msg</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="n">UC_STRING</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="nb">NULL</span><span class="p">;</span><span class="w">  </span><span class="c1">// Fail gracefully</span>
+<span class="p">}</span>
+</code></pre></div>
+<hr />
+<h3 id="memory-hygiene_1">Memory Hygiene<a class="headerlink" href="#memory-hygiene_1" title="Permanent link">&para;</a></h3>
+<p>All stack or heap buffers containing sensitive cryptographic material (keys, nonces, intermediate hashes) MUST be zeroized immediately after use and before function return.</p>
+<p><strong>Requirements:</strong>
+- Use <code>mbedtls_platform_zeroize()</code> for MbedTLS backends.
+- Use <code>ForceZero()</code> or <code>memset_s()</code> equivalents for other backends.</p>
+<hr />
+<h3 id="documentation">Documentation<a class="headerlink" href="#documentation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="cm">/**</span>
+<span class="cm"> * Computes HMAC-SHA256 of a message.</span>
+<span class="cm"> * </span>
+<span class="cm"> * @param key (string) - Secret key (binary)</span>
+<span class="cm"> * @param message (string) - Message to authenticate (binary)</span>
+<span class="cm"> * @return (string) - 32-byte HMAC digest, or NULL on error</span>
+<span class="cm"> */</span>
+<span class="k">static</span><span class="w"> </span><span class="n">uc_value_t</span><span class="w"> </span><span class="o">*</span><span class="nf">uc_mbedtls_hmac_sha256</span><span class="p">(</span><span class="n">uc_vm_t</span><span class="w"> </span><span class="o">*</span><span class="n">vm</span><span class="p">,</span><span class="w"> </span><span class="kt">size_t</span><span class="w"> </span><span class="n">nargs</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// Implementation</span>
+<span class="p">}</span>
+</code></pre></div>
+<h2 id="ucode-syntax-limitations-and-gotchas">ucode Syntax Limitations and Gotchas<a class="headerlink" href="#ucode-syntax-limitations-and-gotchas" title="Permanent link">&para;</a></h2>
+<p>This section lists syntax features that are either unsupported or behave unexpectedly in the target ucode environment.</p>
+<h3 id="1-avoid-optional-chaining">1. Avoid Optional Chaining (<code>?.</code>)<a class="headerlink" href="#1-avoid-optional-chaining" title="Permanent link">&para;</a></h3>
+<p><strong>Status: DANGEROUS</strong>
+While the parser may accept it, the behavior is inconsistent. When used on a <code>null</code> object, it returns a value with an "empty" type that causes crashes (e.g., "left-hand side is not a function") when used in subsequent expressions.</p>
+<p><strong>❌ INCORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">io</span><span class="o">?</span><span class="p">.</span><span class="nx">getenv</span><span class="p">(</span><span class="s2">&quot;PATH&quot;</span><span class="p">);</span>
+</code></pre></div></p>
+<p><strong>✅ CORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">val</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">io</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">getenv</span><span class="p">)</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="nx">io</span><span class="p">.</span><span class="nx">getenv</span><span class="p">(</span><span class="s2">&quot;PATH&quot;</span><span class="p">)</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="kc">null</span><span class="p">;</span>
+</code></pre></div></p>
+<h3 id="2-no-destructuring-let-a-obj">2. No Destructuring (<code>let { a } = obj</code>)<a class="headerlink" href="#2-no-destructuring-let-a-obj" title="Permanent link">&para;</a></h3>
+<p><strong>Status: NOT SUPPORTED</strong>
+ucode does not support object or array destructuring. Using this will result in a compile-time syntax error.</p>
+<p><strong>❌ INCORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">issuer_url</span><span class="p">,</span><span class="w"> </span><span class="nx">client_id</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">config</span><span class="p">;</span>
+</code></pre></div></p>
+<p><strong>✅ CORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">issuer_url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">config</span><span class="p">.</span><span class="nx">issuer_url</span><span class="p">;</span>
+<span class="kd">let</span><span class="w"> </span><span class="nx">client_id</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">config</span><span class="p">.</span><span class="nx">client_id</span><span class="p">;</span>
+</code></pre></div></p>
+<h3 id="3-arrow-functions">3. Arrow Functions<a class="headerlink" href="#3-arrow-functions" title="Permanent link">&para;</a></h3>
+<p><strong>Status: PREFERRED</strong>
+Arrow functions are the preferred way to define functions and passthroughs. They should be used for both one-liners and multi-line logic.</p>
+<p><strong>Exception:</strong> Avoid using arrow functions when the function needs to return an <strong>object literal</strong> directly. This prevents parser ambiguity where the interpreter might confuse the object braces <code>{}</code> with a code block. Use traditional <code>function</code> for these cases.</p>
+<p><strong>❌ INCORRECT (Ambiguous):</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">get_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">a</span><span class="o">:</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="o">:</span><span class="w"> </span><span class="mf">2</span><span class="w"> </span><span class="p">};</span><span class="w"> </span>
+</code></pre></div></p>
+<p><strong>✅ CORRECT (Explicit):</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">get_data</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kd">function</span><span class="p">()</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">a</span><span class="o">:</span><span class="w"> </span><span class="mf">1</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="o">:</span><span class="w"> </span><span class="mf">2</span><span class="w"> </span><span class="p">};</span>
+<span class="p">};</span>
+</code></pre></div></p>
+<h3 id="4-shorthand-properties-a">4. Shorthand Properties (<code>{ a }</code>)<a class="headerlink" href="#4-shorthand-properties-a" title="Permanent link">&para;</a></h3>
+<p><strong>Status: SUPPORTED</strong>
+Shorthand property names are safe to use when building objects from existing local variables.</p>
+<p><strong>✅ CORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">a</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mf">1</span><span class="p">;</span>
+<span class="kd">let</span><span class="w"> </span><span class="nx">obj</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="o">:</span><span class="w"> </span><span class="mf">2</span><span class="w"> </span><span class="p">};</span>
+</code></pre></div></p>
+<h3 id="5-handling-nan">5. Handling <code>NaN</code><a class="headerlink" href="#5-handling-nan" title="Permanent link">&para;</a></h3>
+<p><strong>Status: Standard IEEE 754</strong>
+<code>NaN == NaN</code> is always <code>false</code>. When using <code>int()</code> or <code>double()</code> for conversion, check the resulting type to detect failure.</p>
+<p><strong>✅ CORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">clock_tolerance</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="kr">int</span><span class="p">(</span><span class="nx">val</span><span class="p">);</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">type</span><span class="p">(</span><span class="nx">clock_tolerance</span><span class="p">)</span><span class="w"> </span><span class="o">!=</span><span class="w"> </span><span class="s2">&quot;int&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">die</span><span class="p">(</span><span class="s2">&quot;Invalid integer&quot;</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<h3 id="6-url-encoding">6. URL Encoding<a class="headerlink" href="#6-url-encoding" title="Permanent link">&para;</a></h3>
+<p><strong>Status: MANDATORY FLAGS</strong>
+When using <code>lucihttp.urlencode()</code>, you MUST pass <code>1</code> as the second argument if the string contains characters like <code>/</code> or <code>:</code> (e.g., URLs). Failing to do so MUST be avoided as it results in unencoded characters which can break OIDC redirects.</p>
+<p><strong>✅ CORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">enc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">lucihttp</span><span class="p">.</span><span class="nx">urlencode</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span><span class="w"> </span><span class="mf">1</span><span class="p">);</span>
+</code></pre></div></p>
+<p><strong>❌ INCORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="kd">let</span><span class="w"> </span><span class="nx">enc</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">lucihttp</span><span class="p">.</span><span class="nx">urlencode</span><span class="p">(</span><span class="nx">url</span><span class="p">);</span>
+</code></pre></div></p>
+<h3 id="7-protocol-enforcement">7. Protocol Enforcement<a class="headerlink" href="#7-protocol-enforcement" title="Permanent link">&para;</a></h3>
+<p><strong>Status: MANDATORY CENTRALIZATION</strong>
+To ensure OIDC compliance and prevent case-manipulation bypasses, all HTTPS scheme checks MUST utilize the centralized <code>encoding.is_https()</code> utility. Local <code>substr()</code> or case-sensitive <code>===</code> checks are strictly FORBIDDEN.</p>
+<p><strong>✅ CORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="o">!</span><span class="nx">encoding</span><span class="p">.</span><span class="nx">is_https</span><span class="p">(</span><span class="nx">url</span><span class="p">))</span><span class="w"> </span><span class="k">return</span><span class="w"> </span><span class="nx">Result</span><span class="p">.</span><span class="nx">err</span><span class="p">(</span><span class="s2">&quot;INSECURE&quot;</span><span class="p">);</span>
+</code></pre></div></p>
+<p><strong>❌ INCORRECT:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">substr</span><span class="p">(</span><span class="nx">url</span><span class="p">,</span><span class="w"> </span><span class="mf">0</span><span class="p">,</span><span class="w"> </span><span class="mf">8</span><span class="p">)</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="s2">&quot;https://&quot;</span><span class="p">)</span><span class="w"> </span><span class="p">...</span>
+</code></pre></div></p>
+<hr />
+<h2 id="module-organization">Module Organization<a class="headerlink" href="#module-organization" title="Permanent link">&para;</a></h2>
+<h3 id="file-structure">File Structure<a class="headerlink" href="#file-structure" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>luci-sso/
+├── files/usr/share/ucode/luci_sso/
+│   ├── crypto.uc      # High-level crypto API (wraps native)
+│   ├── oidc.uc        # OIDC protocol (exchange, verification)
+│   ├── discovery.uc   # OIDC metadata fetching and caching
+│   ├── handshake.uc   # OIDC state machine and session orchestration
+│   ├── session.uc     # Session management (JWS tokens)
+│   ├── encoding.uc    # Pure data encoding and string logic
+│   ├── result.uc      # Standard Result object pattern for error handling
+│   ├── jwk.uc         # JSON Web Key management
+│   ├── config.uc      # UCI configuration loader
+│   ├── web.uc         # CGI and HTTP request/response logic
+│   ├── secure_http.uc # HTTPS client logic
+│   ├── ubus.uc        # UBUS session integration
+│   └── io.uc          # I/O abstraction (create_io helper)
+├── src/
+│   ├── native_mbedtls.c   # mbedtls backend
+│   └── native_wolfssl.c   # wolfssl backend
+├── test/
+│   ├── tier0/         # Native crypto compliance (MbedTLS/WolfSSL)
+│   ├── tier1/         # Encoding/crypto logic tests
+│   ├── tier2/         # Integration (handshake, session, config, ubus)
+│   ├── tier3/         # Router / IO tests
+│   ├── tier4/         # Mock system tests
+│   ├── e2e/           # Playwright browser tests
+│   ├── testing/       # Test framework
+│   ├── lib/           # Test helpers
+│   ├── mock.uc        # Mock I/O provider
+│   └── runner.uc      # Test harness
+└── docs/              # Documentation (Diátaxis framework)
+</code></pre></div>
+<hr />
+<h3 id="module-naming">Module Naming<a class="headerlink" href="#module-naming" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Package:</strong> <code>luci-sso</code> (hyphenated, OpenWrt convention)</li>
+<li><strong>Namespace:</strong> <code>luci_sso.*</code> (underscored, ucode module system)</li>
+<li><strong>Files:</strong> <code>snake_case.uc</code> (underscored, OpenWrt convention)</li>
+</ul>
+<hr />
+<h3 id="exports">Exports<a class="headerlink" href="#exports" title="Permanent link">&para;</a></h3>
+<p><strong>Export only public API:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1">// crypto.uc</span>
+
+<span class="c1">// Private helpers (not exported)</span>
+<span class="kd">function</span><span class="w"> </span><span class="nx">b64url_to_b64</span><span class="p">(</span><span class="nx">str</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">}</span>
+
+<span class="c1">// Public API (exported)</span>
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">constant_time_eq</span><span class="p">(</span><span class="nx">a</span><span class="p">,</span><span class="w"> </span><span class="nx">b</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">}</span>
+
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">jwt_verify</span><span class="p">(</span><span class="nx">token</span><span class="p">,</span><span class="w"> </span><span class="nx">pubkey</span><span class="p">,</span><span class="w"> </span><span class="nx">options</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">};</span>
+
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">jws_sign</span><span class="p">(</span><span class="nx">payload</span><span class="p">,</span><span class="w"> </span><span class="nx">secret</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">};</span>
+
+<span class="k">export</span><span class="w"> </span><span class="kd">function</span><span class="w"> </span><span class="nx">pkce_pair</span><span class="p">(</span><span class="nx">len</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="c1">// ...</span>
+<span class="p">};</span>
+</code></pre></div>
+<hr />
+<h2 id="security-guidelines">Security Guidelines<a class="headerlink" href="#security-guidelines" title="Permanent link">&para;</a></h2>
+<h3 id="1-constant-time-operations">1. Constant-Time Operations<a class="headerlink" href="#1-constant-time-operations" title="Permanent link">&para;</a></h3>
+<p>Logic MUST use constant-time comparison for all secrets and signatures to prevent timing oracles.</p>
+<h3 id="2-cryptographic-randomness">2. Cryptographic Randomness<a class="headerlink" href="#2-cryptographic-randomness" title="Permanent link">&para;</a></h3>
+<p>All random values MUST be sourced from a CSPRNG (e.g. <code>crypto.random</code>). Predictable sources like <code>time()</code> MUST NOT be used for security parameters.</p>
+<h3 id="3-input-validation">3. Input Validation<a class="headerlink" href="#3-input-validation" title="Permanent link">&para;</a></h3>
+<p>The system MUST validate all external inputs. Contract violations MUST trigger <code>die()</code>, while runtime data errors MUST return a Result Object.</p>
+<h3 id="4-fail-safe-execution-order-consumption-first">4. Fail-Safe Execution Order (Consumption First)<a class="headerlink" href="#4-fail-safe-execution-order-consumption-first" title="Permanent link">&para;</a></h3>
+<p>State handles (handshake state) MUST be consumed BEFORE performing expensive verification operations. OIDC Access Tokens MUST be registered in the local session registry AFTER successful cryptographic verification of the ID Token.</p>
+<p>See <a href="../../explanation/security-model/">Security Model</a> and <a href="../../explanation/threat-model/">Threat Model</a> for the reasoning behind this ordering.</p>
+<hr />
+<h3 id="6-no-secrets-in-logs">6. No Secrets in Logs<a class="headerlink" href="#6-no-secrets-in-logs" title="Permanent link">&para;</a></h3>
+<p><strong>NEVER log secrets:</strong></p>
+<div class="highlight"><pre><span></span><code><span class="c1">// ❌ INCORRECT</span>
+<span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Secret key: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">secret</span><span class="p">);</span>
+<span class="nx">log</span><span class="p">(</span><span class="s2">&quot;ID token: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">id_token</span><span class="p">);</span>
+
+<span class="c1">// ✅ CORRECT</span>
+<span class="nx">log</span><span class="p">(</span><span class="s2">&quot;Using secret key from &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="nx">SECRET_KEY_PATH</span><span class="p">);</span>
+<span class="nx">log</span><span class="p">(</span><span class="s2">&quot;ID token present: &quot;</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="p">(</span><span class="nx">id_token</span><span class="w"> </span><span class="o">?</span><span class="w"> </span><span class="s2">&quot;yes&quot;</span><span class="w"> </span><span class="o">:</span><span class="w"> </span><span class="s2">&quot;no&quot;</span><span class="p">));</span>
+</code></pre></div>
+<hr />
+<h3 id="7-algorithm-whitelisting">7. Algorithm Whitelisting<a class="headerlink" href="#7-algorithm-whitelisting" title="Permanent link">&para;</a></h3>
+<p>The system MUST only support <code>S256</code> for PKCE. The <code>plain</code> method MUST NOT be implemented or accepted.</p>
+<hr />
+<h3 id="8-no-shell-execution-system-popen">8. No Shell Execution (system() / popen())<a class="headerlink" href="#8-no-shell-execution-system-popen" title="Permanent link">&para;</a></h3>
+<p>Logic MUST NOT use <code>system()</code> or <code>popen()</code> for any operation.</p>
+<ul>
+<li><strong>Delays:</strong> Use <code>io.sleep()</code> (which uses <code>uloop.timer()</code>) instead of <code>system("sleep X")</code>.</li>
+<li><strong>System Calls:</strong> Use ucode built-ins or native C bindings for all system operations.</li>
+</ul>
+<hr />
+<h2 id="documentation-standards">Documentation Standards<a class="headerlink" href="#documentation-standards" title="Permanent link">&para;</a></h2>
+<h3 id="philosophy">Philosophy<a class="headerlink" href="#philosophy" title="Permanent link">&para;</a></h3>
+<p>Documentation is code. It MUST be accurate, persona-aware (Diataxis), and accessible.</p>
+<h3 id="1-diataxis-quadrants">1. Diataxis Quadrants<a class="headerlink" href="#1-diataxis-quadrants" title="Permanent link">&para;</a></h3>
+<p>All documentation must reside in the <code>docs/</code> directory and follow the Diataxis framework:</p>
+<ul>
+<li><code>tutorials/</code>: Learning-oriented (Step-by-step success).</li>
+<li><code>how-to/</code>: Goal-oriented (Task completion).</li>
+<li><code>reference/</code>: Information-oriented (Technical machinery).</li>
+<li><code>explanation/</code>: Understanding-oriented (The "Why").</li>
+</ul>
+<h3 id="2-accessibility-mandates-wcag-21-aa">2. Accessibility Mandates (WCAG 2.1 AA)<a class="headerlink" href="#2-accessibility-mandates-wcag-21-aa" title="Permanent link">&para;</a></h3>
+<p>We prioritize accessibility for blind users, those with cognitive disabilities, and AI Agents.</p>
+<ul>
+<li><strong>Alt-Text Mandate:</strong> Every image MUST have a descriptive <code>alt</code> attribute. <ul>
+<li><em>Bad:</em> <code>![Screenshot](image.png)</code></li>
+<li><em>Good:</em> <code>![LuCI interface showing the 'General Settings' tab with the 'OIDC Provider' dropdown set to 'Google'.](image.png)</code></li>
+</ul>
+</li>
+<li><strong>Logical Hierarchy:</strong> Heading levels (<code>#</code>, <code>##</code>, <code>###</code>) MUST be nested logically. Never skip a level (e.g., <code>#</code> followed by <code>###</code>).</li>
+<li><strong>Diagram Fallbacks:</strong> Every Mermaid diagram MUST be preceded or followed by a textual summary or a table describing the flow for screen readers and AI Agents.</li>
+<li><strong>Plain Language:</strong> Avoid jargon where possible. Use active voice and short sentences.</li>
+</ul>
+<h3 id="3-machine-readable-reference">3. Machine-Readable Reference<a class="headerlink" href="#3-machine-readable-reference" title="Permanent link">&para;</a></h3>
+<p>Reference documentation must be high-density and unambiguous. Avoid narrative prose in reference quadrants — describe, don't explain.</p>
+<hr />
+<h2 id="commit-messages">Commit Messages<a class="headerlink" href="#commit-messages" title="Permanent link">&para;</a></h2>
+<h3 id="format">Format<a class="headerlink" href="#format" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>&lt;type&gt;(&lt;scope&gt;): &lt;subject&gt;
+
+&lt;body&gt;
+
+&lt;footer&gt;
+</code></pre></div>
+<h3 id="types">Types<a class="headerlink" href="#types" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>feat</code> - New feature</li>
+<li><code>fix</code> - Bug fix</li>
+<li><code>refactor</code> - Code change (no behavior change)</li>
+<li><code>test</code> - Adding/updating tests</li>
+<li><code>docs</code> - Documentation only</li>
+<li><code>style</code> - Formatting, naming (no code logic change)</li>
+<li><code>perf</code> - Performance improvement</li>
+<li><code>chore</code> - Build, CI, tooling</li>
+</ul>
+<h3 id="examples">Examples<a class="headerlink" href="#examples" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>feat(crypto): Add HMAC-SHA256 implementation
+
+- Implement uc_mbedtls_hmac_sha256 in C
+- Add jws_sign/jws_verify wrappers in ucode
+- Add tests for JWS creation and verification
+
+Closes #42
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>fix(oidc): Handle missing kid in JWT header
+
+Previously, find_jwk() would return error if JWT lacked kid claim.
+Now defaults to first key in JWKS (common for single-key IdPs).
+
+Fixes #56
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>refactor(crypto): Rename jwk_es256_to_pem → jwk_ec_p256_to_pem
+
+ES256 is an algorithm, P-256 is a curve. Function converts
+EC keys (key type) not ES256 signatures (algorithm).
+
+More accurate naming for future P-384 support.
+</code></pre></div>
+<hr />
+<h2 id="code-review-checklist">Code Review Checklist<a class="headerlink" href="#code-review-checklist" title="Permanent link">&para;</a></h2>
+<p>Before submitting PR, verify:</p>
+<ul>
+<li>[ ] All functions have tests</li>
+<li>[ ] All tests pass (<code>make -C devenv test</code>)</li>
+<li>[ ] No secrets in code/logs</li>
+<li>[ ] Error handling follows guide (exceptions vs result objects)</li>
+<li>[ ] I/O uses dependency injection</li>
+<li>[ ] C code is minimal (only crypto primitives)</li>
+<li>[ ] Function names follow conventions (snake_case, trailing <code>;</code> on exports)</li>
+<li>[ ] Commit messages follow format</li>
+<li>[ ] Documentation updated (if API changed)</li>
+<li>[ ] No TODOs without issue number</li>
+</ul>
+<hr />
+<h2 id="summary-of-key-rules">Summary of Key Rules<a class="headerlink" href="#summary-of-key-rules" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Rule</th>
+<th>Enforcement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Error Handling</strong></td>
+<td>Exceptions for most errors, result objects for fine-grained control</td>
+<td>Code review</td>
+</tr>
+<tr>
+<td><strong>I/O Abstraction</strong></td>
+<td>Always inject <code>io</code> object for testability</td>
+<td>Code review</td>
+</tr>
+<tr>
+<td><strong>Virtual Identity</strong></td>
+<td>Use OIDC role name as session label, no local passwords</td>
+<td>Security review</td>
+</tr>
+<tr>
+<td><strong>C Code</strong></td>
+<td>Crypto primitives only, everything else in ucode</td>
+<td>Architecture review</td>
+</tr>
+<tr>
+<td><strong>PKCE</strong></td>
+<td>S256 only, no <code>plain</code> method support</td>
+<td>Security review</td>
+</tr>
+<tr>
+<td><strong>RBAC Merging</strong></td>
+<td>Aggregate role permissions using logical OR with deduplication</td>
+<td>Logic review</td>
+</tr>
+<tr>
+<td><strong>Indentation</strong></td>
+<td>Tabs (OpenWrt standard)</td>
+<td>Consistency review</td>
+</tr>
+<tr>
+<td><strong>Naming</strong></td>
+<td>snake_case for variables/functions</td>
+<td>Style review</td>
+</tr>
+<tr>
+<td><strong>Exports</strong></td>
+<td>Trailing semicolon on <code>export</code> statements</td>
+<td>Syntax requirement</td>
+</tr>
+<tr>
+<td><strong>Testing</strong></td>
+<td>Every function, every error path, security attacks</td>
+<td>Test coverage review</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><strong>Remember:</strong> This guide exists to help you make consistent decisions, not to slow you down. When rules conflict with common sense, use judgment and document the decision.</p>
+<hr />
+<p><strong>End of Style Guide</strong></p>
+<hr />
+<h2 id="technical-debt-known-exceptions">Technical Debt &amp; Known Exceptions<a class="headerlink" href="#technical-debt-known-exceptions" title="Permanent link">&para;</a></h2>
+<p>While the project strives for consistency, certain legacy patterns or "convenience" trade-offs exist that deviate from the primary rules. These are documented here to prevent confusion.</p>
+<h3 id="encodingsafe_json-dual-mode-result-unwrapping"><code>encoding.safe_json</code> — "Dual-Mode" Result Unwrapping<a class="headerlink" href="#encodingsafe_json-dual-mode-result-unwrapping" title="Permanent link">&para;</a></h3>
+<p>The <code>safe_json(data)</code> function in <code>encoding.uc</code> violates the principle of <strong>Explicitness over Brevity</strong>. It performs three distinct operations:
+1.  <strong>I/O unwrapping:</strong> Calls <code>.read()</code> if given a stream object.
+2.  <strong>Result unwrapping:</strong> Transparently extracts <code>.data</code> if given a <code>Result</code> object (passing through errors).
+3.  <strong>JSON decoding:</strong> Safely decodes the resulting string into a <code>Result</code>.</p>
+<p><strong>Why it exists:</strong> To allow clean chaining like <code>safe_json(b64url_decode(jwt_part))</code>.
+<strong>Debt:</strong> The dual-mode behavior is opaque. Future refactors should consider splitting this into explicit <code>read_json()</code> and <code>parse_json()</code> functions.</p>
+<h3 id="api-return-type-consistency">API Return Type Consistency<a class="headerlink" href="#api-return-type-consistency" title="Permanent link">&para;</a></h3>
+<p>The project is in the process of migrating all cryptographic and encoding functions to return <code>Result</code> objects.
+- <strong>Status:</strong> <code>normalize_url</code>, <code>normalize_sub</code>, <code>sha256</code>, and <code>sha256_hex</code> have been migrated.
+- <strong>Debt:</strong> Some low-level encoding functions (e.g., <code>b64url_encode</code>) still return raw strings. These should be migrated during the next major version update.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["announce.dismiss", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
