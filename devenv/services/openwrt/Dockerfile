@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 # check=skip=InvalidDefaultArgInFrom
+ARG DOCKER_PLATFORM=linux/amd64
 ARG SDK_ARCH
 ARG SDK_VERSION
-FROM ghcr.io/openwrt/rootfs:${SDK_ARCH}-${SDK_VERSION}
+FROM --platform=${DOCKER_PLATFORM} ghcr.io/openwrt/rootfs:${SDK_ARCH}-${SDK_VERSION}
 
 ARG PKG_DEPENDS
 

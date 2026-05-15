@@ -7,6 +7,7 @@ services:
   openwrt:
     container_name: ${SDK_ARCH}-${SDK_VERSION}-openwrt
     image: ${DOCKER_NAMESPACE}/luci-sso-openwrt:${SDK_ARCH}-${SDK_VERSION}
+    platform: ${DOCKER_PLATFORM}
     stop_grace_period: 0s
     build:
       context: ./services/openwrt
@@ -15,6 +16,7 @@ services:
       cache_to:
         - type=gha,mode=max
       args:
+        DOCKER_PLATFORM: ${DOCKER_PLATFORM}
         SDK_ARCH: ${ROOTFS_ARCH}
         SDK_VERSION: ${SDK_VERSION}
         PKG_DEPENDS: "${PKG_DEPENDS}"

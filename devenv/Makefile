@@ -16,8 +16,9 @@ export PKI_CURVE      := prime256v1
 export NODE_VERSION   := 25
 export ALPINE_VERSION := 3.23
 export SDK_VERSION    := 24.10.5
-export SDK_ARCH       ?= $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host)
-export ROOTFS_ARCH    := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh $(SDK_ARCH))
+export SDK_ARCH         ?= $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host)
+export ROOTFS_ARCH      := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh $(SDK_ARCH))
+export DOCKER_PLATFORM  := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --platform $(SDK_ARCH))
 export CRYPTO_LIB     ?= mbedtls
 export PKG_DEPENDS    := $(shell grep 'PKG_DEPENDS:=' $(PROJECT_ROOT)/Makefile | sed 's/PKG_DEPENDS:=//' | tr '+' ' ' | tr ' ' '\n' | sort -u | tr '\n' ' ')
 export DOMAIN         := luci-sso.test

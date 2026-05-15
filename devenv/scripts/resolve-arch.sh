@@ -2,9 +2,22 @@
 
 # Multi-Architecture Resolver for Luci-SSO
 # 1. Mode --host: Return default SDK_ARCH for current machine.
-# 2. Mode <SDK_ARCH>: Return compatible ROOTFS_ARCH.
+# 2. Mode --platform <SDK_ARCH>: Return Docker platform string (linux/arm64, etc).
+# 3. Mode <SDK_ARCH>: Return compatible ROOTFS_ARCH.
 
 ARG1=$1
+
+if [ "$ARG1" == "--platform" ]; then
+    case "$2" in
+        "x86-64")
+            echo "linux/amd64"
+            ;;
+        *)
+            echo "linux/$2"
+            ;;
+    esac
+    exit 0
+fi
 
 if [ "$ARG1" == "--host" ]; then
     HOST_ARCH=$(uname -m)
