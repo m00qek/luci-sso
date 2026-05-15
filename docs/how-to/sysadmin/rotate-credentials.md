@@ -2,6 +2,9 @@
 
 This guide covers updating the OIDC client credentials on your router — either because the client secret has expired, been compromised, or because you are migrating to a new client registration or a different identity provider.
 
+!!! warning "Secret storage"
+    The client secret is stored in plain text in `/etc/config/luci-sso`. It is readable only by root, but anyone with shell access or physical access to the router can read it. Do not store this file in version control or share it in support tickets.
+
 ---
 
 ## How credential changes take effect
