@@ -63,45 +63,76 @@ curl -s 'https://authentik.example.com/application/o/luci-router/.well-known/ope
 
 ## 4. Configure the router
 
-!!! note
-    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+=== "Browser (LuCI)"
 
-```bash
-uci set luci-sso.default.issuer_url='https://authentik.example.com/application/o/luci-router/'
-uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
-uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
-uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
-uci set luci-sso.default.scope='openid profile email'
-uci set luci-sso.default.enabled='1'
-uci commit luci-sso
-```
+    Navigate to **Services > SSO Login**.
+
+    Fill in the **Settings** section:
+
+    | Field | Value |
+    | :--- | :--- |
+    | **Enable SSO** | On |
+    | **Issuer URL** | `https://authentik.example.com/application/o/luci-router/` |
+    | **Client ID** | Your Client ID from Step 1 |
+    | **Client Secret** | Your Client Secret from Step 1 |
+    | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+    | **Scopes** | `openid profile email` |
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.issuer_url='https://authentik.example.com/application/o/luci-router/'
+    uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
+    uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
+    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
+    uci set luci-sso.default.scope='openid profile email'
+    uci set luci-sso.default.enabled='1'
+    uci commit luci-sso
+    ```
 
 ---
 
 ## 5. Configure role mapping
 
-!!! note
-    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
-
 ### Map by email
 
-```bash
-uci add_list luci-sso.admin.email='user@example.com'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.email='user@example.com'
+    uci commit luci-sso
+    ```
 
 ### Map by group
 
 Authentik includes group names in the `groups` claim via the default **authentik default OAuth Mapping: OpenID 'profile'** scope. Ensure this scope is selected in your provider's **Advanced protocol settings > Scopes**.
 
-Authentik delivers group memberships through the `profile` scope, so no separate `groups` scope is required (it is already set in Step 4). Map the group:
+Authentik delivers group memberships through the `profile` scope, so no separate `groups` scope is required (it is already set in Step 4). The group name must exactly match the group name in Authentik (case-sensitive).
 
-```bash
-uci add_list luci-sso.admin.group='router-admins'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
 
-The group name must exactly match the group name in Authentik (case-sensitive).
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name in **Groups**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.group='router-admins'
+    uci commit luci-sso
+    ```
 
 ---
 

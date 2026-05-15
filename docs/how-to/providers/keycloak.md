@@ -52,32 +52,55 @@ curl -s https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>/.well-known/openid
 
 ## 3. Configure the router
 
-!!! note
-    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+=== "Browser (LuCI)"
 
-```bash
-uci set luci-sso.default.issuer_url='https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>'
-uci set luci-sso.default.client_id='luci-router'
-uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
-uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
-uci set luci-sso.default.scope='openid profile email'
-uci set luci-sso.default.enabled='1'
-uci commit luci-sso
-```
+    Navigate to **Services > SSO Login**.
+
+    Fill in the **Settings** section:
+
+    | Field | Value |
+    | :--- | :--- |
+    | **Enable SSO** | On |
+    | **Issuer URL** | `https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>` |
+    | **Client ID** | `luci-router` |
+    | **Client Secret** | Your Client Secret from Step 1 |
+    | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+    | **Scopes** | `openid profile email` |
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.issuer_url='https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>'
+    uci set luci-sso.default.client_id='luci-router'
+    uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
+    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
+    uci set luci-sso.default.scope='openid profile email'
+    uci set luci-sso.default.enabled='1'
+    uci commit luci-sso
+    ```
 
 ---
 
 ## 4. Configure role mapping
 
-!!! note
-    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
-
 ### Map by email
 
-```bash
-uci add_list luci-sso.admin.email='user@example.com'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.email='user@example.com'
+    uci commit luci-sso
+    ```
 
 ### Map by group
 
@@ -91,11 +114,23 @@ Keycloak can include group membership in the `groups` claim, but this requires a
 
 Then enable the `groups` scope on the router and map the group:
 
-```bash
-uci set luci-sso.default.scope='openid profile email groups'
-uci add_list luci-sso.admin.group='router-admins'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login**.
+
+    In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
+
+    Scroll to **Users**, click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name in **Groups**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.scope='openid profile email groups'
+    uci add_list luci-sso.admin.group='router-admins'
+    uci commit luci-sso
+    ```
 
 ---
 

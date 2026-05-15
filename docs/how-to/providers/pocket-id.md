@@ -25,48 +25,85 @@ If you want to restrict which Pocket ID groups are allowed to authenticate to th
 
 ## 2. Configure the router
 
-!!! note
-    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+=== "Browser (LuCI)"
 
-```bash
-uci set luci-sso.default.issuer_url='https://id.example.com'
-uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
-uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
-uci set luci-sso.default.enabled='1'
-uci commit luci-sso
-```
+    Navigate to **Services > SSO Login**.
 
-Replace `https://id.example.com` with the actual URL of your Pocket ID instance.
+    Fill in the **Settings** section:
+
+    | Field | Value |
+    | :--- | :--- |
+    | **Enable SSO** | On |
+    | **Issuer URL** | `https://id.example.com` |
+    | **Client ID** | Your Client ID from Step 1 |
+    | **Client Secret** | Your Client Secret from Step 1 |
+
+    Replace `https://id.example.com` with the actual URL of your Pocket ID instance.
+
+    The **Redirect URI** field is pre-filled from your browser's address bar — verify it matches the callback URL set in Step 1.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.issuer_url='https://id.example.com'
+    uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
+    uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
+    uci set luci-sso.default.enabled='1'
+    uci commit luci-sso
+    ```
+
+    Replace `https://id.example.com` with the actual URL of your Pocket ID instance.
 
 ---
 
 ## 3. Configure role mapping
 
-!!! note
-    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
-
 ### Map by email
 
-```bash
-uci add_list luci-sso.admin.email='user@example.com'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.email='user@example.com'
+    uci commit luci-sso
+    ```
 
 ### Map by group
 
-Pocket ID exposes groups via the `groups` scope. Enable it in the UCI config:
+Pocket ID exposes groups via the `groups` scope. Group names appear in the `groups` claim as `GroupName@PocketID` — include the suffix when configuring the role.
 
-```bash
-uci set luci-sso.default.scope='openid profile email groups'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
 
-Then map the group to a LuCI role. Pocket ID surfaces group names in the `groups` claim as `GroupName@PocketID` — include the suffix when configuring the role:
+    Navigate to **Services > SSO Login**.
 
-```bash
-uci add_list luci-sso.admin.group='router-admins@PocketID'
-uci commit luci-sso
-```
+    In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
+
+    Scroll to **Users**, click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name (e.g. `router-admins@PocketID`) in **Groups**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.scope='openid profile email groups'
+    uci commit luci-sso
+    ```
+
+    Then map the group to a LuCI role:
+
+    ```bash
+    uci add_list luci-sso.admin.group='router-admins@PocketID'
+    uci commit luci-sso
+    ```
 
 ---
 

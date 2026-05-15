@@ -28,7 +28,6 @@ The browser authenticates against Pocket ID on your LAN. No traffic leaves your 
 We need:
 
 - `luci-sso` installed on the router. If not, follow [How to Install luci-sso](../how-to/sysadmin/installation.md) first.
-- SSH access to the router.
 - Pocket ID running on a device on your LAN, with at least one user and passkey enrolled.
 - **LuCI accessible over HTTPS with a certificate the browser trusts.** If using a self-signed certificate, navigate to LuCI in the browser and click through the certificate warning to trust it before continuing — the SSO callback will fail otherwise.
 
@@ -54,23 +53,28 @@ Save the client. Copy the generated **Client ID** and **Client Secret**.
 
 ## Step 2: Configure luci-sso
 
-SSH into the router and run the following commands, replacing the placeholders with your Pocket ID instance URL and the credentials from Step 1:
+Navigate to **Services > SSO Login**.
 
-```bash
-uci set luci-sso.default.issuer_url='https://id.example.com'
-uci set luci-sso.default.client_id='YOUR_CLIENT_ID'
-uci set luci-sso.default.client_secret='YOUR_CLIENT_SECRET'
-uci set luci-sso.default.redirect_uri='https://192.168.1.1/cgi-bin/luci-sso/callback'
-uci set luci-sso.default.scope='openid profile email'
-uci set luci-sso.default.clock_tolerance='60'
-uci set luci-sso.default.enabled='1'
+Fill in the **Settings** section with the values from Step 1:
 
-uci add_list luci-sso.admin.email='your-email@example.com'
+| Field | Value |
+| :--- | :--- |
+| **Enable SSO** | On |
+| **Issuer URL** | `https://id.example.com` |
+| **Client ID** | Our Client ID from Step 1 |
+| **Client Secret** | Our Client Secret from Step 1 |
+| **Redirect URI** | `https://192.168.1.1/cgi-bin/luci-sso/callback` |
+| **Scopes** | `openid profile email` |
+| **Clock Tolerance** | `60` |
 
-uci commit luci-sso
-```
+Replace `https://id.example.com` with the actual URL of our Pocket ID instance. The **Redirect URI** is pre-filled from our browser's address bar — verify it matches the callback URL set in Step 1.
 
-The `issuer_url` is the base URL of your Pocket ID instance. The `redirect_uri` must exactly match the callback URL entered in Step 1.
+Scroll to the **Users** section, click **Edit** on the `admin` role, add our email address to **Email Addresses**, and click **Save**.
+
+Click **Save & Apply**.
+
+!!! note "Prefer the command line?"
+    The same configuration can be done over SSH. See [How to Connect luci-sso to Pocket ID](../how-to/providers/pocket-id.md) for the UCI equivalents.
 
 ---
 
@@ -86,12 +90,7 @@ Expected response:
 {"enabled": true}
 ```
 
-If we see `{"enabled": false}`, verify that `uci commit luci-sso` ran without errors:
-
-```bash
-uci show luci-sso.default.enabled
-# Should output: luci-sso.default.enabled='1'
-```
+If we see `{"enabled": false}`, verify that **Enable SSO** is toggled on in **Services > SSO Login** and that we clicked **Save & Apply**.
 
 ---
 

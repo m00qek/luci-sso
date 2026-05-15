@@ -36,7 +36,7 @@ Check that the service is enabled and responding:
 curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
 ```
 
-- If it returns `{"enabled":false}`: run `uci show luci-sso.default.enabled` — the value must be `'1'`. If it is missing, set it: `uci set luci-sso.default.enabled='1' && uci commit luci-sso`.
+- If it returns `{"enabled":false}`: SSO is disabled. Enable it in **Services > SSO Login** (toggle **Enable SSO** on and click **Save & Apply**), or via SSH: `uci set luci-sso.default.enabled='1' && uci commit luci-sso`.
 - If the request fails entirely: the CGI script is not running. Verify the package is installed: `opkg list-installed | grep luci-sso`.
 - If the log shows `CONFIG_ERROR`: a required option is missing or malformed. Run `uci show luci-sso` and check every option against the [UCI Configuration Reference](../../reference/uci-config.md).
 
@@ -97,10 +97,16 @@ service ntp start
 
 After synchronization, try logging in again. If clock drift is a recurring problem on this hardware (common on devices without a hardware real-time clock), increase `clock_tolerance` to accommodate it:
 
-```bash
-uci set luci-sso.default.clock_tolerance='120'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login**. Set **Clock Tolerance** to `120`, then click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.clock_tolerance='120'
+    uci commit luci-sso
+    ```
 
 The valid range is `0`–`3600` seconds.
 

@@ -14,6 +14,7 @@ How-to guides are recipes. They take the reader through the steps required to so
 
 ## System Administration
 *   [Installation](sysadmin/installation.md) - How to install the package and its dependencies.
+*   [Configure in LuCI](sysadmin/configure-in-luci.md) - How to configure the OIDC settings and roles from the LuCI web interface.
 *   [Installing a Private CA Certificate](sysadmin/install-ca-certificate.md) - How to make the router trust a self-signed or private CA certificate.
 *   [Upgrading](sysadmin/upgrade.md) - How to upgrade to a new version without disrupting active sessions.
 *   [Rotating Credentials](sysadmin/rotate-credentials.md) - How to update the client secret or switch identity providers.

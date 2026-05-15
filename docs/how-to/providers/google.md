@@ -22,35 +22,61 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
 
 ## 2. Configure the router
 
-!!! note
-    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+=== "Browser (LuCI)"
 
-```bash
-uci set luci-sso.default.issuer_url='https://accounts.google.com'
-uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
-uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
-uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
-uci set luci-sso.default.scope='openid profile email'
-uci set luci-sso.default.clock_tolerance='60'
-uci set luci-sso.default.enabled='1'
-uci commit luci-sso
-```
+    Navigate to **Services > SSO Login**.
 
-The `redirect_uri` must exactly match the authorized redirect URI registered in Step 1.
+    Fill in the **Settings** section:
+
+    | Field | Value |
+    | :--- | :--- |
+    | **Enable SSO** | On |
+    | **Issuer URL** | `https://accounts.google.com` |
+    | **Client ID** | Your Client ID from Step 1 |
+    | **Client Secret** | Your Client Secret from Step 1 |
+    | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+    | **Scopes** | `openid profile email` |
+    | **Clock Tolerance** | `60` |
+
+    The Redirect URI must exactly match the authorized redirect URI registered in Step 1.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.issuer_url='https://accounts.google.com'
+    uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
+    uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
+    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
+    uci set luci-sso.default.scope='openid profile email'
+    uci set luci-sso.default.clock_tolerance='60'
+    uci set luci-sso.default.enabled='1'
+    uci commit luci-sso
+    ```
+
+    The `redirect_uri` must exactly match the authorized redirect URI registered in Step 1.
 
 ---
 
 ## 3. Configure role mapping
 
-!!! note
-    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
-
 Google does not provide a `groups` claim for personal accounts. Map access by email address:
 
-```bash
-uci add_list luci-sso.admin.email='your-email@gmail.com'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter your Gmail address in **Email Addresses**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.email='your-email@gmail.com'
+    uci commit luci-sso
+    ```
 
 For Google Workspace accounts, group-based mapping requires the Admin SDK and is not covered here — use email mapping instead.
 

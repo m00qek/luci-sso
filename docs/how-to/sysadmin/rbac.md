@@ -4,9 +4,6 @@ This guide describes how to define who can access the router and what they can d
 
 ---
 
-!!! note
-    Role configuration is not yet available in the LuCI web interface. All steps in this guide require SSH.
-
 ## How roles work
 
 A **role** is a UCI `config role` section in `/etc/config/luci-sso`. When a user logs in, `luci-sso` checks their OIDC claims (email and groups) against every configured role. If any role matches, the user gets the permissions defined by that role. Multiple roles can match — permissions are merged with OR logic.
@@ -26,13 +23,27 @@ config role 'admin'
     list write '*'
 ```
 
-```bash
-uci set luci-sso.admin=role
-uci add_list luci-sso.admin.email='alice@example.com'
-uci add_list luci-sso.admin.read='*'
-uci add_list luci-sso.admin.write='*'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Add**, enter `admin` as the role name, then fill in the modal:
+
+    - **Email Addresses**: `alice@example.com`
+    - **Read Access**: `*`
+    - **Write Access**: `*`
+
+    Click **Save**, then **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.admin=role
+    uci add_list luci-sso.admin.email='alice@example.com'
+    uci add_list luci-sso.admin.read='*'
+    uci add_list luci-sso.admin.write='*'
+    uci commit luci-sso
+    ```
 
 ---
 
@@ -42,14 +53,28 @@ Omit `write` (or leave it empty) and specify only the LuCI access groups the use
 
 A common starting point for read-only users — access to status and network views but no configuration changes:
 
-```bash
-uci set luci-sso.viewer=role
-uci add_list luci-sso.viewer.email='bob@example.com'
-uci add_list luci-sso.viewer.read='luci-base'
-uci add_list luci-sso.viewer.read='luci-mod-status'
-uci add_list luci-sso.viewer.read='luci-mod-network'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Add**, enter `viewer` as the role name, then fill in the modal:
+
+    - **Email Addresses**: `bob@example.com`
+    - **Read Access**: `luci-base`, `luci-mod-status`, `luci-mod-network`
+    - Leave **Write Access** empty.
+
+    Click **Save**, then **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.viewer=role
+    uci add_list luci-sso.viewer.email='bob@example.com'
+    uci add_list luci-sso.viewer.read='luci-base'
+    uci add_list luci-sso.viewer.read='luci-mod-status'
+    uci add_list luci-sso.viewer.read='luci-mod-network'
+    uci commit luci-sso
+    ```
 
 A user configured this way sees status pages and network overviews but cannot save changes. Buttons and forms requiring write access are hidden or disabled by LuCI.
 
@@ -63,30 +88,57 @@ Compare with an admin session where the full menu is visible:
 
 ## Group-based access
 
-If your IdP returns a `groups` claim, you can match roles by group instead of (or in addition to) individual email addresses. Ensure the `groups` scope is included in your IdP client configuration and that the `scope` option in UCI includes it:
+If your IdP returns a `groups` claim, you can match roles by group instead of (or in addition to) individual email addresses. Ensure the `groups` scope is included in your IdP client configuration and that the `scope` option in the router config includes it:
 
-```bash
-uci set luci-sso.default.scope='openid profile email groups'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login**. In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.scope='openid profile email groups'
+    uci commit luci-sso
+    ```
 
 Then configure roles by group:
 
-```bash
-# Full admin for the ops team
-uci set luci-sso.ops_admin=role
-uci add_list luci-sso.ops_admin.group='network-ops'
-uci add_list luci-sso.ops_admin.read='*'
-uci add_list luci-sso.ops_admin.write='*'
-uci commit luci-sso
+=== "Browser (LuCI)"
 
-# Read-only for the security team
-uci set luci-sso.sec_viewer=role
-uci add_list luci-sso.sec_viewer.group='security-team'
-uci add_list luci-sso.sec_viewer.read='luci-base'
-uci add_list luci-sso.sec_viewer.read='luci-mod-status'
-uci commit luci-sso
-```
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Add**, enter `ops_admin` as the role name, then fill in the modal:
+
+    - **Groups**: `network-ops`
+    - **Read Access**: `*`
+    - **Write Access**: `*`
+
+    Click **Save**.
+
+    Click **Add** again, enter `sec_viewer`, then fill in the modal:
+
+    - **Groups**: `security-team`
+    - **Read Access**: `luci-base`, `luci-mod-status`
+
+    Click **Save**, then **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    # Full admin for the ops team
+    uci set luci-sso.ops_admin=role
+    uci add_list luci-sso.ops_admin.group='network-ops'
+    uci add_list luci-sso.ops_admin.read='*'
+    uci add_list luci-sso.ops_admin.write='*'
+    uci commit luci-sso
+
+    # Read-only for the security team
+    uci set luci-sso.sec_viewer=role
+    uci add_list luci-sso.sec_viewer.group='security-team'
+    uci add_list luci-sso.sec_viewer.read='luci-base'
+    uci add_list luci-sso.sec_viewer.read='luci-mod-status'
+    uci commit luci-sso
+    ```
 
 A user who is a member of both groups gets the combined permissions of both roles.
 

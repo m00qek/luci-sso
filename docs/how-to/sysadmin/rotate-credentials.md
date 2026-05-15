@@ -4,9 +4,6 @@ This guide covers updating the OIDC client credentials on your router — either
 
 ---
 
-!!! note
-    Router configuration is not yet available in the LuCI web interface. All steps in this guide require SSH.
-
 ## How credential changes take effect
 
 `luci-sso` reads UCI configuration on every request. There is no daemon to restart — changes committed with `uci commit` take effect on the next login attempt. Active LuCI sessions are not affected: UBUS sessions do not carry the client secret, so users who are already logged in remain logged in until their session expires naturally.
@@ -19,12 +16,18 @@ The most common case: the secret is expired or has been compromised. The client 
 
 **Step 1.** In your IdP, regenerate or replace the client secret for the existing `luci-sso` client registration. Copy the new secret.
 
-**Step 2.** On the router:
+**Step 2.** Update the router:
 
-```bash
-uci set luci-sso.default.client_secret='NEW_SECRET_HERE'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login**. Update **Client Secret** with the new secret, then click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.client_secret='NEW_SECRET_HERE'
+    uci commit luci-sso
+    ```
 
 **Step 3.** Verify the change is live:
 
@@ -55,13 +58,19 @@ If re-registering the client entirely (new application registration in the IdP):
 
 **Step 1.** Register a new OAuth2/OIDC client in your IdP. Set the redirect URI to `https://<YOUR_ROUTER>/cgi-bin/luci-sso/callback`.
 
-**Step 2.** On the router, update both values:
+**Step 2.** Update the router with both values:
 
-```bash
-uci set luci-sso.default.client_id='NEW_CLIENT_ID'
-uci set luci-sso.default.client_secret='NEW_SECRET_HERE'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login**. Update **Client ID** and **Client Secret**, then click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.client_id='NEW_CLIENT_ID'
+    uci set luci-sso.default.client_secret='NEW_SECRET_HERE'
+    uci commit luci-sso
+    ```
 
 **Step 3.** Verify with a fresh login. Active sessions from the old client registration remain valid until they expire.
 
@@ -73,14 +82,20 @@ Changing `issuer_url` requires clearing the discovery cache in addition to updat
 
 **Step 1.** Register a new client with the new IdP.
 
-**Step 2.** Update the UCI configuration:
+**Step 2.** Update the router configuration:
 
-```bash
-uci set luci-sso.default.issuer_url='https://new-idp.example.com'
-uci set luci-sso.default.client_id='NEW_CLIENT_ID'
-uci set luci-sso.default.client_secret='NEW_SECRET_HERE'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login**. Update **Issuer URL**, **Client ID**, and **Client Secret**, then click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.issuer_url='https://new-idp.example.com'
+    uci set luci-sso.default.client_id='NEW_CLIENT_ID'
+    uci set luci-sso.default.client_secret='NEW_SECRET_HERE'
+    uci commit luci-sso
+    ```
 
 **Step 3.** Clear the discovery and JWKS cache so the router fetches fresh data from the new IdP:
 
@@ -90,11 +105,17 @@ rm -f /var/run/luci-sso/*.json
 
 **Step 4.** Update any role mappings if email addresses or group names differ between the old and new IdP:
 
-```bash
-uci show luci-sso | grep email
-# Review and update as needed
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section. Edit each role and update **Email Addresses** and **Groups** as needed, then click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci show luci-sso | grep email
+    # Review and update as needed
+    uci commit luci-sso
+    ```
 
 **Step 5.** Verify with a fresh login.
 

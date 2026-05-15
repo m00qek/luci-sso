@@ -59,21 +59,40 @@ After saving, copy the generated **Client ID** and **Client Secret**.
 
 ## Step 3: Configure the router
 
-!!! note
-    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+=== "Browser (LuCI)"
 
-A minimal working configuration:
+    Navigate to **Services > SSO Login**.
 
-```bash
-uci set luci-sso.default.issuer_url='https://<your-issuer-url>'
-uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
-uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
-uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
-uci set luci-sso.default.scope='openid profile email'
-uci set luci-sso.default.clock_tolerance='60'
-uci set luci-sso.default.enabled='1'
-uci commit luci-sso
-```
+    Fill in the **Settings** section:
+
+    | Field | Value |
+    | :--- | :--- |
+    | **Enable SSO** | On |
+    | **Issuer URL** | `https://<your-issuer-url>` |
+    | **Client ID** | Your Client ID from Step 2 |
+    | **Client Secret** | Your Client Secret from Step 2 |
+    | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+    | **Scopes** | `openid profile email` |
+    | **Clock Tolerance** | `60` |
+
+    For split-horizon setups, also fill in **Internal Issuer URL**. See [How to Configure Split-Horizon Networking](../../how-to/sysadmin/split-horizon.md).
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    A minimal working configuration:
+
+    ```bash
+    uci set luci-sso.default.issuer_url='https://<your-issuer-url>'
+    uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
+    uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
+    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
+    uci set luci-sso.default.scope='openid profile email'
+    uci set luci-sso.default.clock_tolerance='60'
+    uci set luci-sso.default.enabled='1'
+    uci commit luci-sso
+    ```
 
 For all available options (including `internal_issuer_url` for split-horizon setups), see the [UCI Configuration Reference](../../reference/uci-config.md).
 
@@ -83,24 +102,41 @@ For all available options (including `internal_issuer_url` for split-horizon set
 
 After a successful login, `luci-sso` maps the user's OIDC claims to a LuCI role. Without a matching role, the user is denied access even if authentication succeeds.
 
-!!! note
-    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
-
 ### Map by email
 
-```bash
-uci add_list luci-sso.admin.email='user@example.com'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.email='user@example.com'
+    uci commit luci-sso
+    ```
 
 ### Map by group
 
 If your IdP returns a `groups` claim (requires the `groups` scope and IdP-side group claim mapping):
 
-```bash
-uci add_list luci-sso.admin.group='router-admins'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name in **Groups**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.group='router-admins'
+    uci commit luci-sso
+    ```
 
 The role name (`admin` above) must match a `config role` section in `/etc/config/luci-sso`. The default installation creates an `admin` role with full read and write access. For fine-grained access control, see the [UCI Configuration Reference](../../reference/uci-config.md#role-mapping).
 

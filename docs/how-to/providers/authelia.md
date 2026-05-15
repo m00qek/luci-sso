@@ -30,48 +30,82 @@ Reload Authelia after saving the configuration.
 
 ## 2. Configure the router
 
-!!! note
-    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
+The **Client Secret** is the **plaintext** secret — Authelia stores the hash, but the router presents the plaintext during token exchange.
 
-```bash
-uci set luci-sso.default.issuer_url='https://auth.example.com'
-uci set luci-sso.default.client_id='luci-router'
-uci set luci-sso.default.client_secret='<YOUR_PLAINTEXT_SECRET>'
-uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
-uci set luci-sso.default.scope='openid profile email groups'
-uci set luci-sso.default.clock_tolerance='60'
-uci set luci-sso.default.enabled='1'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
 
-The `client_secret` here is the **plaintext** secret — Authelia stores the hash, but the router presents the plaintext during token exchange.
+    Navigate to **Services > SSO Login**.
 
-The `redirect_uri` must exactly match the value in the Authelia client config.
+    Fill in the **Settings** section:
+
+    | Field | Value |
+    | :--- | :--- |
+    | **Enable SSO** | On |
+    | **Issuer URL** | `https://auth.example.com` |
+    | **Client ID** | `luci-router` |
+    | **Client Secret** | Your plaintext secret |
+    | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+    | **Scopes** | `openid profile email groups` |
+    | **Clock Tolerance** | `60` |
+
+    The Redirect URI must exactly match the value in the Authelia client config.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.issuer_url='https://auth.example.com'
+    uci set luci-sso.default.client_id='luci-router'
+    uci set luci-sso.default.client_secret='<YOUR_PLAINTEXT_SECRET>'
+    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
+    uci set luci-sso.default.scope='openid profile email groups'
+    uci set luci-sso.default.clock_tolerance='60'
+    uci set luci-sso.default.enabled='1'
+    uci commit luci-sso
+    ```
+
+    The `redirect_uri` must exactly match the value in the Authelia client config.
 
 ---
 
 ## 3. Configure role mapping
 
-!!! note
-    Role configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
-
 ### Map by email
 
-```bash
-uci add_list luci-sso.admin.email='user@example.com'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.email='user@example.com'
+    uci commit luci-sso
+    ```
 
 ### Map by group
 
-Authelia returns LDAP/AD group memberships in the `groups` claim. Map a group to a LuCI role:
+Authelia returns LDAP/AD group memberships in the `groups` claim. The group name must exactly match the name as Authelia returns it (case-sensitive).
 
-```bash
-uci add_list luci-sso.admin.group='router-admins'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
 
-The group name must exactly match the group name as Authelia returns it (case-sensitive).
+    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+
+    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name in **Groups**, then click **Save**.
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci add_list luci-sso.admin.group='router-admins'
+    uci commit luci-sso
+    ```
 
 ---
 

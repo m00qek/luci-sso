@@ -26,7 +26,6 @@ The password login remains available as a fallback at `/cgi-bin/luci/admin/` —
 We need:
 
 - `luci-sso` installed on the router. If not, follow [How to Install luci-sso](../how-to/sysadmin/installation.md) first.
-- SSH access to the router.
 - A Google account and access to [Google Cloud Console](https://console.cloud.google.com/).
 - **A domain name pointing to the router's public IP** (e.g. `router.example.com`).
 - **LuCI accessible over HTTPS with a publicly trusted certificate** (e.g. Let's Encrypt) at that domain.
@@ -62,23 +61,28 @@ Google will display the Client ID and Client Secret. Copy both.
 
 ## Step 2: Configure luci-sso
 
-SSH into the router and run the following commands, replacing the placeholders with the values from Step 1 and your own domain and email:
+Navigate to **Services > SSO Login**.
 
-```bash
-uci set luci-sso.default.issuer_url='https://accounts.google.com'
-uci set luci-sso.default.client_id='YOUR_CLIENT_ID'
-uci set luci-sso.default.client_secret='YOUR_CLIENT_SECRET'
-uci set luci-sso.default.redirect_uri='https://router.example.com/cgi-bin/luci-sso/callback'
-uci set luci-sso.default.scope='openid profile email'
-uci set luci-sso.default.clock_tolerance='60'
-uci set luci-sso.default.enabled='1'
+Fill in the **Settings** section with the values from Step 1:
 
-uci add_list luci-sso.admin.email='your-email@gmail.com'
+| Field | Value |
+| :--- | :--- |
+| **Enable SSO** | On |
+| **Issuer URL** | `https://accounts.google.com` |
+| **Client ID** | Our Client ID from Step 1 |
+| **Client Secret** | Our Client Secret from Step 1 |
+| **Redirect URI** | `https://router.example.com/cgi-bin/luci-sso/callback` |
+| **Scopes** | `openid profile email` |
+| **Clock Tolerance** | `60` |
 
-uci commit luci-sso
-```
+The Redirect URI must exactly match what we entered in Google Cloud Console.
 
-The `redirect_uri` must exactly match what we entered in Google Cloud Console.
+Scroll to the **Users** section, click **Edit** on the `admin` role, add our Gmail address to **Email Addresses**, and click **Save**.
+
+Click **Save & Apply**.
+
+!!! note "Prefer the command line?"
+    The same configuration can be done over SSH. See [How to Connect luci-sso to Google](../how-to/providers/google.md) for the UCI equivalents.
 
 ---
 
@@ -96,12 +100,7 @@ Expected response:
 {"enabled": true}
 ```
 
-If we see `{"enabled": false}`, check that `uci commit luci-sso` ran without errors and that `enabled` is set:
-
-```bash
-uci show luci-sso.default.enabled
-# Should output: luci-sso.default.enabled='1'
-```
+If we see `{"enabled": false}`, verify that **Enable SSO** is toggled on in **Services > SSO Login** and that we clicked **Save & Apply**.
 
 ---
 

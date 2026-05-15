@@ -85,10 +85,16 @@ curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
 
 Attempt a login to confirm the IdP credentials are still valid. If the client secret has been rotated at the IdP since the backup was made, update it before testing:
 
-```bash
-uci set luci-sso.default.client_secret='NEW_SECRET'
-uci commit luci-sso
-```
+=== "Browser (LuCI)"
+
+    Navigate to **Services > SSO Login**. Update **Client Secret**, then click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    uci set luci-sso.default.client_secret='NEW_SECRET'
+    uci commit luci-sso
+    ```
 
 ---
 

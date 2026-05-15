@@ -74,23 +74,38 @@ If the router cannot verify the IdP's certificate, the token exchange will fail 
 
 ## Configuration
 
-!!! note
-    Router configuration is not yet available in the LuCI web interface. Use SSH for the steps below.
-
 Set `internal_issuer_url` alongside the standard configuration:
 
-```bash
-# Standard configuration
-uci set luci-sso.default.issuer_url='https://auth.homelab.local'
-uci set luci-sso.default.client_id='luci-router'
-uci set luci-sso.default.client_secret='YOUR_SECRET_HERE'
-uci set luci-sso.default.enabled='1'
+=== "Browser (LuCI)"
 
-# Split-horizon: the router reaches the IdP via this internal address
-uci set luci-sso.default.internal_issuer_url='https://192.168.2.10:8443'
+    Navigate to **Services > SSO Login**.
 
-uci commit luci-sso
-```
+    Fill in the **Settings** section with your standard provider credentials, then set **Internal Issuer URL** to the address the router uses to reach the IdP:
+
+    | Field | Value |
+    | :--- | :--- |
+    | **Enable SSO** | On |
+    | **Issuer URL** | `https://auth.homelab.local` |
+    | **Client ID** | `luci-router` |
+    | **Client Secret** | Your secret |
+    | **Internal Issuer URL** | `https://192.168.2.10:8443` |
+
+    Click **Save & Apply**.
+
+=== "Terminal (SSH)"
+
+    ```bash
+    # Standard configuration
+    uci set luci-sso.default.issuer_url='https://auth.homelab.local'
+    uci set luci-sso.default.client_id='luci-router'
+    uci set luci-sso.default.client_secret='YOUR_SECRET_HERE'
+    uci set luci-sso.default.enabled='1'
+
+    # Split-horizon: the router reaches the IdP via this internal address
+    uci set luci-sso.default.internal_issuer_url='https://192.168.2.10:8443'
+
+    uci commit luci-sso
+    ```
 
 ---
 
