@@ -1,4 +1,5 @@
 #!/bin/sh
+set -e
 
 # Source shared library
 . /usr/local/bin/base-startup.sh

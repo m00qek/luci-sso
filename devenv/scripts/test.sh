@@ -3,7 +3,11 @@ set -e
 
 # test.sh: Smart Test Orchestrator for LuCI SSO
 # Responsibilities: Validation, Path Translation, Execution, Watching.
-# COMPOSE_FLAGS and INFRA_COMPOSE_FLAGS MUST be passed from the environment (Makefile).
+# Environment variables that MUST be passed from the Makefile:
+#   COMPOSE_FLAGS, INFRA_COMPOSE_FLAGS — docker compose project/file flags
+#   CRYPTO_LIB                         — crypto backend to link (mbedtls|wolfssl|openssl)
+#   SDK_ARCH, SDK_VERSION              — used when creating the bin/lib staging dir
+#   VERBOSE                            — set to "1" to enable verbose build/test output
 
 # --- CONFIGURATION ---
 BASE_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -77,13 +81,17 @@ stop_openwrt() {
 
 # --- EXECUTION ---
 
+link_crypto_backend() {
+  docker compose $COMPOSE_FLAGS exec openwrt \
+    sh -c "ln -sfn '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
+}
+
 run_unit() {
   local modules=$1
   local filter=$2
 
   log_info "🧪 Running unit tests in openwrt container..."
-  docker compose $COMPOSE_FLAGS exec openwrt \
-    sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
+  link_crypto_backend
   docker compose $COMPOSE_FLAGS exec -e MODULES="$(translate_unit_paths "$modules")" -e FILTER="$filter" -e VERBOSE="$VERBOSE" openwrt ucode \
     -L /usr/share/ucode \
     -L /usr/lib/ucode \
@@ -100,8 +108,7 @@ run_e2e() {
   local grep_flag=""
   [ -n "$filter" ] && grep_flag="-g $filter"
 
-  docker compose $COMPOSE_FLAGS exec openwrt \
-    sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
+  link_crypto_backend
   docker compose $INFRA_COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test $(translate_e2e_paths "$modules") $grep_flag
 }
 

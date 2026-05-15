@@ -55,7 +55,7 @@ uci commit luci-sso
 
 echo "✅ UCI configuration applied."
 
-# Signal services to reload (unless we are booting)
+# Signal services to reload. Skip during boot: daemons aren't up yet to receive the signal.
 if [ -z "$BOOTING" ]; then
   /sbin/reload_config 2>/dev/null || true
 fi

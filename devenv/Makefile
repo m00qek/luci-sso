@@ -16,7 +16,7 @@ export PKI_CURVE      := prime256v1
 export NODE_VERSION   := 25
 export ALPINE_VERSION := 3.23
 export SDK_VERSION    := 24.10.5
-export SDK_ARCH       := $(or $(SDK_ARCH),$(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host))
+export SDK_ARCH       ?= $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host)
 export ROOTFS_ARCH    := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh $(SDK_ARCH))
 export CRYPTO_LIB     ?= mbedtls
 export PKG_DEPENDS    := $(shell grep 'PKG_DEPENDS:=' $(PROJECT_ROOT)/Makefile | sed 's/PKG_DEPENDS:=//' | tr '+' ' ' | tr ' ' '\n' | sort -u | tr '\n' ' ')
@@ -35,7 +35,7 @@ INFRA_COMPOSE_FLAGS  = -p luci-sso-infra -f $(DEVENV_DIR)/docker-compose.infra.y
 
 SENTINEL := $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/.built
 
-.PHONY: build-images up down ps shell infra-up infra-down test fuzz e2e watch-tests lint pull
+.PHONY: build-images up down ps shell infra-up infra-down test fuzz e2e watch-tests lint pull _check-infra
 
 infra-up:
 	@echo -e " $(GREEN)🚀$(RESET) Starting infrastructure..."
@@ -77,31 +77,28 @@ shell:
 	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER)..."
 	docker compose $(COMPOSE_FLAGS) exec $(CONTAINER) /bin/sh
 
-test: DOCKER_SUITE = ci
-test:
+_check-infra:
 	@docker compose $(INFRA_COMPOSE_FLAGS) ps -q idp 2>/dev/null | grep -q . \
 	  || { echo -e " $(RED)⛔$(RESET) Infrastructure not running. Run: make infra-up DOCKER_SUITE=ci"; exit 1; }
+
+test: DOCKER_SUITE = ci
+test: _check-infra
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" INFRA_COMPOSE_FLAGS="$(INFRA_COMPOSE_FLAGS)" \
 	  $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
 e2e: DOCKER_SUITE = ci
-e2e:
-	@docker compose $(INFRA_COMPOSE_FLAGS) ps -q idp 2>/dev/null | grep -q . \
-	  || { echo -e " $(RED)⛔$(RESET) Infrastructure not running. Run: make infra-up DOCKER_SUITE=ci"; exit 1; }
+e2e: _check-infra
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" INFRA_COMPOSE_FLAGS="$(INFRA_COMPOSE_FLAGS)" \
 	  $(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
 
 watch-tests: DOCKER_SUITE = ci
-watch-tests:
-	@docker compose $(INFRA_COMPOSE_FLAGS) ps -q idp 2>/dev/null | grep -q . \
-	  || { echo -e " $(RED)⛔$(RESET) Infrastructure not running. Run: make infra-up DOCKER_SUITE=ci"; exit 1; }
+watch-tests: _check-infra
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" INFRA_COMPOSE_FLAGS="$(INFRA_COMPOSE_FLAGS)" \
 	  $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
 TIME ?= 60
 DETECT_LEAKS ?= 0
 
-fuzz: DOCKER_SUITE = ci
 fuzz:
 	@echo -e " $(BLUE)🧪$(RESET) Running native fuzz tests for $(CRYPTO_LIB) ($(TIME)s)..."
 	docker compose $(COMPOSE_FLAGS) pull fuzzer || true

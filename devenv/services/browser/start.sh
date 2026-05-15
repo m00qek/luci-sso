@@ -7,6 +7,7 @@ set -e
 # 1. Parse Arguments
 parse_args "$@"
 
+# 2. Setup browser trust store
 echo "🔧 Setting up browser trust store..."
 # Initialize NSS database for Chromium
 mkdir -p $HOME/.pki/nssdb

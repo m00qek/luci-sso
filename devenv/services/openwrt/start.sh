@@ -53,18 +53,17 @@ watch_setup &
 # 7. SSO Permissions
 chmod +x /www/cgi-bin/luci-sso 2>/dev/null || true
 
-# 7a. Link native crypto backend to the path ucode expects
+# 8. Link native crypto backend to the path ucode expects
 : ${CRYPTO_LIB:?CRYPTO_LIB must be set}
-mkdir -p /usr/lib/ucode/luci_sso
-ln -sf /luci_sso/backends/${CRYPTO_LIB}/luci_sso/native.so /usr/lib/ucode/luci_sso/native.so
+ln -sfn /luci_sso/backends/${CRYPTO_LIB}/luci_sso /usr/lib/ucode/luci_sso
 
-# 8. Core Daemons
+# 9. Core Daemons
 /sbin/ubusd &
 sleep 1
 /sbin/logd -S 64 &
 /sbin/rpcd &
 
-# 9. One-time Setup
+# 10. One-time Setup
 echo "🔄 Running setup..."
 mkdir -p /etc/uci-defaults
 cp -r /usr/share/luci-sso/uci-defaults/* /etc/uci-defaults/ 2>/dev/null || true
@@ -72,10 +71,10 @@ for f in /etc/uci-defaults/*; do
   [ -e "$f" ] && (. "$f") && rm -f "$f" 2>/dev/null || true
 done
 
-# 10. Root Password
+# 11. Root Password
 printf "admin\nadmin\n" | passwd root >/dev/null 2>&1
 
-# 11. Execution Mode
+# 12. Execution Mode
 if [ "$SHOULD_FOREGROUND" = "true" ]; then
   echo "🚀 Starting LuCI..."
   exec /usr/sbin/uhttpd -f \
