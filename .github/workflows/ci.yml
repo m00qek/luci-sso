@@ -205,6 +205,7 @@ jobs:
       matrix:
         crypto: [mbedtls, wolfssl, openssl]
     env:
+      DOCKER_SUITE: ci
       SDK_ARCH: ${{ needs.metadata.outputs.sdk_arch }}
       CRYPTO_LIB: ${{ matrix.crypto }}
       SDK_VERSION: "25.12.3"
@@ -229,6 +230,7 @@ jobs:
         crypto: [mbedtls, wolfssl, openssl]
         openwrt_version: [24.10.5, 25.12.3]
     env:
+      DOCKER_SUITE: ci
       SDK_ARCH: ${{ needs.metadata.outputs.sdk_arch }}
       CRYPTO_LIB: ${{ matrix.crypto }}
       SDK_VERSION: ${{ matrix.openwrt_version }}

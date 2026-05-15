@@ -60,42 +60,18 @@ COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_D
 SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
 
 # --- 3. PUBLIC INTERFACE ---
-.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint
-.PHONY: local-up local-down local-ps local-shell local-run
+.PHONY: build-images up down ps shell run unit-test fuzzer-test e2e-test test watch-tests lint pull
 
 # Sentinel file tracks the last successful build for a specific arch/version/crypto combo
 SENTINEL := $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/.built-$(CRYPTO_LIB)
 
-# Wrappers sets the context and calls the implementation
-local-up: DOCKER_SUITE = local
-local-up: .up
-
-local-down: DOCKER_SUITE = local
-local-down: .down
-
-local-run: DOCKER_SUITE = local
-local-run: .run
-
-local-shell: DOCKER_SUITE = local
-local-shell: .shell
-
-build-images: DOCKER_SUITE = ci
 build-images: .build-images
-
-up: DOCKER_SUITE = ci
 up: .up
-
-down: DOCKER_SUITE = ci
 down: .down
-
-ps: DOCKER_SUITE = ci
 ps: .ps
-
-shell: DOCKER_SUITE = ci
 shell: .shell
-
-run: DOCKER_SUITE = ci
 run: .run
+pull: .pull
 
 unit-test: DOCKER_SUITE = ci
 unit-test: .unit-test
@@ -106,7 +82,6 @@ fuzzer-test: .fuzzer-test
 e2e-test: DOCKER_SUITE = ci
 e2e-test: .e2e-test
 
-# Watcher: Run tests automatically on change
 watch-tests: DOCKER_SUITE = ci
 watch-tests: .watch-tests
 
@@ -118,9 +93,6 @@ lint:
 	@bash $(DEVENV_DIR)/scripts/check-request-limits.sh
 	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
 	@echo -e " $(GREEN)✅$(RESET) All lint checks passed."
-
-pull: DOCKER_SUITE = ci
-pull: .pull
 
 VAR ?= ""
 print-env: 

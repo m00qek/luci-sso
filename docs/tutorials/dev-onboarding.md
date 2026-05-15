@@ -39,19 +39,27 @@ make -C devenv compile
 
 You should see the build system produce a `.so` file in `bin/lib/`. This C bridge is what `ucode` loads for cryptographic operations.
 
-## Step 2: Launch the development stack
+## Step 2: Try the login flow
 
-Now we'll start the "Mock Environment" — a fake Identity Provider (IdP) and a simulated OpenWrt instance running in containers:
+Start the local stack, which exposes the simulated router on `localhost`:
 
 ```bash
 make -C devenv up
 ```
 
-After a moment, you should see all containers report as healthy. The mock IdP is pre-configured with test credentials so we don't need a real Google or Authelia account.
+After a moment, all containers report as healthy. Open `https://localhost:8443` in your browser and choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
+
+Notice that the login redirects to the mock IdP, then back to LuCI — the same flow a real user experiences with Google or Authelia. The mock IdP accepts any credentials, so any username/password will work.
 
 ## Step 3: Run the test suite
 
-Let's verify everything is working correctly:
+The automated test suite runs in a separate headless stack that includes a Playwright browser container. Start it with `DOCKER_SUITE=ci`:
+
+```bash
+make -C devenv up DOCKER_SUITE=ci
+```
+
+Then run the tests:
 
 ```bash
 make -C devenv unit-test
@@ -65,17 +73,7 @@ All tests passed. (Tier 0: 12, Tier 1: 8, Tier 2: 24, Tier 3: 9, Tier 4: 3)
 
 If any tier fails, the output will identify the failing test and the module it belongs to.
 
-## Step 4: Try the login flow
-
-The CI stack from Step 2 runs entirely inside Docker with no ports exposed to your machine — it is designed for automated tests. To interact with LuCI from a browser, start the local suite, which binds ports on `localhost`:
-
-```bash
-make -C devenv local-up
-```
-
-Then open `https://localhost:8443` in your browser and choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
-
-Notice that the login redirects to the mock IdP, then back to LuCI — the same flow a real user experiences with Google or Authelia. The mock IdP accepts any credentials, so any username/password will work.
+Both stacks run as separate Docker Compose projects, so the local stack from Step 2 and the CI stack can be up simultaneously without interfering.
 
 ---
 
@@ -83,7 +81,8 @@ Notice that the login redirects to the mock IdP, then back to LuCI — the same 
 
 * A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
 * A mock Identity Provider pre-configured with test credentials that accepts any username and password.
-* A CI stack (`make -C devenv up`) for running the test suite, and a local stack (`make -C devenv local-up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
+* A local stack (`make -C devenv up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
+* A CI stack (`make -C devenv up DOCKER_SUITE=ci`) that runs the full automated test suite headlessly via Playwright.
 * A full test suite covering Tiers 0–4, runnable without a physical router or a real IdP.
 
 ---

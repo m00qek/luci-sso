@@ -31,10 +31,10 @@ Native C compilation is guarded by a sentinel file in `bin/lib/.built`. If you m
 
 ## Test
 
-Unit tests run inside the `openwrt` container, so the CI stack must be up first:
+Test targets always run against the CI stack, which includes a headless Playwright browser container. Start it first:
 
 ```bash
-make -C devenv up
+make -C devenv up DOCKER_SUITE=ci
 ```
 
 ```bash
@@ -58,14 +58,14 @@ See [Running Tests](testing.md) for how to run individual tiers, and [Testing Ar
 ## E2E Tests
 
 ```bash
-# Start the full OIDC test stack (mock IdP + router simulation)
-make -C devenv up
+# Start the CI stack (if not already up)
+make -C devenv up DOCKER_SUITE=ci
 
 # Run browser tests
 make -C devenv e2e-test
 
 # Tear down
-make -C devenv down
+make -C devenv down DOCKER_SUITE=ci
 ```
 
 ---

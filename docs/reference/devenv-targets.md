@@ -4,14 +4,16 @@ All development commands run through `devenv/Makefile`. Invoke them as `make -C 
 
 ---
 
-## Stacks
+## Modes
 
-`luci-sso` has two Docker Compose stacks. Most targets operate on one of them:
+The devenv runs in one of two modes, controlled by the `DOCKER_SUITE` variable:
 
-| Stack | Purpose | Ports |
-| :--- | :--- | :--- |
-| **CI** (`up`) | Automated tests — no ports exposed to the host | None |
-| **Local** (`local-up`) | Browser interaction — router accessible at `https://localhost:8443` | `8443` |
+| Mode | `DOCKER_SUITE` | Ports exposed | Includes browser container |
+| :--- | :--- | :--- | :--- |
+| **Local** (default) | `local` | `8443` (router), `5556` (IdP) | No — you are the browser |
+| **CI** | `ci` | None | Yes — Playwright runs headlessly |
+
+Local mode is the default. Test targets (`unit-test`, `e2e-test`, `watch-tests`, `fuzzer-test`) always run in CI mode regardless of what is currently up.
 
 ---
 
@@ -19,51 +21,54 @@ All development commands run through `devenv/Makefile`. Invoke them as `make -C 
 
 ### Environment management
 
-| Target | Stack | Description |
-| :--- | :--- | :--- |
-| `up` | CI | Start the CI stack (mock IdP + simulated router). Required before running tests. |
-| `down` | CI | Stop and remove CI stack containers. |
-| `ps` | CI | List running CI containers and their status. |
-| `shell` | CI | Open an interactive shell in the `openwrt` container. |
-| `run` | CI | Run a one-shot interactive shell (container is removed on exit). |
-| `local-up` | Local | Start the local stack with ports exposed at `localhost:8443`. |
-| `local-down` | Local | Stop and remove local stack containers. |
-| `local-ps` | Local | List running local containers. |
-| `local-shell` | Local | Open an interactive shell in the local `openwrt` container. |
-| `local-run` | Local | Run a one-shot interactive shell in the local stack. |
-| `build-images` | CI | Build Docker images from local Dockerfiles without pulling. |
-| `pull` | CI | Pull the latest pre-built images from the registry. |
+| Target | Description |
+| :--- | :--- |
+| `up` | Start the stack (mock IdP + simulated router). Defaults to local mode — pass `DOCKER_SUITE=ci` for the headless test stack. |
+| `down` | Stop and remove stack containers. Pass the same `DOCKER_SUITE` used when starting. |
+| `ps` | List running containers and their status. |
+| `shell` | Open an interactive shell in the `openwrt` container. |
+| `run` | Run a one-shot interactive shell (container is removed on exit). |
+| `build-images` | Build Docker images from local Dockerfiles without pulling. |
+| `pull` | Pull the latest pre-built images from the registry. |
 
 ### Testing
 
-| Target | Stack | Description |
-| :--- | :--- | :--- |
-| `unit-test` | CI | Run unit and integration tests (Tiers 0–4). Requires `up`. |
-| `e2e-test` | CI | Run browser-based end-to-end tests via Playwright. Requires `up`. |
-| `test` | CI | Alias for `unit-test` followed by `e2e-test`. |
-| `watch-tests` | CI | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. Requires `inotify-tools` on the host. |
-| `fuzzer-test` | CI | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. |
-| `lint` | — | Run the three documentation lint checks (error codes, request limits, cookies). No stack required. |
+Test targets always use CI mode — start the CI stack with `make -C devenv up DOCKER_SUITE=ci` first.
+
+| Target | Description |
+| :--- | :--- |
+| `unit-test` | Run unit and integration tests (Tiers 0–4). |
+| `e2e-test` | Run browser-based end-to-end tests via Playwright. |
+| `test` | Alias for `unit-test` followed by `e2e-test`. |
+| `watch-tests` | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. |
+| `fuzzer-test` | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. |
+| `lint` | Run the three documentation lint checks (error codes, request limits, cookies). No stack required. |
 
 ### Build
 
-| Target | Stack | Description |
-| :--- | :--- | :--- |
-| `compile` | CI | Compile native C components for the target architecture. Skipped if the sentinel file is current. |
-| `package` | CI | Build the `.ipk` package for the target architecture. |
+| Target | Description |
+| :--- | :--- |
+| `compile` | Compile native C components for the target architecture. Skipped if the sentinel file is current. |
+| `package` | Build the `.ipk` package for the target architecture. |
 
 ### Utilities
 
-| Target | Stack | Description |
-| :--- | :--- | :--- |
-| `sync-headers` | CI | Copy C headers from the SDK container into `devenv/.include/` for LSP support. |
-| `print-env` | — | Print the value of a Makefile variable. Usage: `make -C devenv print-env VAR=SDK_ARCH` |
+| Target | Description |
+| :--- | :--- |
+| `sync-headers` | Copy C headers from the SDK container into `devenv/.include/` for LSP support. |
+| `print-env` | Print the value of a Makefile variable. Usage: `make -C devenv print-env VAR=SDK_ARCH` |
 
 ---
 
 ## Variables
 
 Variables are passed on the command line as `KEY=value` after the target name.
+
+### Mode
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `DOCKER_SUITE` | `local` | Stack mode. `local` exposes ports for browser access; `ci` runs headlessly with a Playwright container. |
 
 ### Architecture and build
 
@@ -106,9 +111,16 @@ Common `SDK_ARCH` values:
 ## Examples
 
 ```bash
-# Start the CI stack and run all tests
+# Start the local stack and open the router in a browser at https://localhost:8443
 make -C devenv up
+
+# Open a shell in the running openwrt container
+make -C devenv shell
+
+# Start the CI stack and run all tests
+make -C devenv up DOCKER_SUITE=ci
 make -C devenv unit-test
+make -C devenv down DOCKER_SUITE=ci
 
 # Run only OIDC discovery tests, with verbose output
 make -C devenv unit-test FILTER='oidc.*discovery' VERBOSE=1
@@ -125,10 +137,4 @@ make -C devenv package SDK_ARCH=mipsel_24kc
 
 # Fuzz the mbedtls backend for 10 minutes with leak detection
 make -C devenv fuzzer-test CRYPTO_LIB=mbedtls TIME=600 DETECT_LEAKS=1
-
-# Open a shell in the running openwrt container
-make -C devenv shell
-
-# Start the local stack and open the router in a browser at https://localhost:8443
-make -C devenv local-up
 ```
