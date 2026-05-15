@@ -37,19 +37,19 @@ test('crypto: plumbing - clock tolerance boundary math', () => {
     // 1. Success case
     let payload_ok = { ...f2.MOCK_CLAIMS, exp: 1000 };
     let token_ok = h.generate_id_token(payload_ok, privkey, "RS256");
-    let res_v = crypto.jwt_verify(token_ok, pubkey, { alg: "RS256", now: 1299, clock_tolerance: clock_tolerance });
+    let res_v = crypto.jwt_verify(token_ok, pubkey, { alg: "RS256", now: 1299, clock_tolerance: clock_tolerance, iss: "https://trusted.idp", aud: "luci-app" });
     assert(Result.is(res_v));
     assert(res_v.ok);
-    
+
     // 2. Failure case (expired)
-    let res = crypto.jwt_verify(token_ok, pubkey, { alg: "RS256", now: 1301, clock_tolerance: clock_tolerance });
+    let res = crypto.jwt_verify(token_ok, pubkey, { alg: "RS256", now: 1301, clock_tolerance: clock_tolerance, iss: "https://trusted.idp", aud: "luci-app" });
     assert(Result.is(res));
     assert_eq(res.error, "TOKEN_EXPIRED");
 });
 
 test('crypto: plumbing - invalid algorithm in header', () => {
     let key = "key";
-    let opts = { alg: "RS256", now: 123, clock_tolerance: 300 };
+    let opts = { alg: "RS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" };
     let bad_alg = encoding.b64url_encode(sprintf("%J", { alg: "ROT13" })).data;
     let res1 = crypto.jwt_verify(bad_alg + ".e30.s", key, opts);
     assert(Result.is(res1));
@@ -158,7 +158,7 @@ test('crypto: torture - buffer transition stability', () => {
 test('crypto: plumbing - issuer normalization (B3)', () => {
     let privkey = f2.MOCK_PRIVKEY;
     let pubkey = crypto.jwk_to_pem(f2.MOCK_JWK).data;
-    let opts = { alg: "RS256", now: 1000, clock_tolerance: 300, iss: "https://idp.com" };
+    let opts = { alg: "RS256", now: 1000, clock_tolerance: 300, iss: "https://idp.com", aud: "luci-app" };
 
     // 1. Success case: Identical strings
     let t1 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com" }, privkey, "RS256");

@@ -15,8 +15,12 @@ import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED } from 'luci_sso.er
 function _grant_all_luci_acls(io, sid) {
 	let acl_dir = "/usr/share/rpcd/acl.d";
 	let files = io.lsdir(acl_dir);
-	if (!files) return;
+	if (!files) {
+		io.log("error", `ACL scan failed: ${acl_dir} is missing or unreadable`);
+		return Result.err("ACL_SCAN_FAILED");
+	}
 
+	let granted = 0;
 	for (let f in files) {
 		if (!match(f, /\.json$/)) continue;
 
@@ -47,8 +51,10 @@ function _grant_all_luci_acls(io, sid) {
 				scope: "access-group",
 				objects: map(groups, (g) => [g, "write"]),
 			});
+			granted += length(groups);
 		}
 	}
+	return Result.ok(granted);
 };
 
 /**
@@ -102,7 +108,12 @@ export function create_passwordless_session(io, username, perms, oidc_email, acc
 		grant_perm("cgi-io", "*", "*");
 		
 		// LuCI specific: Expand and grant all known access-groups
-		_grant_all_luci_acls(io, sid);
+		let acl_res = _grant_all_luci_acls(io, sid);
+		if (!acl_res.ok) {
+			io.log("error", `Failed to grant LuCI ACLs for wildcard admin [sid: ${crypto.safe_id(sid)}]`);
+			io.ubus_call("session", "destroy", { ubus_rpc_session: sid });
+			return Result.err(UBUS_SESSION_FAILED);
+		}
 	} else {
 		for (let r in perms.read) {
 			grant_perm("access-group", r, "read");

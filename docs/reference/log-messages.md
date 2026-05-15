@@ -93,6 +93,7 @@ These occur when the browser returns from the IdP with an authorization code.
 | `MALFORMED_STATE_COOKIE` | State cookie value contains characters outside Base64URL | Cookie was tampered with or corrupted in transit. |
 | `HANDSHAKE_EXPIRED` | State cookie is valid but the 5-minute handshake window elapsed | User took too long to complete the IdP login. Normal; the browser will restart the flow on the next attempt. |
 | `HANDSHAKE_NOT_YET_VALID` | State cookie `iat` is in the future beyond the configured clock tolerance | Router clock is ahead of the client by more than `clock_tolerance`. Check NTP synchronization. |
+| `HANDSHAKE_CAPACITY_EXCEEDED` | More than 100 concurrent in-flight handshakes exist and emergency reap did not free enough space | Likely a denial-of-service flood. Check the rate limiter and inspect `/var/run/luci-sso/` for stale handshake files. |
 
 ---
 

@@ -154,6 +154,19 @@ function _out(io, headers, body) {
 };
 
 /**
+ * Applies security headers to a response headers object in-place.
+ * MUST be called for every response — success, error, and crash alike.
+ * @private
+ */
+function _apply_security_headers(headers) {
+	headers["Content-Security-Policy"] = "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; frame-ancestors 'none';";
+	headers["X-Content-Type-Options"] = "nosniff";
+	headers["X-Frame-Options"] = "DENY";
+	headers["Cache-Control"] = "no-store";
+	headers["Referrer-Policy"] = "no-referrer";
+};
+
+/**
  * Extracts and parses the request context from the CGI environment.
  * 
  * @param {object} io - I/O provider
@@ -201,12 +214,7 @@ export function render(io, res) {
 	let headers = res.headers || {};
 	let body = res.body || "";
 
-	// Defense-in-Depth: Strict Content Security Policy
-	headers["Content-Security-Policy"] = "default-src 'none'; script-src 'self'; connect-src 'self'; img-src 'self'; style-src 'self'; frame-ancestors 'none';";
-	headers["X-Content-Type-Options"] = "nosniff";
-	headers["X-Frame-Options"] = "DENY";
-	headers["Cache-Control"] = "no-store";
-	headers["Referrer-Policy"] = "no-referrer";
+	_apply_security_headers(headers);
 
 	headers["Status"] = HTTP_STATUS_MESSAGES["" + res.status] || HTTP_STATUS_MESSAGES["200"];
 
@@ -230,10 +238,12 @@ export function render_error(io, code, status) {
 
 	io.log("error", `[${status || 500}] ${code}`);
 
-	_out(io, {
+	let headers = {
 		"Status": HTTP_STATUS_MESSAGES["" + (status || 500)] || "500 Internal Server Error",
 		"Content-Type": "text/plain"
-	}, `Error: ${user_msg}\n`);
+	};
+	_apply_security_headers(headers);
+	_out(io, headers, `Error: ${user_msg}\n`);
 };
 
 /**
@@ -248,8 +258,10 @@ export function error(io, e) {
 
 	io.log("error", `Router crash: ${msg}\n${stack}`);
 
-	_out(io, {
+	let headers = {
 		"Status": "500 Internal Server Error",
 		"Content-Type": "text/plain"
-	}, "Router Crash: An internal error occurred. Please contact support.\n");
+	};
+	_apply_security_headers(headers);
+	_out(io, headers, "Router Crash: An internal error occurred. Please contact support.\n");
 };

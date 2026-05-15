@@ -2,7 +2,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as common from 'luci_sso.session.common';
-import { CRYPTO_INIT_FAILED, STATE_SAVE_FAILED, MALFORMED_STATE_COOKIE, STATE_NOT_FOUND, STATE_CORRUPTED, HANDSHAKE_EXPIRED, HANDSHAKE_NOT_YET_VALID } from 'luci_sso.errors';
+import { CRYPTO_INIT_FAILED, STATE_SAVE_FAILED, MALFORMED_STATE_COOKIE, STATE_NOT_FOUND, STATE_CORRUPTED, HANDSHAKE_EXPIRED, HANDSHAKE_NOT_YET_VALID, HANDSHAKE_CAPACITY_EXCEEDED } from 'luci_sso.errors';
 
 /**
  * Handshake lifecycle management (OIDC transient state).
@@ -81,6 +81,15 @@ export function create(io) {
 	if (count >= common.HANDSHAKE_MAX_COUNT) {
 		io.log("warn", `Handshake capacity reached (${count}); triggering emergency reap`);
 		_emergency_reap(io, files);
+		let new_count = 0;
+		let refreshed = io.lsdir(common.HANDSHAKE_DIR) || [];
+		for (let f in refreshed) {
+			if (match(f, /^handshake_.*\.json$/)) new_count++;
+		}
+		if (new_count >= common.HANDSHAKE_MAX_COUNT) {
+			io.log("error", `Handshake capacity still exceeded after emergency reap (${new_count}); rejecting`);
+			return Result.err(HANDSHAKE_CAPACITY_EXCEEDED);
+		}
 	}
 
 	let res_p = crypto.pkce_pair();

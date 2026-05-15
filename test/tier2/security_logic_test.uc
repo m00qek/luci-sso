@@ -16,7 +16,7 @@ test('security: JWT - reject alg: none', () => {
 	let token = none_header + "." + payload + ".";
 
 	// 1. JWT High-level
-	let res1 = crypto.jwt_verify(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300 });
+	let res1 = crypto.jwt_verify(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" });
     assert(Result.is(res1));
 	assert_eq(res1.error, "ALGORITHM_MISMATCH");
 
@@ -31,7 +31,7 @@ test('security: JWT - reject stripped signature', () => {
     let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" })).data;
     let stripped = header + "." + payload + ".";
     
-    let res = crypto.jwt_verify(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300 });
+    let res = crypto.jwt_verify(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" });
     assert(Result.is(res));
     assert_eq(res.error, "INVALID_SIGNATURE_ENCODING");
 });

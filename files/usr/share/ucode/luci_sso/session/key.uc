@@ -38,7 +38,7 @@ export function get(io) {
 			// If a process crashed during generation, the lock persists.
 			// 30s is more than enough for a 32-byte CSPRNG write + rename.
 			let st = io.stat(lock_path);
-			if (st && st.mtime && (io.time() - st.mtime) > 30) {
+			if (st && st.mtime != null && (io.time() - st.mtime) > 30) {
 				io.log("warn", "Stale secret key lock detected; performing self-healing cleanup");
 				try { io.remove(lock_path); } catch (e) {}
 				try { acquired = io.mkdir(lock_path, 0700); } catch (e) {}

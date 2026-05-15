@@ -12,7 +12,9 @@ test('Security: JWT - Mandatory Claims Enforced (Audit B2)', () => {
     let opts = {
         alg: "RS256",
         now: mock_now,
-        clock_tolerance: 60
+        clock_tolerance: 60,
+        iss: "https://example.com",
+        aud: "client"
     };
 
     // 1. Valid token with iat but MISSING exp should fail

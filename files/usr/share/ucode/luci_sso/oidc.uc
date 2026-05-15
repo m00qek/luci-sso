@@ -189,12 +189,13 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 		return Result.err(DISCOVERY_ISSUER_MISMATCH, `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}`);
 	}
 
-	let validation_opts = { 
+	let validation_opts = {
 		alg: header.alg,
 		now: now,
 		clock_tolerance: config.clock_tolerance,
 		iss: config.issuer_url,
-		aud: config.client_id
+		aud: config.client_id,
+		pre_parsed_header: header
 	};
 
 	let result = crypto.jwt_verify(tokens.id_token, pem_res.data, validation_opts);
@@ -265,8 +266,8 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 
 	let user_data = {
 		sub: payload.sub,
-		email: payload.email,
-		name: payload.name,
+		email: (type(payload.email) == "string") ? payload.email : null,
+		name: (type(payload.name) == "string") ? payload.name : null,
 		groups: (type(payload.groups) == "array") ? payload.groups : []
 	};
 

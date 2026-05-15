@@ -48,6 +48,12 @@ export function verify(native, token, pubkey, options) {
 	if (length(token) > LIMIT_TOKEN_SIZE)
 		return Result.err("TOKEN_TOO_LARGE");
 
+	if (type(options.iss) != "string")
+		die("CONTRACT_VIOLATION: jwt.verify expects mandatory string options.iss");
+
+	if (type(options.aud) != "string")
+		die("CONTRACT_VIOLATION: jwt.verify expects mandatory string options.aud");
+
 	if (!options.alg)
 		return Result.err("MISSING_ALGORITHM_OPTION");
 
@@ -55,9 +61,14 @@ export function verify(native, token, pubkey, options) {
 	if (length(parts) != 3)
 		return Result.err("MALFORMED_JWT");
 
-	let header = decode_header(parts[0], options.alg);
-	if (!header.ok) 
-		return header;
+	if (options.pre_parsed_header && type(options.pre_parsed_header) == "object") {
+		if (options.pre_parsed_header.alg != options.alg)
+			return Result.err("ALGORITHM_MISMATCH", `Expected ${options.alg}, got ${options.pre_parsed_header.alg}`);
+	} else {
+		let header_res = decode_header(parts[0], options.alg);
+		if (!header_res.ok)
+			return header_res;
+	}
 
 	// 2. Decode Payload Encoding (Fail Fast)
 	let p_res = encoding.b64url_decode(parts[1]);
@@ -117,36 +128,32 @@ export function verify(native, token, pubkey, options) {
 	if (payload.iat > (now + clock_tolerance))
     return Result.err("TOKEN_ISSUED_IN_FUTURE");
 
-	if (options.iss) {
-		let p_iss = encoding.normalize_url(payload.iss);
-		let o_iss = encoding.normalize_url(options.iss);
-		if (!p_iss.ok || !o_iss.ok || !base.constant_time_eq(p_iss.data, o_iss.data))
-			return Result.err("ISSUER_MISMATCH");
+	let p_iss = encoding.normalize_url(payload.iss);
+	let o_iss = encoding.normalize_url(options.iss);
+	if (!p_iss.ok || !o_iss.ok || !base.constant_time_eq(p_iss.data, o_iss.data))
+		return Result.err("ISSUER_MISMATCH");
+
+	let aud = payload.aud;
+	let found = false;
+	if (type(aud) == "array") {
+		if (length(aud) == 0)
+			return Result.err("INVALID_AUDIENCE");
+
+		for (let a in aud) {
+			if (type(a) != "string")
+				return Result.err("MALFORMED_AUDIENCE");
+
+			if (base.constant_time_eq(a, options.aud)) {
+				found = true;
+				break;
+			}
+		}
+	} else {
+		found = base.constant_time_eq(aud, options.aud);
 	}
 
-	if (options.aud) {
-		let aud = payload.aud;
-		let found = false;
-		if (type(aud) == "array") {
-			if (length(aud) == 0)
-        return Result.err("INVALID_AUDIENCE");
-
-			for (let a in aud) {
-				if (type(a) != "string")
-          return Result.err("MALFORMED_AUDIENCE");
-
-				if (base.constant_time_eq(a, options.aud)) {
-					found = true;
-					break;
-				}
-			}
-		} else {
-			found = base.constant_time_eq(aud, options.aud);
-		}
-
-		if (!found) {
-			return Result.err("AUDIENCE_MISMATCH");
-		}
+	if (!found) {
+		return Result.err("AUDIENCE_MISMATCH");
 	}
 
 	return Result.ok(payload);
