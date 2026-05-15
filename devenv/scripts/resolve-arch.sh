@@ -12,6 +12,9 @@ if [ "$ARG1" == "--platform" ]; then
         "x86-64")
             echo "linux/amd64"
             ;;
+        "armsr-armv7")
+            echo "linux/arm/v7"
+            ;;
         *)
             echo "linux/$2"
             ;;

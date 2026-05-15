@@ -119,6 +119,7 @@ jobs:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
         service: [openwrt, sdk]
         target: ${{ fromJson(needs.metadata.outputs.targets) }}
@@ -128,7 +129,7 @@ jobs:
 
       - name: Set up QEMU
         if: matrix.target.sdk_arch != 'x86-64'
-        uses: docker/setup-qemu-action@v3
+        run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -256,7 +257,7 @@ jobs:
 
       - name: Set up QEMU
         if: matrix.target.sdk_arch != 'x86-64'
-        uses: docker/setup-qemu-action@v3
+        run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
 
       - name: Pull images
         run: make -sC devenv pull
