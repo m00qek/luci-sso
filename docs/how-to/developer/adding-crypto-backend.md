@@ -46,15 +46,21 @@ endif()
 
 `luci-sso` includes a "Compliance Test" that exercises every cryptographic primitive in the backend using known-answer tests (KAT).
 
-1.  **Build** your new backend:
+1.  **Register your backend for artifact extraction** in `devenv/services/sdk/build.sh`. Add `boringssl` to the loop in the `compile)` case so the built `.so` is copied alongside the existing backends:
+
     ```bash
-    make -C devenv compile CRYPTO_LIB=boringssl
+    for lib in mbedtls wolfssl openssl boringssl; do
     ```
 
-2.  **Start infrastructure** and **run** Tier 0 compliance tests:
+2.  **Build** all backends (including yours):
+    ```bash
+    make -C devenv compile
+    ```
+
+3.  **Start infrastructure** and **run** Tier 0 compliance tests:
     ```bash
     make -C devenv infra-up DOCKER_SUITE=ci
-    make -C devenv test FILTER=native_compliance
+    make -C devenv test CRYPTO_LIB=boringssl FILTER=native_compliance
     make -C devenv infra-down DOCKER_SUITE=ci
     ```
 

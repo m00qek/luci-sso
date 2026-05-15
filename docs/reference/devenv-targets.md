@@ -47,7 +47,6 @@ Test targets (`test`, `e2e`, `watch-tests`) always use CI mode regardless of the
 | `down` | Stop and remove all stack containers (OpenWrt + infra). Pass the same `DOCKER_SUITE` used when starting. |
 | `ps` | List running containers in the OpenWrt project and their status. |
 | `shell` | Open an interactive shell in the `openwrt` container. |
-| `run` | Run a one-shot interactive shell (container is removed on exit). |
 | `build-images` | Build Docker images from local Dockerfiles without pulling. |
 | `pull` | Pull the latest pre-built images from the registry. |
 
@@ -94,7 +93,7 @@ Variables are passed on the command line as `KEY=value` after the target name.
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `SDK_ARCH` | Host architecture | Target CPU architecture. Determines which OpenWrt SDK container is used and where build output goes. |
-| `CRYPTO_LIB` | `mbedtls` | Cryptographic backend to build and test against. Accepted values: `mbedtls`, `wolfssl`, `openssl`. |
+| `CRYPTO_LIB` | `mbedtls` | Cryptographic backend to **test against**. Does not affect compilation — all available backends are always built. Accepted values: `mbedtls`, `wolfssl`, `openssl`. Applies to: `test`, `e2e`, `watch-tests`, `fuzz`. |
 
 Common `SDK_ARCH` values:
 
@@ -153,8 +152,7 @@ make -C devenv test FILTER='oidc.*discovery' VERBOSE=1
 # Run a single test file
 make -C devenv test MODULES='test/tier2/oidc_logic_test.uc'
 
-# Build and test with the wolfssl backend
-make -C devenv compile CRYPTO_LIB=wolfssl
+# Run tests against the wolfssl backend (compile always builds all backends)
 make -C devenv test CRYPTO_LIB=wolfssl
 
 # Build an IPK for a MIPS router

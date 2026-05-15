@@ -18,7 +18,6 @@ RESET='\033[0m'
 # --- HELPERS ---
 
 log_info() { echo -e " ${BLUE}ℹ️${RESET}  $1"; }
-log_success() { echo -e " ${GREEN}✅${RESET} $1"; }
 log_warn() { echo -e " ${YELLOW}⚠️${RESET}  $1"; }
 log_error() { echo -e " ${RED}⛔${RESET}  $1"; }
 
@@ -55,6 +54,7 @@ translate_e2e_paths() {
 # --- OPENWRT LIFECYCLE ---
 
 start_openwrt() {
+  mkdir -p "$BASE_DIR/bin/lib/${SDK_ARCH}/${SDK_VERSION}"
   log_info "🚀 Starting openwrt..."
   docker compose $COMPOSE_FLAGS up -d --wait openwrt
 }

@@ -8,19 +8,21 @@ ARTIFACTS_DIR="/artifacts"
 
 case "$ACTION" in
 compile)
-  echo "🔨 Compiling native components for $CRYPTO_LIB ($SDK_ARCH/$SDK_VERSION)..."
-  mkdir -p "$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/$CRYPTO_LIB/luci_sso"
-
-  # Ensure SDK is configured
+  echo "🔨 Compiling native components ($SDK_ARCH/$SDK_VERSION)..."
   [ -f .config ] || make defconfig
-
-  # Build the specific package
   [ "$VERBOSE" = "1" ] && V_FLAG="V=s" || V_FLAG=""
   make package/$PKG_NAME/compile -j$(nproc) $V_FLAG QUICK=1 CHECK_KEY=0 IGNORE_ERRORS=m
-
-  # Copy the .so to artifacts
-  cp -v build_dir/target-*/$PKG_NAME-*/.pkgdir/$PKG_NAME-crypto-$CRYPTO_LIB/usr/lib/ucode/luci_sso/native.so \
-    "$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/$CRYPTO_LIB/luci_sso/native.so"
+  for lib in mbedtls wolfssl openssl; do
+    src="build_dir/target-*/$PKG_NAME-*/.pkgdir/$PKG_NAME-crypto-$lib/usr/lib/ucode/luci_sso/native.so"
+    dst="$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/$lib/luci_sso/native.so"
+    mkdir -p "$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/$lib/luci_sso"
+    # shellcheck disable=SC2086
+    if cp -v $src "$dst" 2>/dev/null; then
+      echo "✓ $lib"
+    else
+      echo "⚠ $lib not built (skipping)"
+    fi
+  done
   ;;
 
 package)
