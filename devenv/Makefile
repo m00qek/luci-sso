@@ -15,7 +15,7 @@ export GID            := $(shell id -g)
 export PKI_CURVE      := prime256v1
 export NODE_VERSION   := 25
 export ALPINE_VERSION := 3.23
-export SDK_VERSION    := 24.10.5
+export SDK_VERSION    ?= 24.10.5
 export SDK_ARCH         ?= $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host)
 export ROOTFS_ARCH      := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh $(SDK_ARCH))
 export DOCKER_PLATFORM  := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --platform $(SDK_ARCH))
@@ -121,6 +121,7 @@ compile: $(SENTINEL)
 $(SENTINEL): $(wildcard $(PROJECT_ROOT)/src/*.c) $(wildcard $(PROJECT_ROOT)/src/*.h) $(PROJECT_ROOT)/src/CMakeLists.txt
 	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(SDK_ARCH)..."
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)
+	@chmod a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION) 2>/dev/null || true
 	@touch $(SENTINEL)
