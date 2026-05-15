@@ -43,8 +43,6 @@ The response should be a JSON document containing `authorization_endpoint`, `tok
 
 In your IdP's admin interface, create a new OAuth2 / OIDC client (sometimes called an "Application" or "Relying Party").
 
-![Generic IdP client registration form showing fields for Client Name, Application Type (Web Application), Redirect URI, and Scopes, with a panel on the right showing the generated Client ID and Client Secret fields](../../assets/screenshots/oidc-client-registration.svg "Create a new OAuth client in your IdP")
-
 Set the following values:
 
 | Field | Value |
@@ -54,6 +52,8 @@ Set the following values:
 | **Scopes** | `openid profile email` — add `groups` if you want group-based role mapping |
 
 After saving, copy the generated **Client ID** and **Client Secret**.
+
+![Generic IdP client registration form showing fields for Client Name, Application Type (Web Application), Redirect URI, and Scopes, with a panel on the right showing the generated Client ID and Client Secret fields](../../assets/screenshots/oidc-client-registration.svg "Create a new OAuth client in your IdP — copy the Client ID and Client Secret shown on the right")
 
 ---
 

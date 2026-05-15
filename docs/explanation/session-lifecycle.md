@@ -2,6 +2,17 @@
 
 After a successful login, `luci-sso` creates a LuCI session and hands the browser a session cookie. Understanding what that session is, how long it lasts, and when it ends matters for anyone reasoning about access control on the router.
 
+```mermaid
+stateDiagram-v2
+    [*] --> Active : successful OIDC login\n(UBUS session created)
+    Active --> Expired : 1-hour timeout
+    Active --> Terminated : explicit logout\n(UBUS session destroyed)
+    Expired --> [*]
+    Terminated --> [*]
+```
+
+**Textual summary:** A session begins when the OIDC flow completes and UBUS creates the session record. From that point it either expires after one hour (regardless of IdP token expiry) or is terminated immediately by an explicit logout. Mid-session IdP revocation has no effect — the session continues until one of these two endpoints is reached. Multiple independent sessions can be active simultaneously.
+
 ---
 
 ## What a session is

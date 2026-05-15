@@ -12,6 +12,8 @@ Log in to LuCI and navigate to **Services > SSO Login**.
 
 The page has two sections: **Settings** (OIDC provider credentials) and **Users** (role-based access control).
 
+![LuCI Services › SSO Login page showing the Settings section with fields for Enable SSO, Issuer URL, Client ID, Client Secret, Redirect URI, Scopes, and Clock Tolerance, and a Users section below listing configured roles](../../assets/screenshots/luci-sso-settings.svg "LuCI Services › SSO Login — Settings and Users sections")
+
 ---
 
 ## 2. Fill in the Settings section
@@ -43,6 +45,8 @@ Seconds of allowed clock skew during JWT validation. The default `60` is suffici
 ### Internal Issuer URL
 
 Leave empty unless your router reaches the IdP at a different address than your browser does. When set, `luci-sso` uses this URL for back-channel requests (token exchange, JWKS fetch) while still validating the `iss` claim against the public Issuer URL. See [How to Configure Split-Horizon Networking](split-horizon.md).
+
+![LuCI Services › SSO Login — Settings section scrolled to show the Internal Issuer URL field, which is empty by default and marked as optional](../../assets/screenshots/luci-sso-settings-advanced.svg "LuCI SSO settings — Internal Issuer URL field")
 
 ---
 

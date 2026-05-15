@@ -45,7 +45,6 @@ The same embedded constraints make testing difficult: you cannot run an integrat
 Specifically:
 
 - The UCI configuration schema (`/etc/config/luci-sso`) is stable for the options documented in the [UCI Configuration Reference](../reference/uci-config.md).
-- The LuCI web interface for configuration does not yet exist — all setup requires SSH. This is the primary remaining gap before a stable release.
 - The crypto backend interface (`src/native.h`) is stable for the functions documented in the [Internal API Reference](../reference/internal-api.md).
 
 The project targets **OpenWrt 24.10** and **25.12**.

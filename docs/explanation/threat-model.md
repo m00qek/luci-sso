@@ -18,6 +18,19 @@ This document describes the landscape of threats that shaped the design, how eac
 
 The router itself is the trusted party. All security-critical state (PKCE verifiers, nonces, handshake files, the token registry) lives only on the router.
 
+```mermaid
+graph TD
+    Browser["Browser\n(untrusted environment)"]
+    Router["Router · luci-sso\n(trusted party)"]
+    IdP["Identity Provider\n(trusted to authenticate;\nnot trusted unconditionally)"]
+
+    Browser <-->|"front-channel: redirects + cookies"| Router
+    Browser <-->|"front-channel: redirects"| IdP
+    Router -->|"back-channel: token exchange &amp; JWKS\n(HTTPS mandatory)"| IdP
+```
+
+**Textual summary:** The browser communicates with both the router and the IdP via front-channel redirects — these pass through the untrusted browser environment. The router's back-channel communication to the IdP (token exchange, JWKS fetch) bypasses the browser entirely and is protected by mandatory HTTPS. Security-critical state never leaves the router.
+
 ---
 
 ## Authorization code injection
