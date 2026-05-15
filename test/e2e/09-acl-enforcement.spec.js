@@ -2,11 +2,19 @@
 const { test, expect } = require('@playwright/test');
 const { loginAsRoot } = require('./helpers');
 
-// Intercepts browser-level ubus calls to simulate a session that lacks luci-sso UCI access.
-// Note: LuCI's navigation menu is filtered server-side (dispatcher.uc) before the HTML is sent,
-// so menu visibility cannot be tested by intercepting browser-level ubus calls.
+// Simulates a session where the luci-sso UCI config is not readable by intercepting
+// the real ubus endpoint (/ubus/) and returning UBUS_STATUS_ACCESS_DENIED (6) for
+// any uci.get call for the luci-sso config.
+//
+// Why /ubus/ and not /admin/ubus/:
+//   LuCI views call rpcd directly via the /ubus/ JSON-RPC endpoint. The /admin/ubus/
+//   path is a separate LuCI-proxied route used by the apply/commit flow (08-sso-crud).
+//   Intercepting /ubus/ is therefore the correct point to simulate rpcd ACL denial.
+//
+// Note: LuCI's navigation menu is filtered server-side (dispatcher.uc) before the
+// HTML is sent, so server-side ACL enforcement cannot be tested here.
 function withSsoAccessDenied(page) {
-    return page.route(/\/admin\/ubus/, async (route) => {
+    return page.route(/\/ubus\//, async (route) => {
         let reqBody;
         try { reqBody = route.request().postDataJSON(); }
         catch { return route.continue(); }
@@ -14,28 +22,25 @@ function withSsoAccessDenied(page) {
 
         const isBatch = Array.isArray(reqBody);
         const requests = isBatch ? reqBody : [reqBody];
-        let handled = false;
+
+        const hasSsoRead = requests.some(req => {
+            const [, obj, method, params] = req.params || [];
+            return obj === 'uci' && method === 'get' && params?.config === 'luci-sso';
+        });
+        if (!hasSsoRead) return route.continue();
+
         const results = requests.map(req => {
-            const [sid, obj, method, params] = req.params || [];
-            if (obj === 'session' && method === 'access') {
-                if (params?.object === 'luci-app-sso' || params?.object === 'luci-sso') {
-                    handled = true;
-                    if (params?.function) return { jsonrpc: '2.0', id: req.id, result: [0, { access: false }] };
-                    return { jsonrpc: '2.0', id: req.id, result: [0, { 'access-group': {}, uci: {} }] };
-                }
+            const [, obj, method, params] = req.params || [];
+            if (obj === 'uci' && method === 'get' && params?.config === 'luci-sso') {
+                return { jsonrpc: '2.0', id: req.id, result: [6] };
             }
-            return null;
+            return { jsonrpc: '2.0', id: req.id, result: [0, {}] };
         });
 
-        if (!handled) return route.continue();
-
-        const filled = results.map((r, i) =>
-            r ?? { jsonrpc: '2.0', id: requests[i].id, result: [0, {}] }
-        );
-        return route.fulfill({
+        await route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify(isBatch ? filled : filled[0])
+            body: JSON.stringify(isBatch ? results : results[0])
         });
     });
 }
@@ -51,11 +56,13 @@ test.describe('Security: Management UI ACLs', () => {
         await loginAsRoot(page);
 
         await page.goto('/cgi-bin/luci/admin/services/sso');
+        await page.waitForLoadState('networkidle');
 
-        // The page loads (LuCI shell is present) but the form does not render because
-        // the ubus session.access mock returns access=false for the luci-sso config.
+        // LuCI shell is present but the form must not render.
         await expect(page.locator('#view')).toBeVisible({ timeout: 5000 });
-        await expect(page.locator('.cbi-map-descr:has-text("Configure OpenID Connect")')).not.toBeVisible();
+        await expect(page.locator('.cbi-map')).not.toBeVisible({ timeout: 3000 });
+        // LuCI renders a danger notification when uci.load() is rejected.
+        await expect(page.locator('.alert-message.danger')).toBeVisible({ timeout: 3000 });
     });
 
     test('ACL: Access is allowed for authorized sessions', async ({ page }) => {

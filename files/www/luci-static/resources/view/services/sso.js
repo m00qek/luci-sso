@@ -5,13 +5,8 @@
 'require ui';
 
 function renderList(items) {
-	if (!items || !items.length) return E('em', {}, _('(none)'));
-	var node = E('span');
-	items.forEach(function(v, i) {
-		node.appendChild(document.createTextNode(v));
-		if (i < items.length - 1) node.appendChild(E('br'));
-	});
-	return node;
+	if (!items || !items.length) return _('(none)');
+	return items.join(', ');
 }
 
 return view.extend({
@@ -75,6 +70,7 @@ return view.extend({
 		o = s.option(form.Value, 'clock_tolerance', _('Clock Tolerance'),
 		        _('Allowed clock skew in seconds applied to JWT validation (0–3600).'));
 		o.datatype = 'range(0,3600)';
+		o.default = '60';
 		o.placeholder = '60';
 		o.rmempty = false;
 
@@ -103,6 +99,15 @@ return view.extend({
 		s.nodescriptions = true;
 		s.modaltitle = function(section_id) {
 			return _('User Role: %s').format(section_id);
+		};
+		s.handleAdd = function(ev, name) {
+			if (name && name.trim() === 'default') {
+				ui.addNotification(null,
+					E('p', {}, _('The name "default" is reserved for OIDC provider settings. Choose a different role name.')),
+					'danger');
+				return;
+			}
+			return form.GridSection.prototype.handleAdd.call(this, ev, name);
 		};
 
 		/* --- Table columns (visible inline) --- */
@@ -134,23 +139,23 @@ return view.extend({
 		o = s.option(form.DynamicList, 'email', _('Email Addresses'),
 			_('Match by OIDC <code>email</code> claim (case-insensitive).'));
 		o.modalonly = true;
-		o.optional = true;
+		o.rmempty = true;
 
 		o = s.option(form.DynamicList, 'group', _('Groups'),
 			_('Match by OIDC <code>groups</code> claim (case-sensitive). ' +
 			  'For Pocket ID, include the <code>@PocketID</code> suffix.'));
 		o.modalonly = true;
-		o.optional = true;
+		o.rmempty = true;
 
 		o = s.option(form.DynamicList, 'read', _('Read Access'),
 			_('LuCI access groups granted read access. Use <code>*</code> for all groups.'));
 		o.modalonly = true;
-		o.optional = true;
+		o.rmempty = true;
 
 		o = s.option(form.DynamicList, 'write', _('Write Access'),
 			_('LuCI access groups granted write access. Use <code>*</code> for all groups.'));
 		o.modalonly = true;
-		o.optional = true;
+		o.rmempty = true;
 
 		return m.render();
 	}

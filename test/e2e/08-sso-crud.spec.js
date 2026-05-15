@@ -40,14 +40,19 @@ function setupPristineMocks(page) {
                 return { jsonrpc: '2.0', id: req.id, result: [0] };
             }
 
-            // Pass through unrecognised calls (auth/session) without route.fetch().
+            // Explicit grant for session ACL checks so a mixed batch never silently
+            // swallows an unrecognised auth call with a generic [0,{}] response.
+            if (obj === 'session' && method === 'access') {
+                return { jsonrpc: '2.0', id: req.id, result: [0, { access: true }] };
+            }
+
             return null;
         });
 
         // All unhandled — let the real server respond.
         if (results.every(r => r === null)) return route.continue();
 
-        // Some unhandled slots — return generic success to avoid route.fetch().
+        // Some unhandled slots — return generic success.
         const filled = results.map((r, i) =>
             r ?? { jsonrpc: '2.0', id: requests[i].id, result: [0, {}] }
         );
@@ -119,6 +124,20 @@ test.describe('SSO Settings: Pristine CRUD Lifecycle', () => {
 
         const internalIssuer = page.locator('[id="widget.cbid.luci-sso.default.internal_issuer_url"]');
         await expect(internalIssuer).toHaveAttribute('placeholder', /https:\/\/.*:8443/);
+    });
+
+    test('Guard: Role named "default" is rejected with an error notification', async ({ page }) => {
+        await setupPristineMocks(page);
+        await loginAsRoot(page);
+        await gotoSSOSettings(page);
+
+        await page.locator('.cbi-section-create-name').pressSequentially('default');
+        await page.locator('.cbi-section-create .cbi-button-add').click();
+
+        // The guard fires before uci.add — no modal should open.
+        await expect(page.locator('.modal, [role="dialog"]')).not.toBeVisible({ timeout: 2000 });
+        // A danger notification must tell the user the name is reserved.
+        await expect(page.locator('.alert-message.danger')).toBeVisible({ timeout: 3000 });
     });
 
 });

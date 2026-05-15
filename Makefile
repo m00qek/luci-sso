@@ -66,6 +66,7 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/etc/luci-sso
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/etc/uci-defaults/10-luci-sso-setup $(1)/etc/uci-defaults/10-luci-sso-setup
+	$(INSTALL_BIN) ./files/etc/uci-defaults/15-luci-sso-migrate-roles $(1)/etc/uci-defaults/15-luci-sso-migrate-roles
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-luci-sso-ui $(1)/etc/uci-defaults/99-luci-sso-ui
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-cleanup $(1)/usr/sbin/luci-sso-cleanup
@@ -90,6 +91,12 @@ sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
 # Revert UI patches
 sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/sysauth.ut 2>/dev/null
 sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/themes/bootstrap/sysauth.ut 2>/dev/null
+
+# Remove the SSO ACL entry and reload rpcd so the permission is revoked
+# immediately. opkg removes the file after prerm exits, so we delete it here
+# first; opkg's own removal becomes a harmless no-op.
+rm -f /usr/share/rpcd/acl.d/luci-app-sso.json 2>/dev/null
+[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd restart >/dev/null 2>&1 || true
 
 # Clear LuCI cache to reflect removal
 rm -rf /tmp/luci-modulecache/* 2>/dev/null
