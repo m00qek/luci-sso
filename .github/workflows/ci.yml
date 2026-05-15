@@ -136,8 +136,9 @@ jobs:
       - name: Set up 32-bit MIPS QEMU for OpenWrt
         if: startsWith(matrix.target.sdk_arch, 'mips')
         run: |
-          docker run --rm -v /usr/local/bin:/host multiarch/qemu-user-static \
-            cp /usr/bin/qemu-mips-static /host/qemu-mips-static
+          CID=$(docker create multiarch/qemu-user-static)
+          docker cp "$CID:/usr/bin/qemu-mips-static" /usr/local/bin/qemu-mips-static
+          docker rm "$CID"
           docker run --rm --privileged -v /usr/local/bin:/usr/local/bin busybox sh -c \
             "echo ':qemu-mips-ow:M:0:\x7fELF\x01\x02\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x08:\xff\xff\xff\xff\xff\xff\xff\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff:/usr/local/bin/qemu-mips-static:F' > /proc/sys/fs/binfmt_misc/register"
 
@@ -274,8 +275,9 @@ jobs:
       - name: Set up 32-bit MIPS QEMU for OpenWrt
         if: startsWith(matrix.target.sdk_arch, 'mips')
         run: |
-          docker run --rm -v /usr/local/bin:/host multiarch/qemu-user-static \
-            cp /usr/bin/qemu-mips-static /host/qemu-mips-static
+          CID=$(docker create multiarch/qemu-user-static)
+          docker cp "$CID:/usr/bin/qemu-mips-static" /usr/local/bin/qemu-mips-static
+          docker rm "$CID"
           docker run --rm --privileged -v /usr/local/bin:/usr/local/bin busybox sh -c \
             "echo ':qemu-mips-ow:M:0:\x7fELF\x01\x02\x01\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x02\x00\x08:\xff\xff\xff\xff\xff\xff\xff\x00\x00\xff\xff\xff\xff\xff\xff\xff\xff\xfe\xff\xff:/usr/local/bin/qemu-mips-static:F' > /proc/sys/fs/binfmt_misc/register"
 
