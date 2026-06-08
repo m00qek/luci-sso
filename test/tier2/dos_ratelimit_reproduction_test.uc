@@ -3,7 +3,7 @@ import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-it('REPRODUCTION: router: lacks global rate limiting', () => {
+it('router: reproduction - lacks global rate limiting', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
         enabled: "1"

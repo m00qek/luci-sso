@@ -43,7 +43,7 @@ function mock_request(path, query, cookies, env) {
 // Tier 3: Behavioral Integration (Homogeneous Standard)
 // =============================================================================
 
-it('Router: Login Flow - Handle massive discovery response', () => {
+it('router: login - handle massive discovery response', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { error: "RESPONSE_TOO_LARGE" } }, (io) => {
 		let res = router.handle(io, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
@@ -52,7 +52,7 @@ it('Router: Login Flow - Handle massive discovery response', () => {
 	});
 });
 
-it('Router: Login Flow - Redirect to Healthy IdP', () => {
+it('router: login - redirect to healthy IdP', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
 	factory.with_responses(responses, (io) => {
@@ -63,7 +63,7 @@ it('Router: Login Flow - Redirect to Healthy IdP', () => {
 	});
 });
 
-it('Router: Bootstrap - Automatic secret key generation', () => {
+it('router: bootstrap - automatic secret key generation', () => {
 	let factory = mock.create(); // NO secret.key exists
 	let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
 	
@@ -76,7 +76,7 @@ it('Router: Bootstrap - Automatic secret key generation', () => {
 	assert.match(32, length(final_key), "Secret key should be 32 bytes");
 });
 
-it('Router: ?action=enabled returns correct JSON', () => {
+it('router: enabled - returns JSON response', () => {
 	let factory = mock.create();
 	let request = mock_request("/", { action: "enabled" });
 
@@ -101,7 +101,7 @@ it('Router: ?action=enabled returns correct JSON', () => {
 	});
 });
 
-it('Router: Callback - Successful authentication and UBUS login', () => {
+it('router: callback - successful authentication and UBUS login', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
@@ -147,7 +147,7 @@ it('Router: Callback - Successful authentication and UBUS login', () => {
 	});
 });
 
-it('Router: Callback - Handle stale JWKS cache recovery', () => {
+it('router: callback - handle stale JWKS cache recovery', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
@@ -189,7 +189,7 @@ it('Router: Callback - Handle stale JWKS cache recovery', () => {
 	});
 });
 
-it('Router: Callback - Reject non-whitelisted users', () => {
+it('router: callback - reject non-whitelisted users', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
@@ -214,7 +214,7 @@ it('Router: Callback - Reject non-whitelisted users', () => {
 	});
 });
 
-it('Router: Callback - Reject token replay (already used access_token)', () => {
+it('router: callback - reject token replay', () => {
 	let factory = mock.create().with_files({ 
 		"/etc/luci-sso/secret.key": TEST_SECRET,
 		"/var/run/luci-sso/tokens/": { ".type": "directory" }
@@ -253,7 +253,7 @@ it('Router: Callback - Reject token replay (already used access_token)', () => {
 	});
 });
 
-it('Router: Callback - Reject state replay (handshake one-time use)', () => {
+it('router: callback - reject state replay', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
@@ -276,7 +276,7 @@ it('Router: Callback - Reject state replay (handshake one-time use)', () => {
 	});
 });
 
-it('Router: Callback - Reject code replay (IdP level rejection)', () => {
+it('router: callback - reject code replay', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
@@ -295,7 +295,7 @@ it('Router: Callback - Reject code replay (IdP level rejection)', () => {
 	});
 });
 
-it('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
+it('router: security - reject PKCE bypass', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
@@ -314,7 +314,7 @@ it('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
 	});
 });
 
-it('Router: Security - Access token is NOT registered if verification fails (DoS prevention)', () => {
+it('router: security - skip token registration on verification failure', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
@@ -364,7 +364,7 @@ it('Router: Security - Access token is NOT registered if verification fails (DoS
 	});
 });
 
-it('Router: Logout - OIDC RP-Initiated Logout', () => {
+it('router: logout - OIDC RP-initiated logout', () => {
 	let DISC_WITH_LOGOUT = { 
 		...MOCK_DISC_DOC, 
 		end_session_endpoint: "https://idp.com/logout" 
@@ -393,7 +393,7 @@ it('Router: Logout - OIDC RP-Initiated Logout', () => {
 	assert.match(truthy(), data.called("ubus", "session", "destroy"), "Should have destroyed local session");
 });
 
-it('Router: Logout - Fallback to local logout', () => {
+it('router: logout - fallback to local logout', () => {
 	let factory = mock.create()
 		.with_ubus({ 
 			"session:get": (args) => ({ values: { token: "csrf-456" } }),
@@ -413,7 +413,7 @@ it('Router: Logout - Fallback to local logout', () => {
 	assert.match(truthy(), data.called("ubus", "session", "destroy"));
 });
 
-it('Router: Router - Handle unhandled system path', () => {
+it('router: routing - handle unhandled system path', () => {
 	let factory = mock.create();
 	        factory.with_env({}, (io) => {
 	                let res = router.handle(io, MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
@@ -422,7 +422,7 @@ it('Router: Router - Handle unhandled system path', () => {
 	        });
 	});
 	
-	it('Router: Logout - Prevent unauthenticated redirect (W3)', () => {
+	it('router: logout - prevent unauthenticated redirect', () => {
 		let DISC_WITH_LOGOUT = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
 		let factory = mock.create()
 			.with_responses({

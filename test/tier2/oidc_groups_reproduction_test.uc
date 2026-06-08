@@ -10,7 +10,7 @@ import * as h from 'lib.helpers';
 
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
-it('REPRODUCTION: oidc: verify_id_token drops groups claim', () => {
+it('oidc: reproduction - verify_id_token drops groups claim', () => {
 	let keys = [ f.MOCK_JWK ];
 	let at = "mock-at";
 	let ah = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
@@ -27,7 +27,7 @@ it('REPRODUCTION: oidc: verify_id_token drops groups claim', () => {
 	});
 });
 
-it('REPRODUCTION: handshake: userinfo fallback drops groups claim', () => {
+it('handshake: reproduction - userinfo fallback drops groups claim', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
         ...f.MOCK_DISCOVERY,

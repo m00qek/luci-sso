@@ -4,7 +4,7 @@ import { it, assert, falsy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 
-it('Discovery: Reproduction of optional chaining crash with error response', () => {
+it('discovery: reproduction - optional chaining crash with error response', () => {
 	mock.create()
 		.with_responses({
 			"https://idp.com/.well-known/openid-configuration": { error: "MOCK_ERROR" }
@@ -15,7 +15,7 @@ it('Discovery: Reproduction of optional chaining crash with error response', () 
 		});
 });
 
-it('JWKS: Reproduction of optional chaining crash with error response', () => {
+it('jwks: reproduction - optional chaining crash with error response', () => {
 	mock.create()
 		.with_responses({
 			"https://idp.com/jwks": { error: "MOCK_ERROR" }

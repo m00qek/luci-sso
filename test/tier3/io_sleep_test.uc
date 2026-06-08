@@ -1,7 +1,7 @@
 import { it, assert, truthy } from 'utest';
 import { create } from 'luci_sso.io';
 
-it("io.sleep() - verify timing and yielding", () => {
+it("io: sleep - verify timing accuracy", () => {
 	let io = create();
 
 	let start = clock();
@@ -15,7 +15,7 @@ it("io.sleep() - verify timing and yielding", () => {
 	assert.match(truthy(), duration <= 0.2, `Expected sleep to be reasonable, but got ${duration}s`);
 });
 
-it("io.sleep() - type safety", () => {
+it("io: sleep - contract violations", () => {
 	let io = create();
 	assert.throws(() => io.sleep(-0.1), /CONTRACT_VIOLATION/, "Error should mention CONTRACT_VIOLATION");
 	assert.throws(() => io.sleep("0.1"), /CONTRACT_VIOLATION/, "Error should mention CONTRACT_VIOLATION");

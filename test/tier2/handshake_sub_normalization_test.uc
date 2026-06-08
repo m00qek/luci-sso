@@ -10,7 +10,7 @@ import * as h from 'lib.helpers';
 
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
-it('REPRODUCTION: handshake: userinfo fallback fails on case-mismatched sub', () => {
+it('handshake: reproduction - userinfo fallback fails on case-mismatched sub', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
         ...f.MOCK_DISCOVERY,

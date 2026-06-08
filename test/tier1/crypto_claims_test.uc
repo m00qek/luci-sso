@@ -3,7 +3,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import { PLUMBING_RSA } from 'tier1.fixtures';
 
-it('Security: JWT - Mandatory Claims Enforced (Audit B2)', () => {
+it('security: JWT - mandatory claims enforced (B2)', () => {
     // We use a valid token but strip the signature check for this test by mocking 
     // it or just providing a token that fails early on claims if signature passes.
     // However, verify_jwt checks signature FIRST. 
@@ -28,7 +28,7 @@ it('Security: JWT - Mandatory Claims Enforced (Audit B2)', () => {
     assert.match("MISSING_EXP_CLAIM", res_allow.error, "W3: allow_missing_claims MUST be ignored/removed");
 });
 
-it('Security: JWT - Mandatory iat Enforced', () => {
+it('security: JWT - mandatory iat enforced', () => {
     // Construct a token with exp but NO iat
     // Payload: {"sub":"1234567890", "exp": 2000000000}
     // Since we don't have the private key to sign, we can't test the FULL verify_jwt
