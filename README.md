@@ -33,7 +33,7 @@
 If you have Docker and `make`:
 
 ```bash
-make -C devenv package SDK_ARCH=x86-64
+make package SDK_ARCH=x86-64
 ```
 
 See [Building from Source](https://m00qek.github.io/luci-sso/tutorials/building/) for other architectures.

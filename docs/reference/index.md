@@ -18,7 +18,7 @@ Reference documentation is technical description of the machinery. It is informa
 *   [RFC Compliance](rfc-compliance.md) - Mapping our implementation to OIDC/OAuth2 standards.
 
 ## 🛠️ Development
-*   [devenv Targets](devenv-targets.md) - All `make -C devenv` targets and their variables.
+*   [Makefile Targets](devenv-targets.md) - All `make` targets and their variables.
 
 ## 📐 Standards
 *   [Style Guide](style-guide.md) - Code style, commit messages, and documentation conventions.

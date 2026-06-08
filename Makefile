@@ -1,128 +1,237 @@
-include $(TOPDIR)/rules.mk
+# --- 1. CONFIGURATION & EXPORTS ---
+.ONESHELL: # Run recipes as single shell scripts
+.SHELLFLAGS = -ec # Exit immediately on error
 
-PKG_NAME:=luci-sso
-PKG_VERSION:=0.9.0
-PKG_RELEASE:=1
+# Directory Resolution
+PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
+DEVENV_DIR   := $(PROJECT_ROOT)/devenv
 
-PKG_MAINTAINER:=António Móra <m00qek@gmail.com>
-PKG_LICENSE:=MIT
+# ANSI Color Codes
+GREEN := \033[1;32m
+BLUE  := \033[1;34m
+YELLOW:= \033[1;33m
+RED   := \033[1;31m
+RESET := \033[0m
 
-PKG_INSTALL:=1
-PKG_BUILD_DEPENDS:=libucode/host
-PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode
+# Project Variables
+export UID := $(shell id -u)
+export GID := $(shell id -g)
+export PKI_CURVE := prime256v1
+export NODE_VERSION := 25
+export ALPINE_VERSION := 3.23
+export SDK_VERSION := 24.10.5
 
-include $(INCLUDE_DIR)/package.mk
-include $(INCLUDE_DIR)/cmake.mk
+# Architecture Resolution (Authoritative SDK Model)
+# 1. Determine SDK_ARCH (Manual override > Host detection)
+export SDK_ARCH := $(or $(SDK_ARCH),$(shell $(DEVENV_DIR)/scripts/resolve-arch.sh --host))
 
-define Package/$(PKG_NAME)
-  SECTION:=utils
-  CATEGORY:=Utilities
-  TITLE:=OIDC/OAuth2 SSO for LuCI
-  DEPENDS:=$(PKG_DEPENDS) +luci-sso-crypto +luci-base
+# 2. Derive ROOTFS_ARCH from SDK_ARCH
+export ROOTFS_ARCH := $(shell $(DEVENV_DIR)/scripts/resolve-arch.sh $(SDK_ARCH))
+
+export CRYPTO_LIB  ?= mbedtls
+
+# Dynamic Dependency Parsing from root Makefile
+# Grab all DEPENDS lines, remove +, remove luci-sso*, and flatten into a unique sorted list
+export PKG_DEPENDS := $(shell grep 'PKG_DEPENDS:=' $(PROJECT_ROOT)/openwrt/luci-sso/Makefile | sed 's/PKG_DEPENDS:=//' | tr '+' ' ' | tr ' ' '\n' | sort -u | tr '\n' ' ')
+
+export DOMAIN := luci-sso.test
+export FQDN_IDP := idp.$(DOMAIN)
+export FQDN_LUCI := luci.$(DOMAIN)
+export FQDN_BROWSER := browser.$(DOMAIN)
+
+export PORT_IDP := 5556
+export PORT_LUCI := 8443
+
+# --- 2. DYNAMIC SUITE CONFIG ---
+# Default to local if not set
+export DOCKER_SUITE ?= local
+export DOCKER_NAMESPACE := ghcr.io/m00qek
+
+# Lazy variables (=) evaluated at runtime
+export RESOLVED_DOCKER_COMPOSE = $(DEVENV_DIR)/.resolved.docker-compose.$(DOCKER_SUITE).yaml
+# Use SDK_ARCH and SDK_VERSION in project name to ensure isolated containers per environment
+# We replace dots with hyphens because dots are invalid in Docker Compose project names
+SAFE_SDK_VERSION = $(subst .,-,$(SDK_VERSION))
+COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
+
+# Helper: Command to return container IDs if any service in the suite is running
+# We use --all to ensure we detect the project even if one-shot services (pki) have exited
+# This is a raw string, NOT wrapped in $(shell), so it's evaluated at recipe runtime.
+SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
+
+# --- 3. PUBLIC INTERFACE ---
+.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint
+.PHONY: local-up local-down local-ps local-shell local-run
+
+# Sentinel file tracks the last successful build for a specific arch/version/crypto combo
+SENTINEL := $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/.built-$(CRYPTO_LIB)
+
+# Wrappers sets the context and calls the implementation
+local-up: DOCKER_SUITE = local
+local-up: .up
+
+local-down: DOCKER_SUITE = local
+local-down: .down
+
+local-run: DOCKER_SUITE = local
+local-run: .run
+
+local-shell: DOCKER_SUITE = local
+local-shell: .shell
+
+build-images: DOCKER_SUITE = ci
+build-images: .build-images
+
+up: DOCKER_SUITE = ci
+up: .up
+
+down: DOCKER_SUITE = ci
+down: .down
+
+ps: DOCKER_SUITE = ci
+ps: .ps
+
+shell: DOCKER_SUITE = ci
+shell: .shell
+
+run: DOCKER_SUITE = ci
+run: .run
+
+unit-test: DOCKER_SUITE = ci
+unit-test: .unit-test
+
+fuzzer-test: DOCKER_SUITE = ci
+fuzzer-test: .fuzzer-test
+
+e2e-test: DOCKER_SUITE = ci
+e2e-test: .e2e-test
+
+# Watcher: Run tests automatically on change
+watch-tests: DOCKER_SUITE = ci
+watch-tests: .watch-tests
+
+test: unit-test e2e-test
+
+lint:
+	@echo -e " $(BLUE)🔍$(RESET) Running documentation lint checks..."
+	@bash $(DEVENV_DIR)/scripts/check-error-codes.sh
+	@bash $(DEVENV_DIR)/scripts/check-request-limits.sh
+	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
+	@echo -e " $(GREEN)✅$(RESET) All lint checks passed."
+
+pull: DOCKER_SUITE = ci
+pull: .pull
+
+VAR ?= ""
+print-env: 
+	@echo "$${$(VAR)}"
+
+.pull:
+	@docker compose $(COMPOSE_FLAGS) pull
+
+# --- 4. IMPLEMENTATION (Private Targets) ---
+
+# Macro: Abort if the current DOCKER_SUITE is not running
+define VALIDATE_SUITE_RUNNING
+	@if [ -z "$$($(SUITE_IS_RUNNING_CMD))" ]; then \
+		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING (Project: $(DOCKER_SUITE)-$(SDK_ARCH)-$(SDK_VERSION))."; \
+		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"; \
+		echo -e "\n      make up SDK_VERSION=$(SDK_VERSION)"; \
+		exit 1; \
+	fi
 endef
 
-define Package/$(PKG_NAME)/description
-  A lightweight OIDC/OAuth2 Single Sign-On provider for LuCI with minimal dependencies.
-endef
+.unit-test:
+	$(VALIDATE_SUITE_RUNNING)
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh unit --modules "$(MODULES)" --filter "$(FILTER)"
 
-define Package/$(PKG_NAME)/conffiles
-/etc/config/luci-sso
-endef
+TIME ?= 60
+DETECT_LEAKS ?= 0
 
-define Package/$(PKG_NAME)-crypto-mbedtls
-  SECTION:=utils
-  CATEGORY:=Utilities
-  TITLE:=MbedTLS backend for $(PKG_NAME)
-  DEPENDS:=+libucode +libmbedtls
-  PROVIDES:=luci-sso-crypto
-endef
+.fuzzer-test:
+	@echo -e " $(BLUE)🧪$(RESET) Running native fuzz tests for $(CRYPTO_LIB) ($(TIME)s)..."
+	docker compose $(COMPOSE_FLAGS) pull fuzzer || true
+	docker compose $(COMPOSE_FLAGS) run --rm -e ASAN_OPTIONS="detect_leaks=$(DETECT_LEAKS)" fuzzer bash -c " \
+		mkdir -p bin/fuzz && cd bin/fuzz && \
+		cmake -DENABLE_FUZZING=ON ../../src && \
+		make -j$$(nproc) && \
+		./fuzz_$(CRYPTO_LIB) -max_total_time=$(TIME) -rss_limit_mb=2048"
 
-define Package/$(PKG_NAME)-crypto-wolfssl
-  SECTION:=utils
-  CATEGORY:=Utilities
-  TITLE:=WolfSSL backend for $(PKG_NAME)
-  DEPENDS:=+libucode +libwolfssl
-  PROVIDES:=luci-sso-crypto
-endef
+.e2e-test:
+	$(VALIDATE_SUITE_RUNNING)
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh e2e --modules "$(MODULES)" --filter "$(FILTER)"
 
-define Package/$(PKG_NAME)-crypto-openssl
-  SECTION:=utils
-  CATEGORY:=Utilities
-  TITLE:=OpenSSL backend for $(PKG_NAME)
-  DEPENDS:=+libucode +libopenssl
-  PROVIDES:=luci-sso-crypto
-endef
+.watch-tests:
+	$(VALIDATE_SUITE_RUNNING)
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
+	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
-define Build/Prepare
-	mkdir -p $(PKG_BUILD_DIR)
-	$(CP) ./src/* $(PKG_BUILD_DIR)/
-endef
+.build-images:
+	@echo -e " $(BLUE)🔨$(RESET) Building images for '$(DOCKER_SUITE)'..."
+	docker compose $(COMPOSE_FLAGS) build --pull=false
 
-define Package/$(PKG_NAME)/install
-	$(INSTALL_DIR) $(1)/usr/share/ucode/luci_sso
-	$(CP) ./files/usr/share/ucode/luci_sso/* $(1)/usr/share/ucode/luci_sso/
-	$(INSTALL_DIR) $(1)/etc/config
-	$(CP) ./files/etc/config/luci-sso $(1)/etc/config/luci-sso
-	$(INSTALL_DIR) $(1)/etc/luci-sso
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./files/etc/uci-defaults/10-luci-sso-setup $(1)/etc/uci-defaults/10-luci-sso-setup
-	$(INSTALL_BIN) ./files/etc/uci-defaults/99-luci-sso-ui $(1)/etc/uci-defaults/99-luci-sso-ui
-	$(INSTALL_DIR) $(1)/usr/sbin
-	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-cleanup $(1)/usr/sbin/luci-sso-cleanup
-	$(INSTALL_DIR) $(1)/www/cgi-bin
-	$(INSTALL_BIN) ./files/www/cgi-bin/luci-sso $(1)/www/cgi-bin/luci-sso
-	$(INSTALL_DIR) $(1)/www/luci-static/resources
-	$(CP) ./files/www/luci-static/resources/luci-sso-login.js $(1)/www/luci-static/resources/
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/services
-	$(CP) ./files/www/luci-static/resources/view/services/sso.js $(1)/www/luci-static/resources/view/services/
-	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
-	$(CP) ./files/usr/share/luci/menu.d/luci-app-sso.json $(1)/usr/share/luci/menu.d/
-	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
-	$(CP) ./files/usr/share/rpcd/acl.d/luci-app-sso.json $(1)/usr/share/rpcd/acl.d/
-endef
+.up:
+	@# VALIDATION: Check if already running
+	@if [ -n "$$($(SUITE_IS_RUNNING_CMD))" ]; then
+		echo -e " $(GREEN)✅$(RESET) The '$(DOCKER_SUITE)' environment is ALREADY RUNNING."
+		echo -e " $(BLUE)ℹ️$(RESET)  Nothing to do."
+		exit 0
+	fi
+	
+	@echo -e " $(BLUE)⚙️$(RESET)  Generating configuration for '$(DOCKER_SUITE)'..."
+	docker compose $(COMPOSE_FLAGS) config > $(RESOLVED_DOCKER_COMPOSE)
 
-define Package/$(PKG_NAME)/prerm
-#!/bin/sh
-# Clean up cron job
-sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
-[ -x "/etc/init.d/cron" ] && /etc/init.d/cron restart
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) pull || true
+	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) build
+	
+	@echo -e " $(GREEN)🚀$(RESET) Starting '$(DOCKER_SUITE)' environment..."
+	docker compose $(COMPOSE_FLAGS) up --remove-orphans -d
+	
+	@echo -e " $(GREEN)✨$(RESET) Done!$(RESET)"
 
-# Revert UI patches
-sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/sysauth.ut 2>/dev/null
-sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/themes/bootstrap/sysauth.ut 2>/dev/null
+.down:
+	@echo -e " $(YELLOW)🛑$(RESET) Stopping '$(DOCKER_SUITE)' environment..."
+	docker compose $(COMPOSE_FLAGS) down --remove-orphans
 
-# Remove the SSO ACL entry and reload rpcd so the permission is revoked
-# immediately. opkg removes the file after prerm exits, so we delete it here
-# first; opkg's own removal becomes a harmless no-op.
-rm -f /usr/share/rpcd/acl.d/luci-app-sso.json 2>/dev/null
-[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+.ps:
+	@docker compose $(COMPOSE_FLAGS) ps
 
-# Clear LuCI cache to reflect removal
-rm -rf /tmp/luci-modulecache/* 2>/dev/null
-rm -rf /tmp/luci-indexcache 2>/dev/null
+CONTAINER ?= openwrt
 
-exit 0
-endef
+.shell:
+	$(VALIDATE_SUITE_RUNNING)
+	
+	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER) ($(DOCKER_SUITE))..."
+	docker compose $(COMPOSE_FLAGS) exec $(CONTAINER) /bin/sh
 
-define Package/$(PKG_NAME)-crypto-mbedtls/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
-	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_mbedtls.so ] && \
-		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_mbedtls.so $(1)/usr/lib/ucode/luci_sso/native.so || true
-endef
+.run:
+	$(VALIDATE_SUITE_RUNNING)
+	
+	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER) ($(DOCKER_SUITE))..."
+	docker compose $(COMPOSE_FLAGS) run -it --rm $(CONTAINER) /bin/sh
 
-define Package/$(PKG_NAME)-crypto-wolfssl/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
-	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_wolfssl.so ] && \
-		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_wolfssl.so $(1)/usr/lib/ucode/luci_sso/native.so || true
-endef
+sync-headers:
+	@echo -e " $(BLUE)🔄$(RESET) Syncing headers for LSP..."
+	@mkdir -p $(DEVENV_DIR)/.include
+	docker compose $(COMPOSE_FLAGS) run --rm sdk sh -c "cp -r /sdk/staging_dir/target-*/usr/include/* /sdk/package/luci-sso/devenv/.include/"
 
-define Package/$(PKG_NAME)-crypto-openssl/install
-	$(INSTALL_DIR) $(1)/usr/lib/ucode/luci_sso
-	[ -f $(PKG_INSTALL_DIR)/usr/lib/ucode/native_openssl.so ] && \
-		$(CP) $(PKG_INSTALL_DIR)/usr/lib/ucode/native_openssl.so $(1)/usr/lib/ucode/luci_sso/native.so || true
-endef
+compile: $(SENTINEL)
 
-$(eval $(call BuildPackage,$(PKG_NAME)))
-$(eval $(call BuildPackage,$(PKG_NAME)-crypto-mbedtls))
-$(eval $(call BuildPackage,$(PKG_NAME)-crypto-wolfssl))
-$(eval $(call BuildPackage,$(PKG_NAME)-crypto-openssl))
+$(SENTINEL): $(wildcard $(PROJECT_ROOT)/src/*.c) $(wildcard $(PROJECT_ROOT)/src/*.h) $(PROJECT_ROOT)/src/CMakeLists.txt
+	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(SDK_ARCH)/$(CRYPTO_LIB)..."
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
+	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
+
+	@touch $(SENTINEL)
+
+package:
+	@echo -e " $(BLUE)📦$(RESET) Building IPK package for $(SDK_ARCH)..."
+	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/packages
+	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION) 2>/dev/null || true
+	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh package

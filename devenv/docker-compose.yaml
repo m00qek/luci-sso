@@ -154,7 +154,9 @@ services:
         SDK_ARCH: ${SDK_ARCH}
         SDK_VERSION: ${SDK_VERSION}
     volumes:
-      - ..:/sdk/package/luci-sso
+      - ../openwrt/luci-sso/Makefile:/sdk/package/luci-sso/Makefile:ro
+      - ../src:/sdk/package/luci-sso/src:ro
+      - ../files:/sdk/package/luci-sso/files:ro
       - ../bin/lib:/artifacts
       - ./services/sdk/build.sh:/usr/local/bin/build.sh:ro
     working_dir: /sdk
