@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as io_mod from 'luci_sso.io';
 import * as web_mod from 'luci_sso.web';
 import * as router from 'luci_sso.router';
@@ -40,7 +40,7 @@ it('cgi: reproduction - missing Result.ok check (W1)', () => {
 
 		// 4. Call router (should return error for /invalid-path)
 		let res_router = router.handle(io, config, req);
-		assert.match(truthy(), !res_router.ok, "Router should return error for invalid path");
+		assert.match(falsy(), res_router.ok, "Router should return error for invalid path");
 
 		// 5. Simulate the FIXED CGI code:
 		let rendered_error = false;

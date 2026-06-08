@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
@@ -15,7 +15,7 @@ it('discovery: security - compliance - constant_time_eq used for issuer comparis
         [`${issuer}/.well-known/openid-configuration`]: { status: 200, body: evil_doc }
     }).spy((io) => {
         let res = discovery.discover(io, issuer);
-        assert.match(truthy(), !res.ok, "Should fail on issuer mismatch");
+        assert.match(falsy(), res.ok, "Should fail on issuer mismatch");
         assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
     });
 
@@ -46,9 +46,9 @@ it('discovery: find_jwk - functional verification', () => {
 
     // 3. Failure cases
     let res4 = discovery.find_jwk(keys, "non-existent");
-    assert.match(truthy(), !res4.ok, "Should fail for non-existent kid");
+    assert.match(falsy(), res4.ok, "Should fail for non-existent kid");
     assert.match("KEY_NOT_FOUND", res4.error);
 
     let res5 = discovery.find_jwk([], "any");
-    assert.match(truthy(), !res5.ok, "Should fail for empty keys array");
+    assert.match(falsy(), res5.ok, "Should fail for empty keys array");
 });

@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
@@ -27,7 +27,7 @@ it('REPRODUCTION: router: lacks global rate limiting', () => {
                 if (i <= 50) {
                     assert.match(truthy(), res.ok, `Request ${i} SHOULD succeed (within limit)`);
                 } else {
-                    assert.match(truthy(), !res.ok, `Request ${i} SHOULD fail (exceeded limit)`);
+                    assert.match(falsy(), res.ok, `Request ${i} SHOULD fail (exceeded limit)`);
                     assert.match("TOO_MANY_REQUESTS", res.error);
                 }
             }

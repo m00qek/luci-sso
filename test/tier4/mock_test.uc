@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as mock from 'mock';
 
 it('Meta: Mock DSL - Temporal file isolation', () => {
@@ -9,7 +9,7 @@ it('Meta: Mock DSL - Temporal file isolation', () => {
 		
 		factory.with_files({ "/b": "2" }, (io2) => {
 			assert.match("2", io2.read_file("/b"));
-			assert.match(truthy(), !io2.read_file("/a"), "Should not leak from sibling scope");
+			assert.match(falsy(), io2.read_file("/a"), "Should not leak from sibling scope");
 		});
 	});
 });
@@ -44,10 +44,10 @@ it('Meta: Mock DSL - Deep state accumulation layering', () => {
 it('Meta: Mock DSL - Read-only status persistence through inheritance', () => {
 	let factory = mock.create().with_read_only();
 	factory.with_files({}, (io) => {
-		assert.match(truthy(), !io.write_file("/test", "data"), "Root factory should be read-only");
+		assert.match(falsy(), io.write_file("/test", "data"), "Root factory should be read-only");
 		
 		factory.using(io).with_env({}, (io2) => {
-			assert.match(truthy(), !io2.write_file("/test", "data"), "Inherited factory should remain read-only");
+			assert.match(falsy(), io2.write_file("/test", "data"), "Inherited factory should remain read-only");
 		});
 	});
 });
@@ -62,7 +62,7 @@ it('Meta: Mock DSL - Selective spy recording', () => {
 		});
 		
 		assert.match(truthy(), results.called("log", "error", "captured"));
-		assert.match(truthy(), !results.called("log", "warn"), "Pre-spy logs MUST NOT be in history");
+		assert.match(falsy(), results.called("log", "warn"), "Pre-spy logs MUST NOT be in history");
 	});
 });
 

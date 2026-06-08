@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, has_length, falsy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
@@ -21,7 +21,7 @@ it('session: logic - handshake lifecycle (creation, validation, atomic consumpti
 
 		// 3. Replay Attempt (Must fail)
 		let replay_res = session.verify_state(io, handshake.token, 300);
-		assert.match(truthy(), !replay_res.ok);
+		assert.match(falsy(), replay_res.ok);
 		assert.match("STATE_NOT_FOUND", replay_res.error);
 	});
 });
@@ -33,7 +33,7 @@ it('session: logic - handle corrupted handshake files', () => {
 	
 	factory.with_files({ [path]: "{ invalid json !!! }" }, (io) => {
 		let res = session.verify_state(io, handle, 300);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("STATE_CORRUPTED", res.error);
 	});
 });
@@ -55,7 +55,7 @@ it('session: logic - enforce clock tolerance boundaries', () => {
 		
 		// 1. Expired (beyond tolerance)
 		let res = session.verify_state(io, handle, 10);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("HANDSHAKE_EXPIRED", res.error);
 	});
 });
@@ -80,7 +80,7 @@ it('session: logic - concurrent verify_state race rejection', () => {
 		io.rename = () => false; 
 		
 		let res = session.verify_state(io, handle, 300);
-		assert.match(truthy(), !res.ok, "Should NOT recover state from .consumed if rename failed (Strict One-Time Use)");
+		assert.match(falsy(), res.ok, "Should NOT recover state from .consumed if rename failed (Strict One-Time Use)");
 		assert.match("STATE_NOT_FOUND", res.error);
 	});
 });
@@ -104,7 +104,7 @@ it('session: logic - cleanup of abandoned handshakes', () => {
 		assert.match(truthy(), reap_res.ok);
 		assert.match(1, reap_res.data, "Should report 1 file reaped");
 		
-		assert.match(truthy(), !io.read_file(old_path), "Old handshake should be reaped");
+		assert.match(falsy(), io.read_file(old_path), "Old handshake should be reaped");
 		assert.match(truthy(), io.read_file(new_path), "Recent handshake should remain");
 		assert.match(truthy(), io.read_file(other_path), "Unrelated files should be ignored");
 	});
@@ -124,7 +124,7 @@ it('session: logic - stale secret key lock self-healing (Audit #104)', () => {
 		}).spy((spying_io) => {
 			let res = session.get_secret_key(spying_io);
 			assert.match(truthy(), res.ok, "Should succeed by self-healing the stale lock");
-			assert.match(truthy(), length(res.data) == 32, "Should return a valid 32-byte key");
+			assert.match(has_length(32), res.data, "Should return a valid 32-byte key");
 		});
 
 		// Verify warning log was emitted
@@ -154,7 +154,7 @@ it('session: logic - read-only FS resilience', () => {
 	factory.with_env({}, (io) => {
 		// Should FAIL if it cannot persist the key
 		let res = session.get_secret_key(io);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("SYSTEM_KEY_UNAVAILABLE", res.error);
 	});
 });
@@ -187,7 +187,7 @@ it('session: logic - secret key lock collision fallback', () => {
 		io.read_file = () => null; // File missing
 
 		let res = session.get_secret_key(io);
-		assert.match(truthy(), !res.ok, "Should fail if lock is held and key never appears");
+		assert.match(falsy(), res.ok, "Should fail if lock is held and key never appears");
 		assert.match("SYSTEM_KEY_UNAVAILABLE", res.error);
 	});
 });
@@ -202,7 +202,7 @@ it('session: logic - explicit state consumption (cleanup)', () => {
 		assert.match(truthy(), io.read_file(path), "Handshake file should exist");
 		
 		session.consume_state(io, handle);
-		assert.match(truthy(), !io.read_file(path), "Handshake file should have been deleted");
+		assert.match(falsy(), io.read_file(path), "Handshake file should have been deleted");
 	});
 });
 
@@ -231,14 +231,14 @@ it('session: logic - atomic handshake state creation', () => {
 	assert.match(truthy(), index(write_op.args[0], ".tmp") > 0, `Should write to temporary file first. Got: ${write_op.args[0]}`);
 
 	let chmod_op = operations[write_idx + 1];
-	assert.match(truthy(), chmod_op && chmod_op.type == "chmod", "Should have performed chmod after write");
+	assert.match("chmod", chmod_op && chmod_op.type, "Should have performed chmod after write");
 	assert.match(write_op.args[0], chmod_op.args[0], "chmod should target the tmp file");
 	assert.match(0600, chmod_op.args[1], "chmod should set 0600");
 
 	let rename_op = operations[write_idx + 2];
-	assert.match(truthy(), rename_op && rename_op.type == "rename", "Should have performed rename after chmod");
+	assert.match("rename", rename_op && rename_op.type, "Should have performed rename after chmod");
 	assert.match(write_op.args[0], rename_op.args[0], "rename should move from the tmp file");
-	assert.match(truthy(), index(rename_op.args[1], ".tmp") == -1, `Target path should not be temporary. Got: ${rename_op.args[1]}`);
+	assert.match(-1, index(rename_op.args[1], ".tmp"), `Target path should not be temporary. Got: ${rename_op.args[1]}`);
 });
 
 it('session: logic - detect CSPRNG failure during secret key generation (B1)', () => {
@@ -256,7 +256,7 @@ it('session: logic - detect CSPRNG failure during secret key generation (B1)', (
     crypto.set_native(null);
     if (err) die(err);
 
-    assert.match(truthy(), !res.ok, "Should fail when random() returns null");
+    assert.match(falsy(), res.ok, "Should fail when random() returns null");
     assert.match("CRYPTO_INIT_FAILED", res.error);
 });
 
@@ -275,7 +275,7 @@ it('session: logic - detect CSPRNG failure during handshake creation (B2)', () =
     crypto.set_native(null);
     if (err) die(err);
 
-    assert.match(truthy(), !res.ok, "Should fail when random() returns null");
+    assert.match(falsy(), res.ok, "Should fail when random() returns null");
     assert.match("CRYPTO_INIT_FAILED", res.error);
 });
 
@@ -293,7 +293,7 @@ it('session: get_secret_key - W1 rename failure regression', () => {
 
 			let res = session.get_secret_key(io);
 			
-			assert.match(truthy(), !res.ok, "W1: get_secret_key MUST fail if atomic rename fails");
+			assert.match(falsy(), res.ok, "W1: get_secret_key MUST fail if atomic rename fails");
 			assert.match("SYSTEM_KEY_WRITE_FAILED", res.error, "W1: Expected error code for rename failure");
 		});
 });

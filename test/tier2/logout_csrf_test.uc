@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
@@ -28,7 +28,7 @@ it('logout: security - csrf token validation', () => {
 				query: {}
 			};
 			let res = router.handle(io, config, req);
-			assert.match(truthy(), !res.ok);
+			assert.match(falsy(), res.ok);
 			assert.match(403, res.details.http_status, "Logout without token MUST fail");
 		});
 
@@ -43,7 +43,7 @@ it('logout: security - csrf token validation', () => {
 				query: { stoken: "wrong-token" }
 			};
 			let res = router.handle(io, config, req);
-			assert.match(truthy(), !res.ok);
+			assert.match(falsy(), res.ok);
 			assert.match(403, res.details.http_status, "Logout with wrong token MUST fail");
 		});
 
@@ -83,7 +83,7 @@ it('logout: security - csrf token validation', () => {
 			router.handle(io, config, req);
 		});
 	
-	assert.match(truthy(), !history.called("ubus", "session", "destroy"), "Should NOT call destroy if session lookup failed (W1)");
+	assert.match(falsy(), history.called("ubus", "session", "destroy"), "Should NOT call destroy if session lookup failed (W1)");
 });
 
 // B1: CSRF Bypass Regression Test (Empty Token Comparison)
@@ -113,7 +113,7 @@ it('logout: security - B1 CSRF bypass regression', () => {
 			};
 			let res = router.handle(io, config, req);
 			
-			assert.match(truthy(), !res.ok, "B1: Logout with MISSING session token and MISSING query token MUST fail (CSRF bypass)");
+			assert.match(falsy(), res.ok, "B1: Logout with MISSING session token and MISSING query token MUST fail (CSRF bypass)");
 			assert.match(403, res.details.http_status, "B1: Expected 403 Forbidden for empty CSRF token comparison");
 		});
 });

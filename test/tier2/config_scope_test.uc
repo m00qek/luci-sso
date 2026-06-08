@@ -53,6 +53,6 @@ it('config: scope - handle missing scope', () => {
             assert.match(truthy(), Result.is(res));
             assert.match(truthy(), res.ok);
             // In the current implementation, res.data.scope will be undefined
-            assert.match(truthy(), res.data.scope === undefined, "Scope should be undefined if not in UCI");
+            assert.match(undefined, res.data.scope, "Scope should be undefined if not in UCI");
         });
 });

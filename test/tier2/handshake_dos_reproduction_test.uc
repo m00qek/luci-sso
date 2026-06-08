@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
@@ -66,7 +66,7 @@ it('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => {
             // This should NOT trigger the rotation recovery path because kid is missing
             let res = handshake.authenticate(io, test_config, request);
             
-            assert.match(truthy(), !res.ok, "Handshake should fail due to invalid signature");
+            assert.match(falsy(), res.ok, "Handshake should fail due to invalid signature");
             assert.match("ID_TOKEN_VERIFICATION_FAILED", res.error);
             assert.match("INVALID_SIGNATURE", res.details?.details);
             assert.match(1, call_count, "JWKS should have been fetched exactly once (no retry should occur if kid is missing)");

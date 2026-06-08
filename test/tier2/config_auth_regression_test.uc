@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as mock from 'mock';
 
@@ -32,7 +32,7 @@ it('config: auth regression - deny role with empty permissions', () => {
 		let res = config_loader.find_roles_for_user(config, { email: "empty@test.com" });
 		
 		// This is expected to FAIL before the fix
-		assert.match(truthy(), !res.ok, "Should DENY user with empty permissions role");
+		assert.match(falsy(), res.ok, "Should DENY user with empty permissions role");
 		assert.match("NO_ROLES_MATCHED", res.error, "Error code should be NO_ROLES_MATCHED");
 	});
 });

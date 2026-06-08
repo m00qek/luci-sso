@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as ubus from 'luci_sso.ubus';
 import * as mock from 'mock';
 
@@ -25,7 +25,7 @@ it('ubus: register_token - handles concurrent registration (replay)', () => {
         };
         
         let res2 = ubus.register_token(io, token);
-        assert.match(truthy(), !res2.ok, "Second registration MUST fail");
+        assert.match(falsy(), res2.ok, "Second registration MUST fail");
         assert.match("TOKEN_REPLAYED", res2.error);
     });
 });

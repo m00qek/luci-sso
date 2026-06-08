@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as encoding from 'luci_sso.encoding';
@@ -127,7 +127,7 @@ it('handshake: warning - silent for opaque or short-lived tokens', () => {
                         break;
                     }
                 }
-                assert.match(truthy(), !found, `Should NOT log warning for ${c.name} token`);
+                assert.match(falsy(), found, `Should NOT log warning for ${c.name} token`);
             });
     }
 });

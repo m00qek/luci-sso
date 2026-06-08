@@ -1,6 +1,6 @@
 'use strict';
 
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as mock from 'mock';
 
@@ -24,7 +24,7 @@ it('config: logic - reproduction - reject internal_issuer_url with insecure sche
 
     mocked.with_uci(mock_uci, (io) => {
         let res = config_loader.load(io);
-        assert.match(truthy(), !res.ok, "Should reject insecure internal_issuer_url");
+        assert.match(falsy(), res.ok, "Should reject insecure internal_issuer_url");
         assert.match("CONFIG_ERROR", res.error);
         assert.match(truthy(), index(res.details, "internal_issuer_url must use HTTPS") >= 0, "Error message must match");
     });
@@ -60,15 +60,15 @@ it('config: validation - clock_tolerance range checks (N4/N5)', () => {
 
 	// Error paths
 	let res_neg = check("-1");
-	assert.match(truthy(), !res_neg.ok);
+	assert.match(falsy(), res_neg.ok);
 	assert.match("CONFIG_ERROR", res_neg.error);
 	assert.match(truthy(), index(res_neg.details, "between 0 and 3600") != -1);
 
 	let res_large = check("3601");
-	assert.match(truthy(), !res_large.ok);
+	assert.match(falsy(), res_large.ok);
 	assert.match("CONFIG_ERROR", res_large.error);
 
 	let res_invalid = check("abc");
-	assert.match(truthy(), !res_invalid.ok);
+	assert.match(falsy(), res_invalid.ok);
 	assert.match("CONFIG_ERROR", res_invalid.error);
 });

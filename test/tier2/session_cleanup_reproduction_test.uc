@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 
@@ -28,7 +28,7 @@ it('session: reproduction - verify_state cleanup failure on read error (W5)', ()
 		let res = session.verify_state(io, handle, 300);
 
 		// Assertions
-		assert.match(truthy(), !res.ok, "Should fail due to read error");
+		assert.match(falsy(), res.ok, "Should fail due to read error");
 		assert.match(truthy(), remove_called, "CRITICAL: Must remove .consumed file even if read fails");
 	});
 });

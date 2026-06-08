@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, has_length } from 'utest';
 import * as native from 'luci_sso.native';
 import * as Result from 'luci_sso.result';
 
@@ -24,12 +24,12 @@ it('native: boundary - sha256 input limits', () => {
     let data_ok = generate_large(MAX);
     let res_ok = native.sha256(data_ok);
     assert.match(truthy(), res_ok != null, "Should accept exactly 16384 bytes");
-    assert.match(truthy(), length(res_ok) == 32, "Should return 32-byte hash");
+    assert.match(has_length(32), res_ok, "Should return 32-byte hash");
 
     // 2. Over Limit (16385)
     let data_bad = data_ok + "A";
     let res_bad = native.sha256(data_bad);
-    assert.match(truthy(), res_bad == null, "Should reject 16385 bytes (Null return)");
+    assert.match(null, res_bad, "Should reject 16385 bytes (Null return)");
 });
 
 it('native: boundary - hmac_sha256 input limits', () => {
@@ -46,10 +46,10 @@ it('native: boundary - hmac_sha256 input limits', () => {
     assert.match(truthy(), res_key_ok != null, "Should accept 16384 bytes key");
 
     // 3. Data over limit
-    assert.match(truthy(), native.hmac_sha256(key_ok, data_ok + "A") == null, "Should reject 16385 bytes data");
+    assert.match(null, native.hmac_sha256(key_ok, data_ok + "A"), "Should reject 16385 bytes data");
 
     // 4. Key over limit
-    assert.match(truthy(), native.hmac_sha256(data_ok + "A", "msg") == null, "Should reject 16385 bytes key");
+    assert.match(null, native.hmac_sha256(data_ok + "A", "msg"), "Should reject 16385 bytes key");
 });
 
 it('native: boundary - verify_rs256 input limits', () => {
@@ -62,13 +62,13 @@ it('native: boundary - verify_rs256 input limits', () => {
     // native_common.c happens BEFORE the crypto library is called.
     
     // 1. Msg over limit
-    assert.match(truthy(), native.verify_rs256(data_ok + "A", sig_ok, key_ok) === false, "Should return false for msg > 16KB");
+    assert.match(false, native.verify_rs256(data_ok + "A", sig_ok, key_ok), "Should return false for msg > 16KB");
 
     // 2. Sig over limit
-    assert.match(truthy(), native.verify_rs256(data_ok, data_ok + "A", key_ok) === false, "Should return false for sig > 16KB");
+    assert.match(false, native.verify_rs256(data_ok, data_ok + "A", key_ok), "Should return false for sig > 16KB");
 
     // 3. Key over limit
     // Note: native.h has NATIVE_RSA_PEM_MAX (4096), but native_common.c 
     // uses NATIVE_MAX_INPUT_SIZE (16384) for the initial boundary check.
-    assert.match(truthy(), native.verify_rs256(data_ok, sig_ok, data_ok + "A") === false, "Should return false for key > 16KB");
+    assert.match(false, native.verify_rs256(data_ok, sig_ok, data_ok + "A"), "Should return false for key > 16KB");
 });

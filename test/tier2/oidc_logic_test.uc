@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
 import * as encoding from 'luci_sso.encoding';
@@ -31,7 +31,7 @@ it('oidc: discovery - handle non-JSON response', () => {
 	
 	mock.create().with_responses({ [url]: { status: 200, body: "<html>Error</html>" } }, (io) => {
 		let res = oidc.discover(io, issuer);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INVALID_DISCOVERY_DOC", res.error);
 	});
 });
@@ -43,7 +43,7 @@ it('oidc: discovery - reject issuer mismatch', () => {
 
 	mock.create().with_responses({ [url]: { status: 200, body: evil_doc } }, (io) => {
 		let res = oidc.discover(io, issuer);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
 	});
 });
@@ -56,7 +56,7 @@ it('oidc: discovery - reject document missing issuer field', () => {
 
 	mock.create().with_responses({ [url]: { status: 200, body: bad_doc } }, (io) => {
 		let res = oidc.discover(io, issuer);
-		assert.match(truthy(), !res.ok, "Should fail if issuer field is missing");
+		assert.match(falsy(), res.ok, "Should fail if issuer field is missing");
 		assert.match("DISCOVERY_MISSING_ISSUER", res.error);
 	});
 });
@@ -100,7 +100,7 @@ it('oidc: token - handle IdP errors (401/400)', () => {
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 401, body: { error: "invalid_client" } }
 	}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", v);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("TOKEN_EXCHANGE_FAILED", res.error);
 	});
 
@@ -109,7 +109,7 @@ it('oidc: token - handle IdP errors (401/400)', () => {
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "something_else" } }
 	}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", v);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("TOKEN_EXCHANGE_FAILED", res.error);
 	});
 
@@ -118,7 +118,7 @@ it('oidc: token - handle IdP errors (401/400)', () => {
 		[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "invalid_grant" } }
 	}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", v);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("OIDC_INVALID_GRANT", res.error);
 	});
 });
@@ -231,10 +231,10 @@ it('oidc: ID token - handle binary garbage', () => {
 	
 	mock.create().with_env({}, (io) => {
 		let res = oidc.verify_id_token(io, { id_token: "not.a.token" }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		
 		res = oidc.verify_id_token(io, { id_token: "\x00\xff\xdeadbeef" }, keys, f.MOCK_CONFIG, {}, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 	});
 });
 
@@ -273,7 +273,7 @@ it('oidc: token - enforce PKCE verifier length', () => {
 	mock.create().with_responses({}, (io) => {
 		// 1. Weak verifier
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "code", "weak");
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INVALID_PKCE_VERIFIER", res.error);
 
 		// 2. Valid verifier
@@ -307,19 +307,19 @@ it('oidc: ID token - at_hash validation ensures token binding', () => {
 		// 2. Failure: Both missing (Stripping Attack / Hybrid Bypass)
 		let p2 = { ...f.MOCK_CLAIMS };
 		let res2 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p2, PRIVKEY, "RS256") }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert.match(truthy(), !res2.ok && res2.error == "MISSING_ACCESS_TOKEN", "Should fail if access_token is missing");
+		assert.match("MISSING_ACCESS_TOKEN", !res2.ok && res2.error, "Should fail if access_token is missing");
 
 		// 3. Failure: at_hash does not match access_token
 		let res3 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, PRIVKEY, "RS256"), access_token: "wrong" }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert.match(truthy(), !res3.ok && res3.error == "AT_HASH_MISMATCH");
+		assert.match("AT_HASH_MISMATCH", !res3.ok && res3.error);
 
 		// 4. Failure: at_hash missing when access_token present
 		let res4 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p2, PRIVKEY, "RS256"), access_token: access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert.match(truthy(), !res4.ok && res4.error == "MISSING_AT_HASH");
+		assert.match("MISSING_AT_HASH", !res4.ok && res4.error);
 
 		// 5. Failure: at_hash present but access_token missing (Stripping Attack)
 		let res5 = oidc.verify_id_token(io, { id_token: h.generate_id_token(p1, PRIVKEY, "RS256") }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert.match(truthy(), !res5.ok && res5.error == "MISSING_ACCESS_TOKEN");
+		assert.match("MISSING_ACCESS_TOKEN", !res5.ok && res5.error);
 	});
 });
 
@@ -377,7 +377,7 @@ it('oidc: discovery - handle insecure end_session_endpoint', () => {
 	factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { status: 200, body: disc } }, (io) => {
 		let res = oidc.discover(io, "https://idp.com");
 		assert.match(truthy(), res.ok);
-		assert.match(truthy(), !res.data.end_session_endpoint, "Insecure end_session_endpoint MUST be removed");
+		assert.match(falsy(), res.data.end_session_endpoint, "Insecure end_session_endpoint MUST be removed");
 	});
 });
 
@@ -446,7 +446,7 @@ it('oidc: userinfo - reject missing sub claim', () => {
 		[endpoint]: { status: 200, body: { email: "no-sub@example.com" } }
 	}, (io) => {
 		let res = oidc.fetch_userinfo(io, endpoint, "at");
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("MISSING_SUB_CLAIM", res.error);
 	});
 });
@@ -470,7 +470,7 @@ it('oidc: ID token - require azp when aud has multiple audiences', () => {
 
 	mock.create().with_env({}, (io) => {
 		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert.match(truthy(), !res.ok, "Verification MUST fail when aud has multiple audiences but azp is missing");
+		assert.match(falsy(), res.ok, "Verification MUST fail when aud has multiple audiences but azp is missing");
 		assert.match("MISSING_AZP_CLAIM", res.error);
 	});
 });
@@ -517,7 +517,7 @@ it('oidc: ID token - reject azp mismatch even for single-element aud', () => {
 
 	mock.create().with_env({}, (io) => {
 		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert.match(truthy(), !res.ok, "Verification MUST fail when azp claim is present but mismatched");
+		assert.match(falsy(), res.ok, "Verification MUST fail when azp claim is present but mismatched");
 		assert.match("AZP_MISMATCH", res.error);
 	});
 });

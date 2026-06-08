@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
@@ -17,7 +17,7 @@ it('discovery: security - prevent cache poisoning on issuer mismatch (B5)', () =
         .spy((io) => {
             let res = discovery.discover(io, issuer);
             
-            assert.match(truthy(), !res.ok, "Should fail on issuer mismatch");
+            assert.match(falsy(), res.ok, "Should fail on issuer mismatch");
             assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
 
             // Verify NO files were written to cache
@@ -25,7 +25,7 @@ it('discovery: security - prevent cache poisoning on issuer mismatch (B5)', () =
             let cache_written = false;
             for (let f in files) if (match(f, /^oidc-discovery-/)) cache_written = true;
             
-            assert.match(truthy(), !cache_written, "Cache MUST NOT be written when validation fails (B5)");
+            assert.match(falsy(), cache_written, "Cache MUST NOT be written when validation fails (B5)");
         });
 });
 
@@ -39,13 +39,13 @@ it('discovery: security - prevent cache poisoning on missing required fields', (
         })
         .spy((io) => {
             let res = discovery.discover(io, issuer);
-            assert.match(truthy(), !res.ok);
+            assert.match(falsy(), res.ok);
             
             let files = io.lsdir("/var/run/luci-sso");
             let cache_written = false;
             for (let f in files) if (match(f, /^oidc-discovery-/)) cache_written = true;
             
-            assert.match(truthy(), !cache_written, "Cache MUST NOT be written for incomplete discovery doc");
+            assert.match(falsy(), cache_written, "Cache MUST NOT be written for incomplete discovery doc");
         });
 });
 
@@ -69,7 +69,7 @@ it('discovery: security - ensure sanitized logging on issuer mismatch (W4)', () 
         if (entry.type == "log") {
             log_found = true;
             let msg = entry.args[1];
-            assert.match(truthy(), index(msg, evil_issuer) == -1, "Raw malicious issuer MUST NOT be logged");
+            assert.match(-1, index(msg, evil_issuer), "Raw malicious issuer MUST NOT be logged");
         }
     }
     assert.match(truthy(), log_found, "Mismatch error should have been logged");

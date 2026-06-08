@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as encoding from 'luci_sso.encoding';
 
 it('encoding: url - normalize_url removes trailing slashes', () => {
@@ -16,6 +16,6 @@ it('encoding: url - normalize_url preservation of path', () => {
 
 it('encoding: url - normalize_url handles non-string safely', () => {
 	let res = encoding.normalize_url(null);
-	assert.match(truthy(), !res.ok, "Should return Result.err for non-string");
+	assert.match(falsy(), res.ok, "Should return Result.err for non-string");
 	assert.match(truthy(), index(res.error, "INVALID_ARGUMENT") >= 0, "Should contain INVALID_ARGUMENT in error");
 });

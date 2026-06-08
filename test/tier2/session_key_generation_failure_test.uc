@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 
@@ -31,7 +31,7 @@ it('session: reproduction - null key propagation on generation failure (B5)', ()
 ");
 		}
 
-		assert.match(truthy(), !res.ok, "Should return error when key generation fails");
+		assert.match(falsy(), res.ok, "Should return error when key generation fails");
 		assert.match(truthy(), res.error == "SYSTEM_KEY_GENERATION_FAILED" || res.error == "SYSTEM_KEY_WRITE_FAILED", "Expected key generation or write failure error");
 	});
 });

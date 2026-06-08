@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as oidc from 'luci_sso.oidc';
 
 it('oidc: get_auth_url - rejects fragments in authorization_endpoint (W2)', () => {
@@ -21,6 +21,6 @@ it('oidc: get_auth_url - rejects fragments in authorization_endpoint (W2)', () =
 
     let res = oidc.get_auth_url({}, mock_config, discovery_doc, params);
     
-    assert.match(truthy(), !res.ok, "Authorization endpoint with fragment MUST be rejected");
+    assert.match(falsy(), res.ok, "Authorization endpoint with fragment MUST be rejected");
     assert.match("INVALID_AUTH_ENDPOINT", res.error);
 });

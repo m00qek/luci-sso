@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as jwt from 'luci_sso.crypto.jwt';
 import * as mock from 'mock';
 
@@ -26,6 +26,6 @@ import * as encoding from 'luci_sso.encoding';
 
 it('encoding: normalize_url - should return Result.err for non-string instead of die', () => {
 	let res = encoding.normalize_url(null);
-	assert.match(truthy(), !res.ok, "Should return Result.err for null");
+	assert.match(falsy(), res.ok, "Should return Result.err for null");
 	assert.match("INVALID_ARGUMENT", res.error);
 });

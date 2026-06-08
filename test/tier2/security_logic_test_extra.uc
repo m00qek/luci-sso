@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as oidc from 'luci_sso.oidc';
 import * as ubus from 'luci_sso.ubus';
@@ -29,11 +29,11 @@ it('session: handshake - state is single-use only', () => {
 
                // 3. Attempt 2: Should fail
                let res_2 = session.verify_state(io, handle, 0);
-               assert.match(truthy(), !res_2.ok, "Second consumption should fail");
+               assert.match(falsy(), res_2.ok, "Second consumption should fail");
 
                // 4. Attempt 3: Should still fail
                let res_3 = session.verify_state(io, handle, 0);
-               assert.match(truthy(), !res_3.ok, "Third consumption should fail");
+               assert.match(falsy(), res_3.ok, "Third consumption should fail");
                assert.match("STATE_NOT_FOUND", res_3.error);
        });
 });
@@ -41,7 +41,7 @@ it('session: handshake - state is single-use only', () => {
 it('session: handshake - traversal attempts are rejected', () => {
        mock.create().with_files({}, (io) => {
                let res = session.verify_state(io, "../../../etc/passwd", 0);
-               assert.match(truthy(), !res.ok, "Should reject traversal attempt");
+               assert.match(falsy(), res.ok, "Should reject traversal attempt");
                assert.match("MALFORMED_STATE_COOKIE", res.error);
        });
 });
@@ -52,7 +52,7 @@ it('session: handshake - malformed JSON fails closed', () => {
 
        mock.create().with_files({ [path]: "{ invalid: json" }, (io) => {
                let res = session.verify_state(io, handle, 0);
-               assert.match(truthy(), !res.ok, "Should fail on malformed JSON");
+               assert.match(falsy(), res.ok, "Should fail on malformed JSON");
                assert.match("STATE_CORRUPTED", res.error);
        });
 });
@@ -65,7 +65,7 @@ it('session: handshake - filesystem error fails closed', () => {
                // Derive a read-only reality
                mock.create().using(io).with_read_only((read_only_io) => {
                        let res_fs = session.verify_state(read_only_io, handle, 0);
-                       assert.match(truthy(), !res_fs.ok, "Should fail when rename is impossible");
+                       assert.match(falsy(), res_fs.ok, "Should fail when rename is impossible");
                        assert.match("STATE_NOT_FOUND", res_fs.error);
                });
        });
@@ -82,7 +82,7 @@ it('security: reject authorization URL generation without state (B1)', () => {
 it('security: reject authorization URL generation with short state (B3)', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "short", nonce: "n1234567890123456", code_challenge: "cc1" });
-		assert.match(truthy(), !res.ok, "MUST reject short state");
+		assert.match(falsy(), res.ok, "MUST reject short state");
 		assert.match("MISSING_STATE_PARAMETER", res.error);
 	});
 });
@@ -90,7 +90,7 @@ it('security: reject authorization URL generation with short state (B3)', () => 
 it('security: reject authorization URL generation without nonce (B1)', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "s1234567890123456", code_challenge: "cc1" });
-		assert.match(truthy(), !res.ok, "MUST reject missing nonce");
+		assert.match(falsy(), res.ok, "MUST reject missing nonce");
 		assert.match("MISSING_NONCE_PARAMETER", res.error);
 	});
 });
@@ -113,6 +113,6 @@ it('security: detect CSPRNG failure during CSRF token generation (B3)', () => {
     crypto.set_native(null);
     if (err) die(err);
 
-    assert.match(truthy(), !res.ok, "MUST reject session creation if CSPRNG fails");
+    assert.match(falsy(), res.ok, "MUST reject session creation if CSPRNG fails");
     assert.match("CRYPTO_INIT_FAILED", res.error);
 });

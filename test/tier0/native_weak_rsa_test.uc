@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as native from 'luci_sso.native';
 
 // 512-bit RSA Public Key (Weak but validly signed)
@@ -18,5 +18,5 @@ it('native: security - RSA minimum key size enforcement (2048 bits)', () => {
     // Currently, it is expected to return true (VULNERABLE).
     let res = native.verify_rs256(msg, sig, WEAK_RSA_PUB);
     
-    assert.match(truthy(), !res, "Verification SHOULD fail for weak 512-bit RSA key even if signature is valid");
+    assert.match(falsy(), res, "Verification SHOULD fail for weak 512-bit RSA key even if signature is valid");
 });

@@ -52,7 +52,7 @@ it('logout: security - robust origin extraction for post_logout_redirect_uri', (
                 assert.match(truthy(), res.ok);
                 let location = res.data.headers["Location"];
                 
-                assert.match(truthy(), index(location, "evil.com") == -1, `Logout URL MUST NOT contain injected HTTP_HOST (Case: ${c.redirect})`);
+                assert.match(-1, index(location, "evil.com"), `Logout URL MUST NOT contain injected HTTP_HOST (Case: ${c.redirect})`);
                 
                 let expected_param = "post_logout_redirect_uri=" + c.expected;
                 assert.match(truthy(), index(location, expected_param) != -1, `Should use exact trusted origin base (Expected: ${c.expected}, Got: ${location})`);
@@ -64,7 +64,7 @@ it('logout: security - robust origin extraction for post_logout_redirect_uri', (
                     // Check if the encoded version of path_part appears after post_logout_redirect_uri
                     // This is a bit complex to test generically, so we just check for "callback" as per the case
                     if (index(path_part, "callback") != -1) {
-                         assert.match(truthy(), index(location, "callback") == -1, `Path MUST be stripped from post_logout_redirect_uri (Case: ${c.redirect})`);
+                         assert.match(-1, index(location, "callback"), `Path MUST be stripped from post_logout_redirect_uri (Case: ${c.redirect})`);
                     }
                 }
             });

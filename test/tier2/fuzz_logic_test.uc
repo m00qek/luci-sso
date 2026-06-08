@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
@@ -21,7 +21,7 @@ it('fuzz: logic - Base64URL consistency', () => {
 		let encoded_res = encoding.b64url_encode(original);
 		assert.match(truthy(), encoded_res.ok);
 		let encoded = encoded_res.data;
-		assert.match(truthy(), !match(encoded, /[+/=]/), `Encoded string '${encoded}' should not contain +, / or =`);
+		assert.match(falsy(), match(encoded, /[+/=]/), `Encoded string '${encoded}' should not contain +, / or =`);
 		let decoded_res = encoding.b64url_decode(encoded);
 		assert.match(truthy(), decoded_res.ok);
 		let decoded = decoded_res.data;

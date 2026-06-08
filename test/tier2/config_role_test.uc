@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as mock from 'mock';
 
@@ -123,7 +123,7 @@ it('config: role - deny user with no roles', () => {
 		let config = config_loader.load(io).data;
 		let res = config_loader.find_roles_for_user(config, { email: "stranger@test.com" });
 		
-		assert.match(truthy(), !res.ok, "Should NOT find roles");
+		assert.match(falsy(), res.ok, "Should NOT find roles");
 		assert.match("NO_ROLES_MATCHED", res.error);
 	});
 });

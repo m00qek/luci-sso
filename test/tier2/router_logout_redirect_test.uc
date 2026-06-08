@@ -39,6 +39,6 @@ it('router: logic - logout redirect derivation robustness (W3)', () => {
 		let res = router.handle(io, config, req, TEST_POLICY);
 		assert.match(truthy(), res.ok);
 		// Correct logic (Audit W4): If regex fails, OMIT the parameter entirely rather than sending relative /
-		assert.match(truthy(), index(res.data.headers["Location"], "post_logout_redirect_uri=") == -1, "Should OMIT post_logout_redirect_uri for invalid redirect_uri scheme");
+		assert.match(-1, index(res.data.headers["Location"], "post_logout_redirect_uri="), "Should OMIT post_logout_redirect_uri for invalid redirect_uri scheme");
 	});
 });

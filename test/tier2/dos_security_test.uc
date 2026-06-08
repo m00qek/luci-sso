@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as oidc from 'luci_sso.oidc';
 import * as handshake from 'luci_sso.handshake';
@@ -22,7 +22,7 @@ it('oidc: security - reject massive discovery response (DoS protection)', () => 
         .with_env({}, (io) => {
             let res = oidc.discover(io, "https://massive.idp");
             
-            assert.match(truthy(), !res.ok, "Should reject massive discovery document");
+            assert.match(falsy(), res.ok, "Should reject massive discovery document");
             assert.match("DISCOVERY_NETWORK_ERROR", res.error, "Should return network error (aborted read)");
             
             // Verification of the exact policy in history
@@ -59,7 +59,7 @@ it('handshake: security - register_token deferred until after verification (DoS 
 
             // 3. This call should fail because id_token is invalid
             let auth_res = handshake.authenticate(io, test_config, request, { allowed_algs: ["RS256"] });
-            assert.match(truthy(), !auth_res.ok, "Authentication should fail due to invalid ID token");
+            assert.match(falsy(), auth_res.ok, "Authentication should fail due to invalid ID token");
 
             // 4. Verify that register_token was NEVER called
             let history = io.__state__.history;
@@ -70,6 +70,6 @@ it('handshake: security - register_token deferred until after verification (DoS 
                     break;
                 }
             }
-            assert.match(truthy(), !registered, "Should NOT register token before successful ID token verification");
+            assert.match(falsy(), registered, "Should NOT register token before successful ID token verification");
         });
 });

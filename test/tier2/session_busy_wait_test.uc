@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 
@@ -28,7 +28,7 @@ it('session: security - get_secret_key avoids infinite busy-wait', () => {
 
 		let res = session.get_secret_key(io);
 		
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("SYSTEM_KEY_UNAVAILABLE", res.error);
 		
 		// Each retry (max 5) should perform exactly one sleep(1).

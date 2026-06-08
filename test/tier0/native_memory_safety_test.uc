@@ -6,7 +6,7 @@ it('native: memory safety - WolfSSL jwk_ec_p256_to_pem failed import (B1)', () =
     // Coordinates that are not on the curve should also fail.
     
     let res = native.jwk_ec_p256_to_pem("too-short", "too-short");
-    assert.match(truthy(), res === null, "Should return null for too-short EC coordinates");
+    assert.match(null, res, "Should return null for too-short EC coordinates");
 
     let x_bad = "";
     for (let i = 0; i < 32; i++) x_bad += "A";
@@ -14,5 +14,5 @@ it('native: memory safety - WolfSSL jwk_ec_p256_to_pem failed import (B1)', () =
     for (let i = 0; i < 32; i++) y_bad += "B";
     
     res = native.jwk_ec_p256_to_pem(x_bad, y_bad);
-    assert.match(truthy(), res === null, "Should return null for invalid EC coordinates (not on curve)");
+    assert.match(null, res, "Should return null for invalid EC coordinates (not on curve)");
 });

@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
@@ -44,7 +44,7 @@ it('discovery: resilience - fail if cache is missing AND network fails', () => {
 		io.http_get = (url) => Result.err("DNS_FAILURE");
 
 		let res = discovery.discover(io, issuer);
-		assert.match(truthy(), !res.ok, "Should fail if no cache and no network");
+		assert.match(falsy(), res.ok, "Should fail if no cache and no network");
 		assert.match("DISCOVERY_NETWORK_ERROR", res.error);
 	});
 });

@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, has_length, falsy } from 'utest';
 import * as ubus from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
@@ -28,7 +28,7 @@ it('ubus: logic - get_session handle missing session', () => {
 	factory.with_env({}, (io) => {
 		let res = ubus.get_session(io, "invalid-sid");
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("SESSION_NOT_FOUND", res.error);
 	});
 });
@@ -38,7 +38,7 @@ it('ubus: logic - get_session handle invalid SID', () => {
 	factory.with_env({}, (io) => {
 		let res = ubus.get_session(io, null);
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INVALID_SID", res.error);
 	});
 });
@@ -97,13 +97,13 @@ it('ubus: logic - register_token atomicity and full hash (B2)', () => {
 		
 		// 2. Verify it created a 64-character hex ID entry
 		let files = io.lsdir("/var/run/luci-sso/tokens");
-		assert.match(truthy(), length(files) == 1, "Should have exactly one token entry");
+		assert.match(has_length(1), files, "Should have exactly one token entry");
 		assert.match(64, length(files[0]), "Token ID must be a full 64-character SHA-256 hex digest");
 		
 		// 3. Second registration of SAME token must fail (replay)
 		let res2 = ubus.register_token(io, token);
         assert.match(truthy(), Result.is(res2));
-		assert.match(truthy(), !res2.ok, "Replayed token registration must fail");
+		assert.match(falsy(), res2.ok, "Replayed token registration must fail");
 		assert.match("TOKEN_REPLAYED", res2.error);
 		
 		// 4. Registration of DIFFERENT token should succeed
@@ -140,6 +140,6 @@ it('ubus: security - create_passwordless_session robust ACL parsing (N2)', () =>
 		}
 		
 		assert.match(truthy(), index(granted_groups, "luci-mod-status") != -1, "Should grant actual luci-* key");
-		assert.match(truthy(), index(granted_groups, "luci-fake") == -1, "Should NOT grant luci-* string found in values (N2)");
+		assert.match(-1, index(granted_groups, "luci-fake"), "Should NOT grant luci-* string found in values (N2)");
 	});
 });

@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 import * as Result from 'luci_sso.result';
@@ -12,11 +12,11 @@ it('session: get_secret_key - handle write failure', () => {
             
             let res = session.get_secret_key(io);
             
-            assert.match(truthy(), !res.ok, "get_secret_key should fail when write_file fails");
+            assert.match(falsy(), res.ok, "get_secret_key should fail when write_file fails");
             assert.match("SYSTEM_KEY_WRITE_FAILED", res.error);
             
             // Ensure lock is removed even on failure
             let stat = io.stat("/etc/luci-sso/secret.key.lock");
-            assert.match(truthy(), !stat, "Lock directory should be removed after failure");
+            assert.match(falsy(), stat, "Lock directory should be removed after failure");
         });
 });

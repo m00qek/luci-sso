@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 
 it('ucode: truthiness of empty array', () => {
     let a = [];
@@ -10,12 +10,12 @@ it('ucode: truthiness of empty array', () => {
 
 it('ucode: truthiness of null/undefined', () => {
     let a = null;
-    assert.match(truthy(), !a, "null SHOULD be falsy");
+    assert.match(falsy(), a, "null SHOULD be falsy");
     let b = a || ["fallback"];
     assert.match(["fallback"], b, "|| fallback SHOULD trigger for null");
 
     let c = {}.missing;
-    assert.match(truthy(), !c, "undefined SHOULD be falsy");
+    assert.match(falsy(), c, "undefined SHOULD be falsy");
     let d = c || ["fallback"];
     assert.match(["fallback"], d, "|| fallback SHOULD trigger for undefined");
 });

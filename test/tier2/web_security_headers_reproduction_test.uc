@@ -37,5 +37,5 @@ it('web: security - prevent CRLF injection in headers (W4)', () => {
 	assert.match(truthy(), index(stdout, "X-Custom: valid malicious") != -1, "LF MUST be sanitized in custom headers");
 
 	// Ensure no raw Set-Cookie: evil=true exists as a header line
-	assert.match(truthy(), index(stdout, "\nSet-Cookie: evil=true\n") == -1, "Injection attack MUST fail");
+	assert.match(-1, index(stdout, "\nSet-Cookie: evil=true\n"), "Injection attack MUST fail");
 });

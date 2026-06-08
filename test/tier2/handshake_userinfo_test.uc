@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as handshake from 'luci_sso.handshake';
@@ -118,7 +118,7 @@ it('handshake: userinfo - fails identity binding when sub mismatches', () => {
             };
 
             let res = handshake.authenticate(io, test_config, request);
-            assert.match(truthy(), !res.ok, "Handshake should fail on sub mismatch");
+            assert.match(falsy(), res.ok, "Handshake should fail on sub mismatch");
             assert.match("IDENTITY_MISMATCH", res.error);
         });
 });

@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as web_mod from 'luci_sso.web';
 import * as router from 'luci_sso.router';
@@ -28,7 +28,7 @@ it('router: reproduction - enabled endpoint returns JSON even if disabled (W2)',
 
         // 2. Load Config (will be SSO_DISABLED)
         let res_c = config_loader.load(io);
-        assert.match(truthy(), !res_c.ok);
+        assert.match(falsy(), res_c.ok);
         assert.match("SSO_DISABLED", res_c.error);
 
         // 3. Emulate the fix in CGI entry point:
@@ -53,7 +53,7 @@ it('router: security - null config guard (B2)', () => {
         
         let res = router.handle(io, null, req);
         
-        assert.match(truthy(), !res.ok, "Should fail when config is null");
+        assert.match(falsy(), res.ok, "Should fail when config is null");
         assert.match("SSO_DISABLED", res.error);
         assert.match(503, res.details.http_status);
     });

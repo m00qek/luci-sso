@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as router from 'luci_sso.router';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
@@ -47,7 +47,7 @@ it('Router: Login Flow - Handle massive discovery response', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { error: "RESPONSE_TOO_LARGE" } }, (io) => {
 		let res = router.handle(io, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
-		assert.match(truthy(), !res.ok, "Should fail on discovery failure");
+		assert.match(falsy(), res.ok, "Should fail on discovery failure");
 		assert.match(500, res.details.http_status, "Should return 500 status in details");
 	});
 });
@@ -59,7 +59,7 @@ it('Router: Login Flow - Redirect to Healthy IdP', () => {
 		let res = router.handle(io, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
 		assert.match(truthy(), res.ok, "Router handle should succeed");
 		assert.match(302, res.data.status);
-		assert.match(truthy(), index(res.data.headers["Location"], "https://idp.com/auth") == 0, "Redirect MUST point to auth endpoint");
+		assert.match(0, index(res.data.headers["Location"], "https://idp.com/auth"), "Redirect MUST point to auth endpoint");
 	});
 });
 
@@ -207,7 +207,7 @@ it('Router: Callback - Reject non-whitelisted users', () => {
 		}, (io_http) => {
 			let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 			let res = router.handle(io_http, { ...MOCK_CONFIG, roles: [] }, req, TEST_POLICY);
-			assert.match(truthy(), !res.ok);
+			assert.match(falsy(), res.ok);
 			assert.match(403, res.details.http_status, "Should return Forbidden for non-whitelisted user");
 			assert.match("USER_NOT_AUTHORIZED", res.error);
 		});
@@ -246,7 +246,7 @@ it('Router: Callback - Reject token replay (already used access_token)', () => {
 			.spy((spying_io) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 				let res = router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
-				assert.match(truthy(), !res.ok);
+				assert.match(falsy(), res.ok);
 				assert.match(403, res.details.http_status);
 				assert.match("TOKEN_REPLAYED", res.error);
 			});
@@ -269,7 +269,7 @@ it('Router: Callback - Reject state replay (handshake one-time use)', () => {
 		factory_with_responses.with_env({}, (io_exec) => { router.handle(io_exec, MOCK_CONFIG, req, TEST_POLICY); });
 		factory_with_responses.with_env({}, (io_exec) => {
 			let res = router.handle(io_exec, MOCK_CONFIG, req, TEST_POLICY);
-			assert.match(truthy(), !res.ok);
+			assert.match(falsy(), res.ok);
 			assert.match(401, res.details.http_status);
 			assert.match("STATE_NOT_FOUND", res.error);
 		});
@@ -289,7 +289,7 @@ it('Router: Callback - Reject code replay (IdP level rejection)', () => {
 			"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } }
 		}, (io_http) => {
 			let res = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
-			assert.match(truthy(), !res.ok);
+			assert.match(falsy(), res.ok);
 			assert.match("OIDC_INVALID_GRANT", res.error);
 		});
 	});
@@ -308,7 +308,7 @@ it('Router: Security - Reject PKCE bypass (IdP level rejection)', () => {
 			"https://idp.com/token": { status: 400, body: { error: "invalid_grant", sub_error: "pkce_mismatch" } }
 		}, (io_http) => {
 			let res = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
-			assert.match(truthy(), !res.ok);
+			assert.match(falsy(), res.ok);
 			assert.match("OIDC_INVALID_GRANT", res.error);
 		});
 	});
@@ -332,7 +332,7 @@ it('Router: Security - Access token is NOT registered if verification fails (DoS
 			
 			// First attempt fails at verification
 			let res1 = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
-			assert.match(truthy(), !res1.ok, "Should fail verification");
+			assert.match(falsy(), res1.ok, "Should fail verification");
 			assert.match(401, res1.details.http_status);
 
 			// 2. Verify that the token was NOT registered by attempting a DIFFERENT handshake
@@ -356,7 +356,7 @@ it('Router: Security - Access token is NOT registered if verification fails (DoS
 				
 				// It should FAIL with 401 (Verification Failed) again, NOT 403 (Replay Detected).
 				// This proves the token wasn't persisted in the registry after the first failure.
-				assert.match(truthy(), !res2.ok);
+				assert.match(falsy(), res2.ok);
 				assert.match(401, res2.details.http_status, "Should fail verification again (NOT replay) because token wasn't registered");
 				assert.match(truthy(), res2.error != "TOKEN_REPLAYED", "Should NOT fail with replay error");
 			});
@@ -384,7 +384,7 @@ it('Router: Logout - OIDC RP-Initiated Logout', () => {
 		
 		assert.match(truthy(), res.ok);
 		assert.match(302, res.data.status);
-		assert.match(truthy(), index(res.data.headers["Location"], "https://idp.com/logout") == 0, "Should redirect to IdP logout");
+		assert.match(0, index(res.data.headers["Location"], "https://idp.com/logout"), "Should redirect to IdP logout");
 		assert.match(truthy(), index(res.data.headers["Location"], "id_token_hint=mock-id-token") != -1, "Should include id_token_hint");
 		assert.match(truthy(), match(res.data.headers["Location"], /post_logout_redirect_uri=https%3A%2F%2Frouter%2F(&|$)/), "Should include EXACT post_logout_redirect_uri");
 	});
@@ -417,7 +417,7 @@ it('Router: Router - Handle unhandled system path', () => {
 	let factory = mock.create();
 	        factory.with_env({}, (io) => {
 	                let res = router.handle(io, MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
-					assert.match(truthy(), !res.ok);
+					assert.match(falsy(), res.ok);
 	                assert.match(404, res.details.http_status);
 	        });
 	});

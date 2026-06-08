@@ -34,8 +34,8 @@ it('ubus: security - _grant_all_luci_acls handles malformed ACL files', () => {
 		ubus.create_passwordless_session(io, "root", { read: ["*"], write: [] }, "a@b.com", "at", "rt", "it");
 		
 		assert.match(truthy(), index(grants, "luci-base") != -1, "Should grant valid ACL");
-		assert.match(truthy(), index(grants, "luci-broken") == -1, "Should NOT grant from array root");
-		assert.match(truthy(), index(grants, "luci-evil") == -1, "Should NOT grant if value is not an object (W5)");
+		assert.match(-1, index(grants, "luci-broken"), "Should NOT grant from array root");
+		assert.match(-1, index(grants, "luci-evil"), "Should NOT grant if value is not an object (W5)");
 		
 		// Ensure it didn't crash on bad JSON
 		assert.match(truthy(), length(grants) > 0);

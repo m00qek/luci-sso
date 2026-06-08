@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as oidc from 'luci_sso.oidc';
 import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
@@ -36,7 +36,7 @@ it('oidc: security - reject HS256 algorithm confusion', () => {
 		let res = oidc.verify_id_token(io, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500);
 		
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok, "Should NOT accept HS256 token in OIDC flow");
+		assert.match(falsy(), res.ok, "Should NOT accept HS256 token in OIDC flow");
 		assert.match("UNSUPPORTED_ALGORITHM", res.error);
 	});
 });
@@ -46,7 +46,7 @@ it('oidc: security - reject insecure token endpoint', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, insecure_disc, "code", "verifier-is-long-enough-to-pass-basic-check-123");
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INSECURE_TOKEN_ENDPOINT", res.error);
 	});
 });
@@ -57,7 +57,7 @@ it('oidc: security - handle network failure during exchange', () => {
 	}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "code", "verifier-is-long-enough-to-pass-basic-check-123");
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("TOKEN_ENDPOINT_NETWORK_ERROR", res.error);
 	});
 });
@@ -66,7 +66,7 @@ it('oidc: security - reject insecure issuer URL', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.discover(io, "http://insecure.idp");
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INSECURE_ISSUER_URL", res.error);
 	});
 });
@@ -75,7 +75,7 @@ it('oidc: security - reject insecure internal issuer URL', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.discover(io, "https://secure.idp", { internal_issuer_url: "http://insecure.local" });
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INSECURE_FETCH_URL", res.error);
 	});
 });
@@ -91,7 +91,7 @@ it('oidc: security - reject discovery document with insecure endpoints', () => {
 	mock.create().with_responses({ [url]: { status: 200, body: evil_disc } }, (io) => {
 		let res = oidc.discover(io, issuer);
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INSECURE_ENDPOINT", res.error);
 	});
 });
@@ -116,7 +116,7 @@ it('oidc: security - reject invalid at_hash', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.verify_id_token(io, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok, "Should reject invalid at_hash");
+		assert.match(falsy(), res.ok, "Should reject invalid at_hash");
 		assert.match("AT_HASH_MISMATCH", res.error);
 	});
 });
@@ -131,7 +131,7 @@ it('oidc: security - reject missing mandatory claims', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.verify_id_token(io, t_no_exp, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok, "Should reject ID token missing 'exp' claim");
+		assert.match(falsy(), res.ok, "Should reject ID token missing 'exp' claim");
 		assert.match("MISSING_EXP_CLAIM", res.error);
 	});
 
@@ -142,7 +142,7 @@ it('oidc: security - reject missing mandatory claims', () => {
 	mock.create().with_responses({}, (io) => {
 		let res = oidc.verify_id_token(io, t_no_iat, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500, TEST_POLICY);
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok, "Should reject ID token missing 'iat' claim");
+		assert.match(falsy(), res.ok, "Should reject ID token missing 'iat' claim");
 		assert.match("MISSING_IAT_CLAIM", res.error);
 	});
 });
@@ -155,7 +155,7 @@ it('oidc: security - reject missing mandatory at_hash claim (W2)', () => {
 	let data = mock.create().spy((io) => {
 		let res = oidc.verify_id_token(io, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 1500, TEST_POLICY);
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok, "Should reject ID token missing 'at_hash' claim");
+		assert.match(falsy(), res.ok, "Should reject ID token missing 'at_hash' claim");
 		assert.match("MISSING_AT_HASH", res.error);
 	});
 
@@ -185,7 +185,7 @@ it('oidc: security - enforce RFC 7636 PKCE verifier length (43-128 chars)', () =
 	factory.with_responses({}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "too-short");
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INVALID_PKCE_VERIFIER", res.error);
 	});
 
@@ -195,7 +195,7 @@ it('oidc: security - enforce RFC 7636 PKCE verifier length (43-128 chars)', () =
 	factory.with_responses({}, (io) => {
 		let res = oidc.exchange_code(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", long_verifier);
         assert.match(truthy(), Result.is(res));
-		assert.match(truthy(), !res.ok);
+		assert.match(falsy(), res.ok);
 		assert.match("INVALID_PKCE_VERIFIER", res.error);
 	});
 });

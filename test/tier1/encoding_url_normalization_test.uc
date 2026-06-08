@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import { normalize_url } from 'luci_sso.encoding';
 
 it('encoding: normalize_url - preserves path case while lowercasing origin', () => {
@@ -9,7 +9,7 @@ it('encoding: normalize_url - preserves path case while lowercasing origin', () 
     assert.match("https://idp.com", normalize_url("https://idp.com///").data, "Should handle multiple trailing slashes");
     
     let res = normalize_url("invalid-url");
-    assert.match(truthy(), !res.ok, "Should fail for invalid URL format");
+    assert.match(falsy(), res.ok, "Should fail for invalid URL format");
     assert.match("MALFORMED_URL", res.error);
 });
 

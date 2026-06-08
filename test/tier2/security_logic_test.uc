@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
@@ -75,8 +75,8 @@ it('security: PII - ensure logs never contain raw identifiers', () => {
 	for (let call in data.calls) {
 		if (call[0] == "log") {
 			let msg = call[2];
-			assert.match(truthy(), !match(msg, /@/), `Security Violation: Raw email found in logs: ${msg}`);
-			assert.match(truthy(), !match(msg, /Evil Attacker/), `Security Violation: Raw name found in logs: ${msg}`);
+			assert.match(falsy(), match(msg, /@/), `Security Violation: Raw email found in logs: ${msg}`);
+			assert.match(falsy(), match(msg, /Evil Attacker/), `Security Violation: Raw name found in logs: ${msg}`);
 		}
 	}
 });
@@ -103,7 +103,7 @@ it('security: token registry - cleanup of stale tokens', () => {
 
 		let files = io.lsdir("/var/run/luci-sso/tokens");
 
-		assert.match(truthy(), index(files, "old-id") == -1, "Old token should be reaped");
+		assert.match(-1, index(files, "old-id"), "Old token should be reaped");
 		assert.match(truthy(), index(files, "new-id") >= 0, "New token should remain");
 	});
 });
@@ -131,7 +131,7 @@ it('security: handshake registry - cleanup of stale handshakes (N5)', () => {
 		assert.match(1, res.data, "Should report 1 file reaped");
 		
 		let files = io.lsdir("/var/run/luci-sso");
-		assert.match(truthy(), index(files, "handshake_old.json") == -1, "Old handshake should be reaped");
+		assert.match(-1, index(files, "handshake_old.json"), "Old handshake should be reaped");
 		assert.match(truthy(), index(files, "handshake_new.json") >= 0, "New handshake should remain");
 		assert.match(truthy(), index(files, "oidc-discovery-123.json") >= 0, "Discovery caches should NOT be reaped by handshake reaper");
 	});

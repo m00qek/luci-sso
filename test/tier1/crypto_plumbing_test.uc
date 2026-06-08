@@ -70,7 +70,7 @@ it('crypto: plumbing - JWK to PEM conversion', () => {
 	let res = crypto.jwk_to_pem(jwk);
     assert.match(truthy(), Result.is(res));
 	assert.match(truthy(), res.ok, "JWK to PEM failed: " + res.error);
-	assert.match(truthy(), index(res.data, "-----BEGIN PUBLIC KEY-----") == 0);
+	assert.match(0, index(res.data, "-----BEGIN PUBLIC KEY-----"));
 });
 
 it('crypto: plumbing - JWK to secret (OCT/symmetric)', () => {

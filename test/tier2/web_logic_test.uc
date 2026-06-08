@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as web from 'luci_sso.web';
 import * as mock from 'mock';
 
@@ -8,7 +8,7 @@ it('web: rendering - standardized error prevents internal leakage', () => {
 		let out = io.__state__.stdout_buf;
 
 		assert.match(truthy(), index(out, "Authentication failed") >= 0, "Should return generic message");
-		assert.match(truthy(), index(out, "STATE_CORRUPTED") == -1, "Internal codes MUST NOT leak to body");
+		assert.match(-1, index(out, "STATE_CORRUPTED"), "Internal codes MUST NOT leak to body");
 
 		let found_log = false;
 		for (let e in io.__state__.history) {
@@ -54,8 +54,8 @@ it('web: security - prevent XSS in redirect location', () => {
 		let body = parts[1] || "";
 
 		assert.match(truthy(), index(body, "Redirecting") >= 0, "Should contain redirecting message");
-		assert.match(truthy(), index(body, malicious_loc) == -1, "Malicious location MUST NOT be present in HTML body");
-		assert.match(truthy(), index(body, "url=") == -1, "Meta refresh URL MUST NOT be present in body");
+		assert.match(-1, index(body, malicious_loc), "Malicious location MUST NOT be present in HTML body");
+		assert.match(-1, index(body, "url="), "Meta refresh URL MUST NOT be present in body");
 	});
 });
 
@@ -65,7 +65,7 @@ it('web: security - safe_getenv returns Result.err on overflow', () => {
 
 	mock.create().with_env({ "HTTP_HOST": long_val }, (io) => {
 		let res = web.request(io);
-		assert.match(truthy(), !res.ok, "Should fail on overflow");
+		assert.match(falsy(), res.ok, "Should fail on overflow");
 		assert.match("INPUT_TOO_LARGE", res.error);
 	});
 });
@@ -75,7 +75,7 @@ it('web: security - parse_params returns Result.err on overflow', () => {
 	for (let i = 0; i < 16385; i++) long_val += "a";
 
 	let res = web.parse_params(long_val);
-	assert.match(truthy(), !res.ok, "Should fail on overflow");
+	assert.match(falsy(), res.ok, "Should fail on overflow");
 	assert.match("INPUT_TOO_LARGE", res.error);
 });
 
@@ -84,7 +84,7 @@ it('web: security - parse_params rejects too many parameters', () => {
 	for (let i = 0; i < 101; i++) push(params, `p${i}=v${i}`);
 	let res = web.parse_params(join("&", params));
 
-	assert.match(truthy(), !res.ok, "Should fail on too many parameters");
+	assert.match(falsy(), res.ok, "Should fail on too many parameters");
 	assert.match("INPUT_TOO_LARGE", res.error);
 	assert.match(431, res.details.http_status);
 });

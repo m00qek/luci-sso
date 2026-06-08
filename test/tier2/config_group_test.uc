@@ -1,4 +1,4 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, falsy } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as mock from 'mock';
 
@@ -49,7 +49,7 @@ it('config: role - group mapping support', () => {
 		
 		// Test no match
 		let res_none = config_loader.find_roles_for_user(config, { groups: ["marketing"] });
-		assert.match(truthy(), !res_none.ok, "Should NOT find roles");
+		assert.match(falsy(), res_none.ok, "Should NOT find roles");
 		assert.match("NO_ROLES_MATCHED", res_none.error);
 	});
 });

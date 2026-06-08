@@ -11,7 +11,7 @@ it('native: torture - SHA256 boundary inputs', () => {
 
     // Overflow boundary
     let too_large = max_ok + "B";
-    assert.match(truthy(), native.sha256(too_large) === null, "Should reject 16KB + 1 byte input");
+    assert.match(null, native.sha256(too_large), "Should reject 16KB + 1 byte input");
 });
 
 it('native: torture - HMAC-SHA256 invalid inputs', () => {
