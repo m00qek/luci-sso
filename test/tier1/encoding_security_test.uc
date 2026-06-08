@@ -1,5 +1,5 @@
 import { safe_json, normalize_sub } from 'luci_sso.encoding';
-import { it, assert, truthy, falsy } from 'utest';
+import { it, assert, falsy } from 'utest';
 
 it('encoding: security - safe_json does not leak raw fragments on failure', () => {
     let sensitive_data = '{"token": "SECRET_1234567890", "garbage": '; // Malformed JSON
@@ -23,11 +23,8 @@ it('encoding: security - normalize_sub enforces lowercase', () => {
 	assert.match("already-lower", normalize_sub("already-lower").data, "Should handle already lowercase sub");
 });
 
-it('encoding: security - normalize_sub contract violation', () => {
-	try {
-		normalize_sub(null);
-		assert.match(truthy(), false, "Should have thrown for null sub");
-	} catch (e) {
-		assert.match(truthy(), index(e, "CONTRACT_VIOLATION") >= 0);
-	}
+it('encoding: security - normalize_sub rejects null input', () => {
+	let res = normalize_sub(null);
+	assert.match(falsy(), res.ok, "Should fail for null sub");
+	assert.match("INVALID_ARGUMENT", res.error);
 });
