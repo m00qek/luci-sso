@@ -117,7 +117,7 @@ services:
       - ./services/openwrt/board.json:/etc/board.json.init:ro
 
       # Project Code
-      - ../src/luci_sso:/usr/share/ucode/luci_sso:ro
+      - ../src:/usr/share/ucode/luci_sso:ro
       - ../files/www/cgi-bin/luci-sso:/www/cgi-bin/luci-sso:ro
       - ../files/www/luci-static/resources/luci-sso-login.js:/www/luci-static/resources/luci-sso-login.js:ro
       - ../files/www/luci-static/resources/view/services:/www/luci-static/resources/view/services:ro
@@ -160,6 +160,7 @@ services:
         SDK_VERSION: ${SDK_VERSION}
     volumes:
       - ../openwrt/luci-sso/Makefile:/sdk/package/luci-sso/Makefile:ro
+      - ../mod:/sdk/package/luci-sso/mod:ro
       - ../src:/sdk/package/luci-sso/src:ro
       - ../files:/sdk/package/luci-sso/files:ro
       - ../bin/lib:/artifacts
