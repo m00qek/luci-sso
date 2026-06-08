@@ -78,8 +78,7 @@ run_unit() {
 
   docker compose $COMPOSE_FLAGS exec openwrt \
     utest \
-    -l /usr/lib/ucode \
-    -l /usr/share/luci-sso/test \
+    -c /usr/share/luci-sso/test/utest.config.uc \
     -r "$reporter" \
     $filter_flag \
     $bundles
