@@ -1,44 +1,44 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as native from 'luci_sso.native';
 
-test('session: logic - handshake lifecycle (creation, validation, atomic consumption)', () => {
+it('session: logic - handshake lifecycle (creation, validation, atomic consumption)', () => {
 	let factory = mock.create();
 	
 	factory.with_env({}, (io) => {
 		// 1. Create
 		let state_res = session.create_state(io);
-		assert(state_res.ok);
+		assert.match(truthy(), state_res.ok);
 		let handshake = state_res.data;
-		assert(handshake.token);
+		assert.match(truthy(), handshake.token);
 		
 		// 2. Verify & Consume (Atomic)
 		let verify_res = session.verify_state(io, handshake.token, 300);
-		assert(verify_res.ok);
-		assert_eq(verify_res.data.state, handshake.state);
+		assert.match(truthy(), verify_res.ok);
+		assert.match(handshake.state, verify_res.data.state);
 
 		// 3. Replay Attempt (Must fail)
 		let replay_res = session.verify_state(io, handshake.token, 300);
-		assert(!replay_res.ok);
-		assert_eq(replay_res.error, "STATE_NOT_FOUND");
+		assert.match(truthy(), !replay_res.ok);
+		assert.match("STATE_NOT_FOUND", replay_res.error);
 	});
 });
 
-test('session: logic - handle corrupted handshake files', () => {
+it('session: logic - handle corrupted handshake files', () => {
 	let factory = mock.create();
 	let handle = "corrupted-handle";
 	let path = `/var/run/luci-sso/handshake_${handle}.json`;
 	
 	factory.with_files({ [path]: "{ invalid json !!! }" }, (io) => {
 		let res = session.verify_state(io, handle, 300);
-		assert(!res.ok);
-		assert_eq(res.error, "STATE_CORRUPTED");
+		assert.match(truthy(), !res.ok);
+		assert.match("STATE_CORRUPTED", res.error);
 	});
 });
 
-test('session: logic - enforce clock tolerance boundaries', () => {
+it('session: logic - enforce clock tolerance boundaries', () => {
 	let factory = mock.create();
 	let now = 1516239022;
 	
@@ -55,20 +55,20 @@ test('session: logic - enforce clock tolerance boundaries', () => {
 		
 		// 1. Expired (beyond tolerance)
 		let res = session.verify_state(io, handle, 10);
-		assert(!res.ok);
-		assert_eq(res.error, "HANDSHAKE_EXPIRED");
+		assert.match(truthy(), !res.ok);
+		assert.match("HANDSHAKE_EXPIRED", res.error);
 	});
 });
 
-test('session: logic - reject malformed state handles', () => {
+it('session: logic - reject malformed state handles', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		let res = session.verify_state(io, "../evil", 300);
-		assert_eq(res.error, "MALFORMED_STATE_COOKIE");
+		assert.match("MALFORMED_STATE_COOKIE", res.error);
 	});
 });
 
-test('session: logic - concurrent verify_state race rejection', () => {
+it('session: logic - concurrent verify_state race rejection', () => {
 	let factory = mock.create();
 	let handle = "race-handle";
 	let path = `/var/run/luci-sso/handshake_${handle}.json`;
@@ -80,12 +80,12 @@ test('session: logic - concurrent verify_state race rejection', () => {
 		io.rename = () => false; 
 		
 		let res = session.verify_state(io, handle, 300);
-		assert(!res.ok, "Should NOT recover state from .consumed if rename failed (Strict One-Time Use)");
-		assert_eq(res.error, "STATE_NOT_FOUND");
+		assert.match(truthy(), !res.ok, "Should NOT recover state from .consumed if rename failed (Strict One-Time Use)");
+		assert.match("STATE_NOT_FOUND", res.error);
 	});
 });
 
-test('session: logic - cleanup of abandoned handshakes', () => {
+it('session: logic - cleanup of abandoned handshakes', () => {
 	let factory = mock.create();
 	let now = 1516239022;
 	let old_path = "/var/run/luci-sso/handshake_old.json";
@@ -101,16 +101,16 @@ test('session: logic - cleanup of abandoned handshakes', () => {
 		io.__state__.now = now;
 
 		let reap_res = session.reap_stale_handshakes(io, 300);
-		assert(reap_res.ok);
-		assert_eq(reap_res.data, 1, "Should report 1 file reaped");
+		assert.match(truthy(), reap_res.ok);
+		assert.match(1, reap_res.data, "Should report 1 file reaped");
 		
-		assert(!io.read_file(old_path), "Old handshake should be reaped");
-		assert(io.read_file(new_path), "Recent handshake should remain");
-		assert(io.read_file(other_path), "Unrelated files should be ignored");
+		assert.match(truthy(), !io.read_file(old_path), "Old handshake should be reaped");
+		assert.match(truthy(), io.read_file(new_path), "Recent handshake should remain");
+		assert.match(truthy(), io.read_file(other_path), "Unrelated files should be ignored");
 	});
 });
 
-test('session: logic - stale secret key lock self-healing (Audit #104)', () => {
+it('session: logic - stale secret key lock self-healing (Audit #104)', () => {
 	let factory = mock.create();
 	let lock_path = "/etc/luci-sso/secret.key.lock";
 
@@ -123,20 +123,20 @@ test('session: logic - stale secret key lock self-healing (Audit #104)', () => {
 			[lock_path]: { ".type": "directory", ".mtime": base_now - 31 }
 		}).spy((spying_io) => {
 			let res = session.get_secret_key(spying_io);
-			assert(res.ok, "Should succeed by self-healing the stale lock");
-			assert(length(res.data) == 32, "Should return a valid 32-byte key");
+			assert.match(truthy(), res.ok, "Should succeed by self-healing the stale lock");
+			assert.match(truthy(), length(res.data) == 32, "Should return a valid 32-byte key");
 		});
 
 		// Verify warning log was emitted
-		assert(history.called("log", "warn", "Stale secret key lock detected; performing self-healing cleanup"), "Should log a warning about stale lock");
+		assert.match(truthy(), history.called("log", "warn", "Stale secret key lock detected; performing self-healing cleanup"), "Should log a warning about stale lock");
 
 		// Verify lock was removed and re-created
-		assert(history.called("remove", lock_path), "Should have removed the stale lock");
-		assert(history.called("mkdir", lock_path), "Should have re-acquired the lock");
+		assert.match(truthy(), history.called("remove", lock_path), "Should have removed the stale lock");
+		assert.match(truthy(), history.called("mkdir", lock_path), "Should have re-acquired the lock");
 	});
 });
 
-test('session: logic - secret key persistence (atomic race resilience)', () => {
+it('session: logic - secret key persistence (atomic race resilience)', () => {
 	let factory = mock.create();
 	let key_path = "/etc/luci-sso/secret.key";
 
@@ -144,22 +144,22 @@ test('session: logic - secret key persistence (atomic race resilience)', () => {
 		// 1. Successive calls should return same key
 		let res1 = session.get_secret_key(io);
 		let res2 = session.get_secret_key(io);
-		assert_eq(res1.data, res2.data);
-		assert_eq(length(res1.data), 32);
+		assert.match(res2.data, res1.data);
+		assert.match(32, length(res1.data));
 	});
 });
 
-test('session: logic - read-only FS resilience', () => {
+it('session: logic - read-only FS resilience', () => {
 	let factory = mock.create().with_read_only();
 	factory.with_env({}, (io) => {
 		// Should FAIL if it cannot persist the key
 		let res = session.get_secret_key(io);
-		assert(!res.ok);
-		assert_eq(res.error, "SYSTEM_KEY_UNAVAILABLE");
+		assert.match(truthy(), !res.ok);
+		assert.match("SYSTEM_KEY_UNAVAILABLE", res.error);
 	});
 });
 
-test('session: logic - secret key lock collision fallback', () => {
+it('session: logic - secret key lock collision fallback', () => {
 	let factory = mock.create();
 	let key_path = "/etc/luci-sso/secret.key";
 
@@ -177,8 +177,8 @@ test('session: logic - secret key lock collision fallback', () => {
 		};
 
 		let res = session.get_secret_key(io);
-		assert(res.ok);
-		assert_eq(res.data, "ANOTHER_PROCESS_KEY_012345678901", "Should recover key from concurrent process");
+		assert.match(truthy(), res.ok);
+		assert.match("ANOTHER_PROCESS_KEY_012345678901", res.data, "Should recover key from concurrent process");
 	});
 
 	// Scenario B: Lock held, and key NEVER appears (concurrent failure/slowness)
@@ -187,31 +187,31 @@ test('session: logic - secret key lock collision fallback', () => {
 		io.read_file = () => null; // File missing
 
 		let res = session.get_secret_key(io);
-		assert(!res.ok, "Should fail if lock is held and key never appears");
-		assert_eq(res.error, "SYSTEM_KEY_UNAVAILABLE");
+		assert.match(truthy(), !res.ok, "Should fail if lock is held and key never appears");
+		assert.match("SYSTEM_KEY_UNAVAILABLE", res.error);
 	});
 });
 
-test('session: logic - explicit state consumption (cleanup)', () => {
+it('session: logic - explicit state consumption (cleanup)', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		let state_res = session.create_state(io);
 		let handle = state_res.data.token;
 		let path = `/var/run/luci-sso/handshake_${handle}.json`;
 		
-		assert(io.read_file(path), "Handshake file should exist");
+		assert.match(truthy(), io.read_file(path), "Handshake file should exist");
 		
 		session.consume_state(io, handle);
-		assert(!io.read_file(path), "Handshake file should have been deleted");
+		assert.match(truthy(), !io.read_file(path), "Handshake file should have been deleted");
 	});
 });
 
-test('session: logic - atomic handshake state creation', () => {
+it('session: logic - atomic handshake state creation', () => {
 	let factory = mock.create();
 	
 	let history = factory.with_env({}).spy((io) => {
 		let res = session.create_state(io);
-		assert(res.ok, `create_state failed: ${res.error}`);
+		assert.match(truthy(), res.ok, `create_state failed: ${res.error}`);
 	});
 
 	let operations = history.all();
@@ -227,21 +227,21 @@ test('session: logic - atomic handshake state creation', () => {
 		}
 	}
 
-	assert(write_op, `Should have performed a write_file operation. Ops: ${sprintf("%J", operations)}`);
-	assert(index(write_op.args[0], ".tmp") > 0, `Should write to temporary file first. Got: ${write_op.args[0]}`);
+	assert.match(truthy(), write_op, `Should have performed a write_file operation. Ops: ${sprintf("%J", operations)}`);
+	assert.match(truthy(), index(write_op.args[0], ".tmp") > 0, `Should write to temporary file first. Got: ${write_op.args[0]}`);
 
 	let chmod_op = operations[write_idx + 1];
-	assert(chmod_op && chmod_op.type == "chmod", "Should have performed chmod after write");
-	assert_eq(chmod_op.args[0], write_op.args[0], "chmod should target the tmp file");
-	assert_eq(chmod_op.args[1], 0600, "chmod should set 0600");
+	assert.match(truthy(), chmod_op && chmod_op.type == "chmod", "Should have performed chmod after write");
+	assert.match(write_op.args[0], chmod_op.args[0], "chmod should target the tmp file");
+	assert.match(0600, chmod_op.args[1], "chmod should set 0600");
 
 	let rename_op = operations[write_idx + 2];
-	assert(rename_op && rename_op.type == "rename", "Should have performed rename after chmod");
-	assert_eq(rename_op.args[0], write_op.args[0], "rename should move from the tmp file");
-	assert(index(rename_op.args[1], ".tmp") == -1, `Target path should not be temporary. Got: ${rename_op.args[1]}`);
+	assert.match(truthy(), rename_op && rename_op.type == "rename", "Should have performed rename after chmod");
+	assert.match(write_op.args[0], rename_op.args[0], "rename should move from the tmp file");
+	assert.match(truthy(), index(rename_op.args[1], ".tmp") == -1, `Target path should not be temporary. Got: ${rename_op.args[1]}`);
 });
 
-test('session: logic - detect CSPRNG failure during secret key generation (B1)', () => {
+it('session: logic - detect CSPRNG failure during secret key generation (B1)', () => {
     crypto.set_native({ ...native, random: () => null });
     
     let res = null;
@@ -256,11 +256,11 @@ test('session: logic - detect CSPRNG failure during secret key generation (B1)',
     crypto.set_native(null);
     if (err) die(err);
 
-    assert(!res.ok, "Should fail when random() returns null");
-    assert_eq(res.error, "CRYPTO_INIT_FAILED");
+    assert.match(truthy(), !res.ok, "Should fail when random() returns null");
+    assert.match("CRYPTO_INIT_FAILED", res.error);
 });
 
-test('session: logic - detect CSPRNG failure during handshake creation (B2)', () => {
+it('session: logic - detect CSPRNG failure during handshake creation (B2)', () => {
     crypto.set_native({ ...native, random: () => null });
 
     let res = null;
@@ -275,12 +275,12 @@ test('session: logic - detect CSPRNG failure during handshake creation (B2)', ()
     crypto.set_native(null);
     if (err) die(err);
 
-    assert(!res.ok, "Should fail when random() returns null");
-    assert_eq(res.error, "CRYPTO_INIT_FAILED");
+    assert.match(truthy(), !res.ok, "Should fail when random() returns null");
+    assert.match("CRYPTO_INIT_FAILED", res.error);
 });
 
 // W1: Unchecked io.rename in get_secret_key
-test('session: get_secret_key - W1 rename failure regression', () => {
+it('session: get_secret_key - W1 rename failure regression', () => {
 	// Mock IO where rename fails (manual override)
 	mock.create()
 		.with_files({
@@ -293,7 +293,7 @@ test('session: get_secret_key - W1 rename failure regression', () => {
 
 			let res = session.get_secret_key(io);
 			
-			assert(!res.ok, "W1: get_secret_key MUST fail if atomic rename fails");
-			assert_eq(res.error, "SYSTEM_KEY_WRITE_FAILED", "W1: Expected error code for rename failure");
+			assert.match(truthy(), !res.ok, "W1: get_secret_key MUST fail if atomic rename fails");
+			assert.match("SYSTEM_KEY_WRITE_FAILED", res.error, "W1: Expected error code for rename failure");
 		});
 });

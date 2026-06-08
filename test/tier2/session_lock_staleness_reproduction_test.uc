@@ -1,8 +1,8 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 
-test('session: get_secret_key - reproduction of permanent lockout on stale lock', () => {
+it('session: get_secret_key - reproduction of permanent lockout on stale lock', () => {
     let factory = mock.create();
     const lock_path = "/etc/luci-sso/secret.key.lock";
 
@@ -22,8 +22,8 @@ test('session: get_secret_key - reproduction of permanent lockout on stale lock'
 
         let res = session.get_secret_key(io);
         
-        assert(res.ok, "Should succeed with self-healing");
-        assert_eq(length(res.data), 32, "Should return a 32-byte key");
+        assert.match(truthy(), res.ok, "Should succeed with self-healing");
+        assert.match(32, length(res.data), "Should return a 32-byte key");
 
         let history = mock.create().using(io).spy((dummy) => {}); // Get history from IO
         // Wait, 'io' is the one that has the history.
@@ -31,7 +31,7 @@ test('session: get_secret_key - reproduction of permanent lockout on stale lock'
     });
 });
 
-test('session: get_secret_key - self-healing log and cleanup verification', () => {
+it('session: get_secret_key - self-healing log and cleanup verification', () => {
     let factory = mock.create();
     const lock_path = "/etc/luci-sso/secret.key.lock";
 
@@ -46,8 +46,8 @@ test('session: get_secret_key - self-healing log and cleanup verification', () =
         session.get_secret_key(io);
     });
 
-    assert(history.called("log", "warn", "Stale secret key lock detected; performing self-healing cleanup"), "Should log self-healing event");
-    assert(history.called("remove", lock_path), "Should remove the stale lock");
-    assert(history.called("write_file", "/etc/luci-sso/secret.key.tmp"), "Should proceed with generation after healing");
+    assert.match(truthy(), history.called("log", "warn", "Stale secret key lock detected; performing self-healing cleanup"), "Should log self-healing event");
+    assert.match(truthy(), history.called("remove", lock_path), "Should remove the stale lock");
+    assert.match(truthy(), history.called("write_file", "/etc/luci-sso/secret.key.tmp"), "Should proceed with generation after healing");
 });
 

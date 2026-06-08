@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
@@ -6,7 +6,7 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
-test('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => {
+it('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => {
     let access_token = "access-token-123";
     let test_config = {
         ...f.MOCK_CONFIG,
@@ -39,7 +39,7 @@ test('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => 
 
             // Create a valid handshake state
             let state_res = session.create_state(io);
-            assert(state_res.ok);
+            assert.match(truthy(), state_res.ok);
             let s_data = state_res.data;
 
             // Create ID token WITHOUT kid
@@ -66,9 +66,9 @@ test('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => 
             // This should NOT trigger the rotation recovery path because kid is missing
             let res = handshake.authenticate(io, test_config, request);
             
-            assert(!res.ok, "Handshake should fail due to invalid signature");
-            assert_eq(res.error, "ID_TOKEN_VERIFICATION_FAILED");
-            assert_eq(res.details?.details, "INVALID_SIGNATURE");
-            assert_eq(call_count, 1, "JWKS should have been fetched exactly once (no retry should occur if kid is missing)");
+            assert.match(truthy(), !res.ok, "Handshake should fail due to invalid signature");
+            assert.match("ID_TOKEN_VERIFICATION_FAILED", res.error);
+            assert.match("INVALID_SIGNATURE", res.details?.details);
+            assert.match(1, call_count, "JWKS should have been fetched exactly once (no retry should occur if kid is missing)");
         });
 });

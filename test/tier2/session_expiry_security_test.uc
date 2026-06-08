@@ -1,8 +1,8 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 
-test('session: verify_state - rejects handshake with exp=0 as expired', () => {
+it('session: verify_state - rejects handshake with exp=0 as expired', () => {
     mock.create()
         .spy((io) => {
             let s_res = session.create_state(io);
@@ -14,12 +14,12 @@ test('session: verify_state - rejects handshake with exp=0 as expired', () => {
             io.write_file(path, sprintf("%J", data));
 
             let res = session.verify_state(io, handle, 300);
-            assert(!res.ok, "Should fail verification");
-            assert_eq(res.error, "HANDSHAKE_EXPIRED", "Should be rejected as expired even if exp is 0 (truthy guard fix)");
+            assert.match(truthy(), !res.ok, "Should fail verification");
+            assert.match("HANDSHAKE_EXPIRED", res.error, "Should be rejected as expired even if exp is 0 (truthy guard fix)");
         });
 });
 
-test('session: verify_state - rejects handshake with missing exp as corrupted', () => {
+it('session: verify_state - rejects handshake with missing exp as corrupted', () => {
     mock.create()
         .spy((io) => {
             let s_res = session.create_state(io);
@@ -31,12 +31,12 @@ test('session: verify_state - rejects handshake with missing exp as corrupted', 
             io.write_file(path, sprintf("%J", data));
 
             let res = session.verify_state(io, handle, 300);
-            assert(!res.ok, "Should fail verification");
-            assert_eq(res.error, "STATE_CORRUPTED", "Should be rejected as corrupted if exp is missing");
+            assert.match(truthy(), !res.ok, "Should fail verification");
+            assert.match("STATE_CORRUPTED", res.error, "Should be rejected as corrupted if exp is missing");
         });
 });
 
-test('session: verify_state - rejects handshake with missing iat as corrupted', () => {
+it('session: verify_state - rejects handshake with missing iat as corrupted', () => {
     mock.create()
         .spy((io) => {
             let s_res = session.create_state(io);
@@ -48,7 +48,7 @@ test('session: verify_state - rejects handshake with missing iat as corrupted', 
             io.write_file(path, sprintf("%J", data));
 
             let res = session.verify_state(io, handle, 300);
-            assert(!res.ok, "Should fail verification");
-            assert_eq(res.error, "STATE_CORRUPTED", "Should be rejected as corrupted if iat is missing");
+            assert.match(truthy(), !res.ok, "Should fail verification");
+            assert.match("STATE_CORRUPTED", res.error, "Should be rejected as corrupted if iat is missing");
         });
 });

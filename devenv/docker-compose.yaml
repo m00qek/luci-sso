@@ -126,6 +126,11 @@ services:
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
       - ../bin/lib/${SDK_ARCH}/${SDK_VERSION}:/luci_sso/backends:ro
       - ../test:/usr/share/luci-sso/test:ro
+
+      # utest framework (from sibling repo)
+      - ../../utest/src/utest.sh:/usr/bin/utest:ro
+      - ../../utest/src/utest.uc:/usr/share/ucode/utest.uc:ro
+      - ../../utest/src/utest:/usr/share/ucode/utest:ro
     labels:
       cert.fqdn: "${FQDN_LUCI}"
     command: /bin/sh /usr/local/bin/start.sh --foreground

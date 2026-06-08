@@ -1,7 +1,7 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as crypto from 'luci_sso.crypto';
 
-test('crypto: security - W1: constant_time_eq length cap', () => {
+it('crypto: security - W1: constant_time_eq length cap', () => {
 	let secret = "short_secret";
 	
 	// Create a string longer than 16KB (e.g. 32KB) to trigger the cap
@@ -11,5 +11,5 @@ test('crypto: security - W1: constant_time_eq length cap', () => {
 	}
 
 	let res = crypto.constant_time_eq(long_str, secret);
-	assert(!res, "Should return false for over-large input (> 16KB)");
+	assert.match(truthy(), !res, "Should return false for over-large input (> 16KB)");
 });

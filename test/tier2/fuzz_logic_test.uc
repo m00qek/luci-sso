@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
@@ -7,7 +7,7 @@ import * as Result from 'luci_sso.result';
 // Tier 2: Fuzz & Robustness Logic
 // =============================================================================
 
-test('fuzz: logic - Base64URL consistency', () => {
+it('fuzz: logic - Base64URL consistency', () => {
 	let cases = [
 		"",
 		"foobar",
@@ -19,17 +19,17 @@ test('fuzz: logic - Base64URL consistency', () => {
 
 	for (let i, original in cases) {
 		let encoded_res = encoding.b64url_encode(original);
-		assert(encoded_res.ok);
+		assert.match(truthy(), encoded_res.ok);
 		let encoded = encoded_res.data;
-		assert(!match(encoded, /[+/=]/), `Encoded string '${encoded}' should not contain +, / or =`);
+		assert.match(truthy(), !match(encoded, /[+/=]/), `Encoded string '${encoded}' should not contain +, / or =`);
 		let decoded_res = encoding.b64url_decode(encoded);
-		assert(decoded_res.ok);
+		assert.match(truthy(), decoded_res.ok);
 		let decoded = decoded_res.data;
-		assert_eq(original, decoded, `Roundtrip failed for case: ${original}`);
+		assert.match(decoded, original, `Roundtrip failed for case: ${original}`);
 	}
 });
 
-test('fuzz: logic - large input stability', () => {
+it('fuzz: logic - large input stability', () => {
     // 16KB limit check
 	let large = "";
 	for (let i = 0; i < 1024; i++) {
@@ -37,14 +37,14 @@ test('fuzz: logic - large input stability', () => {
 	}
 	let encoded = encoding.b64url_encode(large).data;
 	let decoded = encoding.b64url_decode(encoded).data;
-	assert_eq(length(decoded), 16384, "Should successfully roundtrip 16KB");
+	assert.match(16384, length(decoded), "Should successfully roundtrip 16KB");
 });
 
-test('fuzz: logic - bit flipping resistance', () => {
+it('fuzz: logic - bit flipping resistance', () => {
 	let secret = "secret";
 	let res_s = crypto.jws_sign({foo: "bar"}, secret);
-    assert(Result.is(res_s));
-	assert(res_s.ok);
+    assert.match(truthy(), Result.is(res_s));
+	assert.match(truthy(), res_s.ok);
 	let token = res_s.data;
 	let parts = split(token, ".");
 	let sig = encoding.b64url_decode(parts[2]).data;
@@ -60,11 +60,11 @@ test('fuzz: logic - bit flipping resistance', () => {
 	let tampered_token = parts[0] + "." + parts[1] + "." + encoding.b64url_encode(tampered_sig).data;
 
 	let result = crypto.jws_verify(tampered_token, secret);
-    assert(Result.is(result));
-	assert_eq(result.error, "INVALID_SIGNATURE", "Bit flipping must invalidate signature");
+    assert.match(truthy(), Result.is(result));
+	assert.match("INVALID_SIGNATURE", result.error, "Bit flipping must invalidate signature");
 });
 
-test('fuzz: logic - header injection resistance', () => {
+it('fuzz: logic - header injection resistance', () => {
 	let secret = "secret";
 	let payload = { foo: "bar" };
 	let header = { alg: "HS256", typ: "JWT", malicious_extra: "ignore-me" }; 
@@ -79,7 +79,7 @@ test('fuzz: logic - header injection resistance', () => {
 	let token = signed_data + "." + encoding.b64url_encode(signature).data;
 
 	let result = crypto.jws_verify(token, secret);
-    assert(Result.is(result));
-	assert(result.ok, "Should verify despite extra header fields (Forward Compatibility)");
-	assert_eq(result.data.foo, "bar");
+    assert.match(truthy(), Result.is(result));
+	assert.match(truthy(), result.ok, "Should verify despite extra header fields (Forward Compatibility)");
+	assert.match("bar", result.data.foo);
 });

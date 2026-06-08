@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as router from 'luci_sso.router';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
@@ -12,7 +12,7 @@ const MOCK_DISC_DOC = {
 	end_session_endpoint: "https://idp.com/logout"
 };
 
-test('router: logic - logout redirect derivation robustness (W3)', () => {
+it('router: logic - logout redirect derivation robustness (W3)', () => {
 	let factory = mock.create()
 		.with_ubus({ 
 			"session:get": (args) => ({ values: { oidc_id_token: "hint", token: "csrf" } }),
@@ -27,8 +27,8 @@ test('router: logic - logout redirect derivation robustness (W3)', () => {
 		let config = { issuer_url: "https://idp.com", redirect_uri: "https://router.lan/cgi-bin/luci-sso/callback" };
 		let req = { path: "/logout", query: { stoken: "csrf" }, cookies: { sysauth: "sid" } };
 		let res = router.handle(io, config, req, TEST_POLICY);
-		assert(res.ok);
-		assert(index(res.data.headers["Location"], "post_logout_redirect_uri=https%3A%2F%2Frouter.lan%2F") != -1);
+		assert.match(truthy(), res.ok);
+		assert.match(truthy(), index(res.data.headers["Location"], "post_logout_redirect_uri=https%3A%2F%2Frouter.lan%2F") != -1);
 	});
 
 	// Test Case 2: Malformed redirect_uri (missing https://)
@@ -37,8 +37,8 @@ test('router: logic - logout redirect derivation robustness (W3)', () => {
 		let config = { issuer_url: "https://idp.com", redirect_uri: "ftp://router.lan/callback" };
 		let req = { path: "/logout", query: { stoken: "csrf" }, cookies: { sysauth: "sid" } };
 		let res = router.handle(io, config, req, TEST_POLICY);
-		assert(res.ok);
+		assert.match(truthy(), res.ok);
 		// Correct logic (Audit W4): If regex fails, OMIT the parameter entirely rather than sending relative /
-		assert(index(res.data.headers["Location"], "post_logout_redirect_uri=") == -1, "Should OMIT post_logout_redirect_uri for invalid redirect_uri scheme");
+		assert.match(truthy(), index(res.data.headers["Location"], "post_logout_redirect_uri=") == -1, "Should OMIT post_logout_redirect_uri for invalid redirect_uri scheme");
 	});
 });

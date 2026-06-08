@@ -1,9 +1,9 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-test('router: rate limit persistence is atomic', () => {
+it('router: rate limit persistence is atomic', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
         enabled: "1"
@@ -25,6 +25,6 @@ test('router: rate limit persistence is atomic', () => {
     const RATELIMIT_FILE = "/var/run/luci-sso/ratelimit.json";
     const TMP_FILE = RATELIMIT_FILE + ".tmp";
 
-    assert(history.called("write_file", TMP_FILE), "Should write to temporary file first");
-    assert(history.called("rename", TMP_FILE, RATELIMIT_FILE), "Should atomically rename tmp to target");
+    assert.match(truthy(), history.called("write_file", TMP_FILE), "Should write to temporary file first");
+    assert.match(truthy(), history.called("rename", TMP_FILE, RATELIMIT_FILE), "Should atomically rename tmp to target");
 });

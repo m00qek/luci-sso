@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
@@ -10,7 +10,7 @@ import * as h from 'lib.helpers';
 
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
-test('REPRODUCTION: handshake: userinfo fallback fails on case-mismatched sub', () => {
+it('REPRODUCTION: handshake: userinfo fallback fails on case-mismatched sub', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
         ...f.MOCK_DISCOVERY,
@@ -74,7 +74,7 @@ test('REPRODUCTION: handshake: userinfo fallback fails on case-mismatched sub', 
             let res = handshake.authenticate(io, test_config, request, TEST_POLICY);
             
             // Expected: SUCCESS because of normalization
-            assert(res.ok, "Should SUCCEED after sub normalization fix");
-            assert_eq(res.data.email, "user@example.com");
+            assert.match(truthy(), res.ok, "Should SUCCEED after sub normalization fix");
+            assert.match("user@example.com", res.data.email);
         });
 });

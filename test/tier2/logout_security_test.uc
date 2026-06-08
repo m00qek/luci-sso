@@ -1,9 +1,9 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-test('logout: security - robust origin extraction for post_logout_redirect_uri', () => {
+it('logout: security - robust origin extraction for post_logout_redirect_uri', () => {
     const cases = [
         {
             redirect: "https://trusted-router.local/cgi-bin/luci-sso/callback",
@@ -33,11 +33,11 @@ test('logout: security - robust origin extraction for post_logout_redirect_uri',
         mock.create()
             .with_ubus({
                 "session:get": (args) => {
-                    assert_eq(args.ubus_rpc_session, sid);
+                    assert.match(sid, args.ubus_rpc_session);
                     return { values: { token: stoken, oidc_id_token: "hint" } };
                 },
                 "session:destroy": (args) => {
-                    assert_eq(args.ubus_rpc_session, sid);
+                    assert.match(sid, args.ubus_rpc_session);
                     return {};
                 }
             })
@@ -49,13 +49,13 @@ test('logout: security - robust origin extraction for post_logout_redirect_uri',
             })
             .with_env({}, (io) => {
                 let res = router.handle(io, config, request);
-                assert(res.ok);
+                assert.match(truthy(), res.ok);
                 let location = res.data.headers["Location"];
                 
-                assert(index(location, "evil.com") == -1, `Logout URL MUST NOT contain injected HTTP_HOST (Case: ${c.redirect})`);
+                assert.match(truthy(), index(location, "evil.com") == -1, `Logout URL MUST NOT contain injected HTTP_HOST (Case: ${c.redirect})`);
                 
                 let expected_param = "post_logout_redirect_uri=" + c.expected;
-                assert(index(location, expected_param) != -1, `Should use exact trusted origin base (Expected: ${c.expected}, Got: ${location})`);
+                assert.match(truthy(), index(location, expected_param) != -1, `Should use exact trusted origin base (Expected: ${c.expected}, Got: ${location})`);
                 
                 // PARANOID: Ensure the path from redirect_uri is NOT present in the post_logout_redirect_uri
                 // We check that the substring AFTER the origin is NOT found within the Location header as part of the redirect param
@@ -64,14 +64,14 @@ test('logout: security - robust origin extraction for post_logout_redirect_uri',
                     // Check if the encoded version of path_part appears after post_logout_redirect_uri
                     // This is a bit complex to test generically, so we just check for "callback" as per the case
                     if (index(path_part, "callback") != -1) {
-                         assert(index(location, "callback") == -1, `Path MUST be stripped from post_logout_redirect_uri (Case: ${c.redirect})`);
+                         assert.match(truthy(), index(location, "callback") == -1, `Path MUST be stripped from post_logout_redirect_uri (Case: ${c.redirect})`);
                     }
                 }
             });
     }
 });
 
-test('logout: security - ignore insecure end_session_endpoint (W2)', () => {
+it('logout: security - ignore insecure end_session_endpoint (W2)', () => {
     let config = f.MOCK_CONFIG;
     let sid = "session-789";
     let stoken = "csrf-token-xyz";
@@ -95,8 +95,8 @@ test('logout: security - ignore insecure end_session_endpoint (W2)', () => {
         })
         .spy((io) => {
             let res = router.handle(io, config, request);
-            assert(res.ok);
+            assert.match(truthy(), res.ok);
             // Should fallback to local root "/" instead of redirecting to HTTP
-            assert_eq(res.data.headers["Location"], "/", "Should ignore insecure logout endpoint and fallback to local root");
+            assert.match("/", res.data.headers["Location"], "Should ignore insecure logout endpoint and fallback to local root");
         });
 });

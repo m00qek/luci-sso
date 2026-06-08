@@ -1,34 +1,34 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as mock from 'mock';
 
-test('Meta: Mock DSL - Temporal file isolation', () => {
+it('Meta: Mock DSL - Temporal file isolation', () => {
 	let factory = mock.create();
 	
 	factory.with_files({ "/a": "1" }, (io1) => {
-		assert_eq(io1.read_file("/a"), "1");
+		assert.match("1", io1.read_file("/a"));
 		
 		factory.with_files({ "/b": "2" }, (io2) => {
-			assert_eq(io2.read_file("/b"), "2");
-			assert(!io2.read_file("/a"), "Should not leak from sibling scope");
+			assert.match("2", io2.read_file("/b"));
+			assert.match(truthy(), !io2.read_file("/a"), "Should not leak from sibling scope");
 		});
 	});
 });
 
-test('Meta: Mock DSL - Explicit state accumulation via using()', () => {
+it('Meta: Mock DSL - Explicit state accumulation via using()', () => {
 	let factory = mock.create().with_files({ "/global": "ok" });
 	
 	factory.with_env({ "FOO": "bar" }, (io) => {
 		let accumulated = factory.using(io).with_files({ "/local": "here" });
 		
 		accumulated.with_env({}, (io_final) => {
-			assert_eq(io_final.read_file("/global"), "ok");
-			assert_eq(io_final.read_file("/local"), "here");
-			assert_eq(io_final.getenv("FOO"), "bar");
+			assert.match("ok", io_final.read_file("/global"));
+			assert.match("here", io_final.read_file("/local"));
+			assert.match("bar", io_final.getenv("FOO"));
 		});
 	});
 });
 
-test('Meta: Mock DSL - Deep state accumulation layering', () => {
+it('Meta: Mock DSL - Deep state accumulation layering', () => {
 	let io = mock.create()
 		.with_files({ "/f1": "1" })
 		.with_env({ "E1": "1" })
@@ -37,22 +37,22 @@ test('Meta: Mock DSL - Deep state accumulation layering', () => {
 		.with_uci({ "P1": {} })
 		.with_read_only((i) => i);
 
-	assert_eq(io.read_file("/f1"), "1");
-	assert_eq(io.getenv("E1"), "1");
+	assert.match("1", io.read_file("/f1"));
+	assert.match("1", io.getenv("E1"));
 });
 
-test('Meta: Mock DSL - Read-only status persistence through inheritance', () => {
+it('Meta: Mock DSL - Read-only status persistence through inheritance', () => {
 	let factory = mock.create().with_read_only();
 	factory.with_files({}, (io) => {
-		assert(!io.write_file("/test", "data"), "Root factory should be read-only");
+		assert.match(truthy(), !io.write_file("/test", "data"), "Root factory should be read-only");
 		
 		factory.using(io).with_env({}, (io2) => {
-			assert(!io2.write_file("/test", "data"), "Inherited factory should remain read-only");
+			assert.match(truthy(), !io2.write_file("/test", "data"), "Inherited factory should remain read-only");
 		});
 	});
 });
 
-test('Meta: Mock DSL - Selective spy recording', () => {
+it('Meta: Mock DSL - Selective spy recording', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
 		io.log("warn", "ignored"); // Should not be in history
@@ -61,30 +61,30 @@ test('Meta: Mock DSL - Selective spy recording', () => {
 			spying_io.log("error", "captured");
 		});
 		
-		assert(results.called("log", "error", "captured"));
-		assert(!results.called("log", "warn"), "Pre-spy logs MUST NOT be in history");
+		assert.match(truthy(), results.called("log", "error", "captured"));
+		assert.match(truthy(), !results.called("log", "warn"), "Pre-spy logs MUST NOT be in history");
 	});
 });
 
-test('Meta: Mock DSL - Argument matching for complex types', () => {
+it('Meta: Mock DSL - Argument matching for complex types', () => {
 	let results = mock.create().spy((io) => {
 		io.write_file("/a", "complex-data");
 	});
-	assert(results.called("write_file", "/a", "complex-data"));
+	assert.match(truthy(), results.called("write_file", "/a", "complex-data"));
 });
 
-test('Meta: Mock DSL - Mandatory HTTPS enforcement', () => {
+it('Meta: Mock DSL - Mandatory HTTPS enforcement', () => {
 	mock.create().with_responses({}, (io) => {
-		assert_eq(io.http_get("http://insecure.com").error, "HTTPS_REQUIRED");
-		assert_eq(io.http_post("http://insecure.com").error, "HTTPS_REQUIRED");
+		assert.match("HTTPS_REQUIRED", io.http_get("http://insecure.com").error);
+		assert.match("HTTPS_REQUIRED", io.http_post("http://insecure.com").error);
 	});
 });
 
-test('Meta: Mock DSL - Stdout capture via intercepted thunk', () => {
+it('Meta: Mock DSL - Stdout capture via intercepted thunk', () => {
 	let factory = mock.create();
 	let out = factory.get_stdout((io) => {
 		io.stdout.write("hello");
 		io.stdout.write(" world");
 	});
-	assert_eq(out, "hello world");
+	assert.match("hello world", out);
 });

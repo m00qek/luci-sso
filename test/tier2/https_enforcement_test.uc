@@ -1,21 +1,21 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as oidc from 'luci_sso.oidc';
 import * as mock from 'mock';
 
-test('oidc: discovery - reject insecure HTTP issuer', () => {
+it('oidc: discovery - reject insecure HTTP issuer', () => {
 	let mocked = mock.create();
 	mocked.with_responses({}, (io) => {
 		let res = oidc.discover(io, "http://insecure.com");
-		assert(!res.ok, "Should fail for HTTP");
-		assert_eq(res.error, "INSECURE_ISSUER_URL", "Wrong error code: " + res.error);
+		assert.match(truthy(), !res.ok, "Should fail for HTTP");
+		assert.match("INSECURE_ISSUER_URL", res.error, "Wrong error code: " + res.error);
 	});
 });
 
-test('oidc: discovery - reject insecure internal issuer URL', () => {
+it('oidc: discovery - reject insecure internal issuer URL', () => {
 	let mocked = mock.create();
 	mocked.with_responses({}, (io) => {
 		let res = oidc.discover(io, "https://secure.com", { internal_issuer_url: "http://insecure.local" });
-		assert(!res.ok, "Should fail for insecure internal URL");
-		assert_eq(res.error, "INSECURE_FETCH_URL", "Wrong error code: " + res.error);
+		assert.match(truthy(), !res.ok, "Should fail for insecure internal URL");
+		assert.match("INSECURE_FETCH_URL", res.error, "Wrong error code: " + res.error);
 	});
 });

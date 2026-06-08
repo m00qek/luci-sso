@@ -1,9 +1,9 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-test('REPRODUCTION: router: lacks global rate limiting', () => {
+it('REPRODUCTION: router: lacks global rate limiting', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
         enabled: "1"
@@ -25,10 +25,10 @@ test('REPRODUCTION: router: lacks global rate limiting', () => {
             for (let i = 1; i <= 60; i++) {
                 let res = router.handle(io, test_config, request);
                 if (i <= 50) {
-                    assert(res.ok, `Request ${i} SHOULD succeed (within limit)`);
+                    assert.match(truthy(), res.ok, `Request ${i} SHOULD succeed (within limit)`);
                 } else {
-                    assert(!res.ok, `Request ${i} SHOULD fail (exceeded limit)`);
-                    assert_eq(res.error, "TOO_MANY_REQUESTS");
+                    assert.match(truthy(), !res.ok, `Request ${i} SHOULD fail (exceeded limit)`);
+                    assert.match("TOO_MANY_REQUESTS", res.error);
                 }
             }
 
@@ -37,8 +37,8 @@ test('REPRODUCTION: router: lacks global rate limiting', () => {
             let action_req = { path: "/", query: { action: "enabled" }, cookies: {} };
             for (let i = 0; i < 5; i++) {
                 let res = router.handle(io, test_config, action_req);
-                assert(res.ok, "Action=Enabled SHOULD be exempt from rate limiting to prevent UI DoS (N3)");
-                assert_eq(res.data.status, 200);
+                assert.match(truthy(), res.ok, "Action=Enabled SHOULD be exempt from rate limiting to prevent UI DoS (N3)");
+                assert.match(200, res.data.status);
             }
         });
 });

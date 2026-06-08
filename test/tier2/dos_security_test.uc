@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as oidc from 'luci_sso.oidc';
 import * as handshake from 'luci_sso.handshake';
@@ -6,7 +6,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-test('oidc: security - reject massive discovery response (DoS protection)', () => {
+it('oidc: security - reject massive discovery response (DoS protection)', () => {
 	// Generate a response slightly larger than 256KB using exponential doubling
 	let garbage = "1234567890";
 	for (let i = 0; i < 15; i++) garbage += garbage; // 10 * 2^15 = 327,680 chars (~320KB)
@@ -22,8 +22,8 @@ test('oidc: security - reject massive discovery response (DoS protection)', () =
         .with_env({}, (io) => {
             let res = oidc.discover(io, "https://massive.idp");
             
-            assert(!res.ok, "Should reject massive discovery document");
-            assert_eq(res.error, "DISCOVERY_NETWORK_ERROR", "Should return network error (aborted read)");
+            assert.match(truthy(), !res.ok, "Should reject massive discovery document");
+            assert.match("DISCOVERY_NETWORK_ERROR", res.error, "Should return network error (aborted read)");
             
             // Verification of the exact policy in history
             let history = io.__state__.history;
@@ -33,7 +33,7 @@ test('oidc: security - reject massive discovery response (DoS protection)', () =
         });
 });
 
-test('handshake: security - register_token deferred until after verification (DoS prevention)', () => {
+it('handshake: security - register_token deferred until after verification (DoS prevention)', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
         internal_issuer_url: f.MOCK_CONFIG.issuer_url,
@@ -59,7 +59,7 @@ test('handshake: security - register_token deferred until after verification (Do
 
             // 3. This call should fail because id_token is invalid
             let auth_res = handshake.authenticate(io, test_config, request, { allowed_algs: ["RS256"] });
-            assert(!auth_res.ok, "Authentication should fail due to invalid ID token");
+            assert.match(truthy(), !auth_res.ok, "Authentication should fail due to invalid ID token");
 
             // 4. Verify that register_token was NEVER called
             let history = io.__state__.history;
@@ -70,6 +70,6 @@ test('handshake: security - register_token deferred until after verification (Do
                     break;
                 }
             }
-            assert(!registered, "Should NOT register token before successful ID token verification");
+            assert.match(truthy(), !registered, "Should NOT register token before successful ID token verification");
         });
 });

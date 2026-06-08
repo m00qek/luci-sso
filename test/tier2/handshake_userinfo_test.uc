@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as handshake from 'luci_sso.handshake';
@@ -8,7 +8,7 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
-test('handshake: userinfo - supplements missing email when sub matches', () => {
+it('handshake: userinfo - supplements missing email when sub matches', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
         ...f.MOCK_DISCOVERY,
@@ -62,12 +62,12 @@ test('handshake: userinfo - supplements missing email when sub matches', () => {
             };
 
             let res = handshake.authenticate(io, test_config, request);
-            assert(res.ok, `Handshake should succeed with UserInfo. Error: ${res.error}`);
-            assert_eq(res.data.email, "user@example.com", "Email should be supplemented from UserInfo");
+            assert.match(truthy(), res.ok, `Handshake should succeed with UserInfo. Error: ${res.error}`);
+            assert.match("user@example.com", res.data.email, "Email should be supplemented from UserInfo");
         });
 });
 
-test('handshake: userinfo - fails identity binding when sub mismatches', () => {
+it('handshake: userinfo - fails identity binding when sub mismatches', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
         ...f.MOCK_DISCOVERY,
@@ -118,7 +118,7 @@ test('handshake: userinfo - fails identity binding when sub mismatches', () => {
             };
 
             let res = handshake.authenticate(io, test_config, request);
-            assert(!res.ok, "Handshake should fail on sub mismatch");
-            assert_eq(res.error, "IDENTITY_MISMATCH");
+            assert.match(truthy(), !res.ok, "Handshake should fail on sub mismatch");
+            assert.match("IDENTITY_MISMATCH", res.error);
         });
 });

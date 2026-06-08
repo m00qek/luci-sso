@@ -1,9 +1,9 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-test('discovery: security - prevent cache poisoning on issuer mismatch (B5)', () => {
+it('discovery: security - prevent cache poisoning on issuer mismatch (B5)', () => {
     let issuer = "https://trusted.idp";
     let cache_path = `/var/run/luci-sso/oidc-discovery-extracted_later.json`;
     
@@ -17,19 +17,19 @@ test('discovery: security - prevent cache poisoning on issuer mismatch (B5)', ()
         .spy((io) => {
             let res = discovery.discover(io, issuer);
             
-            assert(!res.ok, "Should fail on issuer mismatch");
-            assert_eq(res.error, "DISCOVERY_ISSUER_MISMATCH");
+            assert.match(truthy(), !res.ok, "Should fail on issuer mismatch");
+            assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
 
             // Verify NO files were written to cache
             let files = io.lsdir("/var/run/luci-sso");
             let cache_written = false;
             for (let f in files) if (match(f, /^oidc-discovery-/)) cache_written = true;
             
-            assert(!cache_written, "Cache MUST NOT be written when validation fails (B5)");
+            assert.match(truthy(), !cache_written, "Cache MUST NOT be written when validation fails (B5)");
         });
 });
 
-test('discovery: security - prevent cache poisoning on missing required fields', () => {
+it('discovery: security - prevent cache poisoning on missing required fields', () => {
     let issuer = "https://trusted.idp";
     let broken_doc = { issuer: issuer }; // Missing everything else
 
@@ -39,17 +39,17 @@ test('discovery: security - prevent cache poisoning on missing required fields',
         })
         .spy((io) => {
             let res = discovery.discover(io, issuer);
-            assert(!res.ok);
+            assert.match(truthy(), !res.ok);
             
             let files = io.lsdir("/var/run/luci-sso");
             let cache_written = false;
             for (let f in files) if (match(f, /^oidc-discovery-/)) cache_written = true;
             
-            assert(!cache_written, "Cache MUST NOT be written for incomplete discovery doc");
+            assert.match(truthy(), !cache_written, "Cache MUST NOT be written for incomplete discovery doc");
         });
 });
 
-test('discovery: security - ensure sanitized logging on issuer mismatch (W4)', () => {
+it('discovery: security - ensure sanitized logging on issuer mismatch (W4)', () => {
     let issuer = "https://trusted.idp";
     let evil_issuer = "https://evil.com/path?malicious=true";
     let evil_doc = { ...f.MOCK_DISCOVERY, issuer: evil_issuer };
@@ -69,13 +69,13 @@ test('discovery: security - ensure sanitized logging on issuer mismatch (W4)', (
         if (entry.type == "log") {
             log_found = true;
             let msg = entry.args[1];
-            assert(index(msg, evil_issuer) == -1, "Raw malicious issuer MUST NOT be logged");
+            assert.match(truthy(), index(msg, evil_issuer) == -1, "Raw malicious issuer MUST NOT be logged");
         }
     }
-    assert(log_found, "Mismatch error should have been logged");
+    assert.match(truthy(), log_found, "Mismatch error should have been logged");
 });
 
-test('discovery: security - normalized issuer comparison (W2)', () => {
+it('discovery: security - normalized issuer comparison (W2)', () => {
     let issuer = "https://trusted.idp/"; // Trailing slash
     let doc = { ...f.MOCK_DISCOVERY, issuer: "https://trusted.idp" }; // No trailing slash
 
@@ -85,7 +85,7 @@ test('discovery: security - normalized issuer comparison (W2)', () => {
         })
         .spy((io) => {
             let res = discovery.discover(io, issuer);
-            assert(res.ok, "Should succeed with normalized comparison");
-            assert_eq(res.data.issuer, "https://trusted.idp");
+            assert.match(truthy(), res.ok, "Should succeed with normalized comparison");
+            assert.match("https://trusted.idp", res.data.issuer);
         });
 });

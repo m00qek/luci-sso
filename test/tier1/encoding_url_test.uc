@@ -1,21 +1,21 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as encoding from 'luci_sso.encoding';
 
-test('encoding: url - normalize_url removes trailing slashes', () => {
-	assert_eq(encoding.normalize_url("https://idp.com/").data, "https://idp.com");
-	assert_eq(encoding.normalize_url("https://idp.com///").data, "https://idp.com");
+it('encoding: url - normalize_url removes trailing slashes', () => {
+	assert.match("https://idp.com", encoding.normalize_url("https://idp.com/").data);
+	assert.match("https://idp.com", encoding.normalize_url("https://idp.com///").data);
 });
 
-test('encoding: url - normalize_url case normalization', () => {
-	assert_eq(encoding.normalize_url("HTTPS://IDP.COM").data, "https://idp.com");
+it('encoding: url - normalize_url case normalization', () => {
+	assert.match("https://idp.com", encoding.normalize_url("HTTPS://IDP.COM").data);
 });
 
-test('encoding: url - normalize_url preservation of path', () => {
-	assert_eq(encoding.normalize_url("https://idp.com/auth/").data, "https://idp.com/auth");
+it('encoding: url - normalize_url preservation of path', () => {
+	assert.match("https://idp.com/auth", encoding.normalize_url("https://idp.com/auth/").data);
 });
 
-test('encoding: url - normalize_url handles non-string safely', () => {
+it('encoding: url - normalize_url handles non-string safely', () => {
 	let res = encoding.normalize_url(null);
-	assert(!res.ok, "Should return Result.err for non-string");
-	assert(index(res.error, "INVALID_ARGUMENT") >= 0, "Should contain INVALID_ARGUMENT in error");
+	assert.match(truthy(), !res.ok, "Should return Result.err for non-string");
+	assert.match(truthy(), index(res.error, "INVALID_ARGUMENT") >= 0, "Should contain INVALID_ARGUMENT in error");
 });

@@ -1,9 +1,9 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-test('discovery: reproduction - case-insensitive cache miss (W6)', () => {
+it('discovery: reproduction - case-insensitive cache miss (W6)', () => {
     let issuer_upper = "HTTPS://TRUSTED.IDP";
     let issuer_lower = "https://trusted.idp";
     let doc = { ...f.MOCK_DISCOVERY, issuer: issuer_lower };
@@ -15,7 +15,7 @@ test('discovery: reproduction - case-insensitive cache miss (W6)', () => {
         [`${issuer_lower}/.well-known/openid-configuration`]: { status: 200, body: doc }
     }).spy((io) => {
         let res1 = discovery.discover(io, issuer_lower);
-        assert(res1.ok);
+        assert.match(truthy(), res1.ok);
 
         // Clear responses to ensure cache is used
         io._responses = {};
@@ -28,6 +28,6 @@ test('discovery: reproduction - case-insensitive cache miss (W6)', () => {
             print(`DEBUG: history=${sprintf("%J", io.__state__.history)}\n`);
         }
         
-        assert(res2.ok, "Should hit cache using normalized comparison (W6)");
+        assert.match(truthy(), res2.ok, "Should hit cache using normalized comparison (W6)");
     });
 });

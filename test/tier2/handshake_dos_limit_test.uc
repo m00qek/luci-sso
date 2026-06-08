@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 
@@ -6,7 +6,7 @@ import * as mock from 'mock';
 // Tier 2: Handshake DoS Protection (Capacity Limits)
 // =============================================================================
 
-test('handshake: security - enforce hard capacity limit (DoS Protection)', () => {
+it('handshake: security - enforce hard capacity limit (DoS Protection)', () => {
 	let factory = mock.create();
 	
 	factory.with_env({}, (io) => {
@@ -20,24 +20,24 @@ test('handshake: security - enforce hard capacity limit (DoS Protection)', () =>
 
 		for (let i = 0; i < 100; i++) {
 			let res = session.create_state(io);
-			assert(res.ok, `Failed to create handshake #${i}: ${res.error}`);
+			assert.match(truthy(), res.ok, `Failed to create handshake #${i}: ${res.error}`);
 		}
 
 		let files = io.lsdir("/var/run/luci-sso");
 		let files_before = 0;
 		for (let f in files) if (match(f, /^handshake_.*\.json$/)) files_before++;
 		
-		assert_eq(files_before, 100, "Should have exactly 100 handshake files");
+		assert.match(100, files_before, "Should have exactly 100 handshake files");
 
 		// 2. The 101st handshake should trigger an emergency reap of the oldest 50%
 		let res_101 = session.create_state(io);
-		assert(res_101.ok, "101st handshake should succeed after emergency reap");
+		assert.match(truthy(), res_101.ok, "101st handshake should succeed after emergency reap");
 
 		files = io.lsdir("/var/run/luci-sso");
 		let files_after = 0;
 		for (let f in files) if (match(f, /^handshake_.*\.json$/)) files_after++;
 		
 		// Expected: 100 (original) - 50 (reaped) + 1 (new) = 51
-		assert_eq(files_after, 51, "Emergency reap should have cleared 50% of oldest handshakes");
+		assert.match(51, files_after, "Emergency reap should have cleared 50% of oldest handshakes");
 	});
 });

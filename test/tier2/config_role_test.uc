@@ -1,8 +1,8 @@
-import { test, assert, assert_eq, assert_throws } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as mock from 'mock';
 
-test('config: role - successful load and mapping', () => {
+it('config: role - successful load and mapping', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -32,20 +32,20 @@ test('config: role - successful load and mapping', () => {
 
 	mocked.with_uci(mock_uci, (io) => {
 		let config_res = config_loader.load(io);
-		assert(config_res.ok, "Should load configuration");
+		assert.match(truthy(), config_res.ok, "Should load configuration");
 		let config = config_res.data;
 
-		assert_eq(length(config.roles), 2, "Should have 2 roles");
+		assert.match(2, length(config.roles), "Should have 2 roles");
 		
-		assert_eq(config.roles[0].emails[0], "admin@test.com");
-		assert_eq(config.roles[0].read[0], "*");
+		assert.match("admin@test.com", config.roles[0].emails[0]);
+		assert.match("*", config.roles[0].read[0]);
 		
-		assert_eq(config.roles[1].emails[0], "jane@test.com");
-		assert_eq(config.roles[1].read[0], "luci-mod-network");
+		assert.match("jane@test.com", config.roles[1].emails[0]);
+		assert.match("luci-mod-network", config.roles[1].read[0]);
 	});
 });
 
-test('config: role - find_roles_for_user merges permissions', () => {
+it('config: role - find_roles_for_user merges permissions', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -58,19 +58,19 @@ test('config: role - find_roles_for_user merges permissions', () => {
 	mocked.with_uci(mock_uci, (io) => {
 		let config = config_loader.load(io).data;
 		let res = config_loader.find_roles_for_user(config, { email: "user@test.com" });
-		assert(res.ok, "Should find roles");
+		assert.match(truthy(), res.ok, "Should find roles");
 		let perms = res.data;
 		
-		assert_eq(length(perms.read), 3, "Should have 3 unique read perms (r1, shared, r2)");
-		assert_eq(perms.read[0], "r1");
-		assert_eq(perms.read[1], "shared");
-		assert_eq(perms.read[2], "r2");
-		assert_eq(length(perms.write), 2);
-		assert_eq(perms.role_name, "r1", "Should use the first matched role name as identity");
+		assert.match(3, length(perms.read), "Should have 3 unique read perms (r1, shared, r2)");
+		assert.match("r1", perms.read[0]);
+		assert.match("shared", perms.read[1]);
+		assert.match("r2", perms.read[2]);
+		assert.match(2, length(perms.write));
+		assert.match("r1", perms.role_name, "Should use the first matched role name as identity");
 	});
 });
 
-test('config: role - first matched role name wins', () => {
+it('config: role - first matched role name wins', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -83,14 +83,14 @@ test('config: role - first matched role name wins', () => {
 	mocked.with_uci(mock_uci, (io) => {
 		let config = config_loader.load(io).data;
 		let res = config_loader.find_roles_for_user(config, { email: "user@test.com" });
-		assert(res.ok, "Should find roles");
+		assert.match(truthy(), res.ok, "Should find roles");
 		let perms = res.data;
 		
-		assert_eq(perms.role_name, "r_operator", "Should use the first matched role name");
+		assert.match("r_operator", perms.role_name, "Should use the first matched role name");
 	});
 });
 
-test('config: role - wildcard expansion check', () => {
+it('config: role - wildcard expansion check', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -102,15 +102,15 @@ test('config: role - wildcard expansion check', () => {
 	mocked.with_uci(mock_uci, (io) => {
 		let config = config_loader.load(io).data;
 		let res = config_loader.find_roles_for_user(config, { email: "admin@test.com" });
-		assert(res.ok, "Should find roles");
+		assert.match(truthy(), res.ok, "Should find roles");
 		let perms = res.data;
 		
-		assert_eq(perms.read[0], "*");
-		assert_eq(perms.write[0], "*");
+		assert.match("*", perms.read[0]);
+		assert.match("*", perms.write[0]);
 	});
 });
 
-test('config: role - deny user with no roles', () => {
+it('config: role - deny user with no roles', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -123,7 +123,7 @@ test('config: role - deny user with no roles', () => {
 		let config = config_loader.load(io).data;
 		let res = config_loader.find_roles_for_user(config, { email: "stranger@test.com" });
 		
-		assert(!res.ok, "Should NOT find roles");
-		assert_eq(res.error, "NO_ROLES_MATCHED");
+		assert.match(truthy(), !res.ok, "Should NOT find roles");
+		assert.match("NO_ROLES_MATCHED", res.error);
 	});
 });

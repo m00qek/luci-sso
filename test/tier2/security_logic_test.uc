@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
@@ -10,37 +10,37 @@ import * as mock from 'mock';
 // Tier 2: Security Enforcement Logic
 // =============================================================================
 
-test('security: JWT - reject alg: none', () => {
+it('security: JWT - reject alg: none', () => {
 	let none_header = encoding.b64url_encode(sprintf("%J", { alg: "none", typ: "JWT" })).data;
 	let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" })).data;
 	let token = none_header + "." + payload + ".";
 
 	// 1. JWT High-level
 	let res1 = crypto.jwt_verify(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" });
-    assert(Result.is(res1));
-	assert_eq(res1.error, "ALGORITHM_MISMATCH");
+    assert.match(truthy(), Result.is(res1));
+	assert.match("ALGORITHM_MISMATCH", res1.error);
 
 	// 2. JWS Primitive
 	let res2 = crypto.jws_verify(token, "secret");
-    assert(Result.is(res2));
-	assert_eq(res2.error, "UNSUPPORTED_ALGORITHM");
+    assert.match(truthy(), Result.is(res2));
+	assert.match("UNSUPPORTED_ALGORITHM", res2.error);
 });
 
-test('security: JWT - reject stripped signature', () => {
+it('security: JWT - reject stripped signature', () => {
     let header = encoding.b64url_encode(sprintf("%J", { alg: "HS256" })).data;
     let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" })).data;
     let stripped = header + "." + payload + ".";
     
     let res = crypto.jwt_verify(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" });
-    assert(Result.is(res));
-    assert_eq(res.error, "INVALID_SIGNATURE_ENCODING");
+    assert.match(truthy(), Result.is(res));
+    assert.match("INVALID_SIGNATURE_ENCODING", res.error);
 });
 
-test('security: JWT - payload integrity', () => {
+it('security: JWT - payload integrity', () => {
 	let secret = "secret";
 	let res_s = crypto.jws_sign({foo: "bar"}, secret);
-    assert(Result.is(res_s));
-	assert(res_s.ok);
+    assert.match(truthy(), Result.is(res_s));
+	assert.match(truthy(), res_s.ok);
 	let good_token = res_s.data;
 	let parts = split(good_token, ".");
     
@@ -49,11 +49,11 @@ test('security: JWT - payload integrity', () => {
 	let tampered = parts[0] + "." + bad_payload + "." + parts[2];
 	
 	let res = crypto.jws_verify(tampered, secret);
-    assert(Result.is(res));
-	assert_eq(res.error, "INVALID_SIGNATURE", "Tampering must invalidate HMAC signature");
+    assert.match(truthy(), Result.is(res));
+	assert.match("INVALID_SIGNATURE", res.error, "Tampering must invalidate HMAC signature");
 });
 
-test('security: PII - ensure logs never contain raw identifiers', () => {
+it('security: PII - ensure logs never contain raw identifiers', () => {
 	let factory = mock.create();
 	let user_data = {
 		sub: "123456789",
@@ -75,13 +75,13 @@ test('security: PII - ensure logs never contain raw identifiers', () => {
 	for (let call in data.calls) {
 		if (call[0] == "log") {
 			let msg = call[2];
-			assert(!match(msg, /@/), `Security Violation: Raw email found in logs: ${msg}`);
-			assert(!match(msg, /Evil Attacker/), `Security Violation: Raw name found in logs: ${msg}`);
+			assert.match(truthy(), !match(msg, /@/), `Security Violation: Raw email found in logs: ${msg}`);
+			assert.match(truthy(), !match(msg, /Evil Attacker/), `Security Violation: Raw name found in logs: ${msg}`);
 		}
 	}
 });
 
-test('security: token registry - cleanup of stale tokens', () => {
+it('security: token registry - cleanup of stale tokens', () => {
 	let factory = mock.create();
 	let now = 1516239022;
 	let old_token_path = "/var/run/luci-sso/tokens/old-id";
@@ -98,17 +98,17 @@ test('security: token registry - cleanup of stale tokens', () => {
 		};
 
 		let res = ubus.reap_stale_tokens(io);
-		assert(res.ok);
-		assert_eq(res.data, 1, "Should report 1 token reaped");
+		assert.match(truthy(), res.ok);
+		assert.match(1, res.data, "Should report 1 token reaped");
 
 		let files = io.lsdir("/var/run/luci-sso/tokens");
 
-		assert(index(files, "old-id") == -1, "Old token should be reaped");
-		assert(index(files, "new-id") >= 0, "New token should remain");
+		assert.match(truthy(), index(files, "old-id") == -1, "Old token should be reaped");
+		assert.match(truthy(), index(files, "new-id") >= 0, "New token should remain");
 	});
 });
 
-test('security: handshake registry - cleanup of stale handshakes (N5)', () => {
+it('security: handshake registry - cleanup of stale handshakes (N5)', () => {
 	let factory = mock.create();
 	let now = 1516239022;
 	let old_h_path = "/var/run/luci-sso/handshake_old.json";
@@ -127,12 +127,12 @@ test('security: handshake registry - cleanup of stale handshakes (N5)', () => {
 		};
 
 		let res = session.reap_stale_handshakes(io, 60);
-		assert(res.ok);
-		assert_eq(res.data, 1, "Should report 1 file reaped");
+		assert.match(truthy(), res.ok);
+		assert.match(1, res.data, "Should report 1 file reaped");
 		
 		let files = io.lsdir("/var/run/luci-sso");
-		assert(index(files, "handshake_old.json") == -1, "Old handshake should be reaped");
-		assert(index(files, "handshake_new.json") >= 0, "New handshake should remain");
-		assert(index(files, "oidc-discovery-123.json") >= 0, "Discovery caches should NOT be reaped by handshake reaper");
+		assert.match(truthy(), index(files, "handshake_old.json") == -1, "Old handshake should be reaped");
+		assert.match(truthy(), index(files, "handshake_new.json") >= 0, "New handshake should remain");
+		assert.match(truthy(), index(files, "oidc-discovery-123.json") >= 0, "Discovery caches should NOT be reaped by handshake reaper");
 	});
 });

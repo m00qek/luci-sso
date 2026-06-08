@@ -1,11 +1,11 @@
 'use strict';
 
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as handshake from 'luci_sso.handshake';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-test('handshake: security - state is consumed only once (B1)', () => {
+it('handshake: security - state is consumed only once (B1)', () => {
 	let handle = "valid-handle";
 	let path = `/var/run/luci-sso/handshake_${handle}.json`;
 	let config = { ...f.MOCK_CONFIG, clock_tolerance: 30 };
@@ -48,6 +48,6 @@ test('handshake: security - state is consumed only once (B1)', () => {
 		}
 	}
 
-	assert_eq(rename_calls, 1, "Should attempt rename exactly once");
-	assert_eq(remove_calls, 1, "Should attempt remove exactly once (inside verify_state)");
+	assert.match(1, rename_calls, "Should attempt rename exactly once");
+	assert.match(1, remove_calls, "Should attempt remove exactly once (inside verify_state)");
 });

@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as ubus from 'luci_sso.ubus';
 import * as mock from 'mock';
 
@@ -6,7 +6,7 @@ import * as mock from 'mock';
 // Tier 2: Token Registry Race Condition & Persistence
 // =============================================================================
 
-test('ubus: register_token - handles concurrent registration (replay)', () => {
+it('ubus: register_token - handles concurrent registration (replay)', () => {
     let factory = mock.create();
     let token = "some-access-token-12345";
     
@@ -14,7 +14,7 @@ test('ubus: register_token - handles concurrent registration (replay)', () => {
         // 1. First registration succeeds
         io.mkdir = (path, mode) => true; 
         let res1 = ubus.register_token(io, token);
-        assert(res1.ok, "First registration should succeed");
+        assert.match(truthy(), res1.ok, "First registration should succeed");
 
         // 2. Second registration (Simulated Replay/Race)
         // If mkdir returns false, it means the directory (lock) already exists.
@@ -25,12 +25,12 @@ test('ubus: register_token - handles concurrent registration (replay)', () => {
         };
         
         let res2 = ubus.register_token(io, token);
-        assert(!res2.ok, "Second registration MUST fail");
-        assert_eq(res2.error, "TOKEN_REPLAYED");
+        assert.match(truthy(), !res2.ok, "Second registration MUST fail");
+        assert.match("TOKEN_REPLAYED", res2.error);
     });
 });
 
-test('ubus: register_token - resilience to registry mkdir failure', () => {
+it('ubus: register_token - resilience to registry mkdir failure', () => {
     let factory = mock.create();
     let token = "token-123";
     
@@ -46,6 +46,6 @@ test('ubus: register_token - resilience to registry mkdir failure', () => {
         };
         
         let res = ubus.register_token(io, token);
-        assert(res.ok, "Should proceed if token lock succeeds despite base dir mkdir returning false (might already exist)");
+        assert.match(truthy(), res.ok, "Should proceed if token lock succeeds despite base dir mkdir returning false (might already exist)");
     });
 });

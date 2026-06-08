@@ -1,8 +1,8 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as mock from 'mock';
 
-test('session: reproduction - null key propagation on generation failure (B5)', () => {
+it('session: reproduction - null key propagation on generation failure (B5)', () => {
 	let factory = mock.create();
 	
 	factory.with_env({}, (io) => {
@@ -31,7 +31,7 @@ test('session: reproduction - null key propagation on generation failure (B5)', 
 ");
 		}
 
-		assert(!res.ok, "Should return error when key generation fails");
-		assert(res.error == "SYSTEM_KEY_GENERATION_FAILED" || res.error == "SYSTEM_KEY_WRITE_FAILED", "Expected key generation or write failure error");
+		assert.match(truthy(), !res.ok, "Should return error when key generation fails");
+		assert.match(truthy(), res.error == "SYSTEM_KEY_GENERATION_FAILED" || res.error == "SYSTEM_KEY_WRITE_FAILED", "Expected key generation or write failure error");
 	});
 });

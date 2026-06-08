@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
@@ -7,7 +7,7 @@ import * as mock from 'mock';
 // Tier 2: Discovery Resilience (Stale Cache Fallback)
 // =============================================================================
 
-test('discovery: resilience - fallback to stale cache on network failure', () => {
+it('discovery: resilience - fallback to stale cache on network failure', () => {
 	let factory = mock.create();
 	let issuer = "https://idp.example.com";
 	let cache_path = "/var/run/luci-sso/oidc-discovery-stale.json";
@@ -31,12 +31,12 @@ test('discovery: resilience - fallback to stale cache on network failure', () =>
 
 		let res = discovery.discover(io, issuer, { cache_path: cache_path });
 		
-		assert(res.ok, "Should fallback to stale cache on network error: " + (res.error || ""));
-		assert_eq(res.data.issuer, issuer, "Should return cached data");
+		assert.match(truthy(), res.ok, "Should fallback to stale cache on network error: " + (res.error || ""));
+		assert.match(issuer, res.data.issuer, "Should return cached data");
 	});
 });
 
-test('discovery: resilience - fail if cache is missing AND network fails', () => {
+it('discovery: resilience - fail if cache is missing AND network fails', () => {
 	let factory = mock.create();
 	let issuer = "https://idp.evil.com";
 
@@ -44,7 +44,7 @@ test('discovery: resilience - fail if cache is missing AND network fails', () =>
 		io.http_get = (url) => Result.err("DNS_FAILURE");
 
 		let res = discovery.discover(io, issuer);
-		assert(!res.ok, "Should fail if no cache and no network");
-		assert_eq(res.error, "DISCOVERY_NETWORK_ERROR");
+		assert.match(truthy(), !res.ok, "Should fail if no cache and no network");
+		assert.match("DISCOVERY_NETWORK_ERROR", res.error);
 	});
 });

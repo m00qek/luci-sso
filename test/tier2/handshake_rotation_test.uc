@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
@@ -8,7 +8,7 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
-test('handshake: recovery - handle JWKS key rotation with automatic retry', () => {
+it('handshake: recovery - handle JWKS key rotation with automatic retry', () => {
     let access_token = "access-token-123";
     let secret = f.MOCK_CONFIG.client_secret;
     
@@ -59,7 +59,7 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
             let state_res = session.create_state(io);
             if (!state_res.ok) {
                 print("create_state failed: " + state_res.error + " " + (state_res.details || ""));
-                assert(false);
+                assert.match(truthy(), false);
             }
             let s_data = state_res.data;
 
@@ -88,7 +88,7 @@ test('handshake: recovery - handle JWKS key rotation with automatic retry', () =
             // This should trigger the rotation recovery path
             let res = handshake.authenticate(io, test_config, request);
             
-            assert(res.ok, `Handshake should succeed after JWKS retry (Error: ${res.error}, Details: ${res.details})`);
-            assert_eq(call_count, 2, "JWKS should have been fetched exactly twice (initial + forced refresh)");
+            assert.match(truthy(), res.ok, `Handshake should succeed after JWKS retry (Error: ${res.error}, Details: ${res.details})`);
+            assert.match(2, call_count, "JWKS should have been fetched exactly twice (initial + forced refresh)");
         });
 });

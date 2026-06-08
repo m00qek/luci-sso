@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as native from 'luci_sso.native';
 
 // 512-bit RSA Public Key (Weak but validly signed)
@@ -10,7 +10,7 @@ const WEAK_RSA_PUB = "-----BEGIN PUBLIC KEY-----\n" +
 // Valid signature for "test message" using the private counterpart of WEAK_RSA_PUB
 const WEAK_RSA_SIG_B64 = "NQIvIQu5i0YKhIwhsvCqrYeNqKxQTABrufd0ssfVn/JezIJL67hET6S0kCdAQKv4Fv/a4Hxwqtz6FxUTsq4F0A==";
 
-test('native: security - RSA minimum key size enforcement (2048 bits)', () => {
+it('native: security - RSA minimum key size enforcement (2048 bits)', () => {
     let msg = "test message";
     let sig = b64dec(WEAK_RSA_SIG_B64); 
 
@@ -18,5 +18,5 @@ test('native: security - RSA minimum key size enforcement (2048 bits)', () => {
     // Currently, it is expected to return true (VULNERABLE).
     let res = native.verify_rs256(msg, sig, WEAK_RSA_PUB);
     
-    assert(!res, "Verification SHOULD fail for weak 512-bit RSA key even if signature is valid");
+    assert.match(truthy(), !res, "Verification SHOULD fail for weak 512-bit RSA key even if signature is valid");
 });

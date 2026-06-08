@@ -1,4 +1,4 @@
-import { test, assert, assert_eq, assert_throws } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
@@ -7,7 +7,7 @@ import * as mock from 'mock';
 // Tier 2: Configuration Logic (Platinum Suite)
 // =============================================================================
 
-test('config: logic - successful load', () => {
+it('config: logic - successful load', () => {
         let mocked = mock.create();
         let mock_uci = {
                 "luci-sso": {
@@ -26,16 +26,16 @@ test('config: logic - successful load', () => {
 
         mocked.with_uci(mock_uci, (io) => {
                 let res = config_loader.load(io);
-                assert(Result.is(res), "Should return Result object");
-                assert(res.ok, "Should return successful result");
+                assert.match(truthy(), Result.is(res), "Should return Result object");
+                assert.match(truthy(), res.ok, "Should return successful result");
                 let config = res.data;
-                assert_eq(config.issuer_url, "https://idp.com");
-                assert_eq(config.clock_tolerance, 300);
-                assert_eq(config.roles[0].name, "r1");
+                assert.match("https://idp.com", config.issuer_url);
+                assert.match(300, config.clock_tolerance);
+                assert.match("r1", config.roles[0].name);
         });
 });
 
-test('config: logic - normalization (email list vs string)', () => {
+it('config: logic - normalization (email list vs string)', () => {
         let mocked = mock.create();
         let mock_uci = {
                 "luci-sso": {
@@ -47,15 +47,15 @@ test('config: logic - normalization (email list vs string)', () => {
 
         mocked.with_uci(mock_uci, (io) => {
                 let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(res.ok, "Should be ok");
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), res.ok, "Should be ok");
                 let config = res.data;
-                assert_eq(type(config.roles[0].emails), "array", "Single email should be wrapped in array");
-                assert_eq(length(config.roles[1].emails), 2, "Multiple emails should remain an array");
+                assert.match("array", type(config.roles[0].emails), "Single email should be wrapped in array");
+                assert.match(2, length(config.roles[1].emails), "Multiple emails should remain an array");
         });
 });
 
-test('config: logic - HTTPS enforcement', () => {
+it('config: logic - HTTPS enforcement', () => {
         let mocked = mock.create();
 
         let check = (url) => {
@@ -67,16 +67,16 @@ test('config: logic - HTTPS enforcement', () => {
                 };
                 return mocked.with_uci(mock_uci, (io) => {
                         let res = config_loader.load(io);
-                        assert(Result.is(res));
+                        assert.match(truthy(), Result.is(res));
                         return res.ok;
                 });
         };
 
-        assert(check("https://idp.com"), "HTTPS should be allowed");
-        assert(!check("http://idp.com"), "Insecure remote HTTP must be rejected");
+        assert.match(truthy(), check("https://idp.com"), "HTTPS should be allowed");
+        assert.match(truthy(), !check("http://idp.com"), "Insecure remote HTTP must be rejected");
 });
 
-test('config: logic - reject empty or invalid roles', () => {
+it('config: logic - reject empty or invalid roles', () => {
         let mocked = mock.create();
 
         // Case 1: No role sections at all
@@ -87,13 +87,13 @@ test('config: logic - reject empty or invalid roles', () => {
         };
         mocked.with_uci(mock_uci_1, (io) => {
                 let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(!res.ok, "Should have failed due to zero roles");
-                assert_eq(res.error, "CONFIG_ERROR");
-                assert(index(res.details, "No valid roles") != -1);
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), !res.ok, "Should have failed due to zero roles");
+                assert.match("CONFIG_ERROR", res.error);
+                assert.match(truthy(), index(res.details, "No valid roles") != -1);
         });
 });
-test('config: logic - handle disabled state', () => {
+it('config: logic - handle disabled state', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -102,23 +102,23 @@ test('config: logic - handle disabled state', () => {
 	};
 	mocked.with_uci(mock_uci, (io) => {
 		let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(!res.ok);
-                assert_eq(res.error, "SSO_DISABLED");
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), !res.ok);
+                assert.match("SSO_DISABLED", res.error);
 	});
 });
 
-test('config: logic - handle missing config', () => {
+it('config: logic - handle missing config', () => {
 	let mocked = mock.create();
 	mocked.with_uci({}, (io) => {
 		let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(!res.ok);
-                assert_eq(res.error, "SSO_DISABLED"); // is_enabled returns false if missing
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), !res.ok);
+                assert.match("SSO_DISABLED", res.error); // is_enabled returns false if missing
 	});
 });
 
-test('config: logic - is_enabled reflects UCI state', () => {
+it('config: logic - is_enabled reflects UCI state', () => {
 	let factory = mock.create();
 	
 	// Enabled
@@ -129,8 +129,8 @@ test('config: logic - is_enabled reflects UCI state', () => {
 	};
 	factory.with_uci(uci_enabled, (io) => {
 		let res = config_loader.is_enabled(io);
-		assert(Result.is(res));
-		assert(res.ok && res.data === true, "Should be enabled");
+		assert.match(truthy(), Result.is(res));
+		assert.match(truthy(), res.ok && res.data === true, "Should be enabled");
 	});
 
 	// Disabled
@@ -141,19 +141,19 @@ test('config: logic - is_enabled reflects UCI state', () => {
 	};
 	factory.with_uci(uci_disabled, (io) => {
 		let res = config_loader.is_enabled(io);
-		assert(Result.is(res));
-		assert(res.ok && res.data === false, "Should be disabled");
+		assert.match(truthy(), Result.is(res));
+		assert.match(truthy(), res.ok && res.data === false, "Should be disabled");
 	});
 
 	// Missing section
 	factory.with_uci({}, (io) => {
 		let res = config_loader.is_enabled(io);
-		assert(Result.is(res));
-		assert(res.ok && res.data === false, "Should be disabled if missing");
+		assert.match(truthy(), Result.is(res));
+		assert.match(truthy(), res.ok && res.data === false, "Should be disabled if missing");
 	});
 });
 
-test('config: logic - reject missing issuer URL', () => {
+it('config: logic - reject missing issuer URL', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -162,13 +162,13 @@ test('config: logic - reject missing issuer URL', () => {
 	};
 	mocked.with_uci(mock_uci, (io) => {
 		let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(!res.ok);
-                assert_eq(res.error, "CONFIG_ERROR");
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), !res.ok);
+                assert.match("CONFIG_ERROR", res.error);
 	});
 });
 
-test('config: logic - reject missing clock tolerance', () => {
+it('config: logic - reject missing clock tolerance', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -177,13 +177,13 @@ test('config: logic - reject missing clock tolerance', () => {
 	};
 	mocked.with_uci(mock_uci, (io) => {
 		let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(!res.ok);
-                assert_eq(res.error, "CONFIG_ERROR");
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), !res.ok);
+                assert.match("CONFIG_ERROR", res.error);
 	});
 });
 
-test('config: logic - reject missing mandatory OIDC fields', () => {
+it('config: logic - reject missing mandatory OIDC fields', () => {
 	let mocked = mock.create();
 	
 	// 1. Missing client_id
@@ -194,9 +194,9 @@ test('config: logic - reject missing mandatory OIDC fields', () => {
 	};
 	mocked.with_uci(mock_uci_1, (io) => {
 		let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(!res.ok);
-                assert_eq(res.error, "CONFIG_ERROR");
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), !res.ok);
+                assert.match("CONFIG_ERROR", res.error);
 	});
 
 	// 2. Missing client_secret
@@ -207,13 +207,13 @@ test('config: logic - reject missing mandatory OIDC fields', () => {
 	};
 	mocked.with_uci(mock_uci_2, (io) => {
 		let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(!res.ok);
-                assert_eq(res.error, "CONFIG_ERROR");
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), !res.ok);
+                assert.match("CONFIG_ERROR", res.error);
 	});
 });
 
-test('config: logic - reject insecure redirect URI', () => {
+it('config: logic - reject insecure redirect URI', () => {
 	let mocked = mock.create();
 	let mock_uci = {
 		"luci-sso": {
@@ -230,8 +230,8 @@ test('config: logic - reject insecure redirect URI', () => {
 	};
 	mocked.with_uci(mock_uci, (io) => {
 		let res = config_loader.load(io);
-                assert(Result.is(res));
-                assert(!res.ok);
-                assert_eq(res.error, "CONFIG_ERROR");
+                assert.match(truthy(), Result.is(res));
+                assert.match(truthy(), !res.ok);
+                assert.match("CONFIG_ERROR", res.error);
 	});
 });

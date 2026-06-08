@@ -1,8 +1,8 @@
-import { test, assert, assert_eq, assert_throws } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as jwt from 'luci_sso.crypto.jwt';
 import * as mock from 'mock';
 
-test('crypto: jwt - missing iss claim should NOT crash', () => {
+it('crypto: jwt - missing iss claim should NOT crash', () => {
 	// Options specify an issuer to check
 	let options = { iss: "https://idp.com" };
 	
@@ -24,8 +24,8 @@ test('crypto: jwt - missing iss claim should NOT crash', () => {
 
 import * as encoding from 'luci_sso.encoding';
 
-test('encoding: normalize_url - should return Result.err for non-string instead of die', () => {
+it('encoding: normalize_url - should return Result.err for non-string instead of die', () => {
 	let res = encoding.normalize_url(null);
-	assert(!res.ok, "Should return Result.err for null");
-	assert_eq(res.error, "INVALID_ARGUMENT");
+	assert.match(truthy(), !res.ok, "Should return Result.err for null");
+	assert.match("INVALID_ARGUMENT", res.error);
 });

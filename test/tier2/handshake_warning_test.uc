@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as encoding from 'luci_sso.encoding';
@@ -7,7 +7,7 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
-test('handshake: warning - log warning for long-lived access tokens (W2)', () => {
+it('handshake: warning - log warning for long-lived access tokens (W2)', () => {
     let now = 1516239022;
     // Lifetime = 25 hours (90000 seconds) > 24 hours (86400)
     let payload = { iat: now, exp: now + 90000 };
@@ -36,7 +36,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
             };
 
             let state_res = handshake.initiate(io, test_config);
-            assert(state_res.ok, `initiate failed: ${state_res.error}`);
+            assert.match(truthy(), state_res.ok, `initiate failed: ${state_res.error}`);
 
             let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
             let nonce_val = replace(state_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
@@ -56,7 +56,7 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
             };
 
             let auth_res = handshake.authenticate(io, test_config, request);
-            assert(auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
+            assert.match(truthy(), auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
 
             // Manual iteration check
             let found = false;
@@ -66,11 +66,11 @@ test('handshake: warning - log warning for long-lived access tokens (W2)', () =>
                     break;
                 }
             }
-            assert(found, "Should log warning for long-lived access token");
+            assert.match(truthy(), found, "Should log warning for long-lived access token");
         });
 });
 
-test('handshake: warning - silent for opaque or short-lived tokens', () => {
+it('handshake: warning - silent for opaque or short-lived tokens', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
         internal_issuer_url: f.MOCK_CONFIG.issuer_url,
@@ -99,7 +99,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
                 };
 
                 let state_res = handshake.initiate(io, test_config);
-                assert(state_res.ok, `initiate failed: ${state_res.error}`);
+                assert.match(truthy(), state_res.ok, `initiate failed: ${state_res.error}`);
 
                 let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
                 let nonce_val = replace(state_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
@@ -118,7 +118,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
                 };
 
                 let auth_res = handshake.authenticate(io, test_config, request);
-                assert(auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
+                assert.match(truthy(), auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
 
                 let found = false;
                 for (let e in io.__state__.history) {
@@ -127,7 +127,7 @@ test('handshake: warning - silent for opaque or short-lived tokens', () => {
                         break;
                     }
                 }
-                assert(!found, `Should NOT log warning for ${c.name} token`);
+                assert.match(truthy(), !found, `Should NOT log warning for ${c.name} token`);
             });
     }
 });

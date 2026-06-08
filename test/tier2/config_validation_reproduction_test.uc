@@ -1,10 +1,10 @@
 'use strict';
 
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as mock from 'mock';
 
-test('config: logic - reproduction - reject internal_issuer_url with insecure scheme (W3)', () => {
+it('config: logic - reproduction - reject internal_issuer_url with insecure scheme (W3)', () => {
     let mocked = mock.create();
     let mock_uci = {
         "luci-sso": {
@@ -24,13 +24,13 @@ test('config: logic - reproduction - reject internal_issuer_url with insecure sc
 
     mocked.with_uci(mock_uci, (io) => {
         let res = config_loader.load(io);
-        assert(!res.ok, "Should reject insecure internal_issuer_url");
-        assert_eq(res.error, "CONFIG_ERROR");
-        assert(index(res.details, "internal_issuer_url must use HTTPS") >= 0, "Error message must match");
+        assert.match(truthy(), !res.ok, "Should reject insecure internal_issuer_url");
+        assert.match("CONFIG_ERROR", res.error);
+        assert.match(truthy(), index(res.details, "internal_issuer_url must use HTTPS") >= 0, "Error message must match");
     });
 });
 
-test('config: validation - clock_tolerance range checks (N4/N5)', () => {
+it('config: validation - clock_tolerance range checks (N4/N5)', () => {
 	let mocked = mock.create();
 	let base_uci = {
 		"luci-sso": {
@@ -54,21 +54,21 @@ test('config: validation - clock_tolerance range checks (N4/N5)', () => {
 	};
 
 	// Happy path
-	assert(check("0").ok);
-	assert(check("3600").ok);
-	assert(check("60").ok);
+	assert.match(truthy(), check("0").ok);
+	assert.match(truthy(), check("3600").ok);
+	assert.match(truthy(), check("60").ok);
 
 	// Error paths
 	let res_neg = check("-1");
-	assert(!res_neg.ok);
-	assert_eq(res_neg.error, "CONFIG_ERROR");
-	assert(index(res_neg.details, "between 0 and 3600") != -1);
+	assert.match(truthy(), !res_neg.ok);
+	assert.match("CONFIG_ERROR", res_neg.error);
+	assert.match(truthy(), index(res_neg.details, "between 0 and 3600") != -1);
 
 	let res_large = check("3601");
-	assert(!res_large.ok);
-	assert_eq(res_large.error, "CONFIG_ERROR");
+	assert.match(truthy(), !res_large.ok);
+	assert.match("CONFIG_ERROR", res_large.error);
 
 	let res_invalid = check("abc");
-	assert(!res_invalid.ok);
-	assert_eq(res_invalid.error, "CONFIG_ERROR");
+	assert.match(truthy(), !res_invalid.ok);
+	assert.match("CONFIG_ERROR", res_invalid.error);
 });

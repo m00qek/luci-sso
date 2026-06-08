@@ -1,8 +1,8 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as handshake from 'luci_sso.handshake';
 import * as mock from 'mock';
 
-test('handshake: groups fallback - reproduction of dead code', () => {
+it('handshake: groups fallback - reproduction of dead code', () => {
     let factory = mock.create();
 
     // ID Token with no groups

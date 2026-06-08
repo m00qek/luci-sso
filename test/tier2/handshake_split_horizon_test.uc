@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
@@ -8,7 +8,7 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
-test('handshake: split-horizon - prevents path corruption when issuer_url is in path', () => {
+it('handshake: split-horizon - prevents path corruption when issuer_url is in path', () => {
     // BUG: If issuer_url is "https://auth.com" and token_endpoint is "https://auth.com/realms/auth.com/token",
     // naive replace() results in "https://internal/realms/internal/token" if internal_issuer_url is "https://internal".
     
@@ -89,7 +89,7 @@ test('handshake: split-horizon - prevents path corruption when issuer_url is in 
             let s_res = session.create_state(io);
             if (!s_res.ok) {
                 print("create_state failed: ", s_res.error, "\n");
-                assert(false);
+                assert.match(truthy(), false);
             }
             let s_data = s_res.data;
             let handle = s_data.token;
@@ -99,7 +99,7 @@ test('handshake: split-horizon - prevents path corruption when issuer_url is in 
             let json_res = encoding.safe_json(content);
             if (!json_res.ok) {
                 print("Failed to parse handshake state from: ", path, " (", json_res.details, ")\n");
-                assert(false);
+                assert.match(truthy(), false);
             }
             let raw_data = json_res.data;
             raw_data.nonce = "test-nonce";
@@ -114,12 +114,12 @@ test('handshake: split-horizon - prevents path corruption when issuer_url is in 
 
             let res = handshake.authenticate(io, test_config, request);
             
-            assert(res.ok, `Handshake should succeed. Error: ${res.error} Details: ${res.details}`);
-            assert_eq(res.data.email, "admin@example.com");
+            assert.match(truthy(), res.ok, `Handshake should succeed. Error: ${res.error} Details: ${res.details}`);
+            assert.match("admin@example.com", res.data.email);
         });
 });
 
-test('handshake: split-horizon - prevents corruption when internal_issuer_url is substring of issuer_url', () => {
+it('handshake: split-horizon - prevents corruption when internal_issuer_url is substring of issuer_url', () => {
     // SCENARIO: issuer_url is "https://auth.com", internal_issuer_url is "https://auth".
     // If endpoint is "https://auth.com/token", naive replace results in "https://auth.com/token" -> "https://auth.com/token" (no change) or worse if reversed.
     // Actually the previous BUG was global replace.
@@ -191,11 +191,11 @@ test('handshake: split-horizon - prevents corruption when internal_issuer_url is
             };
 
             let res = handshake.authenticate(io, test_config, request);
-            assert(res.ok, `Handshake should succeed with internal_issuer_url as substring. Error: ${res.error}`);
+            assert.match(truthy(), res.ok, `Handshake should succeed with internal_issuer_url as substring. Error: ${res.error}`);
         });
 });
 
-test('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)', () => {
+it('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)', () => {
     let issuer_url = "https://idp.com/"; // Trailing slash
     let internal_issuer_url = "https://internal.lan";
     
@@ -252,6 +252,6 @@ test('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)
             let res = handshake.authenticate(io, test_config, request);
             
             // If we reached here without a "URL Corrupted" failure in io.http_post, it means the prefix replacement worked!
-            assert(true);
+            assert.match(truthy(), true);
         });
 });

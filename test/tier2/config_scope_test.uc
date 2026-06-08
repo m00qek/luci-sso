@@ -1,9 +1,9 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as config from 'luci_sso.config';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
 
-test('config: scope - load custom scope from UCI', () => {
+it('config: scope - load custom scope from UCI', () => {
     let mock_uci = {
         "luci-sso": {
             "default": {
@@ -24,13 +24,13 @@ test('config: scope - load custom scope from UCI', () => {
         .with_uci(mock_uci)
         .with_env({}, (io) => {
             let res = config.load(io);
-            assert(Result.is(res));
-            assert(res.ok);
-            assert_eq(res.data.scope, "openid email custom_scope", "Should correctly load custom scope from UCI");
+            assert.match(truthy(), Result.is(res));
+            assert.match(truthy(), res.ok);
+            assert.match("openid email custom_scope", res.data.scope, "Should correctly load custom scope from UCI");
         });
 });
 
-test('config: scope - handle missing scope', () => {
+it('config: scope - handle missing scope', () => {
     let mock_uci = {
         "luci-sso": {
             "default": {
@@ -50,9 +50,9 @@ test('config: scope - handle missing scope', () => {
         .with_uci(mock_uci)
         .with_env({}, (io) => {
             let res = config.load(io);
-            assert(Result.is(res));
-            assert(res.ok);
+            assert.match(truthy(), Result.is(res));
+            assert.match(truthy(), res.ok);
             // In the current implementation, res.data.scope will be undefined
-            assert(res.data.scope === undefined, "Scope should be undefined if not in UCI");
+            assert.match(truthy(), res.data.scope === undefined, "Scope should be undefined if not in UCI");
         });
 });

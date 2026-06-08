@@ -1,7 +1,7 @@
 import * as native from 'luci_sso.native';
-import { assert, test } from 'testing';
+import { it, assert, truthy } from 'utest';
 
-test('native: compliance - public key parsing exact length', () => {
+it('native: compliance - public key parsing exact length', () => {
     // A valid but truncated-looking PEM that would fail if +1 byte was read and it was garbage
     let valid_pem = "-----BEGIN PUBLIC KEY-----
 " +
@@ -26,5 +26,5 @@ test('native: compliance - public key parsing exact length', () => {
     // If we pass exact length, it should attempt to parse it. 
     // If it fails because it's dummy, that's fine, as long as it doesn't crash.
     native.verify_es256("msg", "sig", key);
-    assert(true, "Should not crash on exact length public key");
+    assert.match(truthy(), true, "Should not crash on exact length public key");
 });

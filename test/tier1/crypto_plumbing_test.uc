@@ -1,4 +1,4 @@
-import { test, assert, assert_eq, assert_throws } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as pkce from 'luci_sso.crypto.pkce';
@@ -13,23 +13,23 @@ import * as h from 'lib.helpers';
 // Tier 1: Cryptographic Plumbing (Platinum Standard)
 // =============================================================================
 
-test('crypto: plumbing - JWK set lookup', () => {
+it('crypto: plumbing - JWK set lookup', () => {
     let res = oidc.find_jwk(f.JWK_SET, "key-2");
-    assert(Result.is(res));
-    assert(res.ok);
-    assert_eq(res.data.kty, "EC");
+    assert.match(truthy(), Result.is(res));
+    assert.match(truthy(), res.ok);
+    assert.match("EC", res.data.kty);
 
     res = oidc.find_jwk(f.JWK_SET, null);
-    assert(Result.is(res));
-    assert(res.ok);
-    assert_eq(res.data.kid, "key-1");
+    assert.match(truthy(), Result.is(res));
+    assert.match(truthy(), res.ok);
+    assert.match("key-1", res.data.kid);
 
     res = oidc.find_jwk(f.JWK_SET, "non-existent");
-    assert(Result.is(res));
-    assert_eq(res.error, "KEY_NOT_FOUND");
+    assert.match(truthy(), Result.is(res));
+    assert.match("KEY_NOT_FOUND", res.error);
 });
 
-test('crypto: plumbing - clock tolerance boundary math', () => {
+it('crypto: plumbing - clock tolerance boundary math', () => {
     let privkey = f2.MOCK_PRIVKEY;
     let pubkey = crypto.jwk_to_pem(f2.MOCK_JWK).data;
     let clock_tolerance = 300;
@@ -38,105 +38,105 @@ test('crypto: plumbing - clock tolerance boundary math', () => {
     let payload_ok = { ...f2.MOCK_CLAIMS, exp: 1000 };
     let token_ok = h.generate_id_token(payload_ok, privkey, "RS256");
     let res_v = crypto.jwt_verify(token_ok, pubkey, { alg: "RS256", now: 1299, clock_tolerance: clock_tolerance, iss: "https://trusted.idp", aud: "luci-app" });
-    assert(Result.is(res_v));
-    assert(res_v.ok);
+    assert.match(truthy(), Result.is(res_v));
+    assert.match(truthy(), res_v.ok);
 
     // 2. Failure case (expired)
     let res = crypto.jwt_verify(token_ok, pubkey, { alg: "RS256", now: 1301, clock_tolerance: clock_tolerance, iss: "https://trusted.idp", aud: "luci-app" });
-    assert(Result.is(res));
-    assert_eq(res.error, "TOKEN_EXPIRED");
+    assert.match(truthy(), Result.is(res));
+    assert.match("TOKEN_EXPIRED", res.error);
 });
 
-test('crypto: plumbing - invalid algorithm in header', () => {
+it('crypto: plumbing - invalid algorithm in header', () => {
     let key = "key";
     let opts = { alg: "RS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" };
     let bad_alg = encoding.b64url_encode(sprintf("%J", { alg: "ROT13" })).data;
     let res1 = crypto.jwt_verify(bad_alg + ".e30.s", key, opts);
-    assert(Result.is(res1));
-    assert_eq(res1.error, "ALGORITHM_MISMATCH");
+    assert.match(truthy(), Result.is(res1));
+    assert.match("ALGORITHM_MISMATCH", res1.error);
 
     let no_alg = encoding.b64url_encode(sprintf("%J", { typ: "JWT" })).data;
     let res2 = crypto.jwt_verify(no_alg + ".e30.s", key, opts);
-    assert(Result.is(res2));
-    assert_eq(res2.error, "INVALID_HEADER_JSON");
+    assert.match(truthy(), Result.is(res2));
+    assert.match("INVALID_HEADER_JSON", res2.error);
 });
 
-test('crypto: plumbing - JWK to PEM conversion', () => {
+it('crypto: plumbing - JWK to PEM conversion', () => {
     let jwk = {
 		kty: "RSA",
 		n: "q0g5x3uxj4F9zmlMbadqN8rJpdebwZL2iMNFmaBCBLRX3neuHobGuMh16Wgt5NiW8-rD_2du7uA76nmUzoUBt3nF5LMtngFGJXFRpy6srKne5Ch9g4RZZrQA5VvE_Rviv3XQ7YbXZe55pRcvNjcxwSIKTGfAw4p1jUu1ty4sg0jVJsPAnp6EOIq7euWpqIRkyxT94VR_QQO9mLcjjuO7ta_ahC8pbGOOIOk7AtCd_KV56tk1Tid5iaYV8RIhXSDeef9q7-L9DY6pK1Mx2Yu8SdPkhgj5kswoqnQWwViDUZAw59eos6Hrbhdh4aFg9mUQm-qCNLXxScFg-X7xcW91pQ",
 		e: "AQAB"
 	};
 	let res = crypto.jwk_to_pem(jwk);
-    assert(Result.is(res));
-	assert(res.ok, "JWK to PEM failed: " + res.error);
-	assert(index(res.data, "-----BEGIN PUBLIC KEY-----") == 0);
+    assert.match(truthy(), Result.is(res));
+	assert.match(truthy(), res.ok, "JWK to PEM failed: " + res.error);
+	assert.match(truthy(), index(res.data, "-----BEGIN PUBLIC KEY-----") == 0);
 });
 
-test('crypto: plumbing - JWK to secret (OCT/symmetric)', () => {
+it('crypto: plumbing - JWK to secret (OCT/symmetric)', () => {
 	let secret_b64url = "bXktc2VjcmV0LWtleS0xMjM0NQ"; 
 	let jwk = { kty: "oct", k: secret_b64url };
 	let res = crypto.jwk_to_pem(jwk);
-    assert(Result.is(res));
-	assert(res.ok);
-	assert_eq(res.data, "my-secret-key-12345");
+    assert.match(truthy(), Result.is(res));
+	assert.match(truthy(), res.ok);
+	assert.match("my-secret-key-12345", res.data);
 });
 
-test('crypto: plumbing - token size enforcement', () => {
+it('crypto: plumbing - token size enforcement', () => {
     let too_big = "1234567890";
     for (let i = 0; i < 11; i++) too_big += too_big; // 10 * 2^11 = 20,480 (> 16,384)
     let res = crypto.jwt_verify(too_big, "key", { alg: "RS256", now: 123, clock_tolerance: 300 });
-    assert(Result.is(res));
-    assert_eq(res.error, "TOKEN_TOO_LARGE");
+    assert.match(truthy(), Result.is(res));
+    assert.match("TOKEN_TOO_LARGE", res.error);
 });
 
-test('crypto: plumbing - PKCE primitives', () => {
+it('crypto: plumbing - PKCE primitives', () => {
     let res_v = pkce.generate_verifier(native, 32);
-    assert(Result.is(res_v));
-    assert(res_v.ok);
-    assert(length(res_v.data) >= 43);
+    assert.match(truthy(), Result.is(res_v));
+    assert.match(truthy(), res_v.ok);
+    assert.match(truthy(), length(res_v.data) >= 43);
     let challenge_res = pkce.calculate_challenge(native, res_v.data);
-    assert(challenge_res.ok);
+    assert.match(truthy(), challenge_res.ok);
     let res_p = crypto.pkce_pair(32);
-    assert(Result.is(res_p));
-    assert(res_p.ok);
-    assert(res_p.data.verifier && res_p.data.challenge);
+    assert.match(truthy(), Result.is(res_p));
+    assert.match(truthy(), res_p.ok);
+    assert.match(truthy(), res_p.data.verifier && res_p.data.challenge);
 });
 
-test('crypto: plumbing - correlation ID stability (safe_id)', () => {
+it('crypto: plumbing - correlation ID stability (safe_id)', () => {
     let token = "sensitive-token-data-1234567890";
     let id = crypto.safe_id(token);
-    assert_eq(length(id), 16, "Correlation ID MUST be 16 characters (64 bits)");
-    assert(match(id, /^[0-9a-f]+$/), "Correlation ID MUST be hex encoded");
+    assert.match(16, length(id), "Correlation ID MUST be 16 characters (64 bits)");
+    assert.match(truthy(), match(id, /^[0-9a-f]+$/), "Correlation ID MUST be hex encoded");
     
-    assert_eq(id, crypto.safe_id(token), "Correlation ID MUST be deterministic");
-    assert_eq(crypto.safe_id(null), "[INVALID]");
-    assert_eq(crypto.safe_id("short"), "[INVALID]");
+    assert.match(crypto.safe_id(token), id, "Correlation ID MUST be deterministic");
+    assert.match("[INVALID]", crypto.safe_id(null));
+    assert.match("[INVALID]", crypto.safe_id("short"));
 });
 
 // =============================================================================
 // Tier 1: Torture Tests (Plumbing Stability)
 // =============================================================================
 
-test('crypto: torture - illegal type injection', () => {
-    assert_throws(() => crypto.jwt_verify(123, "key", { now: 1, clock_tolerance: 1 }), "Should reject non-string token");
-    assert_throws(() => crypto.jwt_verify("a.b.c", 123, { now: 1, clock_tolerance: 1 }), "Should reject non-string key");
-    assert_throws(() => crypto.jwt_verify("a.b.c", "key", "not-obj"), "Should reject non-object options");
+it('crypto: torture - illegal type injection', () => {
+    assert.throws(() => crypto.jwt_verify(123, "key", { now: 1, clock_tolerance: 1 }), null, "Should reject non-string token");
+    assert.throws(() => crypto.jwt_verify("a.b.c", 123, { now: 1, clock_tolerance: 1 }), null, "Should reject non-string key");
+    assert.throws(() => crypto.jwt_verify("a.b.c", "key", "not-obj"), null, "Should reject non-object options");
 });
 
-test('crypto: torture - empty JWK handling', () => {
+it('crypto: torture - empty JWK handling', () => {
     let res1 = oidc.find_jwk([], "any-kid");
-    assert(Result.is(res1));
-    assert_eq(res1.error, "KEY_NOT_FOUND");
+    assert.match(truthy(), Result.is(res1));
+    assert.match("KEY_NOT_FOUND", res1.error);
     let res2 = oidc.find_jwk([], null);
-    assert(Result.is(res2));
-    assert_eq(res2.error, "NO_KEYS_AVAILABLE");
+    assert.match(truthy(), Result.is(res2));
+    assert.match("NO_KEYS_AVAILABLE", res2.error);
     let res3 = crypto.jwk_to_pem({ kty: "RSA", n: "", e: "" });
-    assert(Result.is(res3));
-    assert_eq(res3.error, "MISSING_RSA_PARAMS");
+    assert.match(truthy(), Result.is(res3));
+    assert.match("MISSING_RSA_PARAMS", res3.error);
 });
 
-test('crypto: torture - JSON depth (complexity limit)', () => {
+it('crypto: torture - JSON depth (complexity limit)', () => {
     let deep = "{\"a\":";
     for(let i=0; i<100; i++) deep += "[";
     deep += "1";
@@ -145,17 +145,17 @@ test('crypto: torture - JSON depth (complexity limit)', () => {
     try { json(deep); } catch(e) {}
 });
 
-test('crypto: torture - buffer transition stability', () => {
+it('crypto: torture - buffer transition stability', () => {
     let secret = ""; for(let i=0; i<16384; i++) secret += "A";
     let res = crypto.jws_sign({foo: "bar"}, secret);
-    assert(Result.is(res));
-    assert(res.ok, "Plumbing should handle 16KB secrets during signing");
+    assert.match(truthy(), Result.is(res));
+    assert.match(truthy(), res.ok, "Plumbing should handle 16KB secrets during signing");
     let verify = crypto.jws_verify(res.data, secret);
-    assert(Result.is(verify));
-    assert(verify.ok, "Plumbing should handle 16KB secrets during verification");
+    assert.match(truthy(), Result.is(verify));
+    assert.match(truthy(), verify.ok, "Plumbing should handle 16KB secrets during verification");
 });
 
-test('crypto: plumbing - issuer normalization (B3)', () => {
+it('crypto: plumbing - issuer normalization (B3)', () => {
     let privkey = f2.MOCK_PRIVKEY;
     let pubkey = crypto.jwk_to_pem(f2.MOCK_JWK).data;
     let opts = { alg: "RS256", now: 1000, clock_tolerance: 300, iss: "https://idp.com", aud: "luci-app" };
@@ -163,24 +163,24 @@ test('crypto: plumbing - issuer normalization (B3)', () => {
     // 1. Success case: Identical strings
     let t1 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com" }, privkey, "RS256");
     let res1 = crypto.jwt_verify(t1, pubkey, opts);
-    assert(Result.is(res1));
-    assert(res1.ok, "Should pass with identical issuer strings");
+    assert.match(truthy(), Result.is(res1));
+    assert.match(truthy(), res1.ok, "Should pass with identical issuer strings");
 
     // 2. Trailing slash in token (Current Failure Path for B3)
     let t2 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com/" }, privkey, "RS256");
     let res2 = crypto.jwt_verify(t2, pubkey, opts);
-    assert(Result.is(res2));
-    assert(res2.ok, "Should pass with trailing slash in token iss claim: " + (res2.error || ""));
+    assert.match(truthy(), Result.is(res2));
+    assert.match(truthy(), res2.ok, "Should pass with trailing slash in token iss claim: " + (res2.error || ""));
 
     // 3. Mixed case origin (Current Failure Path for B3)
     let t3 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "HTTPS://IDP.COM" }, privkey, "RS256");
     let res3 = crypto.jwt_verify(t3, pubkey, opts);
-    assert(Result.is(res3));
-    assert(res3.ok, "Should pass with mixed case in token iss claim: " + (res3.error || ""));
+    assert.match(truthy(), Result.is(res3));
+    assert.match(truthy(), res3.ok, "Should pass with mixed case in token iss claim: " + (res3.error || ""));
 
     // 4. Trailing slash in config
     let t4 = h.generate_id_token({ ...f2.MOCK_CLAIMS, iss: "https://idp.com" }, privkey, "RS256");
     let res4 = crypto.jwt_verify(t4, pubkey, { ...opts, iss: "https://idp.com/" });
-    assert(Result.is(res4));
-    assert(res4.ok, "Should pass with trailing slash in config iss: " + (res4.error || ""));
+    assert.match(truthy(), Result.is(res4));
+    assert.match(truthy(), res4.ok, "Should pass with trailing slash in config iss: " + (res4.error || ""));
 });

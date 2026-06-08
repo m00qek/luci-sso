@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as io_mod from 'luci_sso.io';
 import * as web_mod from 'luci_sso.web';
 import * as router from 'luci_sso.router';
@@ -12,7 +12,7 @@ import * as mock from 'mock';
  * that it would crash (catch block) if router.handle returns an error
  * instead of a proper error page.
  */
-test('cgi: reproduction - missing Result.ok check (W1)', () => {
+it('cgi: reproduction - missing Result.ok check (W1)', () => {
 	let factory = mock.create();
 	
 	// Mock a scenario where router.handle returns an error.
@@ -35,12 +35,12 @@ test('cgi: reproduction - missing Result.ok check (W1)', () => {
 
 		// 3. Parse request
 		let res_req = web_mod.request(io);
-		assert(res_req.ok);
+		assert.match(truthy(), res_req.ok);
 		let req = res_req.data;
 
 		// 4. Call router (should return error for /invalid-path)
 		let res_router = router.handle(io, config, req);
-		assert(!res_router.ok, "Router should return error for invalid path");
+		assert.match(truthy(), !res_router.ok, "Router should return error for invalid path");
 
 		// 5. Simulate the FIXED CGI code:
 		let rendered_error = false;
@@ -53,7 +53,7 @@ test('cgi: reproduction - missing Result.ok check (W1)', () => {
 			web_mod.render(io, res_router.data);
 		}
 		
-		assert(rendered_error, "Should have rendered an error response");
+		assert.match(truthy(), rendered_error, "Should have rendered an error response");
 		// Ensure it didn't crash (if it did, the test would fail on exception)
 	});
 });

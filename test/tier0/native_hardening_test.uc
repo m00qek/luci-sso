@@ -1,8 +1,8 @@
 import * as native from 'luci_sso.native';
 import * as crypto from 'luci_sso.crypto';
-import { assert, test } from 'testing';
+import { it, assert, truthy } from 'utest';
 
-test('native: RSA hardening - reject invalid exponents (N2)', () => {
+it('native: RSA hardening - reject invalid exponents (N2)', () => {
     // n is 1024-bit RSA modulus (minimal but valid for test)
     let n = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==";
     
@@ -18,21 +18,21 @@ test('native: RSA hardening - reject invalid exponents (N2)', () => {
     for (let c in cases) {
         // jwk_rsa_to_pem(n, e) returns null on failure
         let res = native.jwk_rsa_to_pem(n, c.e);
-        assert(res === null, `Should reject invalid exponent: ${c.name}`);
+        assert.match(truthy(), res === null, `Should reject invalid exponent: ${c.name}`);
     }
 });
 
-test('native: random - persistent DRBG (N1)', () => {
+it('native: random - persistent DRBG (N1)', () => {
     // We can't easily prove it's persistent from here, 
     // but we can verify it still works and produces entropy.
     let r1 = native.random(32);
     let r2 = native.random(32);
-    assert(type(r1) == "string", "Native random must return a string");
-    assert(length(r1) == 32, "Native random must return requested length");
-    assert(r1 != r2, "Random results should be unique");
+    assert.match(truthy(), type(r1) == "string", "Native random must return a string");
+    assert.match(truthy(), length(r1) == 32, "Native random must return requested length");
+    assert.match(truthy(), r1 != r2, "Random results should be unique");
 });
 
-test('native: security - reject oversized inputs (B4)', () => {
+it('native: security - reject oversized inputs (B4)', () => {
     // 17KB exceeds the 16KB MAX_INPUT_SIZE
     let large_str = "";
     for (let i = 0; i < 17000; i++) large_str += "A";
@@ -41,17 +41,17 @@ test('native: security - reject oversized inputs (B4)', () => {
     let dummy_sig = "SIG";
     
     // verify_rs256(msg, sig, key)
-    assert(native.verify_rs256(large_str, dummy_sig, dummy_key) === false, "Should reject oversized message");
-    assert(native.verify_rs256(dummy_sig, large_str, dummy_key) === false, "Should reject oversized signature");
-    assert(native.verify_rs256(dummy_sig, dummy_sig, large_str) === false, "Should reject oversized key");
+    assert.match(truthy(), native.verify_rs256(large_str, dummy_sig, dummy_key) === false, "Should reject oversized message");
+    assert.match(truthy(), native.verify_rs256(dummy_sig, large_str, dummy_key) === false, "Should reject oversized signature");
+    assert.match(truthy(), native.verify_rs256(dummy_sig, dummy_sig, large_str) === false, "Should reject oversized key");
 
     // verify_es256(msg, sig, key)
-    assert(native.verify_es256(large_str, dummy_sig, dummy_key) === false, "Should reject oversized message (EC)");
+    assert.match(truthy(), native.verify_es256(large_str, dummy_sig, dummy_key) === false, "Should reject oversized message (EC)");
 
     // sha256(msg)
-    assert(native.sha256(large_str) === null, "Should reject oversized message in sha256 (W7)");
+    assert.match(truthy(), native.sha256(large_str) === null, "Should reject oversized message in sha256 (W7)");
 
     // hmac_sha256(key, msg)
-    assert(native.hmac_sha256(large_str, "msg") === null, "Should reject oversized key in hmac_sha256 (W7)");
-    assert(native.hmac_sha256("key", large_str) === null, "Should reject oversized message in hmac_sha256 (W7)");
+    assert.match(truthy(), native.hmac_sha256(large_str, "msg") === null, "Should reject oversized key in hmac_sha256 (W7)");
+    assert.match(truthy(), native.hmac_sha256("key", large_str) === null, "Should reject oversized message in hmac_sha256 (W7)");
 });

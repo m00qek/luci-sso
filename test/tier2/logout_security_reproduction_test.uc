@@ -1,10 +1,10 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
-test('router: security - B1: handle invalid session during logout', () => {
+it('router: security - B1: handle invalid session during logout', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
         issuer_url: "https://trusted.idp"
@@ -36,13 +36,13 @@ test('router: security - B1: handle invalid session during logout', () => {
 
             let res = router.handle(io, test_config, request, {});
 
-            assert(res.ok);
+            assert.match(truthy(), res.ok);
             // EXPECTED behavior: Redirect to local root if session is missing.
-            assert_eq(res.data.headers["Location"], "/", "Should redirect to root if session is invalid");
+            assert.match("/", res.data.headers["Location"], "Should redirect to root if session is invalid");
         });
 });
 
-test('router: security - W3: post_logout_redirect_uri match check', () => {
+it('router: security - W3: post_logout_redirect_uri match check', () => {
 	let malformed_config = {
 		...f.MOCK_CONFIG,
 		redirect_uri: "not-a-url" // Will fail the regex match
@@ -75,10 +75,10 @@ test('router: security - W3: post_logout_redirect_uri match check', () => {
 
 			let res = router.handle(io, malformed_config, request);
 
-			assert(res.ok, "Should succeed even with malformed redirect_uri");
+			assert.match(truthy(), res.ok, "Should succeed even with malformed redirect_uri");
 			let loc = res.data.headers.Location;
 
 			// Should default to "/" if regex match fails
-			assert(index(loc, "post_logout_redirect_uri=") == -1, "Should OMIT post_logout_redirect_uri for malformed URI");
+			assert.match(truthy(), index(loc, "post_logout_redirect_uri=") == -1, "Should OMIT post_logout_redirect_uri for malformed URI");
 		});
 });

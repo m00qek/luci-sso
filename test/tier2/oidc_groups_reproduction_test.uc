@@ -1,4 +1,4 @@
-import { test, assert, assert_eq } from 'testing';
+import { it, assert, truthy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as oidc from 'luci_sso.oidc';
 import * as handshake from 'luci_sso.handshake';
@@ -10,7 +10,7 @@ import * as h from 'lib.helpers';
 
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
-test('REPRODUCTION: oidc: verify_id_token drops groups claim', () => {
+it('REPRODUCTION: oidc: verify_id_token drops groups claim', () => {
 	let keys = [ f.MOCK_JWK ];
 	let at = "mock-at";
 	let ah = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
@@ -21,13 +21,13 @@ test('REPRODUCTION: oidc: verify_id_token drops groups claim', () => {
 
 	mock.create().with_env({}, (io) => {
 		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
-		assert(res.ok, "Verification should succeed");
-		assert(res.data.groups, "Groups claim SHOULD be present in user_data");
-		assert_eq(res.data.groups, groups, "Groups claim SHOULD match original");
+		assert.match(truthy(), res.ok, "Verification should succeed");
+		assert.match(truthy(), res.data.groups, "Groups claim SHOULD be present in user_data");
+		assert.match(groups, res.data.groups, "Groups claim SHOULD match original");
 	});
 });
 
-test('REPRODUCTION: handshake: userinfo fallback drops groups claim', () => {
+it('REPRODUCTION: handshake: userinfo fallback drops groups claim', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
         ...f.MOCK_DISCOVERY,
@@ -98,7 +98,7 @@ test('REPRODUCTION: handshake: userinfo fallback drops groups claim', () => {
             if (!res.ok) {
                 printf("AUTHENTICATE FAILED: %s (Details: %J)\n", res.error, res.details);
             }
-            assert(res.ok, "Authentication should succeed");
+            assert.match(truthy(), res.ok, "Authentication should succeed");
             // If groups was preserved, it would match the "admin" role.
             // But we need to verify if user_data passed to create_passwordless_session has groups.
             // Since we can't easily inspect internal state, we can check if the session was created with the correct role.
