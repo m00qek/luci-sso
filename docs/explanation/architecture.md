@@ -8,7 +8,7 @@ Understanding how `luci-sso` is structured explains why it can be both secure an
 
 The most important structural decision in `luci-sso` is the strict separation between pure logic and I/O. All authentication logic — OIDC validation, JWT verification, role mapping — lives in pure `ucode` functions that know nothing about the network, the filesystem, or real time. The only way logic interacts with the outside world is through an `io` object injected at the boundary.
 
-This pattern is called Functional Core / Imperative Shell. The "shell" is a thin CGI entry point (`files/www/cgi-bin/luci-sso`) that wires real I/O into the core and calls it. The "core" is everything in `files/usr/share/ucode/luci_sso/`.
+This pattern is called Functional Core / Imperative Shell. The "shell" is a thin CGI entry point (`files/www/cgi-bin/luci-sso`) that wires real I/O into the core and calls it. The "core" is everything in `src/luci_sso/`.
 
 The reason this matters: OpenWrt routers can't run network tests. Without this separation, you'd need a real IdP to test anything meaningful. With it, every function in the codebase can be exercised by a test that substitutes a controlled mock environment for the real one.
 

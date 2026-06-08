@@ -99,6 +99,6 @@ If a check fails, see [How to add error codes, limit constants, and cookies](add
 
 ## Stuck?
 
-- Can't remember a formatting rule? Check existing code in `files/usr/share/ucode/luci_sso/`
+- Can't remember a formatting rule? Check existing code in `src/luci_sso/`
 - Unsure whether to throw or return a `Result`? See the [error handling decision tree](../../reference/style-guide.md#error-handling)
 - API changed? Update the relevant doc in `docs/` before merging
