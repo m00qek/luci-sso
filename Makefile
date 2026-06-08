@@ -222,7 +222,7 @@ sync-headers:
 
 compile: $(SENTINEL)
 
-$(SENTINEL): $(wildcard $(PROJECT_ROOT)/src/*.c) $(wildcard $(PROJECT_ROOT)/src/*.h) $(PROJECT_ROOT)/src/CMakeLists.txt
+$(SENTINEL): $(wildcard $(PROJECT_ROOT)/mod/*.c) $(wildcard $(PROJECT_ROOT)/mod/*.h) $(PROJECT_ROOT)/mod/CMakeLists.txt
 	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(SDK_ARCH)/$(CRYPTO_LIB)..."
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
