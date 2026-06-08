@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
-ERRORS_UC="src/luci_sso/errors.uc"
+ERRORS_UC="src/errors.uc"
 LOG_MESSAGES="docs/reference/log-messages.md"
 
 fail=0

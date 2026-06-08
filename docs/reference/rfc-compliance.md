@@ -107,9 +107,9 @@ Verify the claims in this document by inspecting these source files:
 
 | Area | Source |
 | :--- | :--- |
-| Authorization Code Flow, token exchange, session injection | `src/luci_sso/handshake.uc` |
-| ID Token validation, nonce, at_hash, iss, aud, exp | `src/luci_sso/oidc.uc` |
-| Discovery fetch, cache, issuer mismatch detection | `src/luci_sso/discovery.uc` |
-| PKCE generation (S256), constant-time comparisons | `src/luci_sso/crypto.uc` |
+| Authorization Code Flow, token exchange, session injection | `src/handshake.uc` |
+| ID Token validation, nonce, at_hash, iss, aud, exp | `src/oidc.uc` |
+| Discovery fetch, cache, issuer mismatch detection | `src/discovery.uc` |
+| PKCE generation (S256), constant-time comparisons | `src/crypto.uc` |
 | Algorithm enforcement, JWK parsing, signature verification | `src/native_common.c`, `src/native_mbedtls.c` |
-| HTTPS enforcement (`is_https()`) | `src/luci_sso/encoding.uc` |
+| HTTPS enforcement (`is_https()`) | `src/encoding.uc` |
