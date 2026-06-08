@@ -6,13 +6,6 @@
 PROJECT_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 DEVENV_DIR   := $(PROJECT_ROOT)/devenv
 
-# ANSI Color Codes
-GREEN := \033[1;32m
-BLUE  := \033[1;34m
-YELLOW:= \033[1;33m
-RED   := \033[1;31m
-RESET := \033[0m
-
 # Project Variables
 export UID := $(shell id -u)
 export GID := $(shell id -g)
@@ -43,13 +36,11 @@ export PORT_IDP := 5556
 export PORT_LUCI := 8443
 
 # --- 2. DYNAMIC SUITE CONFIG ---
-# Default to local if not set
 export DOCKER_SUITE ?= local
 export DOCKER_NAMESPACE := ghcr.io/m00qek
 
 # Lazy variables (=) evaluated at runtime
 export RESOLVED_DOCKER_COMPOSE = $(DEVENV_DIR)/.resolved.docker-compose.$(DOCKER_SUITE).yaml
-# Use SDK_ARCH and SDK_VERSION in project name to ensure isolated containers per environment
 # We replace dots with hyphens because dots are invalid in Docker Compose project names
 SAFE_SDK_VERSION = $(subst .,-,$(SDK_VERSION))
 COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_DIR)/docker-compose.yaml -f $(DEVENV_DIR)/docker-compose.$(DOCKER_SUITE).yaml
@@ -106,24 +97,21 @@ fuzzer-test: .fuzzer-test
 e2e-test: DOCKER_SUITE = ci
 e2e-test: .e2e-test
 
-# Watcher: Run tests automatically on change
 watch-tests: DOCKER_SUITE = ci
 watch-tests: .watch-tests
 
 test: unit-test e2e-test
 
 lint:
-	@echo -e " $(BLUE)🔍$(RESET) Running documentation lint checks..."
 	@bash $(DEVENV_DIR)/scripts/check-error-codes.sh
 	@bash $(DEVENV_DIR)/scripts/check-request-limits.sh
 	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
-	@echo -e " $(GREEN)✅$(RESET) All lint checks passed."
 
 pull: DOCKER_SUITE = ci
 pull: .pull
 
 VAR ?= ""
-print-env: 
+print-env:
 	@echo "$${$(VAR)}"
 
 .pull:
@@ -131,12 +119,9 @@ print-env:
 
 # --- 4. IMPLEMENTATION (Private Targets) ---
 
-# Macro: Abort if the current DOCKER_SUITE is not running
 define VALIDATE_SUITE_RUNNING
 	@if [ -z "$$($(SUITE_IS_RUNNING_CMD))" ]; then \
-		echo -e " $(RED)⛔$(RESET) The '$(DOCKER_SUITE)' environment is NOT RUNNING (Project: $(DOCKER_SUITE)-$(SDK_ARCH)-$(SDK_VERSION))."; \
-		echo -e " $(BLUE)ℹ️$(RESET)  Please start it first:$(RESET)"; \
-		echo -e "\n      make up SDK_VERSION=$(SDK_VERSION)"; \
+		echo "Error: '$(DOCKER_SUITE)' environment is not running. Start it with: make up"; \
 		exit 1; \
 	fi
 endef
@@ -151,11 +136,10 @@ TIME ?= 60
 DETECT_LEAKS ?= 0
 
 .fuzzer-test:
-	@echo -e " $(BLUE)🧪$(RESET) Running native fuzz tests for $(CRYPTO_LIB) ($(TIME)s)..."
 	docker compose $(COMPOSE_FLAGS) pull fuzzer || true
 	docker compose $(COMPOSE_FLAGS) run --rm -e ASAN_OPTIONS="detect_leaks=$(DETECT_LEAKS)" fuzzer bash -c " \
 		mkdir -p bin/fuzz && cd bin/fuzz && \
-		cmake -DENABLE_FUZZING=ON ../../src && \
+		cmake -DENABLE_FUZZING=ON ../../mod && \
 		make -j$$(nproc) && \
 		./fuzz_$(CRYPTO_LIB) -max_total_time=$(TIME) -rss_limit_mb=2048"
 
@@ -172,30 +156,19 @@ DETECT_LEAKS ?= 0
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
 
 .build-images:
-	@echo -e " $(BLUE)🔨$(RESET) Building images for '$(DOCKER_SUITE)'..."
 	docker compose $(COMPOSE_FLAGS) build --pull=false
 
 .up:
-	@# VALIDATION: Check if already running
-	@if [ -n "$$($(SUITE_IS_RUNNING_CMD))" ]; then
-		echo -e " $(GREEN)✅$(RESET) The '$(DOCKER_SUITE)' environment is ALREADY RUNNING."
-		echo -e " $(BLUE)ℹ️$(RESET)  Nothing to do."
-		exit 0
+	@if [ -n "$$($(SUITE_IS_RUNNING_CMD))" ]; then \
+		echo "'$(DOCKER_SUITE)' environment is already running."; \
+		exit 0; \
 	fi
-	
-	@echo -e " $(BLUE)⚙️$(RESET)  Generating configuration for '$(DOCKER_SUITE)'..."
 	docker compose $(COMPOSE_FLAGS) config > $(RESOLVED_DOCKER_COMPOSE)
-
 	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) pull || true
 	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) build
-	
-	@echo -e " $(GREEN)🚀$(RESET) Starting '$(DOCKER_SUITE)' environment..."
 	docker compose $(COMPOSE_FLAGS) up --remove-orphans -d
-	
-	@echo -e " $(GREEN)✨$(RESET) Done!$(RESET)"
 
 .down:
-	@echo -e " $(YELLOW)🛑$(RESET) Stopping '$(DOCKER_SUITE)' environment..."
 	docker compose $(COMPOSE_FLAGS) down --remove-orphans
 
 .ps:
@@ -205,33 +178,25 @@ CONTAINER ?= openwrt
 
 .shell:
 	$(VALIDATE_SUITE_RUNNING)
-	
-	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER) ($(DOCKER_SUITE))..."
 	docker compose $(COMPOSE_FLAGS) exec $(CONTAINER) /bin/sh
 
 .run:
 	$(VALIDATE_SUITE_RUNNING)
-	
-	@echo -e " $(BLUE)🐚$(RESET) Entering $(CONTAINER) ($(DOCKER_SUITE))..."
 	docker compose $(COMPOSE_FLAGS) run -it --rm $(CONTAINER) /bin/sh
 
 sync-headers:
-	@echo -e " $(BLUE)🔄$(RESET) Syncing headers for LSP..."
 	@mkdir -p $(DEVENV_DIR)/.include
 	docker compose $(COMPOSE_FLAGS) run --rm sdk sh -c "cp -r /sdk/staging_dir/target-*/usr/include/* /sdk/package/luci-sso/devenv/.include/"
 
 compile: $(SENTINEL)
 
 $(SENTINEL): $(wildcard $(PROJECT_ROOT)/mod/*.c) $(wildcard $(PROJECT_ROOT)/mod/*.h) $(PROJECT_ROOT)/mod/CMakeLists.txt
-	@echo -e " $(BLUE)🔨$(RESET) Building native components for $(SDK_ARCH)/$(CRYPTO_LIB)..."
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh compile
-
 	@touch $(SENTINEL)
 
 package:
-	@echo -e " $(BLUE)📦$(RESET) Building IPK package for $(SDK_ARCH)..."
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/packages
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION) 2>/dev/null || true
 	docker compose $(COMPOSE_FLAGS) run --rm sdk /bin/bash /usr/local/bin/build.sh package
