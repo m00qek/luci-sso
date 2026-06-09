@@ -27,7 +27,7 @@ it('router: reproduction - enabled endpoint returns JSON even if disabled (W2)',
         let req = res_req.data;
 
         // 2. Load Config (will be SSO_DISABLED)
-        let res_c = config_loader.load(io);
+        let res_c = config_loader.load({ uci: io.uci_cursor(), log: io.log });
         assert.match(falsy(), res_c.ok);
         assert.match("SSO_DISABLED", res_c.error);
 

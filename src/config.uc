@@ -12,8 +12,8 @@ import { SSO_DISABLED, CONFIG_ERROR, UCI_ERROR } from 'luci_sso.errors';
  * @param {object} io - I/O provider
  * @returns {object} - Result Object {ok, data/error}
  */
-export function is_enabled(io) {
-	let cursor = io.uci_cursor();
+export function is_enabled(deps) {
+	let cursor = deps.uci;
 	if (!cursor) return Result.err(UCI_ERROR);
 
 	let enabled = cursor.get("luci-sso", "default", "enabled");
@@ -26,14 +26,14 @@ export function is_enabled(io) {
  * @param {object} io - I/O provider
  * @returns {object} - Result Object {ok, data/error}
  */
-export function load(io) {
-	let enabled_res = is_enabled(io);
+export function load(deps) {
+	let enabled_res = is_enabled(deps);
 	if (!enabled_res.ok) return enabled_res;
 	if (!enabled_res.data) {
 		return Result.err(SSO_DISABLED);
 	}
 
-	let cursor = io.uci_cursor();
+	let cursor = deps.uci;
 
 	// 1. Load OIDC Provider Settings
 	let oidc_cfg = cursor.get_all("luci-sso", "default");
@@ -80,7 +80,7 @@ export function load(io) {
 		let write = (type(s.write) == "array") ? s.write : (s.write ? [ s.write ] : []);
 
 		if (length(emails) == 0 && length(groups) == 0) {
-			io.log("warn", `Ignoring role '${s[".name"]}': missing email or group list`);
+			deps.log("warn", `Ignoring role '${s[".name"]}': missing email or group list`);
 			return;
 		}
 

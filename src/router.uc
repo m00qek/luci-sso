@@ -189,7 +189,7 @@ export function handle(io, config, request, policy) {
 	if (path == "/") {
 		let query = request.query || {};
 		if (query.action == "enabled") {
-			let enabled_res = config_mod.is_enabled(io);
+			let enabled_res = config_mod.is_enabled({ uci: io.uci_cursor(), log: io.log });
 			let enabled = (enabled_res.ok && enabled_res.data === true);
 			return Result.ok(response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', enabled ? "true" : "false")));
 		}

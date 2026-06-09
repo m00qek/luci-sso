@@ -1,11 +1,8 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, mock } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as Result from 'luci_sso.result';
-import * as mock from 'mock';
 
 it('config: logic - HTTPS protocol case-insensitivity (RFC 3986)', () => {
-	let mocked = mock.create();
-
 	let check = (url, redirect, internal) => {
 		let mock_uci = {
 			"luci-sso": {
@@ -23,21 +20,18 @@ it('config: logic - HTTPS protocol case-insensitivity (RFC 3986)', () => {
 			}
 		};
 
-		return mocked.with_uci(mock_uci, (io) => {
-			let res = config_loader.load(io);
+		let result = null;
+		mock.inject('uci', { data: mock_uci }, (uci) => {
+			let res = config_loader.load({ uci: uci.cursor(), log: () => null });
 			assert.match(truthy(), Result.is(res), "Should return Result object");
-			return res.ok;
+			result = res.ok;
 		});
+		return result;
 	};
 
-	// Standard lowercase (should pass)
 	assert.match(truthy(), check("https://idp.com", "https://app.com/callback", "https://internal-idp.com"), "Standard lowercase HTTPS should pass");
-
-	// Uppercase scheme (should pass per RFC 3986, but currently FAILS)
 	assert.match(truthy(), check("HTTPS://idp.com", "https://app.com/callback"), "Uppercase issuer HTTPS:// should pass");
 	assert.match(truthy(), check("https://idp.com", "HTTPS://app.com/callback"), "Uppercase redirect HTTPS:// should pass");
 	assert.match(truthy(), check("https://idp.com", "https://app.com/callback", "HTTPS://internal-idp.com"), "Uppercase internal_issuer_url HTTPS:// should pass");
-
-	// Mixed case scheme (should pass)
 	assert.match(truthy(), check("hTTpS://idp.com", "https://app.com/callback"), "Mixed case hTTpS:// should pass");
 });

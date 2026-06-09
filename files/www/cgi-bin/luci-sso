@@ -18,7 +18,7 @@ try {
 	const req = res_req.data;
 
 	// W2: Allow ?action=enabled even if config loading fails with SSO_DISABLED
-	const res_c = config_loader.load(io);
+	const res_c = config_loader.load({ uci: io.uci_cursor(), log: io.log });
 	if (!res_c.ok) {
 		if (res_c.error == "SSO_DISABLED" && req.path == "/" && req.query.action == "enabled") {
 			const res_router = router.handle(io, null, req);
