@@ -6,6 +6,24 @@ import * as ubus from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
 
+function make_session_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log: io.log
+	};
+}
+
 // =============================================================================
 // Tier 2: Security Enforcement Logic
 // =============================================================================
@@ -67,7 +85,7 @@ it('security: PII - ensure logs never contain raw identifiers', () => {
 		io.write_file("/etc/luci-sso/secret.key", "01234567890123456789012345678901");
 		
 		return factory.using(io).spy((spying_io) => {
-			session.create(spying_io, user_data);
+			session.create(make_session_deps(spying_io), user_data);
 		});
 	});
 
@@ -126,7 +144,7 @@ it('security: handshake registry - cleanup of stale handshakes (N5)', () => {
 			return { mtime: now };
 		};
 
-		let res = session.reap_stale_handshakes(io, 60);
+		let res = session.reap_stale_handshakes(make_session_deps(io), 60);
 		assert.match(truthy(), res.ok);
 		assert.match(1, res.data, "Should report 1 file reaped");
 		

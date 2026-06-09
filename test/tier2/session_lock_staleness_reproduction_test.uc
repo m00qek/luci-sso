@@ -1,53 +1,62 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, mock } from 'utest';
 import * as session from 'luci_sso.session';
-import * as mock from 'mock';
+
+const LOCK_PATH = "/etc/luci-sso/secret.key.lock";
+const KEY_TMP_PATH = "/etc/luci-sso/secret.key.tmp";
+const STALE_MTIME = 1000000000;
+const NOW = 1516239022;
+
+function make_stale_lock_behavior() {
+	let mkdir_calls = 0;
+	return {
+		stat: (path) => {
+			if (path === LOCK_PATH) return { mtime: STALE_MTIME };
+			return null;
+		},
+		mkdir: (path) => {
+			if (path === LOCK_PATH) {
+				mkdir_calls++;
+				return mkdir_calls > 1;
+			}
+			return true;
+		}
+	};
+}
 
 it('session: get_secret_key - reproduction of permanent lockout on stale lock', () => {
-    let factory = mock.create();
-    const lock_path = "/etc/luci-sso/secret.key.lock";
-
-    // 1. Simulate a stale lock from a previous crashed process
-    // We create the directory manually and set its mtime to way in the past.
-    // In mock, stat() returns { mtime: state.now }.
-    
-    factory.with_files({
-        [lock_path]: { ".type": "directory" }
-    }).spy((io) => {
-        // Force the mock to report a very old mtime for the lock
-        let original_stat = io.stat;
-        io.stat = (path) => {
-            if (path == lock_path) return { mtime: 1000000000 }; // Very old
-            return original_stat(path);
-        };
-
-        let res = session.get_secret_key(io);
-        
-        assert.match(truthy(), res.ok, "Should succeed with self-healing");
-        assert.match(32, length(res.data), "Should return a 32-byte key");
-
-        let history = mock.create().using(io).spy((dummy) => {}); // Get history from IO
-        // Wait, 'io' is the one that has the history.
-        // Let's use the spy handle from factory.spy().
-    });
+	mock.inject('fs', { behavior: make_stale_lock_behavior() }, (fs) => {
+		let res = session.get_secret_key({ fs, log: () => null, clock: { time: () => NOW, sleep: () => null } });
+		assert.match(truthy(), res.ok, "Should succeed with self-healing");
+		assert.match(32, length(res.data), "Should return a 32-byte key");
+	});
 });
 
 it('session: get_secret_key - self-healing log and cleanup verification', () => {
-    let factory = mock.create();
-    const lock_path = "/etc/luci-sso/secret.key.lock";
+	let log_calls = [];
 
-    let history = factory.with_files({
-        [lock_path]: { ".type": "directory" }
-    }).spy((io) => {
-        let original_stat = io.stat;
-        io.stat = (path) => {
-            if (path == lock_path) return { mtime: 1000000000 };
-            return original_stat(path);
-        };
-        session.get_secret_key(io);
-    });
+	mock.inject('fs', { behavior: make_stale_lock_behavior() }, (fs) => {
+		let log = (level, msg) => push(log_calls, [level, msg]);
+		session.get_secret_key({ fs, log, clock: { time: () => NOW, sleep: () => null } });
 
-    assert.match(truthy(), history.called("log", "warn", "Stale secret key lock detected; performing self-healing cleanup"), "Should log self-healing event");
-    assert.match(truthy(), history.called("remove", lock_path), "Should remove the stale lock");
-    assert.match(truthy(), history.called("write_file", "/etc/luci-sso/secret.key.tmp"), "Should proceed with generation after healing");
+		let warn_found = false;
+		for (let e in log_calls) {
+			if (e[0] === "warn" && e[1] === "Stale secret key lock detected; performing self-healing cleanup")
+				warn_found = true;
+		}
+		assert.match(truthy(), warn_found, "Should log self-healing event");
+
+		let unlink_calls = fs.__utest__.calls.unlink || [];
+		let lock_removed = false;
+		for (let call in unlink_calls) {
+			if (call[0] === LOCK_PATH) lock_removed = true;
+		}
+		assert.match(truthy(), lock_removed, "Should remove the stale lock");
+
+		let write_calls = fs.__utest__.calls.writefile || [];
+		let tmp_written = false;
+		for (let call in write_calls) {
+			if (call[0] === KEY_TMP_PATH) tmp_written = true;
+		}
+		assert.match(truthy(), tmp_written, "Should proceed with generation after healing");
+	});
 });
-

@@ -9,6 +9,24 @@ import * as f from 'tier3.fixtures';
 import * as tf from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
+function make_session_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log: io.log
+	};
+}
+
 const TEST_SECRET = "integration-test-secret-32-bytes!!!";
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
@@ -104,7 +122,7 @@ it('router: enabled - returns JSON response', () => {
 it('router: callback - successful authentication and UBUS login', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
-		let state_res = session.create_state(io);
+		let state_res = session.create_state(make_session_deps(io));
         assert.match(truthy(), Result.is(state_res));
 		let handshake = state_res.data;
 		
@@ -150,7 +168,7 @@ it('router: callback - successful authentication and UBUS login', () => {
 it('router: callback - handle stale JWKS cache recovery', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
-		let state_res = session.create_state(io);
+		let state_res = session.create_state(make_session_deps(io));
         assert.match(truthy(), Result.is(state_res));
 		let handshake = state_res.data;
 		
@@ -192,7 +210,7 @@ it('router: callback - handle stale JWKS cache recovery', () => {
 it('router: callback - reject non-whitelisted users', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
-		let state_res = session.create_state(io);
+		let state_res = session.create_state(make_session_deps(io));
         assert.match(truthy(), Result.is(state_res));
 		let handshake = state_res.data;
 		
@@ -220,7 +238,7 @@ it('router: callback - reject token replay', () => {
 		"/var/run/luci-sso/tokens/": { ".type": "directory" }
 	});
 	factory.with_env({}, (io) => {
-		let state_res = session.create_state(io);
+		let state_res = session.create_state(make_session_deps(io));
         assert.match(truthy(), Result.is(state_res));
 		let handshake = state_res.data;
 		let access_token = "ALREADY_USED";
@@ -256,7 +274,7 @@ it('router: callback - reject token replay', () => {
 it('router: callback - reject state replay', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
-		let state_res = session.create_state(io);
+		let state_res = session.create_state(make_session_deps(io));
         assert.match(truthy(), Result.is(state_res));
 		let handshake = state_res.data;
 		let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
@@ -279,7 +297,7 @@ it('router: callback - reject state replay', () => {
 it('router: callback - reject code replay', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
-		let state_res = session.create_state(io);
+		let state_res = session.create_state(make_session_deps(io));
         assert.match(truthy(), Result.is(state_res));
 		let handshake = state_res.data;
 		let req = mock_request("/callback", { code: "REPLAYED_CODE", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
@@ -298,7 +316,7 @@ it('router: callback - reject code replay', () => {
 it('router: security - reject PKCE bypass', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
-		let state_res = session.create_state(io);
+		let state_res = session.create_state(make_session_deps(io));
         assert.match(truthy(), Result.is(state_res));
 		let handshake = state_res.data;
 		let req = mock_request("/callback", { code: "VALID_CODE", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
@@ -317,7 +335,7 @@ it('router: security - reject PKCE bypass', () => {
 it('router: security - skip token registration on verification failure', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_env({}, (io) => {
-		let state_res = session.create_state(io);
+		let state_res = session.create_state(make_session_deps(io));
         assert.match(truthy(), Result.is(state_res));
 		let handshake = state_res.data;
 		let access_token = "DO_NOT_REGISTER_ME";
@@ -340,7 +358,7 @@ it('router: security - skip token registration on verification failure', () => {
 			// If NOT registered, it should proceed past replay check and fail later.
 			
 			// We'll mock the IdP to return the SAME access token again for a new code.
-			let state_res2 = session.create_state(io_http);
+			let state_res2 = session.create_state(make_session_deps(io_http));
             assert.match(truthy(), Result.is(state_res2));
 			let handshake2 = state_res2.data;
 			

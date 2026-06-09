@@ -6,6 +6,24 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
+function make_session_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log: io.log
+	};
+}
+
 it('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => {
     let access_token = "access-token-123";
     let test_config = {
@@ -38,7 +56,7 @@ it('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => {
             };
 
             // Create a valid handshake state
-            let state_res = session.create_state(io);
+            let state_res = session.create_state(make_session_deps(io));
             assert.match(truthy(), state_res.ok);
             let s_data = state_res.data;
 

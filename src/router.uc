@@ -81,7 +81,21 @@ function response(status, headers, body) {
  * @private
  */
 function handle_login(io, config) {
-	let reap_res = session.reap_stale_handshakes(io, config.clock_tolerance);
+	let reap_res = session.reap_stale_handshakes({
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log: io.log
+	}, config.clock_tolerance);
 	if (reap_res.ok && reap_res.data > 0) {
 		io.log("info", `Cleaned up ${reap_res.data} stale handshakes`);
 	}

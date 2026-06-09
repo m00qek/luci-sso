@@ -12,12 +12,12 @@ import { CRYPTO_INIT_FAILED, STATE_SAVE_FAILED, MALFORMED_STATE_COOKIE, STATE_NO
  * Performs an emergency reap of the oldest handshakes.
  * @private
  */
-function _emergency_reap(io, files) {
+function _emergency_reap(deps, files) {
 	let candidates = [];
 	for (let f in files) {
 		if (match(f, /^handshake_.*\.json$/)) {
 			let path = `${common.HANDSHAKE_DIR}/${f}`;
-			let st = io.stat(path);
+			let st = deps.fs.stat(path);
 			push(candidates, { path: path, mtime: (st && st.mtime) || 0 });
 		}
 	}
@@ -28,32 +28,32 @@ function _emergency_reap(io, files) {
 	// Remove oldest 50%
 	let to_remove = int(length(candidates) / 2);
 	for (let i = 0; i < to_remove; i++) {
-		try { io.remove(candidates[i].path); } catch (e) {}
+		try { deps.fs.unlink(candidates[i].path); } catch (e) {}
 	}
 };
 
 /**
  * Removes handshake files older than the duration.
- * @param {object} io - I/O provider
+ * @param {object} deps - { fs, clock, log }
  * @param {number} clock_tolerance - Clock skew tolerance
  * @returns {object} - Result Object {ok, data: count/error}
  */
-export function reap(io, clock_tolerance) {
-	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: reap expects mandatory integer clock_tolerance");
+export function reap(deps, clock_tolerance) {
+	if (type(clock_tolerance) !== "int") die("CONTRACT_VIOLATION: reap expects mandatory integer clock_tolerance");
 
-	let files = io.lsdir(common.HANDSHAKE_DIR);
+	let files = deps.fs.lsdir(common.HANDSHAKE_DIR);
 	if (!files) return Result.ok(0);
 
-	let now = io.time();
+	let now = deps.clock.time();
 	let reaped = 0;
 	for (let f in files) {
 		if (match(f, /^handshake_[A-Za-z0-9_-]+\.json$/)) {
 			let path = `${common.HANDSHAKE_DIR}/${f}`;
-			let st = io.stat(path);
+			let st = deps.fs.stat(path);
 			// Use a slightly larger grace period than duration + tolerance
 			if (st && st.mtime && (now - st.mtime) > (common.HANDSHAKE_DURATION + clock_tolerance + common.REAP_GRACE_PERIOD)) {
-				try { 
-					io.remove(path);
+				try {
+					deps.fs.unlink(path);
 					reaped++;
 				} catch (e) {}
 			}
@@ -64,30 +64,30 @@ export function reap(io, clock_tolerance) {
 
 /**
  * Creates an opaque handshake state on the server.
- * 
- * @param {object} io - I/O provider
+ *
+ * @param {object} deps - { fs, clock, log }
  * @returns {object} - Result Object {ok, data/error}
  */
-export function create(io) {
-	common.ensure_handshake_dir(io);
+export function create(deps) {
+	common.ensure_handshake_dir(deps);
 
 	// DOS PROTECTION: Check capacity before creating new state
-	let files = io.lsdir(common.HANDSHAKE_DIR) || [];
+	let files = deps.fs.lsdir(common.HANDSHAKE_DIR) || [];
 	let count = 0;
 	for (let f in files) {
 		if (match(f, /^handshake_.*\.json$/)) count++;
 	}
 
 	if (count >= common.HANDSHAKE_MAX_COUNT) {
-		io.log("warn", `Handshake capacity reached (${count}); triggering emergency reap`);
-		_emergency_reap(io, files);
+		deps.log("warn", `Handshake capacity reached (${count}); triggering emergency reap`);
+		_emergency_reap(deps, files);
 		let new_count = 0;
-		let refreshed = io.lsdir(common.HANDSHAKE_DIR) || [];
+		let refreshed = deps.fs.lsdir(common.HANDSHAKE_DIR) || [];
 		for (let f in refreshed) {
 			if (match(f, /^handshake_.*\.json$/)) new_count++;
 		}
 		if (new_count >= common.HANDSHAKE_MAX_COUNT) {
-			io.log("error", `Handshake capacity still exceeded after emergency reap (${new_count}); rejecting`);
+			deps.log("error", `Handshake capacity still exceeded after emergency reap (${new_count}); rejecting`);
 			return Result.err(HANDSHAKE_CAPACITY_EXCEEDED);
 		}
 	}
@@ -98,7 +98,7 @@ export function create(io) {
 	let res_h = crypto.random(32);
 
 	if (!res_p.ok || !res_s.ok || !res_n.ok || !res_h.ok) {
-		io.log("error", "CRITICAL: CSPRNG failure during handshake state generation");
+		deps.log("error", "CRITICAL: CSPRNG failure during handshake state generation");
 		return Result.err(CRYPTO_INIT_FAILED);
 	}
 
@@ -108,14 +108,14 @@ export function create(io) {
 	let res_b64_h = encoding.b64url_encode(res_h.data);
 
 	if (!res_b64_s.ok || !res_b64_n.ok || !res_b64_h.ok) {
-		io.log("error", "CRITICAL: b64url_encode failure during handshake state generation");
+		deps.log("error", "CRITICAL: b64url_encode failure during handshake state generation");
 		return Result.err(CRYPTO_INIT_FAILED);
 	}
 
 	let state = res_b64_s.data;
 	let nonce = res_b64_n.data;
 	let handle = res_b64_h.data;
-	let now = io.time();
+	let now = deps.clock.time();
 
 	let data = {
 		id: crypto.safe_id(handle), // Correlation ID for logs
@@ -125,31 +125,31 @@ export function create(io) {
 		iat: now,
 		exp: now + common.HANDSHAKE_DURATION
 	};
-	
+
 	try {
 		let path = `${common.HANDSHAKE_DIR}/handshake_${handle}.json`;
 		let tmp_path = `${path}.tmp`;
 
-		if (!io.write_file(tmp_path, sprintf("%J", data))) {
-			let err = io.fserror();
-			io.log("error", `Failed to save handshake state (write): ${err}`);
+		if (!deps.fs.writefile(tmp_path, sprintf("%J", data))) {
+			let err = deps.fs.error();
+			deps.log("error", `Failed to save handshake state (write): ${err}`);
 			return Result.err(STATE_SAVE_FAILED, err);
 		}
 
-		io.chmod(tmp_path, 0600);
+		deps.fs.chmod(tmp_path, 0600);
 
-		if (!io.rename(tmp_path, path)) {
-			let err = io.fserror();
-			io.log("error", `Failed to save handshake state (rename): ${err}`);
-			try { io.remove(tmp_path); } catch (e) {}
+		if (!deps.fs.rename(tmp_path, path)) {
+			let err = deps.fs.error();
+			deps.log("error", `Failed to save handshake state (rename): ${err}`);
+			try { deps.fs.unlink(tmp_path); } catch (e) {}
 			return Result.err(STATE_SAVE_FAILED, err);
 		}
 	} catch (e) {
-		io.log("error", `Failed to save handshake state: ${e}`);
+		deps.log("error", `Failed to save handshake state: ${e}`);
 		return Result.err(STATE_SAVE_FAILED);
 	}
 
-	io.log("info", `Handshake state created [session_id: ${data.id}]`);
+	deps.log("info", `Handshake state created [session_id: ${data.id}]`);
 
 	return Result.ok({
 		token: handle, // Opaque handle for the cookie
@@ -162,31 +162,31 @@ export function create(io) {
 /**
  * Explicitly consumes (deletes) a handshake state.
  * Used for cleanup on terminal auth failures.
- * 
- * @param {object} io - I/O provider
+ *
+ * @param {object} deps - { fs }
  * @param {string} handle - Opaque handshake handle
  */
-export function consume(io, handle) {
-	if (!handle || type(handle) != "string") return;
+export function consume(deps, handle) {
+	if (!handle || type(handle) !== "string") return;
 	if (!match(handle, /^[A-Za-z0-9_-]+$/)) return;
 
 	let path = `${common.HANDSHAKE_DIR}/handshake_${handle}.json`;
 	try {
-		io.remove(path);
+		deps.fs.unlink(path);
 	} catch (e) {}
 };
 
 /**
  * Verifies and consumes a handshake state handle.
- * 
- * @param {object} io - I/O provider
+ *
+ * @param {object} deps - { fs, clock, log }
  * @param {string} handle - Opaque handshake handle
  * @param {number} clock_tolerance - Clock skew tolerance
  * @returns {object} - Result Object {ok, data/error}
  */
-export function verify(io, handle, clock_tolerance) {
-	if (type(handle) != "string") die("CONTRACT_VIOLATION: verify expects string handle");
-	if (type(clock_tolerance) != "int") die("CONTRACT_VIOLATION: verify expects mandatory integer clock_tolerance");
+export function verify(deps, handle, clock_tolerance) {
+	if (type(handle) !== "string") die("CONTRACT_VIOLATION: verify expects string handle");
+	if (type(clock_tolerance) !== "int") die("CONTRACT_VIOLATION: verify expects mandatory integer clock_tolerance");
 
 	// Ensure the handle is a safe filename (Base64URL only)
 	if (!match(handle, /^[A-Za-z0-9_-]+$/)) {
@@ -201,71 +201,71 @@ export function verify(io, handle, clock_tolerance) {
 	try {
 		// MANDATORY: Atomic one-time use.
 		// We RENAME the file to .consumed. Only one process can succeed in the rename.
-		if (!io.rename(path, consume_path)) {
-			io.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
+		if (!deps.fs.rename(path, consume_path)) {
+			deps.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
 			return Result.err(STATE_NOT_FOUND);
 		}
-		
-		content = io.read_file(consume_path);
+
+		content = deps.fs.readfile(consume_path);
 	} catch (e) {
-		io.log("error", `Handshake state consumption failed [session_id: ${session_id}]: ${e}`);
+		deps.log("error", `Handshake state consumption failed [session_id: ${session_id}]: ${e}`);
 		// Attempt to cleanup the consumed file if it exists but failed to read/process
-		try { io.remove(consume_path); } catch (e) {}
+		try { deps.fs.unlink(consume_path); } catch (e) {}
 		return Result.err(STATE_NOT_FOUND);
 	}
 
 	// Always remove the consumed file immediately
-	try { io.remove(consume_path); } catch (e) {}
+	try { deps.fs.unlink(consume_path); } catch (e) {}
 
 	if (!content) {
-		io.log("error", `Handshake state content missing [session_id: ${session_id}]`);
+		deps.log("error", `Handshake state content missing [session_id: ${session_id}]`);
 		return Result.err(STATE_NOT_FOUND);
 	}
 
 	let res = encoding.safe_json(content);
 	if (!res.ok) {
-		io.log("error", `Handshake state corrupted [session_id: ${session_id}]: ${res.details}`);
+		deps.log("error", `Handshake state corrupted [session_id: ${session_id}]: ${res.details}`);
 		return Result.err(STATE_CORRUPTED);
 	}
 	let data = res.data;
 
 	// Validate mandatory handshake fields on load
-	if (!data.code_verifier || type(data.code_verifier) != "string" || length(data.code_verifier) < 43 || length(data.code_verifier) > 128) {
-		io.log("error", `Handshake state missing or invalid PKCE verifier [session_id: ${session_id}]`);
+	if (!data.code_verifier || type(data.code_verifier) !== "string" || length(data.code_verifier) < 43 || length(data.code_verifier) > 128) {
+		deps.log("error", `Handshake state missing or invalid PKCE verifier [session_id: ${session_id}]`);
 		return Result.err(STATE_CORRUPTED);
 	}
-	if (!data.state || type(data.state) != "string") {
-		io.log("error", `Handshake state missing state parameter [session_id: ${session_id}]`);
+	if (!data.state || type(data.state) !== "string") {
+		deps.log("error", `Handshake state missing state parameter [session_id: ${session_id}]`);
 		return Result.err(STATE_CORRUPTED);
 	}
-	if (!data.nonce || type(data.nonce) != "string") {
-		io.log("error", `Handshake state missing nonce [session_id: ${session_id}]`);
+	if (!data.nonce || type(data.nonce) !== "string") {
+		deps.log("error", `Handshake state missing nonce [session_id: ${session_id}]`);
 		return Result.err(STATE_CORRUPTED);
 	}
 
 	// Enforce mandatory exp and iat claims
-	if (data.exp == null || type(data.exp) != "int") {
-		io.log("error", `Handshake state missing or invalid 'exp' [session_id: ${session_id}]`);
+	if (data.exp === null || type(data.exp) !== "int") {
+		deps.log("error", `Handshake state missing or invalid 'exp' [session_id: ${session_id}]`);
 		return Result.err(STATE_CORRUPTED);
 	}
-	if (data.iat == null || type(data.iat) != "int") {
-		io.log("error", `Handshake state missing or invalid 'iat' [session_id: ${session_id}]`);
+	if (data.iat === null || type(data.iat) !== "int") {
+		deps.log("error", `Handshake state missing or invalid 'iat' [session_id: ${session_id}]`);
 		return Result.err(STATE_CORRUPTED);
 	}
 
-	let now = io.time();
+	let now = deps.clock.time();
 
 	if (data.exp < (now - clock_tolerance)) {
-		io.log("warn", `Handshake state expired [session_id: ${session_id}]`);
+		deps.log("warn", `Handshake state expired [session_id: ${session_id}]`);
 		return Result.err(HANDSHAKE_EXPIRED);
 	}
 
 	if (data.iat > (now + clock_tolerance)) {
-		io.log("warn", `Handshake state not yet valid [session_id: ${session_id}]`);
+		deps.log("warn", `Handshake state not yet valid [session_id: ${session_id}]`);
 		return Result.err(HANDSHAKE_NOT_YET_VALID);
 	}
-	
-	io.log("info", `Handshake state successfully validated [session_id: ${session_id}]`);
-	
+
+	deps.log("info", `Handshake state successfully validated [session_id: ${session_id}]`);
+
 	return Result.ok(data);
 };

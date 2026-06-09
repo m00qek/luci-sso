@@ -15,6 +15,24 @@ import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISM
  * Bridges the gap between raw OIDC protocol and LuCI session management.
  */
 
+function make_session_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log: io.log
+	};
+}
+
 /**
  * Validates the raw callback request and extracts query/handshake.
  * @private
@@ -36,7 +54,7 @@ function _validate_callback_request(io, config, request) {
 		return Result.err(MISSING_HANDSHAKE_COOKIE, { http_status: 401 });
 	}
 
-	let handshake_res = session.verify_state(io, state_token, config.clock_tolerance);
+	let handshake_res = session.verify_state(make_session_deps(io), state_token, config.clock_tolerance);
 	if (!handshake_res.ok) {
 		return Result.err(handshake_res.error, { http_status: 401 });
 	}
@@ -217,10 +235,10 @@ export function initiate(io, config) {
 	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
 
 	// Ensure system is initialized (bootstrap secret key if needed)
-	let key_res = session.get_secret_key(io);
+	let key_res = session.get_secret_key(make_session_deps(io));
 	if (!key_res.ok) return Result.err(SYSTEM_INIT_FAILED, { http_status: 500 });
 
-	let handshake_res = session.create_state(io);
+	let handshake_res = session.create_state(make_session_deps(io));
 	if (!handshake_res.ok) return handshake_res;
 	let handshake = handshake_res.data;
 

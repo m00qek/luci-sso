@@ -8,6 +8,24 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
+function make_session_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log: io.log
+	};
+}
+
 it('handshake: split-horizon - prevents path corruption when issuer_url is in path', () => {
     // BUG: If issuer_url is "https://auth.com" and token_endpoint is "https://auth.com/realms/auth.com/token",
     // naive replace() results in "https://internal/realms/internal/token" if internal_issuer_url is "https://internal".
@@ -86,7 +104,7 @@ it('handshake: split-horizon - prevents path corruption when issuer_url is in pa
                 return Result.ok({ status: 404, body: { read: () => "" } });
             };
 
-            let s_res = session.create_state(io);
+            let s_res = session.create_state(make_session_deps(io));
             if (!s_res.ok) {
                 print("create_state failed: ", s_res.error, "\n");
                 assert.match(truthy(), false);
@@ -176,7 +194,7 @@ it('handshake: split-horizon - prevents corruption when internal_issuer_url is s
                 return Result.ok({ status: 404 });
             };
 
-            let s_res = session.create_state(io);
+            let s_res = session.create_state(make_session_deps(io));
             let s_data = s_res.data;
             let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
             let raw_data = encoding.safe_json(io.read_file(path)).data;
@@ -234,7 +252,7 @@ it('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)',
                 return Result.ok({ status: 404, body: { read: () => "URL Corrupted: " + url } });
             };
 
-            let s_res = session.create_state(io);
+            let s_res = session.create_state(make_session_deps(io));
             let s_data = s_res.data;
             let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
             let raw_data = encoding.safe_json(io.read_file(path)).data;

@@ -8,6 +8,24 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
+function make_session_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log: io.log
+	};
+}
+
 it('handshake: userinfo - supplements missing email when sub matches', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
@@ -47,7 +65,7 @@ it('handshake: userinfo - supplements missing email when sub matches', () => {
                 return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
             };
 
-            let s_res = session.create_state(io);
+            let s_res = session.create_state(make_session_deps(io));
             let s_data = s_res.data;
             let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
             let raw_data = encoding.safe_json(io.read_file(path)).data;
@@ -103,7 +121,7 @@ it('handshake: userinfo - fails identity binding when sub mismatches', () => {
                 return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
             };
 
-            let s_res = session.create_state(io);
+            let s_res = session.create_state(make_session_deps(io));
             let s_data = s_res.data;
             let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
             let raw_data = encoding.safe_json(io.read_file(path)).data;

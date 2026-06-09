@@ -1,37 +1,25 @@
-import { it, assert, truthy, falsy } from 'utest';
+import { it, assert, truthy, falsy, mock } from 'utest';
 import * as session from 'luci_sso.session';
-import * as mock from 'mock';
 
 it('session: reproduction - null key propagation on generation failure (B5)', () => {
-	let factory = mock.create();
-	
-	factory.with_env({}, (io) => {
-		// 1. Force key generation path (file missing)
-		io.read_file = (path) => null;
-		
-		// 2. Allow lock acquisition
-		io.mkdir = (path) => true;
-		
-		// 3. Fail during the "generation/write" block
-		// We mock chmod to throw, which triggers the catch(e) block in session.uc
-		io.chmod = (path, mode) => {
-			die("Permission denied (Mocked)");
-		};
+	mock.inject('fs', {
+		behavior: {
+			readfile: () => null,
+			mkdir:    () => true,
+			chmod:    (path, mode) => { die("Permission denied (Mocked)"); }
+		}
+	}, (fs) => {
+		let res = session.get_secret_key({ fs, log: () => null, clock: { time: () => 1516239022, sleep: () => null } });
 
-		// Execute
-		let res = session.get_secret_key(io);
-
-		// Assert
-		// The bug is that it returns Result.ok(null)
-		// The fix ensures it returns Result.err("SYSTEM_KEY_GENERATION_FAILED")
-		
 		if (res.ok && res.data === null) {
-			// Print explicit failure message for the log
-			print("FAIL: Reproduced B5 - get_secret_key returned Result.ok(null)
-");
+			print("FAIL: Reproduced B5 - get_secret_key returned Result.ok(null)\n");
 		}
 
 		assert.match(falsy(), res.ok, "Should return error when key generation fails");
-		assert.match(truthy(), res.error == "SYSTEM_KEY_GENERATION_FAILED" || res.error == "SYSTEM_KEY_WRITE_FAILED", "Expected key generation or write failure error");
+		assert.match(
+			truthy(),
+			res.error === "SYSTEM_KEY_GENERATION_FAILED" || res.error === "SYSTEM_KEY_WRITE_FAILED",
+			"Expected key generation or write failure error"
+		);
 	});
 });

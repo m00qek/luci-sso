@@ -13,11 +13,11 @@ export const HANDSHAKE_MAX_COUNT = 100;
 
 /**
  * Ensures the handshake directory exists.
- * @param {object} io - I/O provider
+ * @param {object} deps - { fs }
  */
-export function ensure_handshake_dir(io) {
+export function ensure_handshake_dir(deps) {
 	try {
-		io.mkdir(HANDSHAKE_DIR, 0700);
+		deps.fs.mkdir(HANDSHAKE_DIR, 0700);
 	} catch (e) {
 		// Might already exist or failed permissions, we'll find out on write
 	}
