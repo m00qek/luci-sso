@@ -20,6 +20,20 @@ function make_oidc_deps(io) {
 	};
 }
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 // =============================================================================
 // Tier 2: OIDC Business Logic (Platinum Refactor)
 // =============================================================================
@@ -29,7 +43,7 @@ it('oidc: discovery - successful fetch & schema', () => {
 	let url = issuer + "/.well-known/openid-configuration";
 	
 	mock.create().with_responses({ [url]: { status: 200, body: f.MOCK_DISCOVERY } }, (io) => {
-		let res = oidc.discover(io, issuer);
+		let res = oidc.discover(make_discovery_deps(io), issuer);
 		assert.match(truthy(), res.ok);
 		assert.match(f.MOCK_DISCOVERY.issuer, res.data.issuer);
 	});
@@ -40,7 +54,7 @@ it('oidc: discovery - handle non-JSON response', () => {
 	let url = issuer + "/.well-known/openid-configuration";
 	
 	mock.create().with_responses({ [url]: { status: 200, body: "<html>Error</html>" } }, (io) => {
-		let res = oidc.discover(io, issuer);
+		let res = oidc.discover(make_discovery_deps(io), issuer);
 		assert.match(falsy(), res.ok);
 		assert.match("INVALID_DISCOVERY_DOC", res.error);
 	});
@@ -52,7 +66,7 @@ it('oidc: discovery - reject issuer mismatch', () => {
 	let evil_doc = { ...f.MOCK_DISCOVERY, issuer: "https://evil.idp" };
 
 	mock.create().with_responses({ [url]: { status: 200, body: evil_doc } }, (io) => {
-		let res = oidc.discover(io, issuer);
+		let res = oidc.discover(make_discovery_deps(io), issuer);
 		assert.match(falsy(), res.ok);
 		assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
 	});
@@ -65,7 +79,7 @@ it('oidc: discovery - reject document missing issuer field', () => {
 	delete bad_doc.issuer;
 
 	mock.create().with_responses({ [url]: { status: 200, body: bad_doc } }, (io) => {
-		let res = oidc.discover(io, issuer);
+		let res = oidc.discover(make_discovery_deps(io), issuer);
 		assert.match(falsy(), res.ok, "Should fail if issuer field is missing");
 		assert.match("DISCOVERY_MISSING_ISSUER", res.error);
 	});
@@ -77,15 +91,15 @@ it('oidc: discovery - cache robustness & TTL', () => {
 	let url = issuer + "/.well-known/openid-configuration";
 	
 	mock.create().with_responses({ [url]: { status: 200, body: f.MOCK_DISCOVERY } }, (io) => {
-		oidc.discover(io, issuer, { cache_path: cache_path, ttl: 100 });
+		oidc.discover(make_discovery_deps(io), issuer, { cache_path: cache_path, ttl: 100 });
 		
 		mock.create().using(io).with_responses({}, (io_cache) => {
-			let res = oidc.discover(io_cache, issuer, { cache_path: cache_path, ttl: 100 });
+			let res = oidc.discover(make_discovery_deps(io_cache), issuer, { cache_path: cache_path, ttl: 100 });
 			assert.match(truthy(), res.ok, "Should hit cache");
 		});
 
 		let data = mock.create().using(io).spy((spying_io) => {
-			oidc.discover(spying_io, issuer, { cache_path: cache_path, ttl: -1 }); 
+			oidc.discover(make_discovery_deps(spying_io), issuer, { cache_path: cache_path, ttl: -1 }); 
 		});
 		assert.match(truthy(), data.called("http_get", url), "Should have attempted network refresh");
 	});
@@ -254,12 +268,12 @@ it('oidc: JWKS - successful fetch, cache & TTL', () => {
 	let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
 	
 	mock.create().with_responses({ [jwks_uri]: { status: 200, body: mock_jwks } }, (io) => {
-		let res = oidc.fetch_jwks(io, jwks_uri, { cache_path: cache_path, ttl: 3600 });
+		let res = oidc.fetch_jwks(make_discovery_deps(io), jwks_uri, { cache_path: cache_path, ttl: 3600 });
 		assert.match(truthy(), res.ok);
 		assert.match("k1", res.data[0].kid);
 		
 		mock.create().using(io).with_responses({}, (io_cache) => {
-			let res2 = oidc.fetch_jwks(io_cache, jwks_uri, { cache_path: cache_path, ttl: 3600 });
+			let res2 = oidc.fetch_jwks(make_discovery_deps(io_cache), jwks_uri, { cache_path: cache_path, ttl: 3600 });
 			assert.match(truthy(), res2.ok, "Should hit cache");
 		});
 	});
@@ -272,7 +286,7 @@ it('oidc: JWKS - handle corrupted cache', () => {
 	
 	mock.create().with_files({ [cache_path]: "{ invalid json !!! }" }, (io) => {
 		mock.create().using(io).with_responses({ [jwks_uri]: { status: 200, body: mock_jwks } }, (io_final) => {
-			let res = oidc.fetch_jwks(io_final, jwks_uri, { cache_path: cache_path });
+			let res = oidc.fetch_jwks(make_discovery_deps(io_final), jwks_uri, { cache_path: cache_path });
 			assert.match(truthy(), res.ok, "Should fall back to network if cache is corrupted");
 			assert.match("k1", res.data[0].kid);
 		});
@@ -365,11 +379,11 @@ it('oidc: discovery - immutable cache (no pollution)', () => {
 	};
 	
 	mock.create().with_responses({ [url]: { status: 200, body: mock_disc } }, (io) => {
-		let res1 = oidc.discover(io, issuer);
+		let res1 = oidc.discover(make_discovery_deps(io), issuer);
 		assert.match(truthy(), res1.ok);
 		res1.data.token_endpoint = "http://EVIL";
 		
-		let res2 = oidc.discover(io, issuer);
+		let res2 = oidc.discover(make_discovery_deps(io), issuer);
 		assert.match(issuer + "/token", res2.data.token_endpoint, "Cache must not be polluted");
 	});
 });
@@ -385,7 +399,7 @@ it('oidc: discovery - handle insecure end_session_endpoint', () => {
 	};
 	
 	factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { status: 200, body: disc } }, (io) => {
-		let res = oidc.discover(io, "https://idp.com");
+		let res = oidc.discover(make_discovery_deps(io), "https://idp.com");
 		assert.match(truthy(), res.ok);
 		assert.match(falsy(), res.data.end_session_endpoint, "Insecure end_session_endpoint MUST be removed");
 	});

@@ -25,6 +25,21 @@ function make_session_deps(io) {
 	};
 }
 
+function make_ubus_deps(io) {
+	return {
+		fs: {
+			readfile: (p)    => io.read_file(p),
+			lsdir:    (p)    => io.lsdir(p),
+			stat:     (p)    => io.stat(p),
+			unlink:   (p)    => io.remove(p),
+			mkdir:    (p, m) => io.mkdir(p, m),
+		},
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 it('session: handshake - atomic consumption ensures integrity', () => {
 	let data = mock.create().with_files({}).spy((io) => {
 		let res = session.create_state(make_session_deps(io));
@@ -123,7 +138,7 @@ it('security: detect CSPRNG failure during CSRF token generation (B3)', () => {
             .with_ubus({
                 "session:create": { ubus_rpc_session: "sid" }
             }).with_env({}, (io) => {
-                res = ubus.create_passwordless_session(io, "root", { read: ["*"], write: ["*"] }, "user@example.com", "at", "rt", "it");
+                res = ubus.create_passwordless_session(make_ubus_deps(io), "root", { read: ["*"], write: ["*"] }, "user@example.com", "at", "rt", "it");
             });
     } catch (e) {
         err = e;

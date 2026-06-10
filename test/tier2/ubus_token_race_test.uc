@@ -2,6 +2,21 @@ import { it, assert, truthy, falsy } from 'utest';
 import * as ubus from 'luci_sso.ubus';
 import * as mock from 'mock';
 
+function make_ubus_deps(io) {
+	return {
+		fs: {
+			readfile: (p)    => io.read_file(p),
+			lsdir:    (p)    => io.lsdir(p),
+			stat:     (p)    => io.stat(p),
+			unlink:   (p)    => io.remove(p),
+			mkdir:    (p, m) => io.mkdir(p, m),
+		},
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 // =============================================================================
 // Tier 2: Token Registry Race Condition & Persistence
 // =============================================================================
@@ -13,7 +28,7 @@ it('ubus: register_token - handles concurrent registration (replay)', () => {
     factory.with_env({}, (io) => {
         // 1. First registration succeeds
         io.mkdir = (path, mode) => true; 
-        let res1 = ubus.register_token(io, token);
+        let res1 = ubus.register_token(make_ubus_deps(io), token);
         assert.match(truthy(), res1.ok, "First registration should succeed");
 
         // 2. Second registration (Simulated Replay/Race)
@@ -24,7 +39,7 @@ it('ubus: register_token - handles concurrent registration (replay)', () => {
             return false; 
         };
         
-        let res2 = ubus.register_token(io, token);
+        let res2 = ubus.register_token(make_ubus_deps(io), token);
         assert.match(falsy(), res2.ok, "Second registration MUST fail");
         assert.match("TOKEN_REPLAYED", res2.error);
     });
@@ -45,7 +60,7 @@ it('ubus: register_token - resilience to registry mkdir failure', () => {
             return true; // Succeed for the token lock itself (shouldn't happen if base fails, but testing logic)
         };
         
-        let res = ubus.register_token(io, token);
+        let res = ubus.register_token(make_ubus_deps(io), token);
         assert.match(truthy(), res.ok, "Should proceed if token lock succeeds despite base dir mkdir returning false (might already exist)");
     });
 });

@@ -3,6 +3,20 @@ import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 it('discovery: reproduction - case-insensitive cache miss (W6)', () => {
     let issuer_upper = "HTTPS://TRUSTED.IDP";
     let issuer_lower = "https://trusted.idp";
@@ -14,14 +28,14 @@ it('discovery: reproduction - case-insensitive cache miss (W6)', () => {
     factory.with_responses({
         [`${issuer_lower}/.well-known/openid-configuration`]: { status: 200, body: doc }
     }).spy((io) => {
-        let res1 = discovery.discover(io, issuer_lower);
+        let res1 = discovery.discover(make_discovery_deps(io), issuer_lower);
         assert.match(truthy(), res1.ok);
 
         // Clear responses to ensure cache is used
         io._responses = {};
 
         // 2. Fetch with uppercase (Should hit cache)
-        let res2 = discovery.discover(io, issuer_upper);
+        let res2 = discovery.discover(make_discovery_deps(io), issuer_upper);
         
         if (!res2.ok) {
             print(`DEBUG: res2 failed. error=${res2.error}, details=${res2.details}\n`);

@@ -21,6 +21,20 @@ function make_oidc_deps(io) {
 	};
 }
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 it('oidc: security - reject HS256 algorithm confusion', () => {
 	// 1. Setup malicious HS256 token signed with a string key
 	let header = { alg: "HS256", typ: "JWT", kid: "key1" };
@@ -74,7 +88,7 @@ it('oidc: security - handle network failure during exchange', () => {
 
 it('oidc: security - reject insecure issuer URL', () => {
 	mock.create().with_responses({}, (io) => {
-		let res = oidc.discover(io, "http://insecure.idp");
+		let res = oidc.discover(make_discovery_deps(io), "http://insecure.idp");
         assert.match(truthy(), Result.is(res));
 		assert.match(falsy(), res.ok);
 		assert.match("INSECURE_ISSUER_URL", res.error);
@@ -83,7 +97,7 @@ it('oidc: security - reject insecure issuer URL', () => {
 
 it('oidc: security - reject insecure internal issuer URL', () => {
 	mock.create().with_responses({}, (io) => {
-		let res = oidc.discover(io, "https://secure.idp", { internal_issuer_url: "http://insecure.local" });
+		let res = oidc.discover(make_discovery_deps(io), "https://secure.idp", { internal_issuer_url: "http://insecure.local" });
         assert.match(truthy(), Result.is(res));
 		assert.match(falsy(), res.ok);
 		assert.match("INSECURE_FETCH_URL", res.error);
@@ -99,7 +113,7 @@ it('oidc: security - reject discovery document with insecure endpoints', () => {
 	let url = issuer + "/.well-known/openid-configuration";
 
 	mock.create().with_responses({ [url]: { status: 200, body: evil_disc } }, (io) => {
-		let res = oidc.discover(io, issuer);
+		let res = oidc.discover(make_discovery_deps(io), issuer);
         assert.match(truthy(), Result.is(res));
 		assert.match(falsy(), res.ok);
 		assert.match("INSECURE_ENDPOINT", res.error);

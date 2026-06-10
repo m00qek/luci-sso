@@ -3,6 +3,21 @@ import * as ubus from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
 
+function make_ubus_deps(io) {
+	return {
+		fs: {
+			readfile: (p)    => io.read_file(p),
+			lsdir:    (p)    => io.lsdir(p),
+			stat:     (p)    => io.stat(p),
+			unlink:   (p)    => io.remove(p),
+			mkdir:    (p, m) => io.mkdir(p, m),
+		},
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 it('ubus: logic - get_session success', () => {
 	let factory = mock.create().with_ubus({
 		"session:get": (args) => {
@@ -12,7 +27,7 @@ it('ubus: logic - get_session success', () => {
 	});
 
 	factory.with_env({}, (io) => {
-		let res = ubus.get_session(io, "sid-123");
+		let res = ubus.get_session(make_ubus_deps(io), "sid-123");
         assert.match(truthy(), Result.is(res));
 		assert.match(truthy(), res.ok);
 		assert.match("test@example.com", res.data.oidc_user);
@@ -26,7 +41,7 @@ it('ubus: logic - get_session handle missing session', () => {
 	});
 
 	factory.with_env({}, (io) => {
-		let res = ubus.get_session(io, "invalid-sid");
+		let res = ubus.get_session(make_ubus_deps(io), "invalid-sid");
         assert.match(truthy(), Result.is(res));
 		assert.match(falsy(), res.ok);
 		assert.match("SESSION_NOT_FOUND", res.error);
@@ -36,7 +51,7 @@ it('ubus: logic - get_session handle missing session', () => {
 it('ubus: logic - get_session handle invalid SID', () => {
 	let factory = mock.create();
 	factory.with_env({}, (io) => {
-		let res = ubus.get_session(io, null);
+		let res = ubus.get_session(make_ubus_deps(io), null);
         assert.match(truthy(), Result.is(res));
 		assert.match(falsy(), res.ok);
 		assert.match("INVALID_SID", res.error);
@@ -57,7 +72,7 @@ it('ubus: security - create_passwordless_session generates 256-bit CSRF token (B
 	});
 
 	factory.with_env({}, (io) => {
-		let res = ubus.create_passwordless_session(io, "root", { read: ["luci-mod-network"], write: [] }, "user@test.com", "at", "rt", "it");
+		let res = ubus.create_passwordless_session(make_ubus_deps(io), "root", { read: ["luci-mod-network"], write: [] }, "user@test.com", "at", "rt", "it");
         assert.match(truthy(), Result.is(res));
 		assert.match(truthy(), res.ok);
 		assert.match(1, length(grants));
@@ -74,7 +89,7 @@ it('ubus: logic - create_passwordless_session admin wildcard', () => {
 	});
 
 	factory.with_env({}, (io) => {
-		ubus.create_passwordless_session(io, "root", { read: ["*"], write: ["*"] }, "a@b.com", "at", "rt", "it");
+		ubus.create_passwordless_session(make_ubus_deps(io), "root", { read: ["*"], write: ["*"] }, "a@b.com", "at", "rt", "it");
 		
 		let scopes = map(grants, (g) => g.scope);
 		assert.match(truthy(), index(scopes, "ubus") != -1);
@@ -91,7 +106,7 @@ it('ubus: logic - register_token atomicity and full hash (B2)', () => {
 		let token = "my-secret-token-123";
 		
 		// 1. First registration should succeed
-		let res1 = ubus.register_token(io, token);
+		let res1 = ubus.register_token(make_ubus_deps(io), token);
         assert.match(truthy(), Result.is(res1));
 		assert.match(truthy(), res1.ok, "First token registration must succeed");
 		
@@ -101,13 +116,13 @@ it('ubus: logic - register_token atomicity and full hash (B2)', () => {
 		assert.match(64, length(files[0]), "Token ID must be a full 64-character SHA-256 hex digest");
 		
 		// 3. Second registration of SAME token must fail (replay)
-		let res2 = ubus.register_token(io, token);
+		let res2 = ubus.register_token(make_ubus_deps(io), token);
         assert.match(truthy(), Result.is(res2));
 		assert.match(falsy(), res2.ok, "Replayed token registration must fail");
 		assert.match("TOKEN_REPLAYED", res2.error);
 		
 		// 4. Registration of DIFFERENT token should succeed
-		let res3 = ubus.register_token(io, token + "new");
+		let res3 = ubus.register_token(make_ubus_deps(io), token + "new");
         assert.match(truthy(), Result.is(res3));
 		assert.match(truthy(), res3.ok, "Different token must succeed");
 		assert.match(2, length(io.lsdir("/var/run/luci-sso/tokens")), "Should have two entries now");
@@ -128,7 +143,7 @@ it('ubus: security - create_passwordless_session robust ACL parsing (N2)', () =>
 	});
 
 	factory.with_env({}, (io) => {
-		ubus.create_passwordless_session(io, "root", { read: ["*"], write: [] }, "a@b.com", "at", "rt", "it");
+		ubus.create_passwordless_session(make_ubus_deps(io), "root", { read: ["*"], write: [] }, "a@b.com", "at", "rt", "it");
 		
 		let granted_groups = [];
 		for (let g in grants) {

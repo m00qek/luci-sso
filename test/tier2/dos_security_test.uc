@@ -6,6 +6,20 @@ import * as crypto from 'luci_sso.crypto';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 it('oidc: security - reject massive discovery response (DoS protection)', () => {
 	// Generate a response slightly larger than 256KB using exponential doubling
 	let garbage = "1234567890";
@@ -20,7 +34,7 @@ it('oidc: security - reject massive discovery response (DoS protection)', () => 
             }
         })
         .with_env({}, (io) => {
-            let res = oidc.discover(io, "https://massive.idp");
+            let res = oidc.discover(make_discovery_deps(io), "https://massive.idp");
             
             assert.match(falsy(), res.ok, "Should reject massive discovery document");
             assert.match("DISCOVERY_NETWORK_ERROR", res.error, "Should return network error (aborted read)");

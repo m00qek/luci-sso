@@ -15,6 +15,35 @@ import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'l
  * Handles path routing and maps protocol flow results to HTTP responses.
  */
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
+function make_ubus_deps(io) {
+	return {
+		fs: {
+			readfile: (p)    => io.read_file(p),
+			lsdir:    (p)    => io.lsdir(p),
+			stat:     (p)    => io.stat(p),
+			unlink:   (p)    => io.remove(p),
+			mkdir:    (p, m) => io.mkdir(p, m),
+		},
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 const RATELIMIT_DIR = "/var/run/luci-sso";
 const RATELIMIT_FILE = RATELIMIT_DIR + "/ratelimit.json";
 const LIMIT_WINDOW = 60;   // 60 seconds
@@ -141,7 +170,7 @@ function handle_logout(io, config, request) {
 		return Result.ok(response(302, { "Location": "/" }));
 	}
 
-	let session_res = ubus.get_session(io, sid);
+	let session_res = ubus.get_session(make_ubus_deps(io), sid);
 	if (!session_res.ok) {
 		// Session expired or invalid - treat like unauthenticated
 		return Result.ok(response(302, { "Location": "/" }));
@@ -155,12 +184,12 @@ function handle_logout(io, config, request) {
 		return Result.err(CSRF_CHECK_FAILED, { http_status: 403 });
 	}
 	id_token_hint = session_res.data.oidc_id_token;
-	ubus.destroy_session(io, sid);
+	ubus.destroy_session(make_ubus_deps(io), sid);
 
 	let logout_url = "/";
 
 	// OIDC RP-Initiated Logout
-	let disc_res = discovery.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
+	let disc_res = discovery.discover(make_discovery_deps(io), config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (disc_res.ok && disc_res.data.end_session_endpoint) {
 		let end_session = disc_res.data.end_session_endpoint;
 

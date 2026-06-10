@@ -27,10 +27,10 @@ function get_cache_path(id_res, prefix) {
  * Reads and validates a cached object.
  * @private
  */
-function _read_cache(io, path, ttl, ignore_ttl) {
+function _read_cache(deps, path, ttl, ignore_ttl) {
 	if (!path) return null;
 	try {
-		let content = io.read_file(path);
+		let content = deps.fs.readfile(path);
 		if (!content) return null;
 
 		let res = encoding.safe_json(content);
@@ -39,7 +39,7 @@ function _read_cache(io, path, ttl, ignore_ttl) {
 		let data = res.data;
 		if (!data || !data.cached_at) return null;
 
-		if (!ignore_ttl && (io.time() - data.cached_at) > ttl) return null;
+		if (!ignore_ttl && (deps.clock.time() - data.cached_at) > ttl) return null;
 
 		return data;
 	} catch (e) {
@@ -51,14 +51,14 @@ function _read_cache(io, path, ttl, ignore_ttl) {
  * Writes data to cache with a timestamp (Atomic).
  * @private
  */
-function _write_cache(io, path, data) {
+function _write_cache(deps, path, data) {
 	if (!path) return;
 	try {
-		let cache_data = { ...data, cached_at: io.time() };
+		let cache_data = { ...data, cached_at: deps.clock.time() };
 
 		let res = crypto.random(8);
 		if (!res.ok) {
-			io.log("error", "Cache write aborted: CSPRNG failure");
+			deps.log("error", "Cache write aborted: CSPRNG failure");
 			return;
 		}
 		let b64_res = encoding.b64url_encode(res.data);
@@ -66,20 +66,20 @@ function _write_cache(io, path, data) {
 
 		let tmp_path = `${path}.${b64_res.data}.tmp`;
 
-		if (io.write_file(tmp_path, sprintf("%J", cache_data))) {
-			if (!io.rename(tmp_path, path)) {
-				io.remove(tmp_path);
+		if (deps.fs.writefile(tmp_path, sprintf("%J", cache_data))) {
+			if (!deps.fs.rename(tmp_path, path)) {
+				deps.fs.unlink(tmp_path);
 			}
 		}
 	} catch (e) {
-		io.log("error", `Cache write failure: ${e}`);
+		deps.log("error", `Cache write failure: ${e}`);
 	}
 };
 
 /**
  * Fetches and caches OIDC discovery document.
  */
-export function discover(io, issuer, options) {
+export function discover(deps, issuer, options) {
 	if (!encoding.is_https(issuer)) return Result.err(INSECURE_ISSUER_URL);
 
 	options = options || {};
@@ -90,7 +90,7 @@ export function discover(io, issuer, options) {
 	let cache_path = options.cache_path || get_cache_path(normalized_issuer_res, "discovery");
 	let ttl = options.ttl || 86400; // 24 hours default (production standard)
 
-	let cached = _read_cache(io, cache_path, ttl);
+	let cached = _read_cache(deps, cache_path, ttl);
 	if (cached && cached.issuer) {
 		let cached_issuer_res = encoding.normalize_url(cached.issuer);
 		if (cached_issuer_res.ok && crypto.constant_time_eq(cached_issuer_res.data, normalized_issuer)) {
@@ -105,26 +105,26 @@ export function discover(io, issuer, options) {
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
 	fetch_url += ".well-known/openid-configuration";
 
-	let res_http = io.http_get(fetch_url, { verify: true });
+	let res_http = deps.http.get(fetch_url, { verify: true });
 	let issuer_id = crypto.safe_id(normalized_issuer);
 
 	if (!res_http.ok || res_http.data.status != 200) {
 		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
-		let stale = _read_cache(io, cache_path, ttl, true);
+		let stale = _read_cache(deps, cache_path, ttl, true);
 		if (stale && stale.issuer) {
 			let stale_issuer_res = encoding.normalize_url(stale.issuer);
 			if (stale_issuer_res.ok && crypto.constant_time_eq(stale_issuer_res.data, normalized_issuer)) {
-				io.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
+				deps.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
 				return Result.ok(stale);
 			}
 		}
 
 		if (!res_http.ok) {
-			io.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${res_http.error}`);
+			deps.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${res_http.error}`);
 			return Result.err(DISCOVERY_NETWORK_ERROR);
 		}
 
-		io.log("warn", `Discovery fetch HTTP ${res_http.data.status} from [id: ${issuer_id}]`);
+		deps.log("warn", `Discovery fetch HTTP ${res_http.data.status} from [id: ${issuer_id}]`);
 		return Result.err(DISCOVERY_FAILED, { http_status: res_http.data.status });
 	}
 
@@ -132,25 +132,25 @@ export function discover(io, issuer, options) {
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
-		io.log("error", `Discovery JSON parse error: ${res.details}`);
+		deps.log("error", `Discovery JSON parse error: ${res.details}`);
 		return Result.err(INVALID_DISCOVERY_DOC);
 	}
 	let config = res.data;
 
 	// 2.1 Issuer Validation: The document MUST claim to be the issuer we requested
 	if (!config.issuer) {
-		io.log("error", `Discovery document missing issuer field from [id: ${issuer_id}]`);
+		deps.log("error", `Discovery document missing issuer field from [id: ${issuer_id}]`);
 		return Result.err(DISCOVERY_MISSING_ISSUER);
 	}
-	
+
 	let config_issuer_res = encoding.normalize_url(config.issuer);
 	if (!config_issuer_res.ok || !crypto.constant_time_eq(config_issuer_res.data, normalized_issuer)) {
-		io.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(config_issuer_res.data) : "INVALID"}]`);
-		return Result.err(DISCOVERY_ISSUER_MISMATCH, 
+		deps.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(config_issuer_res.data) : "INVALID"}]`);
+		return Result.err(DISCOVERY_ISSUER_MISMATCH,
 			 `Expected issuer_id ${issuer_id}` );
 	}
 
-	io.log("info", `Discovery successful for [id: ${issuer_id}]`);
+	deps.log("info", `Discovery successful for [id: ${issuer_id}]`);
 
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {
@@ -164,17 +164,17 @@ export function discover(io, issuer, options) {
 
 	// OPTIONAL: UserInfo endpoint (RFC 6749 / OIDC)
 	if (config.userinfo_endpoint && !encoding.is_https(config.userinfo_endpoint)) {
-		io.log("warn", `Insecure userinfo_endpoint ignored from [id: ${issuer_id}]`);
+		deps.log("warn", `Insecure userinfo_endpoint ignored from [id: ${issuer_id}]`);
 		delete config.userinfo_endpoint;
 	}
 
 	// OPTIONAL: RP-Initiated Logout support (RFC 7522 / OIDC)
 	if (config.end_session_endpoint && !encoding.is_https(config.end_session_endpoint)) {
-		io.log("warn", `Insecure end_session_endpoint ignored from [id: ${issuer_id}]`);
+		deps.log("warn", `Insecure end_session_endpoint ignored from [id: ${issuer_id}]`);
 		delete config.end_session_endpoint;
 	}
 
-	_write_cache(io, cache_path, config);
+	_write_cache(deps, cache_path, config);
 
 	return Result.ok(config);
 };
@@ -182,7 +182,7 @@ export function discover(io, issuer, options) {
 /**
  * Fetches JWK Set from IdP with caching.
  */
-export function fetch_jwks(io, jwks_uri, options) {
+export function fetch_jwks(deps, jwks_uri, options) {
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
 
 	let normalized_uri_res = encoding.normalize_url(jwks_uri);
@@ -197,28 +197,28 @@ export function fetch_jwks(io, jwks_uri, options) {
 	let uri_id = crypto.safe_id(normalized_uri);
 
 	if (!options.force) {
-		let cached = _read_cache(io, cache_path, ttl);
+		let cached = _read_cache(deps, cache_path, ttl);
 		if (cached && type(cached.keys) == "array") {
-			io.log("info", `JWKS loaded from cache for [id: ${uri_id}]`);
+			deps.log("info", `JWKS loaded from cache for [id: ${uri_id}]`);
 			return Result.ok(cached.keys);
 		}
 	}
 
-	let res_http = io.http_get(jwks_uri, { verify: true });
+	let res_http = deps.http.get(jwks_uri, { verify: true });
 	if (!res_http.ok || res_http.data.status != 200) {
 		// RESILIENCE FALLBACK: Try stale cache
-		let stale = _read_cache(io, cache_path, ttl, true);
+		let stale = _read_cache(deps, cache_path, ttl, true);
 		if (stale && type(stale.keys) == "array") {
-			io.log("warn", `Using stale JWKS cache due to network failure [id: ${uri_id}]`);
+			deps.log("warn", `Using stale JWKS cache due to network failure [id: ${uri_id}]`);
 			return Result.ok(stale.keys);
 		}
 
 		if (!res_http.ok) {
-			io.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${res_http.error}`);
+			deps.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${res_http.error}`);
 			return Result.err(JWKS_NETWORK_ERROR);
 		}
 
-		io.log("warn", `JWKS fetch HTTP ${res_http.data.status} from [id: ${uri_id}]`);
+		deps.log("warn", `JWKS fetch HTTP ${res_http.data.status} from [id: ${uri_id}]`);
 		return Result.err(JWKS_FETCH_FAILED, { http_status: res_http.data.status });
 	}
 
@@ -226,14 +226,14 @@ export function fetch_jwks(io, jwks_uri, options) {
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok || type(res.data.keys) != "array") {
-		io.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"}`);
+		deps.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"}`);
 		return Result.err(INVALID_JWKS_FORMAT);
 	}
 	let jwks = res.data;
 
-	io.log("info", `JWKS successfully fetched: ${length(jwks.keys)} keys from [id: ${uri_id}]`);
+	deps.log("info", `JWKS successfully fetched: ${length(jwks.keys)} keys from [id: ${uri_id}]`);
 
-	_write_cache(io, cache_path, jwks);
+	_write_cache(deps, cache_path, jwks);
 
 	return Result.ok(jwks.keys);
 };

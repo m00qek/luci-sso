@@ -3,6 +3,20 @@ import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 it('discovery: security - prevent cache poisoning on issuer mismatch (B5)', () => {
     let issuer = "https://trusted.idp";
     let cache_path = `/var/run/luci-sso/oidc-discovery-extracted_later.json`;
@@ -15,7 +29,7 @@ it('discovery: security - prevent cache poisoning on issuer mismatch (B5)', () =
             [`${issuer}/.well-known/openid-configuration`]: { status: 200, body: evil_doc }
         })
         .spy((io) => {
-            let res = discovery.discover(io, issuer);
+            let res = discovery.discover(make_discovery_deps(io), issuer);
             
             assert.match(falsy(), res.ok, "Should fail on issuer mismatch");
             assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
@@ -38,7 +52,7 @@ it('discovery: security - prevent cache poisoning on missing required fields', (
             [`${issuer}/.well-known/openid-configuration`]: { status: 200, body: broken_doc }
         })
         .spy((io) => {
-            let res = discovery.discover(io, issuer);
+            let res = discovery.discover(make_discovery_deps(io), issuer);
             assert.match(falsy(), res.ok);
             
             let files = io.lsdir("/var/run/luci-sso");
@@ -59,7 +73,7 @@ it('discovery: security - ensure sanitized logging on issuer mismatch (W4)', () 
             [`${issuer}/.well-known/openid-configuration`]: { status: 200, body: evil_doc }
         })
         .spy((io) => {
-            discovery.discover(io, issuer);
+            discovery.discover(make_discovery_deps(io), issuer);
         });
 
     // Verify raw evil_issuer is NOT in logs
@@ -84,7 +98,7 @@ it('discovery: security - normalized issuer comparison (W2)', () => {
             [`https://trusted.idp/.well-known/openid-configuration`]: { status: 200, body: doc }
         })
         .spy((io) => {
-            let res = discovery.discover(io, issuer);
+            let res = discovery.discover(make_discovery_deps(io), issuer);
             assert.match(truthy(), res.ok, "Should succeed with normalized comparison");
             assert.match("https://trusted.idp", res.data.issuer);
         });

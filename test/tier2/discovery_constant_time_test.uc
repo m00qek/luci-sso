@@ -3,6 +3,20 @@ import * as discovery from 'luci_sso.discovery';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 it('discovery: security - compliance - constant_time_eq used for issuer comparison', () => {
     let issuer = "https://trusted.idp";
     let doc = { ...f.MOCK_DISCOVERY, issuer: issuer };
@@ -14,7 +28,7 @@ it('discovery: security - compliance - constant_time_eq used for issuer comparis
     mocked.with_responses({
         [`${issuer}/.well-known/openid-configuration`]: { status: 200, body: evil_doc }
     }).spy((io) => {
-        let res = discovery.discover(io, issuer);
+        let res = discovery.discover(make_discovery_deps(io), issuer);
         assert.match(falsy(), res.ok, "Should fail on issuer mismatch");
         assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
     });

@@ -24,6 +24,21 @@ function make_session_deps(io) {
 	};
 }
 
+function make_ubus_deps(io) {
+	return {
+		fs: {
+			readfile: (p)    => io.read_file(p),
+			lsdir:    (p)    => io.lsdir(p),
+			stat:     (p)    => io.stat(p),
+			unlink:   (p)    => io.remove(p),
+			mkdir:    (p, m) => io.mkdir(p, m),
+		},
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 // =============================================================================
 // Tier 2: Security Enforcement Logic
 // =============================================================================
@@ -115,7 +130,7 @@ it('security: token registry - cleanup of stale tokens', () => {
 			return { mtime: now };
 		};
 
-		let res = ubus.reap_stale_tokens(io);
+		let res = ubus.reap_stale_tokens(make_ubus_deps(io));
 		assert.match(truthy(), res.ok);
 		assert.match(1, res.data, "Should report 1 token reaped");
 

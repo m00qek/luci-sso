@@ -3,6 +3,20 @@ import * as discovery from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
 import * as mock from 'mock';
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 // =============================================================================
 // Tier 2: Discovery Resilience (Stale Cache Fallback)
 // =============================================================================
@@ -29,7 +43,7 @@ it('discovery: resilience - fallback to stale cache on network failure', () => {
 		// Mock network failure (timeout)
 		io.http_get = (url) => Result.err("TIMEOUT");
 
-		let res = discovery.discover(io, issuer, { cache_path: cache_path });
+		let res = discovery.discover(make_discovery_deps(io), issuer, { cache_path: cache_path });
 		
 		assert.match(truthy(), res.ok, "Should fallback to stale cache on network error: " + (res.error || ""));
 		assert.match(issuer, res.data.issuer, "Should return cached data");
@@ -43,7 +57,7 @@ it('discovery: resilience - fail if cache is missing AND network fails', () => {
 	factory.with_env({}, (io) => {
 		io.http_get = (url) => Result.err("DNS_FAILURE");
 
-		let res = discovery.discover(io, issuer);
+		let res = discovery.discover(make_discovery_deps(io), issuer);
 		assert.match(falsy(), res.ok, "Should fail if no cache and no network");
 		assert.match("DISCOVERY_NETWORK_ERROR", res.error);
 	});

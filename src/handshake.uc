@@ -43,6 +43,35 @@ function make_oidc_deps(io) {
 	};
 }
 
+function make_discovery_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
+function make_ubus_deps(io) {
+	return {
+		fs: {
+			readfile: (p)    => io.read_file(p),
+			lsdir:    (p)    => io.lsdir(p),
+			stat:     (p)    => io.stat(p),
+			unlink:   (p)    => io.remove(p),
+			mkdir:    (p, m) => io.mkdir(p, m),
+		},
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time() },
+		log: io.log
+	};
+}
+
 /**
  * Validates the raw callback request and extracts query/handshake.
  * @private
@@ -83,7 +112,7 @@ function _validate_callback_request(io, config, request) {
  */
 function _complete_oauth_flow(io, config, code, handshake, policy) {
 	let session_id = handshake.id;
-	let disc_res = discovery.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
+	let disc_res = discovery.discover(make_discovery_deps(io), config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
 		return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
 	}
@@ -131,7 +160,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 	}
 	let tokens = exchange_res.data;
 
-	let jwks_res = discovery.fetch_jwks(io, discovery_doc.jwks_uri);
+	let jwks_res = discovery.fetch_jwks(make_discovery_deps(io), discovery_doc.jwks_uri);
 	if (!jwks_res.ok) {
 		return Result.err(JWKS_FETCH_FAILED, { http_status: 500 });
 	}
@@ -153,7 +182,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 
 		if (should_retry) {
 			io.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
-			jwks_res = discovery.fetch_jwks(io, discovery_doc.jwks_uri, { force: true });
+			jwks_res = discovery.fetch_jwks(make_discovery_deps(io), discovery_doc.jwks_uri, { force: true });
 			if (jwks_res.ok) {
 				verify_res = oidc.verify_id_token(make_oidc_deps(io), tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
 			}
@@ -203,7 +232,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 
 	// MANDATORY: Register token AFTER verification (DoS Prevention)
 	let access_token = tokens.access_token;
-	let reg_res = ubus.register_token(io, access_token);
+	let reg_res = ubus.register_token(make_ubus_deps(io), access_token);
 	if (!reg_res.ok) {
 		if (reg_res.error == "TOKEN_REPLAYED") {
 			io.log("warn", `Replay attack detected: access token already registered [session_id: ${session_id}]`);
@@ -241,7 +270,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
  */
 export function initiate(io, config) {
 	io.log("info", "Initiating OIDC login flow");
-	let disc_res = discovery.discover(io, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
+	let disc_res = discovery.discover(make_discovery_deps(io), config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
 
 	// Ensure system is initialized (bootstrap secret key if needed)
@@ -299,8 +328,8 @@ export function authenticate(io, config, request, policy) {
 	let perms = res_perms.data;
 
 	let ubus_res = ubus.create_passwordless_session(
-		io, 
-		perms.role_name, 
+		make_ubus_deps(io),
+		perms.role_name,
 		perms, 
 		user_data.email, 
 		oauth_res.data.access_token, 
