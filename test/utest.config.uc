@@ -4,4 +4,9 @@ return {
         "/usr/lib/ucode",
         "/usr/share/luci-sso/test",
     ],
+    mocks: {
+        uclient: null,
+        uloop: null,
+        ubus: null,
+    },
 };

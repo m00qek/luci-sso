@@ -33,6 +33,16 @@ function make_session_deps(io) {
 	};
 }
 
+function make_oidc_deps(io) {
+	return {
+		http: {
+			get:  (url, opts) => io.http_get(url, opts),
+			post: (url, opts) => io.http_post(url, opts)
+		},
+		log: io.log
+	};
+}
+
 /**
  * Validates the raw callback request and extracts query/handshake.
  * @private
@@ -115,7 +125,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		}
 	}
 
-	let exchange_res = oidc.exchange_code(io, config, discovery_doc, code, handshake.code_verifier, session_id);
+	let exchange_res = oidc.exchange_code(make_oidc_deps(io), config, discovery_doc, code, handshake.code_verifier, session_id);
 	if (!exchange_res.ok) {
 		return exchange_res;
 	}
@@ -126,7 +136,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 		return Result.err(JWKS_FETCH_FAILED, { http_status: 500 });
 	}
 
-	let verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
+	let verify_res = oidc.verify_id_token(make_oidc_deps(io), tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
 
 	// Key Rotation Recovery
 	if (!verify_res.ok) {
@@ -145,7 +155,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 			io.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
 			jwks_res = discovery.fetch_jwks(io, discovery_doc.jwks_uri, { force: true });
 			if (jwks_res.ok) {
-				verify_res = oidc.verify_id_token(io, tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
+				verify_res = oidc.verify_id_token(make_oidc_deps(io), tokens, jwks_res.data, config, handshake, discovery_doc, io.time(), policy);
 			}
 		}
 	}
@@ -161,7 +171,7 @@ function _complete_oauth_flow(io, config, code, handshake, policy) {
 
 	// FALLBACK: If email is missing from ID Token, try UserInfo endpoint (OIDC §5.3)
 	if (!user_data.email && discovery_doc.userinfo_endpoint) {
-		let ui_res = oidc.fetch_userinfo(io, discovery_doc.userinfo_endpoint, tokens.access_token);
+		let ui_res = oidc.fetch_userinfo(make_oidc_deps(io), discovery_doc.userinfo_endpoint, tokens.access_token);
 		if (ui_res.ok) {
 			// SECURITY: sub MUST match (OIDC Core §5.3.2)
 			// MANDATORY: Use constant-time comparison for identity binding
@@ -242,7 +252,7 @@ export function initiate(io, config) {
 	if (!handshake_res.ok) return handshake_res;
 	let handshake = handshake_res.data;
 
-	let url_res = oidc.get_auth_url(io, config, disc_res.data, handshake);
+	let url_res = oidc.get_auth_url(make_oidc_deps(io), config, disc_res.data, handshake);
 	if (!url_res.ok) return url_res;
 
 	return Result.ok({

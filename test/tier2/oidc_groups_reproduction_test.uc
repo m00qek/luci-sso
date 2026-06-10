@@ -10,6 +10,16 @@ import * as h from 'lib.helpers';
 
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
+function make_oidc_deps(io) {
+	return {
+		http: {
+			get:  (url, opts) => io.http_get(url, opts),
+			post: (url, opts) => io.http_post(url, opts)
+		},
+		log: io.log
+	};
+}
+
 it('oidc: reproduction - verify_id_token drops groups claim', () => {
 	let keys = [ f.MOCK_JWK ];
 	let at = "mock-at";
@@ -20,7 +30,7 @@ it('oidc: reproduction - verify_id_token drops groups claim', () => {
 	let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
 
 	mock.create().with_env({}, (io) => {
-		let res = oidc.verify_id_token(io, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
+		let res = oidc.verify_id_token(make_oidc_deps(io), { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, io.time(), TEST_POLICY);
 		assert.match(truthy(), res.ok, "Verification should succeed");
 		assert.match(truthy(), res.data.groups, "Groups claim SHOULD be present in user_data");
 		assert.match(groups, res.data.groups, "Groups claim SHOULD match original");

@@ -28,7 +28,7 @@ export const find_jwk = discovery.find_jwk;
 /**
  * Generates the authorization URL.
  */
-export function get_auth_url(io, config, discovery_doc, params) {
+export function get_auth_url(deps, config, discovery_doc, params) {
 	// BLOCKER FIX: Enforce mandatory CSRF protection (B1)
 	if (!params.state || type(params.state) != "string" || length(params.state) < 16) {
 		return Result.err(MISSING_STATE_PARAMETER);
@@ -76,15 +76,15 @@ export function get_auth_url(io, config, discovery_doc, params) {
 /**
  * Exchanges authorization code for tokens.
  */
-export function exchange_code(io, config, discovery, code, verifier, session_id) {
+export function exchange_code(deps, config, discovery, code, verifier, session_id) {
 	if (!encoding.is_https(discovery.token_endpoint)) return Result.err(INSECURE_TOKEN_ENDPOINT);
 
 	// Audit logging for PKCE usage (Blocker #2)
 	let sid_ctx = session_id ? ` [session_id: ${session_id}]` : "";
-	io.log("info", `Initiating token exchange${sid_ctx}`);
+	deps.log("info", `Initiating token exchange${sid_ctx}`);
 
 	if (type(verifier) != "string" || length(verifier) < 43 || length(verifier) > 128) {
-		io.log("error", `Rejected token exchange${sid_ctx}: PKCE verifier length out of bounds`);
+		deps.log("error", `Rejected token exchange${sid_ctx}: PKCE verifier length out of bounds`);
 		return Result.err(INVALID_PKCE_VERIFIER);
 	}
 
@@ -105,14 +105,13 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 		sep = "&";
 	}
 
-	let res_http = io.http_post(discovery.token_endpoint, {
+	let res_http = deps.http.post(discovery.token_endpoint, {
 		headers: { "Content-Type": "application/x-www-form-urlencoded" },
 		body: encoded_body
-		// TLS verification is enforced by default in the IO provider
 	});
 
 	if (!res_http.ok) {
-		io.log("warn", `Token exchange network error${sid_ctx}: ${res_http.error}`);
+		deps.log("warn", `Token exchange network error${sid_ctx}: ${res_http.error}`);
 		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR);
 	}
 
@@ -120,21 +119,21 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
 	if (response.status != 200) {
 		let res_err = encoding.safe_json(response.body);
 		if (res_err.ok && res_err.data.error == "invalid_grant") {
-			io.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
+			deps.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
 			return Result.err(OIDC_INVALID_GRANT, { http_status: 400 });
 		}
-		io.log("warn", `Token exchange HTTP ${response.status}${sid_ctx}`);
+		deps.log("warn", `Token exchange HTTP ${response.status}${sid_ctx}`);
 		return Result.err(TOKEN_EXCHANGE_FAILED, { http_status: response.status });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
-		io.log("error", `Token exchange JSON parse error${sid_ctx}: ${res.details}`);
+		deps.log("error", `Token exchange JSON parse error${sid_ctx}: ${res.details}`);
 		return Result.err(TOKEN_RESPONSE_INVALID_JSON);
 	}
 	let tokens = res.data;
 
-	io.log("info", `Token exchange successful${sid_ctx}`);
+	deps.log("info", `Token exchange successful${sid_ctx}`);
 
 	return Result.ok(tokens);
 };
@@ -150,7 +149,7 @@ export function exchange_code(io, config, discovery, code, verifier, session_id)
  * @param {number} now - Current timestamp
  * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
  */
-export function verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy) {
+export function verify_id_token(deps, tokens, keys, config, handshake, discovery, now, policy) {
 	if (!tokens.id_token || type(tokens.id_token) != "string") return Result.err(MISSING_ID_TOKEN);
 
 	// 1. Policy Enforcement (Second Dimension)
@@ -208,7 +207,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 	for (let k, v in payload) {
 		push(claim_names, k);
 	}
-	io.log("debug", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
+	deps.log("debug", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
 
 	// 3. OIDC Mandatory Claims Check
 	if (!payload.sub) {
@@ -246,7 +245,7 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
 		return Result.err(MISSING_ACCESS_TOKEN);
 	}
 	if (!payload.at_hash) {
-		io.log("error", "ID Token missing mandatory at_hash claim (Token Binding violation)");
+		deps.log("error", "ID Token missing mandatory at_hash claim (Token Binding violation)");
 		return Result.err(MISSING_AT_HASH);
 	}
 
@@ -282,31 +281,30 @@ export function verify_id_token(io, tokens, keys, config, handshake, discovery, 
  * @param {string} access_token - OAuth2 Access Token
  * @returns {object} - Result Object {ok, data: {sub, email, ...}}
  */
-export function fetch_userinfo(io, endpoint, access_token) {
+export function fetch_userinfo(deps, endpoint, access_token) {
 	if (!encoding.is_https(endpoint)) return Result.err(INSECURE_USERINFO_ENDPOINT);
 	if (!access_token) return Result.err(MISSING_ACCESS_TOKEN);
 
-	io.log("info", "Fetching supplemental claims from UserInfo endpoint");
+	deps.log("info", "Fetching supplemental claims from UserInfo endpoint");
 
-	let res_http = io.http_get(endpoint, {
+	let res_http = deps.http.get(endpoint, {
 		headers: { "Authorization": `Bearer ${access_token}` }
-		// TLS verification is enforced by default in the IO provider
 	});
 
 	if (!res_http.ok) {
-		io.log("warn", `UserInfo fetch network error: ${res_http.error}`);
+		deps.log("warn", `UserInfo fetch network error: ${res_http.error}`);
 		return Result.err(USERINFO_NETWORK_ERROR);
 	}
 
 	let response = res_http.data;
 	if (response.status != 200) {
-		io.log("warn", `UserInfo fetch HTTP ${response.status}`);
+		deps.log("warn", `UserInfo fetch HTTP ${response.status}`);
 		return Result.err(USERINFO_FETCH_FAILED, { http_status: response.status });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
-		io.log("error", `UserInfo JSON parse error: ${res.details}`);
+		deps.log("error", `UserInfo JSON parse error: ${res.details}`);
 		return Result.err(USERINFO_INVALID_JSON);
 	}
 
@@ -317,11 +315,11 @@ export function fetch_userinfo(io, endpoint, access_token) {
 	for (let k, v in payload) {
 		push(claim_names, k);
 	}
-	io.log("debug", `UserInfo claims received: ${join(", ", claim_names)}`);
+	deps.log("debug", `UserInfo claims received: ${join(", ", claim_names)}`);
 
 	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2)
 	if (!payload.sub) {
-		io.log("error", "UserInfo response missing mandatory 'sub' claim");
+		deps.log("error", "UserInfo response missing mandatory 'sub' claim");
 		return Result.err(MISSING_SUB_CLAIM);
 	}
 
