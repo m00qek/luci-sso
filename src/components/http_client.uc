@@ -112,4 +112,4 @@ export function create(uclient, uloop, fs) {
 			return Result.ok({ status: res.data.status, body: res.data.body });
 		}
 	};
-}
+};

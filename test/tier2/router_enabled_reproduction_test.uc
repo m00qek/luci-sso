@@ -4,6 +4,14 @@ import * as web_mod from 'luci_sso.web';
 import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 
+function make_web_deps(io) {
+	return {
+		getenv: (k)    => io.getenv(k),
+		stdout: io.stdout,
+		log:    (l, m) => io.log(l, m)
+	};
+}
+
 function make_router_deps(io) {
 	return {
 		fs: {
@@ -43,7 +51,7 @@ it('router: reproduction - enabled endpoint returns JSON even if disabled (W2)',
         };
 
         // 1. Parse Request
-        let res_req = web_mod.request(io);
+        let res_req = web_mod.request(make_web_deps(io));
         assert.match(truthy(), res_req.ok);
         let req = res_req.data;
 

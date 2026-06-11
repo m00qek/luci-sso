@@ -1,11 +1,12 @@
 import { it, assert, truthy } from 'utest';
-import { create } from 'luci_sso.io';
+import { create } from 'luci_sso.components.clock';
+import * as uloop from 'uloop';
 
-it("io: sleep - verify timing accuracy", () => {
-	let io = create();
+it("clock: sleep - verify timing accuracy", () => {
+	let clk = create(uloop);
 
 	let start = clock();
-	io.sleep(0.1);
+	clk.sleep(0.1);
 	let end = clock();
 
 	let duration = (end[0] - start[0]) + ((end[1] - start[1]) / 1000000000.0);
@@ -15,9 +16,9 @@ it("io: sleep - verify timing accuracy", () => {
 	assert.match(truthy(), duration <= 0.2, `Expected sleep to be reasonable, but got ${duration}s`);
 });
 
-it("io: sleep - contract violations", () => {
-	let io = create();
-	assert.throws(() => io.sleep(-0.1), /CONTRACT_VIOLATION/, "Error should mention CONTRACT_VIOLATION");
-	assert.throws(() => io.sleep("0.1"), /CONTRACT_VIOLATION/, "Error should mention CONTRACT_VIOLATION");
-	assert.throws(() => io.sleep(30.1), /CONTRACT_VIOLATION/, "Error should mention CONTRACT_VIOLATION");
+it("clock: sleep - contract violations", () => {
+	let clk = create(uloop);
+	assert.throws(() => clk.sleep(-0.1), /CONTRACT_VIOLATION/, "Error should mention CONTRACT_VIOLATION");
+	assert.throws(() => clk.sleep("0.1"), /CONTRACT_VIOLATION/, "Error should mention CONTRACT_VIOLATION");
+	assert.throws(() => clk.sleep(30.1), /CONTRACT_VIOLATION/, "Error should mention CONTRACT_VIOLATION");
 });

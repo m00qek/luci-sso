@@ -2,9 +2,17 @@ import { it, assert, truthy, falsy } from 'utest';
 import * as web from 'luci_sso.web';
 import * as mock from 'mock';
 
+function make_web_deps(io) {
+	return {
+		getenv: (k)    => io.getenv(k),
+		stdout: io.stdout,
+		log:    (l, m) => io.log(l, m)
+	};
+}
+
 it('web: rendering - standardized error prevents internal leakage', () => {
 	mock.create().spy((io) => {
-		web.render_error(io, "STATE_CORRUPTED", 401);
+		web.render_error(make_web_deps(io), "STATE_CORRUPTED", 401);
 		let out = io.__state__.stdout_buf;
 
 		assert.match(truthy(), index(out, "Authentication failed") >= 0, "Should return generic message");
@@ -43,7 +51,7 @@ it('web: security - prevent XSS in redirect location', () => {
 	};
 
 	mock.create().spy((io) => {
-		web.render(io, res);
+		web.render(make_web_deps(io), res);
 		let out = io.__state__.stdout_buf;
 
 		// 1. Verify Header is correct (Unescaped for protocol)
@@ -64,7 +72,7 @@ it('web: security - safe_getenv returns Result.err on overflow', () => {
 	for (let i = 0; i < 16385; i++) long_val += "a";
 
 	mock.create().with_env({ "HTTP_HOST": long_val }, (io) => {
-		let res = web.request(io);
+		let res = web.request(make_web_deps(io));
 		assert.match(falsy(), res.ok, "Should fail on overflow");
 		assert.match("INPUT_TOO_LARGE", res.error);
 	});
@@ -91,7 +99,7 @@ it('web: security - parse_params rejects too many parameters', () => {
 
 it('web: security - render_error emits 431 when requested', () => {
 	mock.create().spy((io) => {
-		web.render_error(io, "INPUT_TOO_LARGE", 431);
+		web.render_error(make_web_deps(io), "INPUT_TOO_LARGE", 431);
 		let out = io.__state__.stdout_buf;
 		assert.match(truthy(), index(out, "Status: 431 Request Header Fields Too Large") >= 0, "Should emit 431 status");
 		assert.match(truthy(), index(out, "too much data") >= 0, "Should contain user-friendly error message");
@@ -101,7 +109,7 @@ it('web: security - render_error emits 431 when requested', () => {
 it('web: security - emission of hardened security headers', () => {
 	let res = { status: 200, body: "OK" };
 	mock.create().spy((io) => {
-		web.render(io, res);
+		web.render(make_web_deps(io), res);
 		let out = io.__state__.stdout_buf;
 
 		assert.match(truthy(), index(out, "Content-Security-Policy:") >= 0, "MISSING CSP HEADER");

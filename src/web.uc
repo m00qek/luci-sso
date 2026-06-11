@@ -60,8 +60,8 @@ const ERROR_MAP = {
  * Safely retrieves an environment variable with length enforcement.
  * @private
  */
-function safe_getenv(io, key) {
-	let val = io.getenv(key);
+function safe_getenv(getenv, key) {
+	let val = getenv(key);
 	if (val && length(val) > LIMIT_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431, key: key });
 	return Result.ok(val);
 };
@@ -130,27 +130,27 @@ function _sanitize_header(val) {
  * Internal helper to write HTTP headers and body.
  * @private
  */
-function _out(io, headers, body) {
+function _out(stdout, headers, body) {
 	// CGI SPEC: Status header MUST come first if present
 	if (headers["Status"]) {
-		io.stdout.write(`Status: ${_sanitize_header(headers["Status"])}\n`);
+		stdout.write(`Status: ${_sanitize_header(headers["Status"])}\n`);
 		delete headers["Status"];
 	}
 
 	for (let k, v in headers) {
 		if (type(v) == "array") {
 			for (let val in v) {
-				io.stdout.write(`${k}: ${_sanitize_header(val)}\n`);
+				stdout.write(`${k}: ${_sanitize_header(val)}\n`);
 			}
 		} else if (v != null) {
-			io.stdout.write(`${k}: ${_sanitize_header(v)}\n`);
+			stdout.write(`${k}: ${_sanitize_header(v)}\n`);
 		}
 	}
-	io.stdout.write("\n");
+	stdout.write("\n");
 	if (body != null) {
-		io.stdout.write(body);
+		stdout.write(body);
 	}
-	io.stdout.flush();
+	stdout.flush();
 };
 
 /**
@@ -168,21 +168,21 @@ function _apply_security_headers(headers) {
 
 /**
  * Extracts and parses the request context from the CGI environment.
- * 
- * @param {object} io - I/O provider
+ *
+ * @param {object} deps - { getenv }
  * @returns {object} - Result.ok({path, query, cookies, env}) or Result.err
  */
-export function request(io) {
-	let res_path = safe_getenv(io, "PATH_INFO");
+export function request(deps) {
+	let res_path = safe_getenv(deps.getenv, "PATH_INFO");
 	if (!res_path.ok) return res_path;
 
-	let res_qs = safe_getenv(io, "QUERY_STRING");
+	let res_qs = safe_getenv(deps.getenv, "QUERY_STRING");
 	if (!res_qs.ok) return res_qs;
 
-	let res_cookie = safe_getenv(io, "HTTP_COOKIE");
+	let res_cookie = safe_getenv(deps.getenv, "HTTP_COOKIE");
 	if (!res_cookie.ok) return res_cookie;
 
-	let res_host = safe_getenv(io, "HTTP_HOST");
+	let res_host = safe_getenv(deps.getenv, "HTTP_HOST");
 	if (!res_host.ok) return res_host;
 
 	let res_params = parse_params(res_qs.data);
@@ -206,11 +206,11 @@ export function request(io) {
 
 /**
  * Formats and sends the HTTP response to stdout.
- * 
- * @param {object} io - I/O provider
+ *
+ * @param {object} deps - { stdout }
  * @param {object} res - Response object {status, headers, body}
  */
-export function render(io, res) {
+export function render(deps, res) {
 	let headers = res.headers || {};
 	let body = res.body || "";
 
@@ -223,45 +223,45 @@ export function render(io, res) {
 		body = '<html><body><p>Redirecting...</p></body></html>\n';
 	}
 
-	_out(io, headers, body);
+	_out(deps.stdout, headers, body);
 };
 
 /**
  * Standardizes and renders an error response, preventing internal leakage.
- * 
- * @param {object} io - I/O provider
+ *
+ * @param {object} deps - { log, stdout }
  * @param {string} code - Internal error code (SCREAMING_SNAKE_CASE)
  * @param {number} status - HTTP status code
  */
-export function render_error(io, code, status) {
+export function render_error(deps, code, status) {
 	let user_msg = ERROR_MAP[code] || "An unexpected authentication error occurred.";
 
-	io.log("error", `[${status || 500}] ${code}`);
+	deps.log("error", `[${status || 500}] ${code}`);
 
 	let headers = {
 		"Status": HTTP_STATUS_MESSAGES["" + (status || 500)] || "500 Internal Server Error",
 		"Content-Type": "text/plain"
 	};
 	_apply_security_headers(headers);
-	_out(io, headers, `Error: ${user_msg}\n`);
+	_out(deps.stdout, headers, `Error: ${user_msg}\n`);
 };
 
 /**
  * Handles fatal script errors and crashes.
- * 
- * @param {object} io - I/O provider
+ *
+ * @param {object} deps - { log, stdout }
  * @param {any} e - The error object or message
  */
-export function error(io, e) {
+export function error(deps, e) {
 	let msg = sprintf("%s", e);
 	let stack = (type(e) == "object") ? e.stacktrace : "";
 
-	io.log("error", `Router crash: ${msg}\n${stack}`);
+	deps.log("error", `Router crash: ${msg}\n${stack}`);
 
 	let headers = {
 		"Status": "500 Internal Server Error",
 		"Content-Type": "text/plain"
 	};
 	_apply_security_headers(headers);
-	_out(io, headers, "Router Crash: An internal error occurred. Please contact support.\n");
+	_out(deps.stdout, headers, "Router Crash: An internal error occurred. Please contact support.\n");
 };

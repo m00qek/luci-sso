@@ -1,9 +1,16 @@
 import { it, assert, truthy, falsy } from 'utest';
-import * as io_mod from 'luci_sso.io';
 import * as web_mod from 'luci_sso.web';
 import * as router from 'luci_sso.router';
 import * as config_loader from 'luci_sso.config';
 import * as mock from 'mock';
+
+function make_web_deps(io) {
+	return {
+		getenv: (k)    => io.getenv(k),
+		stdout: io.stdout,
+		log:    (l, m) => io.log(l, m)
+	};
+}
 
 function make_router_deps(io) {
 	return {
@@ -55,7 +62,7 @@ it('cgi: reproduction - missing Result.ok check (W1)', () => {
 		};
 
 		// 3. Parse request
-		let res_req = web_mod.request(io);
+		let res_req = web_mod.request(make_web_deps(io));
 		assert.match(truthy(), res_req.ok);
 		let req = res_req.data;
 
@@ -68,10 +75,10 @@ it('cgi: reproduction - missing Result.ok check (W1)', () => {
 		let res_router = router.handle(make_router_deps(io), config, req);
 		if (!res_router.ok) {
 			let status = (type(res_router.details) == "object") ? res_router.details.http_status : 500;
-			web_mod.render_error(io, res_router.error, status);
+			web_mod.render_error(make_web_deps(io), res_router.error, status);
 			rendered_error = true;
 		} else {
-			web_mod.render(io, res_router.data);
+			web_mod.render(make_web_deps(io), res_router.data);
 		}
 		
 		assert.match(truthy(), rendered_error, "Should have rendered an error response");

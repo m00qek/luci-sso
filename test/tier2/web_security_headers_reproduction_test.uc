@@ -4,10 +4,18 @@ import { it, assert, truthy } from 'utest';
 import * as web from 'luci_sso.web';
 import * as mock from 'mock';
 
+function make_web_deps(io) {
+	return {
+		getenv: (k)    => io.getenv(k),
+		stdout: io.stdout,
+		log:    (l, m) => io.log(l, m)
+	};
+}
+
 it('web: security - reproduction of missing cache/referrer headers', () => {
 	let res = { status: 200, body: "OK" };
 	mock.create().spy((io) => {
-		web.render(io, res);
+		web.render(make_web_deps(io), res);
 		let out = io.__state__.stdout_buf;
 
 		assert.match(truthy(), index(out, "Cache-Control: no-store") >= 0, "MISSING Cache-Control: no-store HEADER");
@@ -26,7 +34,7 @@ it('web: security - prevent CRLF injection in headers (W4)', () => {
 				"X-Custom": "valid\nmalicious"
 			}
 		};
-		web.render(io, res);
+		web.render(make_web_deps(io), res);
 	});
 
 	// Check that CRLF was replaced by space
