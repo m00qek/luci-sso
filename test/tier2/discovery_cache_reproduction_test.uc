@@ -1,47 +1,30 @@
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, spy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
-import * as mock from 'mock';
+import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 
-function make_discovery_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts) },
-		clock: { time: () => io.time() },
-		log: io.log
-	};
-}
-
 it('discovery: reproduction - case-insensitive cache miss (W6)', () => {
-    let issuer_upper = "HTTPS://TRUSTED.IDP";
-    let issuer_lower = "https://trusted.idp";
-    let doc = { ...f.MOCK_DISCOVERY, issuer: issuer_lower };
+	let issuer_upper = "HTTPS://TRUSTED.IDP";
+	let issuer_lower = "https://trusted.idp";
+	let doc = { ...f.MOCK_DISCOVERY, issuer: issuer_lower };
 
-    let factory = mock.create();
-    
-    // 1. Warm cache with lowercase
-    factory.with_responses({
-        [`${issuer_lower}/.well-known/openid-configuration`]: { status: 200, body: doc }
-    }).spy((io) => {
-        let res1 = discovery.discover(make_discovery_deps(io), issuer_lower);
-        assert.match(truthy(), res1.ok);
+	with_context({
+		fs:          { data: {} },
+		http_client: { data: { [`${issuer_lower}/.well-known/openid-configuration`]: { status: 200, body: doc } } },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		let res1 = discovery.discover(deps, issuer_lower);
+		assert.match(truthy(), res1.ok);
 
-        // Clear responses to ensure cache is used
-        io._responses = {};
+		let res2 = discovery.discover(deps, issuer_upper);
 
-        // 2. Fetch with uppercase (Should hit cache)
-        let res2 = discovery.discover(make_discovery_deps(io), issuer_upper);
-        
-        if (!res2.ok) {
-            print(`DEBUG: res2 failed. error=${res2.error}, details=${res2.details}\n`);
-            print(`DEBUG: history=${sprintf("%J", io.__state__.history)}\n`);
-        }
-        
-        assert.match(truthy(), res2.ok, "Should hit cache using normalized comparison (W6)");
-    });
+		if (!res2.ok) {
+			print(`DEBUG: res2 failed. error=${res2.error}, details=${res2.details}\n`);
+		}
+
+		assert.match(truthy(), res2.ok, "Should hit cache using normalized comparison (W6)");
+
+		// Cache was used for the second call — only one HTTP GET
+		assert.match(1, length(spy(deps.http).calls.get));
+	});
 });

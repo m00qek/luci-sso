@@ -1,6 +1,5 @@
 import { it, assert, truthy, falsy } from 'utest';
 import * as jwt from 'luci_sso.crypto.jwt';
-import * as mock from 'mock';
 
 it('crypto: jwt - missing iss claim should NOT crash', () => {
 	// Options specify an issuer to check

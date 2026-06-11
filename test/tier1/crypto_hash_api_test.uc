@@ -1,6 +1,5 @@
 import { it, assert, truthy, is_type } from 'utest';
 import * as crypto from 'luci_sso.crypto';
-import * as mock from 'mock';
 
 it('crypto: hash - sha256 should return Result object', () => {
 	let res = crypto.hash_sha256("test");

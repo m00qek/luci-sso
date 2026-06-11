@@ -5,9 +5,10 @@ return {
         "/usr/share/luci-sso/test",
     ],
     mocks: {
-        uclient: null,
-        uloop: null,
-        ubus: null,
+        fs:          null,
+        uci:         null,
+        ubus:        null,
         http_client: { proxy: '/usr/share/luci-sso/test/proxies/http_client.uc' },
+        clock:       { proxy: '/usr/share/luci-sso/test/proxies/clock.uc' },
     },
 };

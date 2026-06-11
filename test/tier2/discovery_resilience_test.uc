@@ -1,63 +1,41 @@
 import { it, assert, truthy, falsy } from 'utest';
 import * as discovery from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
-import * as mock from 'mock';
-
-function make_discovery_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts) },
-		clock: { time: () => io.time() },
-		log: io.log
-	};
-}
-
-// =============================================================================
-// Tier 2: Discovery Resilience (Stale Cache Fallback)
-// =============================================================================
+import { with_context } from 'context';
 
 it('discovery: resilience - fallback to stale cache on network failure', () => {
-	let factory = mock.create();
 	let issuer = "https://idp.example.com";
 	let cache_path = "/var/run/luci-sso/oidc-discovery-stale.json";
-	
+
 	let stale_doc = {
 		issuer: issuer,
 		authorization_endpoint: "https://idp.example.com/auth",
 		token_endpoint: "https://idp.example.com/token",
 		jwks_uri: "https://idp.example.com/jwks",
-		cached_at: 1000 // Very old
+		cached_at: 1000
 	};
 
-	factory.with_files({
-		[cache_path]: sprintf("%J", stale_doc)
-	}, (io) => {
-		// Mock current time way past TTL (e.g. 1 week later)
-		io.time = () => 1000000;
+	with_context({
+		fs:          { data: { [cache_path]: sprintf("%J", stale_doc) } },
+		http_client: { behavior: { get: (url, opts) => Result.err("HTTP_REQUEST_FAILED", "TIMEOUT") } },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		let res = discovery.discover(deps, issuer, { cache_path: cache_path });
 
-		// Mock network failure (timeout)
-		io.http_get = (url) => Result.err("TIMEOUT");
-
-		let res = discovery.discover(make_discovery_deps(io), issuer, { cache_path: cache_path });
-		
 		assert.match(truthy(), res.ok, "Should fallback to stale cache on network error: " + (res.error || ""));
 		assert.match(issuer, res.data.issuer, "Should return cached data");
 	});
 });
 
 it('discovery: resilience - fail if cache is missing AND network fails', () => {
-	let factory = mock.create();
 	let issuer = "https://idp.evil.com";
 
-	factory.with_env({}, (io) => {
-		io.http_get = (url) => Result.err("DNS_FAILURE");
-
-		let res = discovery.discover(make_discovery_deps(io), issuer);
+	with_context({
+		fs:          { data: {} },
+		http_client: { behavior: { get: (url, opts) => Result.err("HTTP_REQUEST_FAILED", "DNS_FAILURE") } },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		let res = discovery.discover(deps, issuer);
 		assert.match(falsy(), res.ok, "Should fail if no cache and no network");
 		assert.match("DISCOVERY_NETWORK_ERROR", res.error);
 	});
