@@ -1,53 +1,38 @@
-import * as Result from 'luci_sso.result';
+// Loaded via require() in ucode program mode — see proxy_base.uc for why `return` is used here.
+const Result = require('luci_sso.result');
 
-/**
- * Creates a mock HTTP client for use in tests.
- *
- * config.data     — URL-keyed responses: { [url]: { status, body } } or { [url]: { error: "X" } }
- *                   body may be a string or an object (auto-serialized to JSON).
- *                   error entries return Result.err("HTTP_REQUEST_FAILED", error) to match
- *                   the shape the real http_client produces.
- * config.behavior — function overrides: { get: (url, opts) => Result, post: (url, opts) => Result }
- * config.strict   — if true, die() on any unmocked URL instead of returning HTTP_NOT_FOUND.
- *
- * Returns: { get, post, __utest__: { calls: { get: [[url, opts], ...], post: [...] } } }
- *
- * Usage:
- *   import * as http_mock from 'proxies.http_client';
- *   let http = http_mock.create({ data: { [url]: { status: 200, body: f.MOCK_DISCOVERY } } });
- *   let deps = { http, log: () => null, fs, clock };
- */
-export function create(config) {
-	config = config || {};
-	let data     = config.data     || {};
-	let behavior = config.behavior || {};
-	let calls    = { get: [], post: [] };
+return {
+	api: ['get', 'post'],
 
-	let make_response = function(url) {
-		let entry = data[url];
-		if (entry == null) {
-			if (config.strict) die("strict http mock: unmocked URL: " + url);
-			return Result.err("HTTP_REQUEST_FAILED", "HTTP_NOT_FOUND");
-		}
-		if (entry.error)
-			return Result.err("HTTP_REQUEST_FAILED", entry.error);
-		let body = (type(entry.body) == "object") ? sprintf("%J", entry.body) : (entry.body || "");
-		return Result.ok({ status: entry.status || 200, body: body });
-	};
+	create: function(name, real, ctx) {
+		let proxy = ctx.base();
 
-	return {
-		get: function(url, opts) {
-			push(calls.get, [url, opts]);
-			if (behavior.get) return behavior.get(url, opts);
+		let make_response = function(url) {
+			let entry = ctx.get_data(url);
+			if (entry == null) {
+				if (ctx.is_strict()) die("strict http mock: unmocked URL: " + url);
+				return Result.err("HTTP_REQUEST_FAILED", "HTTP_NOT_FOUND");
+			}
+			if (entry.error)
+				return Result.err("HTTP_REQUEST_FAILED", entry.error);
+			let body = (type(entry.body) == "object") ? sprintf("%J", entry.body) : (entry.body || "");
+			return Result.ok({ status: entry.status || 200, body: body });
+		};
+
+		proxy.get = function(url, opts) {
+			ctx.record_call('get', [url, opts]);
+			let f = ctx.get_behavior('get');
+			if (f) return f(url, opts);
 			return make_response(url);
-		},
+		};
 
-		post: function(url, opts) {
-			push(calls.post, [url, opts]);
-			if (behavior.post) return behavior.post(url, opts);
+		proxy.post = function(url, opts) {
+			ctx.record_call('post', [url, opts]);
+			let f = ctx.get_behavior('post');
+			if (f) return f(url, opts);
 			return make_response(url);
-		},
+		};
 
-		__utest__: { calls: calls }
-	};
-}
+		return proxy;
+	}
+};

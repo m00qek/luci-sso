@@ -8,5 +8,6 @@ return {
         uclient: null,
         uloop: null,
         ubus: null,
+        http_client: { proxy: '/usr/share/luci-sso/test/proxies/http_client.uc' },
     },
 };
