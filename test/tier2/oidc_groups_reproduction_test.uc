@@ -20,6 +20,26 @@ function make_oidc_deps(io) {
 	};
 }
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('oidc: reproduction - verify_id_token drops groups claim', () => {
 	let keys = [ f.MOCK_JWK ];
 	let at = "mock-at";
@@ -92,7 +112,7 @@ it('handshake: reproduction - userinfo fallback drops groups claim', () => {
                 return Result.ok({ status: 404 });
             };
 
-            let s_res = handshake.initiate(io, test_config);
+            let s_res = handshake.initiate(make_handshake_deps(io), test_config);
             let s_data = s_res.data;
             let token = s_data.token;
             let state_in_url = split(s_data.url, "state=")[1];
@@ -103,7 +123,7 @@ it('handshake: reproduction - userinfo fallback drops groups claim', () => {
                 cookies: { "__Host-luci_sso_state": token }
             };
 
-            let res = handshake.authenticate(io, test_config, request, TEST_POLICY);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request, TEST_POLICY);
             
             if (!res.ok) {
                 printf("AUTHENTICATE FAILED: %s (Details: %J)\n", res.error, res.details);

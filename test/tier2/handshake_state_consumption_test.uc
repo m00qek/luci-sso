@@ -5,6 +5,26 @@ import * as handshake from 'luci_sso.handshake';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('handshake: security - state is consumed only once (B1)', () => {
 	let handle = "valid-handle";
 	let path = `/var/run/luci-sso/handshake_${handle}.json`;
@@ -32,7 +52,7 @@ it('handshake: security - state is consumed only once (B1)', () => {
 			cookies: { "__Host-luci_sso_state": handle }
 		};
 
-		handshake.authenticate(io, config, req);
+		handshake.authenticate(make_handshake_deps(io), config, req);
 	});
 
 	let history = spy_handle.all();

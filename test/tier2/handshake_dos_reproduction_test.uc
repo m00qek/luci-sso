@@ -24,6 +24,26 @@ function make_session_deps(io) {
 	};
 }
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => {
     let access_token = "access-token-123";
     let test_config = {
@@ -82,7 +102,7 @@ it('handshake: security - DO NOT retry JWKS refresh if kid is missing', () => {
             };
 
             // This should NOT trigger the rotation recovery path because kid is missing
-            let res = handshake.authenticate(io, test_config, request);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
             
             assert.match(falsy(), res.ok, "Handshake should fail due to invalid signature");
             assert.match("ID_TOKEN_VERIFICATION_FAILED", res.error);

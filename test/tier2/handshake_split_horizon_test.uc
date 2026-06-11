@@ -26,6 +26,26 @@ function make_session_deps(io) {
 	};
 }
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('handshake: split-horizon - prevents path corruption when issuer_url is in path', () => {
     // BUG: If issuer_url is "https://auth.com" and token_endpoint is "https://auth.com/realms/auth.com/token",
     // naive replace() results in "https://internal/realms/internal/token" if internal_issuer_url is "https://internal".
@@ -130,7 +150,7 @@ it('handshake: split-horizon - prevents path corruption when issuer_url is in pa
                 env: { HTTPS: "on" }
             };
 
-            let res = handshake.authenticate(io, test_config, request);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
             
             assert.match(truthy(), res.ok, `Handshake should succeed. Error: ${res.error} Details: ${res.details}`);
             assert.match("admin@example.com", res.data.email);
@@ -208,7 +228,7 @@ it('handshake: split-horizon - prevents corruption when internal_issuer_url is s
                 env: { HTTPS: "on" }
             };
 
-            let res = handshake.authenticate(io, test_config, request);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
             assert.match(truthy(), res.ok, `Handshake should succeed with internal_issuer_url as substring. Error: ${res.error}`);
         });
 });
@@ -267,7 +287,7 @@ it('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)',
             };
 
             // Use internal_issuer_url for discovery but we expect it to talk to IDP via it
-            let res = handshake.authenticate(io, test_config, request);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
             
             // If we reached here without a "URL Corrupted" failure in io.http_post, it means the prefix replacement worked!
             assert.match(truthy(), true);

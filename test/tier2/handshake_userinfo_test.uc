@@ -26,6 +26,26 @@ function make_session_deps(io) {
 	};
 }
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('handshake: userinfo - supplements missing email when sub matches', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
@@ -79,7 +99,7 @@ it('handshake: userinfo - supplements missing email when sub matches', () => {
                 env: { HTTPS: "on" }
             };
 
-            let res = handshake.authenticate(io, test_config, request);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
             assert.match(truthy(), res.ok, `Handshake should succeed with UserInfo. Error: ${res.error}`);
             assert.match("user@example.com", res.data.email, "Email should be supplemented from UserInfo");
         });
@@ -135,7 +155,7 @@ it('handshake: userinfo - fails identity binding when sub mismatches', () => {
                 env: { HTTPS: "on" }
             };
 
-            let res = handshake.authenticate(io, test_config, request);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
             assert.match(falsy(), res.ok, "Handshake should fail on sub mismatch");
             assert.match("IDENTITY_MISMATCH", res.error);
         });

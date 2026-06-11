@@ -7,6 +7,26 @@ import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('handshake: warning - log warning for long-lived access tokens (W2)', () => {
     let now = 1516239022;
     // Lifetime = 25 hours (90000 seconds) > 24 hours (86400)
@@ -35,7 +55,7 @@ it('handshake: warning - log warning for long-lived access tokens (W2)', () => {
                 return Result.ok({ status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } });
             };
 
-            let state_res = handshake.initiate(io, test_config);
+            let state_res = handshake.initiate(make_handshake_deps(io), test_config);
             assert.match(truthy(), state_res.ok, `initiate failed: ${state_res.error}`);
 
             let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
@@ -55,7 +75,7 @@ it('handshake: warning - log warning for long-lived access tokens (W2)', () => {
                 env: { HTTPS: "on" }
             };
 
-            let auth_res = handshake.authenticate(io, test_config, request);
+            let auth_res = handshake.authenticate(make_handshake_deps(io), test_config, request);
             assert.match(truthy(), auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
 
             // Manual iteration check
@@ -98,7 +118,7 @@ it('handshake: warning - silent for opaque or short-lived tokens', () => {
                     return Result.ok({ status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } });
                 };
 
-                let state_res = handshake.initiate(io, test_config);
+                let state_res = handshake.initiate(make_handshake_deps(io), test_config);
                 assert.match(truthy(), state_res.ok, `initiate failed: ${state_res.error}`);
 
                 let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
@@ -117,7 +137,7 @@ it('handshake: warning - silent for opaque or short-lived tokens', () => {
                     env: { HTTPS: "on" }
                 };
 
-                let auth_res = handshake.authenticate(io, test_config, request);
+                let auth_res = handshake.authenticate(make_handshake_deps(io), test_config, request);
                 assert.match(truthy(), auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
 
                 let found = false;

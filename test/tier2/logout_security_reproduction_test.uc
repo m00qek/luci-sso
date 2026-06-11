@@ -4,6 +4,27 @@ import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_router_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		uci:   io.uci_cursor(),
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('router: security - B1: handle invalid session during logout', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
@@ -34,7 +55,7 @@ it('router: security - B1: handle invalid session during logout', () => {
                 env: { HTTPS: "on" }
             };
 
-            let res = router.handle(io, test_config, request, {});
+            let res = router.handle(make_router_deps(io), test_config, request, {});
 
             assert.match(truthy(), res.ok);
             // EXPECTED behavior: Redirect to local root if session is missing.
@@ -73,7 +94,7 @@ it('router: security - W3: post_logout_redirect_uri match check', () => {
 				query: { stoken: "valid-stoken" }
 			};
 
-			let res = router.handle(io, malformed_config, request);
+			let res = router.handle(make_router_deps(io), malformed_config, request);
 
 			assert.match(truthy(), res.ok, "Should succeed even with malformed redirect_uri");
 			let loc = res.data.headers.Location;

@@ -3,6 +3,27 @@ import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_router_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		uci:   io.uci_cursor(),
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('logout: security - robust origin extraction for post_logout_redirect_uri', () => {
     const cases = [
         {
@@ -48,7 +69,7 @@ it('logout: security - robust origin extraction for post_logout_redirect_uri', (
                 }
             })
             .with_env({}, (io) => {
-                let res = router.handle(io, config, request);
+                let res = router.handle(make_router_deps(io), config, request);
                 assert.match(truthy(), res.ok);
                 let location = res.data.headers["Location"];
                 
@@ -94,7 +115,7 @@ it('logout: security - ignore insecure end_session_endpoint (W2)', () => {
             }
         })
         .spy((io) => {
-            let res = router.handle(io, config, request);
+            let res = router.handle(make_router_deps(io), config, request);
             assert.match(truthy(), res.ok);
             // Should fallback to local root "/" instead of redirecting to HTTP
             assert.match("/", res.data.headers["Location"], "Should ignore insecure logout endpoint and fallback to local root");

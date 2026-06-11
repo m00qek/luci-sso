@@ -26,6 +26,26 @@ function make_session_deps(io) {
 	};
 }
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('handshake: recovery - handle JWKS key rotation with automatic retry', () => {
     let access_token = "access-token-123";
     let secret = f.MOCK_CONFIG.client_secret;
@@ -104,7 +124,7 @@ it('handshake: recovery - handle JWKS key rotation with automatic retry', () => 
             };
 
             // This should trigger the rotation recovery path
-            let res = handshake.authenticate(io, test_config, request);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
             
             assert.match(truthy(), res.ok, `Handshake should succeed after JWKS retry (Error: ${res.error}, Details: ${res.details})`);
             assert.match(2, call_count, "JWKS should have been fetched exactly twice (initial + forced refresh)");

@@ -10,6 +10,26 @@ import * as h from 'lib.helpers';
 
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('handshake: reproduction - userinfo fallback fails on case-mismatched sub', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
     let discovery_doc = {
@@ -60,7 +80,7 @@ it('handshake: reproduction - userinfo fallback fails on case-mismatched sub', (
                 return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
             };
 
-            let s_res = handshake.initiate(io, test_config);
+            let s_res = handshake.initiate(make_handshake_deps(io), test_config);
             let s_data = s_res.data;
             let token = s_data.token;
             let state_in_url = split(s_data.url, "state=")[1];
@@ -71,7 +91,7 @@ it('handshake: reproduction - userinfo fallback fails on case-mismatched sub', (
                 cookies: { "__Host-luci_sso_state": token }
             };
 
-            let res = handshake.authenticate(io, test_config, request, TEST_POLICY);
+            let res = handshake.authenticate(make_handshake_deps(io), test_config, request, TEST_POLICY);
             
             // Expected: SUCCESS because of normalization
             assert.match(truthy(), res.ok, "Should SUCCEED after sub normalization fix");

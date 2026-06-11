@@ -3,6 +3,27 @@ import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_router_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		uci:   io.uci_cursor(),
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 // B3: CSRF Token Validation Test
 it('logout: security - csrf token validation', () => {
 	let config = { ...f.MOCK_CONFIG };
@@ -27,7 +48,7 @@ it('logout: security - csrf token validation', () => {
 				cookies: { sysauth: sid },
 				query: {}
 			};
-			let res = router.handle(io, config, req);
+			let res = router.handle(make_router_deps(io), config, req);
 			assert.match(falsy(), res.ok);
 			assert.match(403, res.details.http_status, "Logout without token MUST fail");
 		});
@@ -42,7 +63,7 @@ it('logout: security - csrf token validation', () => {
 				cookies: { sysauth: sid },
 				query: { stoken: "wrong-token" }
 			};
-			let res = router.handle(io, config, req);
+			let res = router.handle(make_router_deps(io), config, req);
 			assert.match(falsy(), res.ok);
 			assert.match(403, res.details.http_status, "Logout with wrong token MUST fail");
 		});
@@ -60,7 +81,7 @@ it('logout: security - csrf token validation', () => {
 				cookies: { sysauth: sid },
 				query: { stoken: session_token }
 			};
-			let res = router.handle(io, config, req);
+			let res = router.handle(make_router_deps(io), config, req);
 			assert.match(truthy(), res.ok, "Logout with correct token MUST succeed");
 			assert.match(302, res.data.status);
 		});
@@ -80,7 +101,7 @@ it('logout: security - csrf token validation', () => {
 				cookies: { sysauth: "invalid-sid" },
 				query: { stoken: "any" }
 			};
-			router.handle(io, config, req);
+			router.handle(make_router_deps(io), config, req);
 		});
 	
 	assert.match(falsy(), history.called("ubus", "session", "destroy"), "Should NOT call destroy if session lookup failed (W1)");
@@ -111,7 +132,7 @@ it('logout: security - B1 CSRF bypass regression', () => {
 				cookies: { sysauth: sid },
 				query: { stoken: "" } // or omit entirely
 			};
-			let res = router.handle(io, config, req);
+			let res = router.handle(make_router_deps(io), config, req);
 			
 			assert.match(falsy(), res.ok, "B1: Logout with MISSING session token and MISSING query token MUST fail (CSRF bypass)");
 			assert.match(403, res.details.http_status, "B1: Expected 403 Forbidden for empty CSRF token comparison");

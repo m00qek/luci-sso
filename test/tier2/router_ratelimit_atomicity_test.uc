@@ -3,6 +3,27 @@ import * as router from 'luci_sso.router';
 import * as mock from 'mock';
 import * as f from 'tier2.fixtures';
 
+function make_router_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		uci:   io.uci_cursor(),
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('router: rate limit persistence is atomic', () => {
     let test_config = {
         ...f.MOCK_CONFIG,
@@ -17,7 +38,7 @@ it('router: rate limit persistence is atomic', () => {
 
     let history = factory.spy((io) => {
         let request = { path: "/", query: {}, cookies: {} };
-        router.handle(io, test_config, request);
+        router.handle(make_router_deps(io), test_config, request);
     });
 
     // Check if rename was called for the ratelimit file

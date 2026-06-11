@@ -27,6 +27,27 @@ function make_session_deps(io) {
 	};
 }
 
+function make_router_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		uci:   io.uci_cursor(),
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 const TEST_SECRET = "integration-test-secret-32-bytes!!!";
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
@@ -64,7 +85,7 @@ function mock_request(path, query, cookies, env) {
 it('router: login - handle massive discovery response', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	factory.with_responses({ "https://idp.com/.well-known/openid-configuration": { error: "RESPONSE_TOO_LARGE" } }, (io) => {
-		let res = router.handle(io, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
+		let res = router.handle(make_router_deps(io), MOCK_CONFIG, mock_request("/"), TEST_POLICY);
 		assert.match(falsy(), res.ok, "Should fail on discovery failure");
 		assert.match(500, res.details.http_status, "Should return 500 status in details");
 	});
@@ -74,7 +95,7 @@ it('router: login - redirect to healthy IdP', () => {
 	let factory = mock.create().with_files({ "/etc/luci-sso/secret.key": TEST_SECRET });
 	let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
 	factory.with_responses(responses, (io) => {
-		let res = router.handle(io, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
+		let res = router.handle(make_router_deps(io), MOCK_CONFIG, mock_request("/"), TEST_POLICY);
 		assert.match(truthy(), res.ok, "Router handle should succeed");
 		assert.match(302, res.data.status);
 		assert.match(0, index(res.data.headers["Location"], "https://idp.com/auth"), "Redirect MUST point to auth endpoint");
@@ -86,7 +107,7 @@ it('router: bootstrap - automatic secret key generation', () => {
 	let responses = { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } };
 	
 	let final_key = factory.with_responses(responses, (io) => {
-		router.handle(io, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
+		router.handle(make_router_deps(io), MOCK_CONFIG, mock_request("/"), TEST_POLICY);
 		return io.read_file("/etc/luci-sso/secret.key");
 	});
 
@@ -102,7 +123,7 @@ it('router: enabled - returns JSON response', () => {
 	factory.with_uci({
 		"luci-sso": { "default": { ".type": "oidc", enabled: "1" } }
 	}, (io) => {
-		let res = router.handle(io, MOCK_CONFIG, request, TEST_POLICY);
+		let res = router.handle(make_router_deps(io), MOCK_CONFIG, request, TEST_POLICY);
 		assert.match(truthy(), res.ok);
 		assert.match(200, res.data.status);
 		assert.match('{"enabled": true}', res.data.body);
@@ -113,7 +134,7 @@ it('router: enabled - returns JSON response', () => {
 	factory.with_uci({
 		"luci-sso": { "default": { ".type": "oidc", enabled: "0" } }
 	}, (io) => {
-		let res = router.handle(io, MOCK_CONFIG, request, TEST_POLICY);
+		let res = router.handle(make_router_deps(io), MOCK_CONFIG, request, TEST_POLICY);
 		assert.match(truthy(), res.ok);
 		assert.match('{"enabled": false}', res.data.body);
 	});
@@ -144,7 +165,7 @@ it('router: callback - successful authentication and UBUS login', () => {
 			})
 			.spy((spying_io) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
-				let res = router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
+				let res = router.handle(make_router_deps(spying_io), MOCK_CONFIG, req, TEST_POLICY);
 				assert.match(truthy(), res.ok);
 				assert.match(302, res.data.status);
 				assert.match("/cgi-bin/luci/", res.data.headers["Location"]);
@@ -194,7 +215,7 @@ it('router: callback - handle stale JWKS cache recovery', () => {
 				})
 				.spy((spying_io) => {
 					let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
-					router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
+					router.handle(make_router_deps(spying_io), MOCK_CONFIG, req, TEST_POLICY);
 				});
 
 			assert.match(truthy(), data.called("rename"), "Should have used atomic rename for cache update");
@@ -224,7 +245,7 @@ it('router: callback - reject non-whitelisted users', () => {
 			"https://idp.com/jwks": { status: 200, body: { keys: [ tf.MOCK_JWK ] } }
 		}, (io_http) => {
 			let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
-			let res = router.handle(io_http, { ...MOCK_CONFIG, roles: [] }, req, TEST_POLICY);
+			let res = router.handle(make_router_deps(io_http), { ...MOCK_CONFIG, roles: [] }, req, TEST_POLICY);
 			assert.match(falsy(), res.ok);
 			assert.match(403, res.details.http_status, "Should return Forbidden for non-whitelisted user");
 			assert.match("USER_NOT_AUTHORIZED", res.error);
@@ -263,7 +284,7 @@ it('router: callback - reject token replay', () => {
 			.with_ubus({ "session:list": {} })
 			.spy((spying_io) => {
 				let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
-				let res = router.handle(spying_io, MOCK_CONFIG, req, TEST_POLICY);
+				let res = router.handle(make_router_deps(spying_io), MOCK_CONFIG, req, TEST_POLICY);
 				assert.match(falsy(), res.ok);
 				assert.match(403, res.details.http_status);
 				assert.match("TOKEN_REPLAYED", res.error);
@@ -284,9 +305,9 @@ it('router: callback - reject state replay', () => {
 			"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } } 
 		});
 		
-		factory_with_responses.with_env({}, (io_exec) => { router.handle(io_exec, MOCK_CONFIG, req, TEST_POLICY); });
+		factory_with_responses.with_env({}, (io_exec) => { router.handle(make_router_deps(io_exec), MOCK_CONFIG, req, TEST_POLICY); });
 		factory_with_responses.with_env({}, (io_exec) => {
-			let res = router.handle(io_exec, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(make_router_deps(io_exec), MOCK_CONFIG, req, TEST_POLICY);
 			assert.match(falsy(), res.ok);
 			assert.match(401, res.details.http_status);
 			assert.match("STATE_NOT_FOUND", res.error);
@@ -306,7 +327,7 @@ it('router: callback - reject code replay', () => {
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
 			"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } }
 		}, (io_http) => {
-			let res = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(make_router_deps(io_http), MOCK_CONFIG, req, TEST_POLICY);
 			assert.match(falsy(), res.ok);
 			assert.match("OIDC_INVALID_GRANT", res.error);
 		});
@@ -325,7 +346,7 @@ it('router: security - reject PKCE bypass', () => {
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
 			"https://idp.com/token": { status: 400, body: { error: "invalid_grant", sub_error: "pkce_mismatch" } }
 		}, (io_http) => {
-			let res = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(make_router_deps(io_http), MOCK_CONFIG, req, TEST_POLICY);
 			assert.match(falsy(), res.ok);
 			assert.match("OIDC_INVALID_GRANT", res.error);
 		});
@@ -349,7 +370,7 @@ it('router: security - skip token registration on verification failure', () => {
 			let req = mock_request("/callback", { code: "c", state: handshake.state }, { "__Host-luci_sso_state": handshake.token });
 			
 			// First attempt fails at verification
-			let res1 = router.handle(io_http, MOCK_CONFIG, req, TEST_POLICY);
+			let res1 = router.handle(make_router_deps(io_http), MOCK_CONFIG, req, TEST_POLICY);
 			assert.match(falsy(), res1.ok, "Should fail verification");
 			assert.match(401, res1.details.http_status);
 
@@ -370,7 +391,7 @@ it('router: security - skip token registration on verification failure', () => {
 
 			factory_replay.with_env({}, (io_replay) => {
 				let req2 = mock_request("/callback", { code: "c2", state: handshake2.state }, { "__Host-luci_sso_state": handshake2.token });
-				let res2 = router.handle(io_replay, MOCK_CONFIG, req2, TEST_POLICY);
+				let res2 = router.handle(make_router_deps(io_replay), MOCK_CONFIG, req2, TEST_POLICY);
 				
 				// It should FAIL with 401 (Verification Failed) again, NOT 403 (Replay Detected).
 				// This proves the token wasn't persisted in the registry after the first failure.
@@ -398,7 +419,7 @@ it('router: logout - OIDC RP-initiated logout', () => {
 
 	let data = factory.spy((io) => {
 		let req = mock_request("/logout", { stoken: "csrf-123" }, { "sysauth": "session-12345" }, { HTTP_HOST: "router.lan" });
-		let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
+		let res = router.handle(make_router_deps(io), MOCK_CONFIG, req, TEST_POLICY);
 		
 		assert.match(truthy(), res.ok);
 		assert.match(302, res.data.status);
@@ -423,7 +444,7 @@ it('router: logout - fallback to local logout', () => {
 
 	let data = factory.spy((io) => {
 		let req = mock_request("/logout", { stoken: "csrf-456" }, { "sysauth": "session-12345" });
-		let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
+		let res = router.handle(make_router_deps(io), MOCK_CONFIG, req, TEST_POLICY);
 		assert.match(truthy(), res.ok);
 		assert.match(302, res.data.status);
 		assert.match("/", res.data.headers["Location"]);
@@ -434,7 +455,7 @@ it('router: logout - fallback to local logout', () => {
 it('router: routing - handle unhandled system path', () => {
 	let factory = mock.create();
 	        factory.with_env({}, (io) => {
-	                let res = router.handle(io, MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
+	                let res = router.handle(make_router_deps(io), MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
 					assert.match(falsy(), res.ok);
 	                assert.match(404, res.details.http_status);
 	        });
@@ -450,7 +471,7 @@ it('router: routing - handle unhandled system path', () => {
 		factory.with_env({}, (io) => {
 			// Request with NO cookies (no sid)
 			let req = mock_request("/logout", {}, {}, { HTTP_HOST: "router.lan" });
-			let res = router.handle(io, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(make_router_deps(io), MOCK_CONFIG, req, TEST_POLICY);
 			
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);

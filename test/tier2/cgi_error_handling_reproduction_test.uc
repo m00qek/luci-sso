@@ -5,6 +5,27 @@ import * as router from 'luci_sso.router';
 import * as config_loader from 'luci_sso.config';
 import * as mock from 'mock';
 
+function make_router_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		uci:   io.uci_cursor(),
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 /**
  * REPRODUCTION TEST for W1: Missing Result.ok check in CGI entry point.
  * 
@@ -39,12 +60,12 @@ it('cgi: reproduction - missing Result.ok check (W1)', () => {
 		let req = res_req.data;
 
 		// 4. Call router (should return error for /invalid-path)
-		let res_router = router.handle(io, config, req);
+		let res_router = router.handle(make_router_deps(io), config, req);
 		assert.match(falsy(), res_router.ok, "Router should return error for invalid path");
 
 		// 5. Simulate the FIXED CGI code:
 		let rendered_error = false;
-		let res_router = router.handle(io, config, req);
+		let res_router = router.handle(make_router_deps(io), config, req);
 		if (!res_router.ok) {
 			let status = (type(res_router.details) == "object") ? res_router.details.http_status : 500;
 			web_mod.render_error(io, res_router.error, status);

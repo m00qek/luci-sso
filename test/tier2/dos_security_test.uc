@@ -20,6 +20,26 @@ function make_discovery_deps(io) {
 	};
 }
 
+function make_handshake_deps(io) {
+	return {
+		fs: {
+			readfile:  (p)    => io.read_file(p),
+			writefile: (p, d) => io.write_file(p, d),
+			mkdir:     (p, m) => io.mkdir(p, m),
+			unlink:    (p)    => io.remove(p),
+			rename:    (o, n) => io.rename(o, n),
+			stat:      (p)    => io.stat(p),
+			chmod:     (p, m) => io.chmod(p, m),
+			lsdir:     (p)    => io.lsdir(p),
+			error:     ()     => io.fserror()
+		},
+		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
+		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
+		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
+		log:   io.log
+	};
+}
+
 it('oidc: security - reject massive discovery response (DoS protection)', () => {
 	// Generate a response slightly larger than 256KB using exponential doubling
 	let garbage = "1234567890";
@@ -62,7 +82,7 @@ it('handshake: security - register_token deferred until after verification (DoS 
             io.http_post = (url) => Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: "at1", id_token: "invalid.id.token" }) } });
 
             // 2. Setup state
-            let state_res = handshake.initiate(io, test_config);
+            let state_res = handshake.initiate(make_handshake_deps(io), test_config);
             let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
             let request = {
                 path: "/callback",
@@ -72,7 +92,7 @@ it('handshake: security - register_token deferred until after verification (DoS 
             };
 
             // 3. This call should fail because id_token is invalid
-            let auth_res = handshake.authenticate(io, test_config, request, { allowed_algs: ["RS256"] });
+            let auth_res = handshake.authenticate(make_handshake_deps(io), test_config, request, { allowed_algs: ["RS256"] });
             assert.match(falsy(), auth_res.ok, "Authentication should fail due to invalid ID token");
 
             // 4. Verify that register_token was NEVER called
