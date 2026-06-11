@@ -129,6 +129,7 @@ it('session: logic - stale secret key lock self-healing (Audit #104)', () => {
 
 	mock.inject('fs', {
 		behavior: {
+			readfile: () => null,
 			stat: (path) => {
 				if (path === lock_path) return { mtime: base_now - 31 };
 				return null;
@@ -180,6 +181,7 @@ it('session: logic - secret key persistence (atomic race resilience)', () => {
 it('session: logic - read-only FS resilience', () => {
 	mock.inject('fs', {
 		behavior: {
+			readfile:  () => null,
 			writefile: () => null,
 			rename:    () => false,
 			mkdir:     () => false,
@@ -280,7 +282,7 @@ it('session: logic - detect CSPRNG failure during secret key generation (B1)', (
 	let res = null;
 	let err = null;
 	try {
-		mock.inject('fs', {}, (fs) => {
+		mock.inject('fs', { behavior: { readfile: () => null } }, (fs) => {
 			res = session.get_secret_key({ fs, log: () => null, clock: make_clock(FIXED_NOW) });
 		});
 	} catch (e) {
@@ -315,7 +317,7 @@ it('session: logic - detect CSPRNG failure during handshake creation (B2)', () =
 it('session: get_secret_key - W1 rename failure regression', () => {
 	mock.inject('fs', {
 		data: { "/etc/luci-sso": "" },
-		behavior: { rename: () => false }
+		behavior: { readfile: () => null, rename: () => false }
 	}, (fs) => {
 		let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
 		let res = session.get_secret_key(deps);

@@ -9,6 +9,7 @@ const NOW = 1516239022;
 function make_stale_lock_behavior() {
 	let mkdir_calls = 0;
 	return {
+		readfile: () => null,
 		stat: (path) => {
 			if (path === LOCK_PATH) return { mtime: STALE_MTIME };
 			return null;

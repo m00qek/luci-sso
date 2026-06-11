@@ -3,7 +3,7 @@ import * as session from 'luci_sso.session';
 
 it('session: get_secret_key - handle write failure', () => {
 	mock.inject('fs', {
-		behavior: { writefile: () => null }
+		behavior: { readfile: () => null, writefile: () => null }
 	}, (fs) => {
 		let deps = { fs, log: () => null, clock: { time: () => 1516239022, sleep: () => null } };
 		let res = session.get_secret_key(deps);
