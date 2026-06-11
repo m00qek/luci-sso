@@ -18,6 +18,7 @@ return {
 			if (entry.error)
 				return err("HTTP_REQUEST_FAILED", entry.error);
 			let body = (type(entry.body) == "object") ? sprintf("%J", entry.body) : (entry.body || "");
+			if (length(body) > 262144) return err("HTTP_REQUEST_FAILED", "RESPONSE_TOO_LARGE");
 			return ok({ status: entry.status || 200, body: body });
 		};
 

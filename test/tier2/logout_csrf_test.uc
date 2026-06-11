@@ -1,28 +1,13 @@
-import { it, assert, truthy, falsy } from 'utest';
+import { it, assert, truthy, falsy, spy } from 'utest';
 import * as router from 'luci_sso.router';
-import * as mock from 'mock';
+import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 
-function make_router_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
-		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
-		uci:   io.uci_cursor(),
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log:   io.log
-	};
-}
+const DISCOVERY_DATA = {
+	"https://trusted.idp/.well-known/openid-configuration": {
+		status: 200, body: f.MOCK_DISCOVERY
+	}
+};
 
 // B3: CSRF Token Validation Test
 it('logout: security - csrf token validation', () => {
@@ -31,110 +16,88 @@ it('logout: security - csrf token validation', () => {
 	let sid = "session-id-xyz";
 	let mock_session = { values: { token: session_token, oidc_id_token: "mock-id-token" } };
 
-    let discovery_response = {
-        "https://trusted.idp/.well-known/openid-configuration": {
-            status: 200,
-            body: f.MOCK_DISCOVERY
-        }
-    };
-
 	// 1. Missing Token -> Fail (403)
-	mock.create()
-		.with_ubus({ "session:get": mock_session })
-        .with_responses(discovery_response)
-		.with_env({}, (io) => {
-			let req = {
-				path: "/logout",
-				cookies: { sysauth: sid },
-				query: {}
-			};
-			let res = router.handle(make_router_deps(io), config, req);
-			assert.match(falsy(), res.ok);
-			assert.match(403, res.details.http_status, "Logout without token MUST fail");
-		});
+	with_context({
+		fs:          { data: {} },
+		ubus:        { data: { "session:get": mock_session } },
+		http_client: { data: DISCOVERY_DATA },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		let req = { path: "/logout", cookies: { sysauth: sid }, query: {} };
+		let res = router.handle(deps, config, req);
+		assert.match(falsy(), res.ok);
+		assert.match(403, res.details.http_status, "Logout without token MUST fail");
+	});
 
 	// 2. Wrong Token -> Fail (403)
-	mock.create()
-		.with_ubus({ "session:get": mock_session })
-        .with_responses(discovery_response)
-		.with_env({}, (io) => {
-			let req = {
-				path: "/logout",
-				cookies: { sysauth: sid },
-				query: { stoken: "wrong-token" }
-			};
-			let res = router.handle(make_router_deps(io), config, req);
-			assert.match(falsy(), res.ok);
-			assert.match(403, res.details.http_status, "Logout with wrong token MUST fail");
-		});
+	with_context({
+		fs:          { data: {} },
+		ubus:        { data: { "session:get": mock_session } },
+		http_client: { data: DISCOVERY_DATA },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		let req = { path: "/logout", cookies: { sysauth: sid }, query: { stoken: "wrong-token" } };
+		let res = router.handle(deps, config, req);
+		assert.match(falsy(), res.ok);
+		assert.match(403, res.details.http_status, "Logout with wrong token MUST fail");
+	});
 
 	// 3. Correct Token -> Success (302)
-	let history = mock.create()
-		.with_ubus({ 
-			"session:get": mock_session,
-			"session:destroy": {} 
-		})
-		.with_responses(discovery_response)
-		.spy((io) => {
-			let req = {
-				path: "/logout",
-				cookies: { sysauth: sid },
-				query: { stoken: session_token }
-			};
-			let res = router.handle(make_router_deps(io), config, req);
-			assert.match(truthy(), res.ok, "Logout with correct token MUST succeed");
-			assert.match(302, res.data.status);
-		});
-	
-	assert.match(truthy(), history.called("ubus", "session", "destroy"), "Session MUST be destroyed on valid logout");
+	let ubus_calls3 = null;
+	with_context({
+		fs:          { data: {} },
+		ubus:        { data: { "session:get": mock_session, "session:destroy": {} } },
+		http_client: { data: DISCOVERY_DATA },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		let req = { path: "/logout", cookies: { sysauth: sid }, query: { stoken: session_token } };
+		let res = router.handle(deps, config, req);
+		assert.match(truthy(), res.ok, "Logout with correct token MUST succeed");
+		assert.match(302, res.data.status);
+		ubus_calls3 = spy(deps.ubus).calls.call || [];
+	});
+
+	let destroy_called = false;
+	for (let c in ubus_calls3) {
+		if (c[0] === "session" && c[1] === "destroy") { destroy_called = true; break; }
+	}
+	assert.match(truthy(), destroy_called, "Session MUST be destroyed on valid logout");
 
 	// 4. Session Lookup Fails -> Should NOT call destroy (W1 fix verification)
-	history = mock.create()
-		.with_ubus({ 
-			"session:get": { error: 404 }, // Session not found
-			"session:destroy": {} 
-		})
-		.with_responses(discovery_response)
-		.spy((io) => {
-			let req = {
-				path: "/logout",
-				cookies: { sysauth: "invalid-sid" },
-				query: { stoken: "any" }
-			};
-			router.handle(make_router_deps(io), config, req);
-		});
-	
-	assert.match(falsy(), history.called("ubus", "session", "destroy"), "Should NOT call destroy if session lookup failed (W1)");
+	let ubus_calls4 = null;
+	with_context({
+		fs:          { data: {} },
+		ubus:        { data: { "session:get": { error: 404 }, "session:destroy": {} } },
+		http_client: { data: DISCOVERY_DATA },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		let req = { path: "/logout", cookies: { sysauth: "invalid-sid" }, query: { stoken: "any" } };
+		router.handle(deps, config, req);
+		ubus_calls4 = spy(deps.ubus).calls.call || [];
+	});
+
+	let destroy_called4 = false;
+	for (let c in ubus_calls4) {
+		if (c[0] === "session" && c[1] === "destroy") { destroy_called4 = true; break; }
+	}
+	assert.match(falsy(), destroy_called4, "Should NOT call destroy if session lookup failed (W1)");
 });
 
 // B1: CSRF Bypass Regression Test (Empty Token Comparison)
 it('logout: security - B1 CSRF bypass regression', () => {
 	let config = { ...f.MOCK_CONFIG };
 	let sid = "session-id-with-missing-token";
-	
-	// Case where session exists but has NO CSRF token (e.g. partial setup failure)
-	let mock_session_no_token = { values: { oidc_id_token: "mock-id-token" } }; 
+	let mock_session_no_token = { values: { oidc_id_token: "mock-id-token" } };
 
-    let discovery_response = {
-        "https://trusted.idp/.well-known/openid-configuration": {
-            status: 200,
-            body: f.MOCK_DISCOVERY
-        }
-    };
-
-	// regression: empty provided_token vs empty session_token
-	mock.create()
-		.with_ubus({ "session:get": mock_session_no_token })
-        .with_responses(discovery_response)
-		.with_env({}, (io) => {
-			let req = {
-				path: "/logout",
-				cookies: { sysauth: sid },
-				query: { stoken: "" } // or omit entirely
-			};
-			let res = router.handle(make_router_deps(io), config, req);
-			
-			assert.match(falsy(), res.ok, "B1: Logout with MISSING session token and MISSING query token MUST fail (CSRF bypass)");
-			assert.match(403, res.details.http_status, "B1: Expected 403 Forbidden for empty CSRF token comparison");
-		});
+	with_context({
+		fs:          { data: {} },
+		ubus:        { data: { "session:get": mock_session_no_token } },
+		http_client: { data: { "https://trusted.idp/.well-known/openid-configuration": { status: 200, body: f.MOCK_DISCOVERY } } },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		let req = { path: "/logout", cookies: { sysauth: sid }, query: { stoken: "" } };
+		let res = router.handle(deps, config, req);
+		assert.match(falsy(), res.ok, "B1: Logout with MISSING session token and MISSING query token MUST fail (CSRF bypass)");
+		assert.match(403, res.details.http_status, "B1: Expected 403 Forbidden for empty CSRF token comparison");
+	});
 });

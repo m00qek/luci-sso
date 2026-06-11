@@ -42,7 +42,16 @@ function do_inject(cfg, remaining, proxies, cb) {
 	let name = remaining[0];
 	let rest = slice(remaining, 1);
 	let state = cfg[name] || {};
-	mock.inject(name, { ...state, strict: true }, function(proxy) {
+	let inject_state;
+	if (name === 'fs') {
+		// Seed ratelimit file as empty so router._check_rate_limit doesn't
+		// die in strict mode when it reads an uninitialized path.
+		let data = { "/var/run/luci-sso/ratelimit.json": "", ...state.data };
+		inject_state = { ...state, strict: true, data };
+	} else {
+		inject_state = { ...state, strict: true };
+	}
+	mock.inject(name, inject_state, function(proxy) {
 		proxies[name] = proxy;
 		do_inject(cfg, rest, proxies, cb);
 	});
