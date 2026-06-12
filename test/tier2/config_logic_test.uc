@@ -1,8 +1,10 @@
-import { it, assert, truthy, falsy, mock } from 'utest';
+import { describe, it, assert, truthy, falsy, mock } from 'utest';
 import * as config_loader from 'luci_sso.config';
 import * as Result from 'luci_sso.result';
 
-it('config: logic - successful load', () => {
+describe('config: logic', () => {
+
+it('successful load', () => {
 	let mock_uci = {
 		"luci-sso": {
 			"default": {
@@ -29,7 +31,7 @@ it('config: logic - successful load', () => {
 	});
 });
 
-it('config: logic - normalization (email list vs string)', () => {
+it('normalization (email list vs string)', () => {
 	let mock_uci = {
 		"luci-sso": {
 			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r/callback" },
@@ -48,7 +50,7 @@ it('config: logic - normalization (email list vs string)', () => {
 	});
 });
 
-it('config: logic - HTTPS enforcement', () => {
+it('HTTPS enforcement', () => {
 	let check = (url) => {
 		let mock_uci = {
 			"luci-sso": {
@@ -69,7 +71,7 @@ it('config: logic - HTTPS enforcement', () => {
 	assert.match(falsy(), check("http://idp.com"), "Insecure remote HTTP must be rejected");
 });
 
-it('config: logic - reject empty or invalid roles', () => {
+it('reject empty or invalid roles', () => {
 	let mock_uci_1 = {
 		"luci-sso": {
 			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r/callback" }
@@ -84,7 +86,7 @@ it('config: logic - reject empty or invalid roles', () => {
 	});
 });
 
-it('config: logic - handle disabled state', () => {
+it('handle disabled state', () => {
 	let mock_uci = {
 		"luci-sso": {
 			"default": { ".type": "oidc", "enabled": "0" }
@@ -98,7 +100,7 @@ it('config: logic - handle disabled state', () => {
 	});
 });
 
-it('config: logic - handle missing config', () => {
+it('handle missing config', () => {
 	mock.inject('uci', { data: {} }, (uci) => {
 		let res = config_loader.load({ uci: uci.cursor(), log: () => null });
 		assert.match(truthy(), Result.is(res));
@@ -107,7 +109,7 @@ it('config: logic - handle missing config', () => {
 	});
 });
 
-it('config: logic - is_enabled reflects UCI state', () => {
+it('is_enabled reflects UCI state', () => {
 	// Enabled
 	let uci_enabled = {
 		"luci-sso": {
@@ -140,7 +142,7 @@ it('config: logic - is_enabled reflects UCI state', () => {
 	});
 });
 
-it('config: logic - reject missing issuer URL', () => {
+it('reject missing issuer URL', () => {
 	let mock_uci = {
 		"luci-sso": {
 			"default": { ".type": "oidc", "enabled": "1", "clock_tolerance": "300", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" }
@@ -154,7 +156,7 @@ it('config: logic - reject missing issuer URL', () => {
 	});
 });
 
-it('config: logic - reject missing clock tolerance', () => {
+it('reject missing clock tolerance', () => {
 	let mock_uci = {
 		"luci-sso": {
 			"default": { ".type": "oidc", "enabled": "1", "issuer_url": "https://idp.com", "client_id": "c", "client_secret": "s", "redirect_uri": "https://r" }
@@ -168,7 +170,7 @@ it('config: logic - reject missing clock tolerance', () => {
 	});
 });
 
-it('config: logic - reject missing mandatory OIDC fields', () => {
+it('reject missing mandatory OIDC fields', () => {
 	// 1. Missing client_id
 	let mock_uci_1 = {
 		"luci-sso": {
@@ -196,7 +198,7 @@ it('config: logic - reject missing mandatory OIDC fields', () => {
 	});
 });
 
-it('config: logic - reject insecure redirect URI', () => {
+it('reject insecure redirect URI', () => {
 	let mock_uci = {
 		"luci-sso": {
 			"default": {
@@ -217,3 +219,5 @@ it('config: logic - reject insecure redirect URI', () => {
 		assert.match("CONFIG_ERROR", res.error);
 	});
 });
+
+}); // describe

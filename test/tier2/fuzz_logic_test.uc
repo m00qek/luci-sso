@@ -1,85 +1,81 @@
-import { it, assert, truthy, falsy } from 'utest';
+import { describe, it, assert, truthy, falsy } from 'utest';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 
-// =============================================================================
-// Tier 2: Fuzz & Robustness Logic
-// =============================================================================
+describe('fuzz: logic', () => {
+	it('Base64URL consistency', () => {
+		let cases = [
+			"",
+			"foobar",
+			"Hello World!",
+			"\0\x01\x02\x03",
+			'~`1234567890-=[]\\;\',./!@#$%^&*()_+{}|:"<>?',
+			"The quick brown fox jumps over the lazy dog"
+		];
 
-it('fuzz: logic - Base64URL consistency', () => {
-	let cases = [
-		"",
-		"foobar",
-		"Hello World!",
-		"\0\x01\x02\x03",
-		'~`1234567890-=[]\\;\',./!@#$%^&*()_+{}|:"<>?',
-		"The quick brown fox jumps over the lazy dog"
-	];
+		for (let i, original in cases) {
+			let encoded_res = encoding.b64url_encode(original);
+			assert.match(truthy(), encoded_res.ok);
+			let encoded = encoded_res.data;
+			assert.match(falsy(), match(encoded, /[+/=]/), `Encoded string '${encoded}' should not contain +, / or =`);
+			let decoded_res = encoding.b64url_decode(encoded);
+			assert.match(truthy(), decoded_res.ok);
+			let decoded = decoded_res.data;
+			assert.match(decoded, original, `Roundtrip failed for case: ${original}`);
+		}
+	});
 
-	for (let i, original in cases) {
-		let encoded_res = encoding.b64url_encode(original);
-		assert.match(truthy(), encoded_res.ok);
-		let encoded = encoded_res.data;
-		assert.match(falsy(), match(encoded, /[+/=]/), `Encoded string '${encoded}' should not contain +, / or =`);
-		let decoded_res = encoding.b64url_decode(encoded);
-		assert.match(truthy(), decoded_res.ok);
-		let decoded = decoded_res.data;
-		assert.match(decoded, original, `Roundtrip failed for case: ${original}`);
-	}
-});
+	it('large input stability', () => {
+		// 16KB limit check
+		let large = "";
+		for (let i = 0; i < 1024; i++) {
+			large += "1234567890123456";
+		}
+		let encoded = encoding.b64url_encode(large).data;
+		let decoded = encoding.b64url_decode(encoded).data;
+		assert.match(16384, length(decoded), "Should successfully roundtrip 16KB");
+	});
 
-it('fuzz: logic - large input stability', () => {
-    // 16KB limit check
-	let large = "";
-	for (let i = 0; i < 1024; i++) {
-		large += "1234567890123456";
-	}
-	let encoded = encoding.b64url_encode(large).data;
-	let decoded = encoding.b64url_decode(encoded).data;
-	assert.match(16384, length(decoded), "Should successfully roundtrip 16KB");
-});
+	it('bit flipping resistance', () => {
+		let secret = "secret";
+		let res_s = crypto.jws_sign({foo: "bar"}, secret);
+		assert.match(truthy(), Result.is(res_s));
+		assert.match(truthy(), res_s.ok);
+		let token = res_s.data;
+		let parts = split(token, ".");
+		let sig = encoding.b64url_decode(parts[2]).data;
 
-it('fuzz: logic - bit flipping resistance', () => {
-	let secret = "secret";
-	let res_s = crypto.jws_sign({foo: "bar"}, secret);
-    assert.match(truthy(), Result.is(res_s));
-	assert.match(truthy(), res_s.ok);
-	let token = res_s.data;
-	let parts = split(token, ".");
-	let sig = encoding.b64url_decode(parts[2]).data;
+		let sig_bytes = [];
+		for (let i = 0; i < length(sig); i++) push(sig_bytes, ord(sig, i));
+		sig_bytes[10] ^= 0xFF;
 
-	// Flip bits in the middle of the signature
-    let sig_bytes = [];
-    for(let i=0; i<length(sig); i++) push(sig_bytes, ord(sig, i));
-    sig_bytes[10] ^= 0xFF;
+		let tampered_sig = "";
+		for (let i, b in sig_bytes) tampered_sig += chr(b);
 
-    let tampered_sig = "";
-    for(let i, b in sig_bytes) tampered_sig += chr(b);
+		let tampered_token = parts[0] + "." + parts[1] + "." + encoding.b64url_encode(tampered_sig).data;
 
-	let tampered_token = parts[0] + "." + parts[1] + "." + encoding.b64url_encode(tampered_sig).data;
+		let result = crypto.jws_verify(tampered_token, secret);
+		assert.match(truthy(), Result.is(result));
+		assert.match("INVALID_SIGNATURE", result.error, "Bit flipping must invalidate signature");
+	});
 
-	let result = crypto.jws_verify(tampered_token, secret);
-    assert.match(truthy(), Result.is(result));
-	assert.match("INVALID_SIGNATURE", result.error, "Bit flipping must invalidate signature");
-});
+	it('header injection resistance', () => {
+		let secret = "secret";
+		let payload = { foo: "bar" };
+		let header = { alg: "HS256", typ: "JWT", malicious_extra: "ignore-me" };
 
-it('fuzz: logic - header injection resistance', () => {
-	let secret = "secret";
-	let payload = { foo: "bar" };
-	let header = { alg: "HS256", typ: "JWT", malicious_extra: "ignore-me" }; 
+		let b64_header = encoding.b64url_encode(sprintf("%J", header)).data;
+		let b64_payload = encoding.b64url_encode(sprintf("%J", payload)).data;
+		let signed_data = b64_header + "." + b64_payload;
 
-	let b64_header = encoding.b64url_encode(sprintf("%J", header)).data;
-	let b64_payload = encoding.b64url_encode(sprintf("%J", payload)).data;
-	let signed_data = b64_header + "." + b64_payload;
+		let import_native = require('luci_sso.native');
+		let signature = import_native.hmac_sha256(secret, signed_data);
+		let token = signed_data + "." + encoding.b64url_encode(signature).data;
 
-    // We use raw native to create a signature with an "illegal" header
-	let import_native = require('luci_sso.native');
-	let signature = import_native.hmac_sha256(secret, signed_data);
-	let token = signed_data + "." + encoding.b64url_encode(signature).data;
-
-	let result = crypto.jws_verify(token, secret);
-    assert.match(truthy(), Result.is(result));
-	assert.match(truthy(), result.ok, "Should verify despite extra header fields (Forward Compatibility)");
-	assert.match("bar", result.data.foo);
+		let result = crypto.jws_verify(token, secret);
+		assert.match(truthy(), Result.is(result));
+		assert.match(truthy(), result.ok, "Should verify despite extra header fields (Forward Compatibility)");
+		assert.match("bar", result.data.foo);
+	});
 });

@@ -1,9 +1,11 @@
-import { it, assert, truthy, falsy } from 'utest';
+import { describe, it, assert, truthy, falsy } from 'utest';
 import * as web_mod from 'luci_sso.web';
 import * as router from 'luci_sso.router';
 import { with_context } from 'context';
 
-it('cgi: reproduction - missing Result.ok check (W1)', () => {
+describe('cgi: reproduction', () => {
+
+it('missing Result.ok check (W1)', () => {
 	let config = {
 		enabled: true,
 		client_id: "test",
@@ -44,4 +46,7 @@ it('cgi: reproduction - missing Result.ok check (W1)', () => {
 
 		assert.match(truthy(), rendered_error, "Should have rendered an error response");
 	});
+
+});
+
 });
