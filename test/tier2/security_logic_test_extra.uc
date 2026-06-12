@@ -1,128 +1,113 @@
-import { it, assert, truthy, falsy } from 'utest';
+import { it, assert, truthy, falsy, spy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as oidc from 'luci_sso.oidc';
 import * as ubus from 'luci_sso.ubus';
 import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
-import * as mock from 'mock';
+import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 
-function make_session_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log: io.log
-	};
-}
-
-function make_ubus_deps(io) {
-	return {
-		fs: {
-			readfile: (p)    => io.read_file(p),
-			lsdir:    (p)    => io.lsdir(p),
-			stat:     (p)    => io.stat(p),
-			unlink:   (p)    => io.remove(p),
-			mkdir:    (p, m) => io.mkdir(p, m),
-		},
-		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
-		clock: { time: () => io.time() },
-		log: io.log
-	};
-}
-
 it('session: handshake - atomic consumption ensures integrity', () => {
-	let data = mock.create().with_files({}).spy((io) => {
-		let res = session.create_state(make_session_deps(io));
+	with_context({
+		fs: { data: {} },
+		clock: { data: { now: 1516239022 } }
+	}, (deps) => {
+		let res = session.create_state(deps);
 		let handle = res.data.token;
-		session.verify_state(make_session_deps(io), handle, 0);
-	});
+		session.verify_state(deps, handle, 0);
 
-	assert.match(truthy(), data.called("rename"), "Should have used rename for atomicity");
+		let rename_calls = spy(deps.fs).calls.rename;
+		assert.match(truthy(), length(rename_calls) > 0, "Should have used rename for atomicity");
+	});
 });
 
 it('session: handshake - state is single-use only', () => {
-       mock.create().with_files({}, (io) => {
-               // 1. Create a state
-               let res = session.create_state(make_session_deps(io));
-               let handle = res.data.token;
+	with_context({
+		fs: { data: {} },
+		clock: { data: { now: 1516239022 } }
+	}, (deps) => {
+		let res = session.create_state(deps);
+		let handle = res.data.token;
 
-               // 2. Attempt 1: Should succeed
-               let res_1 = session.verify_state(make_session_deps(io), handle, 0);
-               assert.match(truthy(), res_1.ok, "First consumption should succeed");
+		let res_1 = session.verify_state(deps, handle, 0);
+		assert.match(truthy(), res_1.ok, "First consumption should succeed");
 
-               // 3. Attempt 2: Should fail
-               let res_2 = session.verify_state(make_session_deps(io), handle, 0);
-               assert.match(falsy(), res_2.ok, "Second consumption should fail");
+		let res_2 = session.verify_state(deps, handle, 0);
+		assert.match(falsy(), res_2.ok, "Second consumption should fail");
 
-               // 4. Attempt 3: Should still fail
-               let res_3 = session.verify_state(make_session_deps(io), handle, 0);
-               assert.match(falsy(), res_3.ok, "Third consumption should fail");
-               assert.match("STATE_NOT_FOUND", res_3.error);
-       });
+		let res_3 = session.verify_state(deps, handle, 0);
+		assert.match(falsy(), res_3.ok, "Third consumption should fail");
+		assert.match("STATE_NOT_FOUND", res_3.error);
+	});
 });
 
 it('session: handshake - traversal attempts are rejected', () => {
-       mock.create().with_files({}, (io) => {
-               let res = session.verify_state(make_session_deps(io), "../../../etc/passwd", 0);
-               assert.match(falsy(), res.ok, "Should reject traversal attempt");
-               assert.match("MALFORMED_STATE_COOKIE", res.error);
-       });
+	with_context({ fs: { data: {} } }, (deps) => {
+		let res = session.verify_state(deps, "../../../etc/passwd", 0);
+		assert.match(falsy(), res.ok, "Should reject traversal attempt");
+		assert.match("MALFORMED_STATE_COOKIE", res.error);
+	});
 });
 
 it('session: handshake - malformed JSON fails closed', () => {
-       const handle = "malformed_handle";
-       const path = `/var/run/luci-sso/handshake_${handle}.json`;
+	const handle = "malformed_handle";
+	const path = `/var/run/luci-sso/handshake_${handle}.json`;
 
-       mock.create().with_files({ [path]: "{ invalid: json" }, (io) => {
-               let res = session.verify_state(make_session_deps(io), handle, 0);
-               assert.match(falsy(), res.ok, "Should fail on malformed JSON");
-               assert.match("STATE_CORRUPTED", res.error);
-       });
+	with_context({
+		fs: { data: { [path]: "{ invalid: json" } },
+		clock: { data: { now: 1516239022 } }
+	}, (deps) => {
+		let res = session.verify_state(deps, handle, 0);
+		assert.match(falsy(), res.ok, "Should fail on malformed JSON");
+		assert.match("STATE_CORRUPTED", res.error);
+	});
 });
 
 it('session: handshake - filesystem error fails closed', () => {
-       mock.create().with_files({}, (io) => {
-               let res = session.create_state(make_session_deps(io));
-               let handle = res.data.token;
+	let handle = null;
+	let handshake_content = null;
 
-               // Derive a read-only reality
-               mock.create().using(io).with_read_only((read_only_io) => {
-                       let res_fs = session.verify_state(make_session_deps(read_only_io), handle, 0);
-                       assert.match(falsy(), res_fs.ok, "Should fail when rename is impossible");
-                       assert.match("STATE_NOT_FOUND", res_fs.error);
-               });
-       });
+	with_context({
+		fs: { data: {} },
+		clock: { data: { now: 1516239022 } }
+	}, (deps) => {
+		let res = session.create_state(deps);
+		handle = res.data.token;
+		handshake_content = deps.fs.readfile(`/var/run/luci-sso/handshake_${handle}.json`);
+	});
+
+	with_context({
+		fs: {
+			data: { [`/var/run/luci-sso/handshake_${handle}.json`]: handshake_content },
+			behavior: { rename: (old_path, new_path) => false }
+		},
+		clock: { data: { now: 1516239022 } }
+	}, (deps) => {
+		let res_fs = session.verify_state(deps, handle, 0);
+		assert.match(falsy(), res_fs.ok, "Should fail when rename is impossible");
+		assert.match("STATE_NOT_FOUND", res_fs.error);
+	});
 });
 
 it('security: reject authorization URL generation without state (B1)', () => {
-       mock.create().with_responses({}, (io) => {
-               let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { nonce: "n1234567890123456", code_challenge: "cc1" });
-               assert.match(truthy(), type(res) == "object" && !res.ok, "MUST return error object if state is missing");
-               assert.match("MISSING_STATE_PARAMETER", res.error);
-       });
+	with_context({}, (deps) => {
+		let res = oidc.get_auth_url(deps, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { nonce: "n1234567890123456", code_challenge: "cc1" });
+		assert.match(truthy(), type(res) == "object" && !res.ok, "MUST return error object if state is missing");
+		assert.match("MISSING_STATE_PARAMETER", res.error);
+	});
 });
 
 it('security: reject authorization URL generation with short state (B3)', () => {
-	mock.create().with_responses({}, (io) => {
-		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "short", nonce: "n1234567890123456", code_challenge: "cc1" });
+	with_context({}, (deps) => {
+		let res = oidc.get_auth_url(deps, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "short", nonce: "n1234567890123456", code_challenge: "cc1" });
 		assert.match(falsy(), res.ok, "MUST reject short state");
 		assert.match("MISSING_STATE_PARAMETER", res.error);
 	});
 });
 
 it('security: reject authorization URL generation without nonce (B1)', () => {
-	mock.create().with_responses({}, (io) => {
-		let res = oidc.get_auth_url(io, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "s1234567890123456", code_challenge: "cc1" });
+	with_context({}, (deps) => {
+		let res = oidc.get_auth_url(deps, f.MOCK_CONFIG, f.MOCK_DISCOVERY, { state: "s1234567890123456", code_challenge: "cc1" });
 		assert.match(falsy(), res.ok, "MUST reject missing nonce");
 		assert.match("MISSING_NONCE_PARAMETER", res.error);
 	});
@@ -134,12 +119,18 @@ it('security: detect CSPRNG failure during CSRF token generation (B3)', () => {
     let res = null;
     let err = null;
     try {
-        mock.create()
-            .with_ubus({
-                "session:create": { ubus_rpc_session: "sid" }
-            }).with_env({}, (io) => {
-                res = ubus.create_passwordless_session(make_ubus_deps(io), "root", { read: ["*"], write: ["*"] }, "user@example.com", "at", "rt", "it");
-            });
+        with_context({
+            fs: {},
+            ubus: {
+                data: {
+                    "session:create": { ubus_rpc_session: "sid" },
+                    "session:grant": {},
+                    "session:set": {}
+                }
+            }
+        }, (deps) => {
+            res = ubus.create_passwordless_session(deps, "root", { read: ["*"], write: ["*"] }, "user@example.com", "at", "rt", "it");
+        });
     } catch (e) {
         err = e;
     }

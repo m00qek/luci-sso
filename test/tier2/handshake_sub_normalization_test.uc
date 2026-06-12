@@ -1,34 +1,12 @@
 import { it, assert, truthy } from 'utest';
-import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
-import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
-import * as mock from 'mock';
+import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
-
-function make_handshake_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
-		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log:   io.log
-	};
-}
 
 it('handshake: reproduction - userinfo fallback fails on case-mismatched sub', () => {
     let issuer_url = f.MOCK_CONFIG.issuer_url;
@@ -46,55 +24,43 @@ it('handshake: reproduction - userinfo fallback fails on case-mismatched sub', (
         roles: [ { name: "admin", emails: ["user@example.com"], read: ["*"], write: ["*"] } ]
     };
 
-    mock.create()
-        .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
-        .with_ubus({ "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} })
-        .with_responses({
-            [issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
-            [discovery_doc.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
-            // UserInfo returns UPPERCASE sub
-            [discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: "USER-123", email: "user@example.com" } }
-        })
-        .spy((io) => {
-            let captured_nonce = null;
-            let original_write_file = io.write_file;
-            io.write_file = (path, data) => {
-                if (match(path, /handshake_.*\.json/)) {
-                    let res = encoding.safe_json(data);
-                    if (res.ok) captured_nonce = res.data.nonce;
+    let nonce_captured = null;
+
+    with_context({
+        fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+        ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+        http_client: {
+            data: {
+                [issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+                [discovery_doc.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+                [discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: "USER-123", email: "user@example.com" } }
+            },
+            behavior: {
+                post: (url, opts) => {
+                    let access_token = "at-123";
+                    let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
+                    // ID Token has lowercase sub; UserInfo returns UPPERCASE sub — normalization must reconcile
+                    let payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: null, nonce: nonce_captured, at_hash };
+                    let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+                    return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
                 }
-                return original_write_file(path, data);
-            };
+            }
+        },
+        clock: { data: { now: 1516239022 } }
+    }, (deps) => {
+        let s_res = handshake.initiate(deps, test_config);
+        assert.match(truthy(), s_res.ok, `initiate failed: ${s_res.error}`);
 
-            io.http_post = (url, opts) => {
-                let access_token = "at-123";
-                // ID Token has lowercase sub
-                let payload = { 
-                    ...f.MOCK_CLAIMS, 
-                    sub: "user-123",
-                    email: null, 
-                    nonce: captured_nonce, 
-                    at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data 
-                };
-                let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
-            };
+        nonce_captured = replace(s_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
+        let state_in_url = replace(s_res.data.url, /^.*state=([^&]+).*$/, "$1");
 
-            let s_res = handshake.initiate(make_handshake_deps(io), test_config);
-            let s_data = s_res.data;
-            let token = s_data.token;
-            let state_in_url = split(s_data.url, "state=")[1];
-            state_in_url = split(state_in_url, "&")[0];
+        let request = {
+            query: { code: "c123", state: state_in_url },
+            cookies: { "__Host-luci_sso_state": s_res.data.token }
+        };
 
-            let request = {
-                query: { code: "c123", state: state_in_url },
-                cookies: { "__Host-luci_sso_state": token }
-            };
-
-            let res = handshake.authenticate(make_handshake_deps(io), test_config, request, TEST_POLICY);
-            
-            // Expected: SUCCESS because of normalization
-            assert.match(truthy(), res.ok, "Should SUCCEED after sub normalization fix");
-            assert.match("user@example.com", res.data.email);
-        });
+        let res = handshake.authenticate(deps, test_config, request, TEST_POLICY);
+        assert.match(truthy(), res.ok, "Should SUCCEED after sub normalization fix");
+        assert.match("user@example.com", res.data.email);
+    });
 });

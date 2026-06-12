@@ -46,7 +46,13 @@ function do_inject(cfg, remaining, proxies, cb) {
 	if (name === 'fs') {
 		// Seed ratelimit file as empty so router._check_rate_limit doesn't
 		// die in strict mode when it reads an uninitialized path.
-		let data = { "/var/run/luci-sso/ratelimit.json": "", ...state.data };
+		// Seed ACL dir with an empty placeholder so _grant_all_luci_acls
+		// returns Result.ok(0) without trying to destroy the session.
+		let data = {
+			"/var/run/luci-sso/ratelimit.json": "",
+			"/usr/share/rpcd/acl.d/luci-base.json": "",
+			...(state.data || {})
+		};
 		inject_state = { ...state, strict: true, data };
 	} else {
 		inject_state = { ...state, strict: true };

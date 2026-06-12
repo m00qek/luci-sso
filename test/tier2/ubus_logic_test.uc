@@ -1,33 +1,20 @@
 import { it, assert, truthy, has_length, falsy } from 'utest';
 import * as ubus from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
-import * as mock from 'mock';
-
-function make_ubus_deps(io) {
-	return {
-		fs: {
-			readfile: (p)    => io.read_file(p),
-			lsdir:    (p)    => io.lsdir(p),
-			stat:     (p)    => io.stat(p),
-			unlink:   (p)    => io.remove(p),
-			mkdir:    (p, m) => io.mkdir(p, m),
-		},
-		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
-		clock: { time: () => io.time() },
-		log: io.log
-	};
-}
+import { with_context } from 'context';
 
 it('ubus: logic - get_session success', () => {
-	let factory = mock.create().with_ubus({
-		"session:get": (args) => {
-			assert.match("sid-123", args.ubus_rpc_session);
-			return { values: { oidc_user: "test@example.com", oidc_id_token: "token-abc" } };
+	with_context({
+		ubus: {
+			data: {
+				"session:get": (args) => {
+					assert.match("sid-123", args.ubus_rpc_session);
+					return { values: { oidc_user: "test@example.com", oidc_id_token: "token-abc" } };
+				}
+			}
 		}
-	});
-
-	factory.with_env({}, (io) => {
-		let res = ubus.get_session(make_ubus_deps(io), "sid-123");
+	}, (deps) => {
+		let res = ubus.get_session(deps, "sid-123");
         assert.match(truthy(), Result.is(res));
 		assert.match(truthy(), res.ok);
 		assert.match("test@example.com", res.data.oidc_user);
@@ -36,12 +23,10 @@ it('ubus: logic - get_session success', () => {
 });
 
 it('ubus: logic - get_session handle missing session', () => {
-	let factory = mock.create().with_ubus({
-		"session:get": (args) => null
-	});
-
-	factory.with_env({}, (io) => {
-		let res = ubus.get_session(make_ubus_deps(io), "invalid-sid");
+	with_context({
+		ubus: { data: { "session:get": {} } }
+	}, (deps) => {
+		let res = ubus.get_session(deps, "invalid-sid");
         assert.match(truthy(), Result.is(res));
 		assert.match(falsy(), res.ok);
 		assert.match("SESSION_NOT_FOUND", res.error);
@@ -49,9 +34,8 @@ it('ubus: logic - get_session handle missing session', () => {
 });
 
 it('ubus: logic - get_session handle invalid SID', () => {
-	let factory = mock.create();
-	factory.with_env({}, (io) => {
-		let res = ubus.get_session(make_ubus_deps(io), null);
+	with_context({ ubus: {} }, (deps) => {
+		let res = ubus.get_session(deps, null);
         assert.match(truthy(), Result.is(res));
 		assert.match(falsy(), res.ok);
 		assert.match("INVALID_SID", res.error);
@@ -60,19 +44,21 @@ it('ubus: logic - get_session handle invalid SID', () => {
 
 it('ubus: security - create_passwordless_session generates 256-bit CSRF token (B3)', () => {
 	let grants = [];
-	let factory = mock.create().with_ubus({
-		"session:create": { ubus_rpc_session: "new-sid" },
-		"session:grant": (args) => { push(grants, args); return {}; },
-		"session:set": (args) => {
-			let token = args.values.token;
-			// 256 bits = 32 bytes. Base64URL encoding 32 bytes = 43 chars
-			assert.match(truthy(), length(token) >= 43, "CSRF token MUST be at least 256 bits (43+ chars)");
-			return {};
-		}
-	});
 
-	factory.with_env({}, (io) => {
-		let res = ubus.create_passwordless_session(make_ubus_deps(io), "root", { read: ["luci-mod-network"], write: [] }, "user@test.com", "at", "rt", "it");
+	with_context({
+		ubus: {
+			data: {
+				"session:create": { ubus_rpc_session: "new-sid" },
+				"session:grant": (args) => { push(grants, args); return {}; },
+				"session:set": (args) => {
+					let token = args.values.token;
+					assert.match(truthy(), length(token) >= 43, "CSRF token MUST be at least 256 bits (43+ chars)");
+					return {};
+				}
+			}
+		}
+	}, (deps) => {
+		let res = ubus.create_passwordless_session(deps, "root", { read: ["luci-mod-network"], write: [] }, "user@test.com", "at", "rt", "it");
         assert.match(truthy(), Result.is(res));
 		assert.match(truthy(), res.ok);
 		assert.match(1, length(grants));
@@ -82,15 +68,19 @@ it('ubus: security - create_passwordless_session generates 256-bit CSRF token (B
 
 it('ubus: logic - create_passwordless_session admin wildcard', () => {
 	let grants = [];
-	let factory = mock.create().with_ubus({
-		"session:create": { ubus_rpc_session: "sid" },
-		"session:grant": (args) => { push(grants, args); return {}; },
-		"session:set": () => ({})
-	});
 
-	factory.with_env({}, (io) => {
-		ubus.create_passwordless_session(make_ubus_deps(io), "root", { read: ["*"], write: ["*"] }, "a@b.com", "at", "rt", "it");
-		
+	with_context({
+		fs: {},
+		ubus: {
+			data: {
+				"session:create": { ubus_rpc_session: "sid" },
+				"session:grant": (args) => { push(grants, args); return {}; },
+				"session:set": () => ({})
+			}
+		}
+	}, (deps) => {
+		ubus.create_passwordless_session(deps, "root", { read: ["*"], write: ["*"] }, "a@b.com", "at", "rt", "it");
+
 		let scopes = map(grants, (g) => g.scope);
 		assert.match(truthy(), index(scopes, "ubus") != -1);
 		assert.match(truthy(), index(scopes, "uci") != -1);
@@ -100,51 +90,68 @@ it('ubus: logic - create_passwordless_session admin wildcard', () => {
 });
 
 it('ubus: logic - register_token atomicity and full hash (B2)', () => {
-	let factory = mock.create().with_files({});
-	
-	factory.with_env({}, (io) => {
+	let created_locks = {};
+
+	with_context({
+		fs: {
+			data: {},
+			behavior: {
+				mkdir: (path, mode) => {
+					if (match(path, /\/tokens\//)) {
+						if (created_locks[path]) return false;
+						created_locks[path] = true;
+					}
+					return true;
+				}
+			}
+		}
+	}, (deps) => {
 		let token = "my-secret-token-123";
-		
-		// 1. First registration should succeed
-		let res1 = ubus.register_token(make_ubus_deps(io), token);
+
+		let res1 = ubus.register_token(deps, token);
         assert.match(truthy(), Result.is(res1));
 		assert.match(truthy(), res1.ok, "First token registration must succeed");
-		
-		// 2. Verify it created a 64-character hex ID entry
-		let files = io.lsdir("/var/run/luci-sso/tokens");
-		assert.match(has_length(1), files, "Should have exactly one token entry");
-		assert.match(64, length(files[0]), "Token ID must be a full 64-character SHA-256 hex digest");
-		
-		// 3. Second registration of SAME token must fail (replay)
-		let res2 = ubus.register_token(make_ubus_deps(io), token);
+
+		// Verify it created a 64-character hex ID entry
+		let lock_paths = keys(created_locks);
+		assert.match(has_length(1), lock_paths, "Should have exactly one token entry");
+		let token_id = replace(lock_paths[0], /^.*\//, "");
+		assert.match(64, length(token_id), "Token ID must be a full 64-character SHA-256 hex digest");
+
+		let res2 = ubus.register_token(deps, token);
         assert.match(truthy(), Result.is(res2));
 		assert.match(falsy(), res2.ok, "Replayed token registration must fail");
 		assert.match("TOKEN_REPLAYED", res2.error);
-		
-		// 4. Registration of DIFFERENT token should succeed
-		let res3 = ubus.register_token(make_ubus_deps(io), token + "new");
+
+		let res3 = ubus.register_token(deps, token + "new");
         assert.match(truthy(), Result.is(res3));
 		assert.match(truthy(), res3.ok, "Different token must succeed");
-		assert.match(2, length(io.lsdir("/var/run/luci-sso/tokens")), "Should have two entries now");
+		assert.match(2, length(keys(created_locks)), "Should have two entries now");
 	});
 });
 
 it('ubus: security - create_passwordless_session robust ACL parsing (N2)', () => {
 	let grants = [];
-	let factory = mock.create().with_ubus({
-		"session:create": { ubus_rpc_session: "sid" },
-		"session:grant": (args) => { push(grants, args); return {}; },
-		"session:set": () => ({})
-	}).with_files({
-		"/usr/share/rpcd/acl.d/test.json": sprintf("%J", {
-			"luci-mod-status": { "description": "Actual ACL" },
-			"non-luci": { "comment": "This has luci-fake in value but NOT in key" }
-		})
-	});
 
-	factory.with_env({}, (io) => {
-		ubus.create_passwordless_session(make_ubus_deps(io), "root", { read: ["*"], write: [] }, "a@b.com", "at", "rt", "it");
-		
+	with_context({
+		fs: {
+			data: {
+				"/usr/share/rpcd/acl.d/test.json": sprintf("%J", {
+					"luci-mod-status": { "description": "Actual ACL" },
+					"non-luci": { "comment": "This has luci-fake in value but NOT in key" }
+				})
+			}
+		},
+		ubus: {
+			data: {
+				"session:create": { ubus_rpc_session: "sid" },
+				"session:grant": (args) => { push(grants, args); return {}; },
+				"session:set": () => ({})
+			}
+		}
+	}, (deps) => {
+		ubus.create_passwordless_session(deps, "root", { read: ["*"], write: [] }, "a@b.com", "at", "rt", "it");
+
 		let granted_groups = [];
 		for (let g in grants) {
 			if (g.scope == "access-group") {
@@ -153,7 +160,7 @@ it('ubus: security - create_passwordless_session robust ACL parsing (N2)', () =>
 				}
 			}
 		}
-		
+
 		assert.match(truthy(), index(granted_groups, "luci-mod-status") != -1, "Should grant actual luci-* key");
 		assert.match(-1, index(granted_groups, "luci-fake"), "Should NOT grant luci-* string found in values (N2)");
 	});

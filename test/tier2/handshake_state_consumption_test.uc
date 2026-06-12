@@ -1,73 +1,58 @@
 'use strict';
 
-import { it, assert, truthy } from 'utest';
+import { it, assert, truthy, spy } from 'utest';
 import * as handshake from 'luci_sso.handshake';
-import * as mock from 'mock';
+import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 
-function make_handshake_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
-		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log:   io.log
-	};
-}
-
 it('handshake: security - state is consumed only once (B1)', () => {
-	let handle = "valid-handle";
-	let path = `/var/run/luci-sso/handshake_${handle}.json`;
-	let config = { ...f.MOCK_CONFIG, clock_tolerance: 30 };
-	
-	let mock_handshake = {
-		id: "h123",
-		state: "state123",
-		nonce: "nonce123",
-		code_verifier: "verifier123-verifier123-verifier123-verifier123",
-		iat: 1516239022,
-		exp: 1516239022 + 300
-	};
+    let handle = "valid-handle";
+    let path = `/var/run/luci-sso/handshake_${handle}.json`;
+    let config = { ...f.MOCK_CONFIG, clock_tolerance: 30 };
 
-	let data = mock.create()
-		.with_files({ [path]: sprintf("%J", mock_handshake) })
-		.with_responses({
-			"https://idp.com/.well-known/openid-configuration": { status: 200, body: f.MOCK_DISCOVERY },
-			"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } } // Force failure
-		});
+    let mock_handshake = {
+        id: "h123",
+        state: "state123",
+        nonce: "nonce123",
+        code_verifier: "verifier123-verifier123-verifier123-verifier123",
+        iat: 1516239022,
+        exp: 1516239022 + 300
+    };
 
-	let spy_handle = data.spy((io) => {
-		let req = {
-			query: { code: "123", state: mock_handshake.state },
-			cookies: { "__Host-luci_sso_state": handle }
-		};
+    let rename_calls_arr = null;
+    let unlink_calls_arr = null;
 
-		handshake.authenticate(make_handshake_deps(io), config, req);
-	});
+    with_context({
+        fs: { data: { [path]: sprintf("%J", mock_handshake) } },
+        http_client: {
+            data: {
+                [f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
+                [f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "invalid_grant" } }
+            }
+        },
+        clock: { data: { now: 1516239022 } }
+    }, (deps) => {
+        let req = {
+            query: { code: "123", state: mock_handshake.state },
+            cookies: { "__Host-luci_sso_state": handle }
+        };
 
-	let history = spy_handle.all();
-	let remove_calls = 0;
-	let rename_calls = 0;
+        handshake.authenticate(deps, config, req);
 
-	for (let entry in history) {
-		if (entry.type == "remove" && index(entry.args[0], handle) != -1) {
-			remove_calls++;
-		}
-		if (entry.type == "rename" && index(entry.args[0], handle) != -1) {
-			rename_calls++;
-		}
-	}
+        rename_calls_arr = spy(deps.fs).calls.rename || [];
+        unlink_calls_arr = spy(deps.fs).calls.unlink || [];
+    });
 
-	assert.match(1, rename_calls, "Should attempt rename exactly once");
-	assert.match(1, remove_calls, "Should attempt remove exactly once (inside verify_state)");
+    let rename_calls = 0;
+    for (let c in rename_calls_arr) {
+        if (index(c[0], handle) != -1) rename_calls++;
+    }
+
+    let remove_calls = 0;
+    for (let c in unlink_calls_arr) {
+        if (index(c[0], handle) != -1) remove_calls++;
+    }
+
+    assert.match(1, rename_calls, "Should attempt rename exactly once");
+    assert.match(1, remove_calls, "Should attempt remove exactly once (inside verify_state)");
 });

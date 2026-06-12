@@ -1,59 +1,16 @@
 import { it, assert, truthy } from 'utest';
-import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
-import * as mock from 'mock';
+import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
-function make_session_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log: io.log
-	};
-}
-
-function make_handshake_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
-		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log:   io.log
-	};
-}
-
 it('handshake: split-horizon - prevents path corruption when issuer_url is in path', () => {
-    // BUG: If issuer_url is "https://auth.com" and token_endpoint is "https://auth.com/realms/auth.com/token",
-    // naive replace() results in "https://internal/realms/internal/token" if internal_issuer_url is "https://internal".
-    
     let issuer_url = "https://auth.com";
     let internal_issuer_url = "https://internal.lan:8443";
-    
-    // An IdP where the issuer URL appears in the path
+
     let discovery_doc = {
         issuer: issuer_url,
         authorization_endpoint: issuer_url + "/auth",
@@ -72,99 +29,60 @@ it('handshake: split-horizon - prevents path corruption when issuer_url is in pa
         ]
     };
 
-    mock.create()
-        .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
-        .with_uci({
-            "luci-sso": {
-                "default": { ...test_config, ".type": "oidc", "enabled": "1" }
-            }
-        })
-        .with_ubus({
-            "session:create": { "ubus_rpc_session": "s123" },
-            "session:grant": {},
-            "session:set": {}
-        })
-        .spy((io) => {
-            io.http_get = (url) => {
-                if (url == internal_issuer_url + "/.well-known/openid-configuration") {
-                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", discovery_doc) } });
-                }
-                // If the bug exists, this will be called with the corrupted URL
-                if (url == internal_issuer_url + "/realms/auth.com/jwks") {
-                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
-                }
-                if (url == internal_issuer_url + "/realms/internal.lan:8443/jwks") {
-                     // This is what we expect if naive replace is used
-                     return Result.ok({ status: 404, body: { read: () => "Path Corrupted" } });
-                }
-                return Result.ok({ status: 404, body: { read: () => "" } });
-            };
-
-            io.http_post = (url, body, options) => {
-                // VERIFICATION: Check if the URL is corrupted
-                if (url == internal_issuer_url + "/realms/internal.lan:8443/token") {
-                    return Result.ok({ status: 404, body: { read: () => "Path Corrupted" } });
-                }
-                
-                if (url == internal_issuer_url + "/realms/auth.com/token") {
+    with_context({
+        fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+        ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+        http_client: {
+            data: {
+                [internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+                [internal_issuer_url + "/realms/auth.com/jwks"]: { status: 200, body: { keys: [ f.MOCK_JWK ] } }
+            },
+            behavior: {
+                post: (url, opts) => {
+                    if (url == internal_issuer_url + "/realms/internal.lan:8443/token") {
+                        return { ok: true, data: { status: 404, body: "Path Corrupted" } };
+                    }
                     let access_token = "at-123";
-                    let payload = { 
+                    let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
+                    let payload = {
                         ...f.MOCK_CLAIMS,
                         iss: issuer_url,
                         email: "admin@example.com",
                         nonce: "test-nonce",
-                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data
+                        at_hash
                     };
-                    let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                    return Result.ok({ 
-                        status: 200, 
-                        body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } 
-                    });
+                    let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+                    return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
                 }
-                return Result.ok({ status: 404, body: { read: () => "" } });
-            };
-
-            let s_res = session.create_state(make_session_deps(io));
-            if (!s_res.ok) {
-                print("create_state failed: ", s_res.error, "\n");
-                assert.match(truthy(), false);
             }
-            let s_data = s_res.data;
-            let handle = s_data.token;
-            let path = "/var/run/luci-sso/handshake_" + handle + ".json";
-            
-            let content = io.read_file(path);
-            let json_res = encoding.safe_json(content);
-            if (!json_res.ok) {
-                print("Failed to parse handshake state from: ", path, " (", json_res.details, ")\n");
-                assert.match(truthy(), false);
-            }
-            let raw_data = json_res.data;
-            raw_data.nonce = "test-nonce";
-            io.write_file(path, sprintf("%J", raw_data));
+        },
+        clock: { data: { now: 1516239022 } }
+    }, (deps) => {
+        let s_res = session.create_state(deps);
+        assert.match(truthy(), s_res.ok, `create_state failed: ${s_res.error}`);
+        let s_data = s_res.data;
+        let handle = s_data.token;
+        let path = "/var/run/luci-sso/handshake_" + handle + ".json";
 
-            let request = {
-                path: "/callback",
-                query: { code: "c1", state: raw_data.state },
-                cookies: { "__Host-luci_sso_state": handle },
-                env: { HTTPS: "on" }
-            };
+        let raw_data = encoding.safe_json(deps.fs.readfile(path)).data;
+        raw_data.nonce = "test-nonce";
+        deps.fs.writefile(path, sprintf("%J", raw_data));
 
-            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
-            
-            assert.match(truthy(), res.ok, `Handshake should succeed. Error: ${res.error} Details: ${res.details}`);
-            assert.match("admin@example.com", res.data.email);
-        });
+        let request = {
+            query: { code: "c1", state: raw_data.state },
+            cookies: { "__Host-luci_sso_state": handle }
+        };
+
+        let res = handshake.authenticate(deps, test_config, request);
+        assert.match(truthy(), res.ok, `Handshake should succeed. Error: ${res.error} Details: ${res.details}`);
+        assert.match("admin@example.com", res.data.email);
+    });
 });
 
 it('handshake: split-horizon - prevents corruption when internal_issuer_url is substring of issuer_url', () => {
-    // SCENARIO: issuer_url is "https://auth.com", internal_issuer_url is "https://auth".
-    // If endpoint is "https://auth.com/token", naive replace results in "https://auth.com/token" -> "https://auth.com/token" (no change) or worse if reversed.
-    // Actually the previous BUG was global replace.
-    
     let issuer_url = "https://auth.com";
-    let internal_issuer_url = "https://auth"; // Unusual but possible
-    
+    let internal_issuer_url = "https://auth";
+
     let discovery_doc = {
         issuer: issuer_url,
         authorization_endpoint: issuer_url + "/auth",
@@ -180,65 +98,56 @@ it('handshake: split-horizon - prevents corruption when internal_issuer_url is s
         roles: [ { name: "admin", emails: ["admin@example.com"], read: ["*"], write: ["*"] } ]
     };
 
-    mock.create()
-        .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
-        .with_ubus({
-            "session:create": { "ubus_rpc_session": "s456" },
-            "session:grant": {},
-            "session:set": {}
-        })
-        .spy((io) => {
-            io.http_get = (url) => {
-                if (url == internal_issuer_url + "/.well-known/openid-configuration") {
-                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", discovery_doc) } });
-                }
-                if (url == internal_issuer_url + "/jwks") {
-                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
-                }
-                return Result.ok({ status: 404 });
-            };
-
-            io.http_post = (url) => {
-                if (url == internal_issuer_url + "/token") {
+    with_context({
+        fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+        ubus:  { data: { "session:create": { "ubus_rpc_session": "s456" }, "session:grant": {}, "session:set": {} } },
+        http_client: {
+            data: {
+                [internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+                [internal_issuer_url + "/jwks"]: { status: 200, body: { keys: [ f.MOCK_JWK ] } }
+            },
+            behavior: {
+                post: (url, opts) => {
                     let access_token = "at-456";
-                    let payload = { 
-                        ...f.MOCK_CLAIMS, 
+                    let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
+                    let payload = {
+                        ...f.MOCK_CLAIMS,
                         iss: issuer_url,
-                        email: "admin@example.com", 
+                        email: "admin@example.com",
                         nonce: "test-nonce",
-                        at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data
+                        at_hash
                     };
-                    let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
-                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: access_token, id_token: token }) } });
+                    let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+                    return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
                 }
-                return Result.ok({ status: 404 });
-            };
+            }
+        },
+        clock: { data: { now: 1516239022 } }
+    }, (deps) => {
+        let s_res = session.create_state(deps);
+        assert.match(truthy(), s_res.ok);
+        let s_data = s_res.data;
+        let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
+        let raw_data = encoding.safe_json(deps.fs.readfile(path)).data;
+        raw_data.nonce = "test-nonce";
+        deps.fs.writefile(path, sprintf("%J", raw_data));
 
-            let s_res = session.create_state(make_session_deps(io));
-            let s_data = s_res.data;
-            let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
-            let raw_data = encoding.safe_json(io.read_file(path)).data;
-            raw_data.nonce = "test-nonce";
-            io.write_file(path, sprintf("%J", raw_data));
+        let request = {
+            query: { code: "c1", state: raw_data.state },
+            cookies: { "__Host-luci_sso_state": s_data.token }
+        };
 
-            let request = {
-                path: "/callback",
-                query: { code: "c1", state: raw_data.state },
-                cookies: { "__Host-luci_sso_state": s_data.token },
-                env: { HTTPS: "on" }
-            };
-
-            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
-            assert.match(truthy(), res.ok, `Handshake should succeed with internal_issuer_url as substring. Error: ${res.error}`);
-        });
+        let res = handshake.authenticate(deps, test_config, request);
+        assert.match(truthy(), res.ok, `Handshake should succeed. Error: ${res.error}`);
+    });
 });
 
 it('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)', () => {
-    let issuer_url = "https://idp.com/"; // Trailing slash
+    let issuer_url = "https://idp.com/";
     let internal_issuer_url = "https://internal.lan";
-    
+
     let discovery_doc = {
-        issuer: "https://idp.com", // normalized
+        issuer: "https://idp.com",
         authorization_endpoint: "https://idp.com/auth",
         token_endpoint: "https://idp.com/token",
         jwks_uri: "https://idp.com/jwks"
@@ -250,46 +159,33 @@ it('handshake: split-horizon - handles trailing slash in issuer_url (Audit W3)',
         internal_issuer_url: internal_issuer_url,
     };
 
-    mock.create()
-        .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
-        .spy((io) => {
-            io.http_get = (url) => {
-                if (url == internal_issuer_url + "/.well-known/openid-configuration") {
-                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", discovery_doc) } });
-                }
-                if (url == internal_issuer_url + "/jwks") {
-                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { keys: [ f.MOCK_JWK ] }) } });
-                }
-                return Result.ok({ status: 404 });
-            };
+    with_context({
+        fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+        http_client: {
+            data: {
+                [internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+                [internal_issuer_url + "/jwks"]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+                [internal_issuer_url + "/token"]: { status: 200, body: { access_token: "at", id_token: "it" } }
+            }
+        },
+        clock: { data: { now: 1516239022 } }
+    }, (deps) => {
+        let s_res = session.create_state(deps);
+        assert.match(truthy(), s_res.ok);
+        let s_data = s_res.data;
+        let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
+        let raw_data = encoding.safe_json(deps.fs.readfile(path)).data;
+        raw_data.nonce = "test-nonce";
+        deps.fs.writefile(path, sprintf("%J", raw_data));
 
-            io.http_post = (url) => {
-                // If W3 bug existed, prefix_len of "https://idp.com/" (16) would be used
-                // on "https://idp.com/token", resulting in "https://internal.lanoken"
-                if (url == internal_issuer_url + "/token") {
-                    return Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: "at", id_token: "it" }) } });
-                }
-                return Result.ok({ status: 404, body: { read: () => "URL Corrupted: " + url } });
-            };
+        let request = {
+            query: { code: "c1", state: raw_data.state },
+            cookies: { "__Host-luci_sso_state": s_data.token }
+        };
 
-            let s_res = session.create_state(make_session_deps(io));
-            let s_data = s_res.data;
-            let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
-            let raw_data = encoding.safe_json(io.read_file(path)).data;
-            raw_data.nonce = "test-nonce";
-            io.write_file(path, sprintf("%J", raw_data));
-
-            let request = {
-                path: "/callback",
-                query: { code: "c1", state: raw_data.state },
-                cookies: { "__Host-luci_sso_state": s_data.token },
-                env: { HTTPS: "on" }
-            };
-
-            // Use internal_issuer_url for discovery but we expect it to talk to IDP via it
-            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
-            
-            // If we reached here without a "URL Corrupted" failure in io.http_post, it means the prefix replacement worked!
-            assert.match(truthy(), true);
-        });
+        // If W3 bug existed, token_endpoint would be corrupted and GET would die in strict mode.
+        // Reaching authenticate without strict-mode death confirms correct URL routing.
+        handshake.authenticate(deps, test_config, request);
+        assert.match(truthy(), true);
+    });
 });

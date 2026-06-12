@@ -1,44 +1,9 @@
-import { it, assert, truthy, falsy } from 'utest';
+import { it, assert, truthy, falsy, spy } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as oidc from 'luci_sso.oidc';
 import * as handshake from 'luci_sso.handshake';
-import * as crypto from 'luci_sso.crypto';
-import * as mock from 'mock';
+import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
-
-function make_discovery_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts) },
-		clock: { time: () => io.time() },
-		log: io.log
-	};
-}
-
-function make_handshake_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
-		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log:   io.log
-	};
-}
 
 it('oidc: security - reject massive discovery response (DoS protection)', () => {
 	// Generate a response slightly larger than 256KB using exponential doubling
@@ -46,64 +11,62 @@ it('oidc: security - reject massive discovery response (DoS protection)', () => 
 	for (let i = 0; i < 15; i++) garbage += garbage; // 10 * 2^15 = 327,680 chars (~320KB)
 	let massive_body = { ...f.MOCK_DISCOVERY, garbage };
 
-	mock.create()
-        .with_responses({
-            "https://massive.idp/.well-known/openid-configuration": {
-                status: 200,
-                body: massive_body
-            }
-        })
-        .with_env({}, (io) => {
-            let res = oidc.discover(make_discovery_deps(io), "https://massive.idp");
-            
-            assert.match(falsy(), res.ok, "Should reject massive discovery document");
-            assert.match("DISCOVERY_NETWORK_ERROR", res.error, "Should return network error (aborted read)");
-            
-            // Verification of the exact policy in history
-            let history = io.__state__.history;
-            let call = null;
-            for (let e in history) if (e.type == "http_get") call = e;
-            // The mock returns { error: "RESPONSE_TOO_LARGE" } which io.uc maps to "NETWORK_ERROR"
-        });
+	with_context({
+		http_client: {
+			data: { "https://massive.idp/.well-known/openid-configuration": { status: 200, body: massive_body } }
+		}
+	}, (deps) => {
+		let res = oidc.discover(deps, "https://massive.idp");
+
+		assert.match(falsy(), res.ok, "Should reject massive discovery document");
+		assert.match("DISCOVERY_NETWORK_ERROR", res.error, "Should return network error (aborted read)");
+	});
 });
 
 it('handshake: security - register_token deferred until after verification (DoS prevention)', () => {
-    let test_config = {
-        ...f.MOCK_CONFIG,
-        internal_issuer_url: f.MOCK_CONFIG.issuer_url,
-        redirect_uri: "https://r/c",
-        roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
-    };
+	let test_config = {
+		...f.MOCK_CONFIG,
+		internal_issuer_url: f.MOCK_CONFIG.issuer_url,
+		redirect_uri: "https://r/c",
+		roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
+	};
 
-    mock.create()
-        .with_env({}, (io) => {
-            // 1. Setup mock responses: Successful exchange, but verification will fail later
-            io.http_get = (url) => Result.ok({ status: 200, body: { read: () => sprintf("%J", f.MOCK_DISCOVERY) } });
-            io.http_post = (url) => Result.ok({ status: 200, body: { read: () => sprintf("%J", { access_token: "at1", id_token: "invalid.id.token" }) } });
+	with_context({
+		fs: { data: {} },
+		http_client: {
+			behavior: {
+				get: (url, opts) => {
+					return { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } };
+				},
+				post: (url, opts) => {
+					return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: "at1", id_token: "invalid.id.token" }) } };
+				}
+			}
+		},
+		clock: { data: { now: 1516239022 } }
+	}, (deps) => {
+		let state_res = handshake.initiate(deps, test_config);
+		assert.match(truthy(), state_res.ok, "initiate should succeed");
+		let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
+		let request = {
+			path: "/callback",
+			query: { code: "c1", state: state_val },
+			cookies: { "__Host-luci_sso_state": state_res.data.token },
+			env: { HTTPS: "on" }
+		};
 
-            // 2. Setup state
-            let state_res = handshake.initiate(make_handshake_deps(io), test_config);
-            let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
-            let request = {
-                path: "/callback",
-                query: { code: "c1", state: state_val },
-                cookies: { "__Host-luci_sso_state": state_res.data.token },
-                env: { HTTPS: "on" }
-            };
+		let auth_res = handshake.authenticate(deps, test_config, request, { allowed_algs: ["RS256"] });
+		assert.match(falsy(), auth_res.ok, "Authentication should fail due to invalid ID token");
 
-            // 3. This call should fail because id_token is invalid
-            let auth_res = handshake.authenticate(make_handshake_deps(io), test_config, request, { allowed_algs: ["RS256"] });
-            assert.match(falsy(), auth_res.ok, "Authentication should fail due to invalid ID token");
-
-            // 4. Verify that register_token was NEVER called
-            let history = io.__state__.history;
-            let registered = false;
-            for (let e in history) {
-                if (e.type == "ubus" && e.args[1] == "register_token") {
-                    registered = true;
-                    break;
-                }
-            }
-            assert.match(falsy(), registered, "Should NOT register token before successful ID token verification");
-        });
+		// Verify token was NOT registered by checking fs.mkdir was never called with a token path
+		let mkdir_calls = spy(deps.fs).calls.mkdir;
+		let token_registered = false;
+		for (let call in mkdir_calls) {
+			if (call[0] && index(call[0], "/tokens/") != -1) {
+				token_registered = true;
+				break;
+			}
+		}
+		assert.match(falsy(), token_registered, "Should NOT register token before successful ID token verification");
+	});
 });

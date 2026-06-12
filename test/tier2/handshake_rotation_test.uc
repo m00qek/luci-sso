@@ -1,56 +1,14 @@
 import { it, assert, truthy } from 'utest';
-import * as Result from 'luci_sso.result';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
-import * as mock from 'mock';
+import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
 
-function make_session_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log: io.log
-	};
-}
-
-function make_handshake_deps(io) {
-	return {
-		fs: {
-			readfile:  (p)    => io.read_file(p),
-			writefile: (p, d) => io.write_file(p, d),
-			mkdir:     (p, m) => io.mkdir(p, m),
-			unlink:    (p)    => io.remove(p),
-			rename:    (o, n) => io.rename(o, n),
-			stat:      (p)    => io.stat(p),
-			chmod:     (p, m) => io.chmod(p, m),
-			lsdir:     (p)    => io.lsdir(p),
-			error:     ()     => io.fserror()
-		},
-		http:  { get: (url, opts) => io.http_get(url, opts), post: (url, opts) => io.http_post(url, opts) },
-		ubus:  { call: (obj, method, args) => io.ubus_call(obj, method, args) },
-		clock: { time: () => io.time(), sleep: (s) => io.sleep(s) },
-		log:   io.log
-	};
-}
-
 it('handshake: recovery - handle JWKS key rotation with automatic retry', () => {
     let access_token = "access-token-123";
-    let secret = f.MOCK_CONFIG.client_secret;
-    
-    // Ensure config is fully populated as config.load() would do
     let test_config = {
         ...f.MOCK_CONFIG,
         internal_issuer_url: f.MOCK_CONFIG.issuer_url,
@@ -60,73 +18,57 @@ it('handshake: recovery - handle JWKS key rotation with automatic retry', () => 
         ]
     };
 
-    // 2. Setup stateful mock responses
     let jwks_uri = f.MOCK_DISCOVERY.jwks_uri;
     let old_jwks = { keys: [ f.MOCK_JWK ] };
-    let new_jwks = { keys: [ f.ROTATION_NEW_JWK ] }; 
-
+    let new_jwks = { keys: [ f.ROTATION_NEW_JWK ] };
     let call_count = 0;
-    
-    mock.create()
-        .with_files({ "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" })
-        .with_uci({
-            "luci-sso": {
-                "default": { ...test_config, ".type": "oidc", "enabled": "1" },
-                "r1": { ".type": "role", "email": ["user-123"], "read": ["*"], "write": ["*"] }
-            }
-        })
-        .with_ubus({
-            "session:create": { "ubus_rpc_session": "s123" },
-            "session:grant": {},
-            "session:set": {}
-        })
-        .spy((io) => {
-            io.http_get = (url) => {
-                let data = null;
-                if (url == f.MOCK_DISCOVERY.issuer + "/.well-known/openid-configuration") {
-                    data = f.MOCK_DISCOVERY;
-                } else if (url == jwks_uri) {
-                    call_count++;
-                    data = (call_count == 1) ? old_jwks : new_jwks;
+
+    // Token is built lazily after session.create_state reveals the nonce
+    let pending_tokens = { access_token: null, id_token: null };
+
+    with_context({
+        fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+        ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+        http_client: {
+            behavior: {
+                get: (url, opts) => {
+                    if (url == f.MOCK_DISCOVERY.issuer + "/.well-known/openid-configuration")
+                        return { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } };
+                    if (url == jwks_uri) {
+                        call_count++;
+                        let data = (call_count == 1) ? old_jwks : new_jwks;
+                        return { ok: true, data: { status: 200, body: sprintf("%J", data) } };
+                    }
+                    return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+                },
+                post: (url, opts) => {
+                    return { ok: true, data: { status: 200, body: sprintf("%J", pending_tokens) } };
                 }
-                if (data) return Result.ok({ status: 200, body: { read: () => sprintf("%J", data) } });
-                return Result.ok({ status: 404, body: { read: () => "" } });
-            };
-
-            // Create a valid handshake state
-            let state_res = session.create_state(make_session_deps(io));
-            if (!state_res.ok) {
-                print("create_state failed: " + state_res.error + " " + (state_res.details || ""));
-                assert.match(truthy(), false);
             }
-            let s_data = state_res.data;
+        },
+        clock: { data: { now: 1516239022 } }
+    }, (deps) => {
+        let state_res = session.create_state(deps);
+        assert.match(truthy(), state_res.ok);
+        let s_data = state_res.data;
 
-            // Create ID token matching the generated nonce
-            let payload = { 
-                ...f.MOCK_CLAIMS,
-                email: "user-123",
-                nonce: s_data.nonce,
-                at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data
-            };
-            let token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", f.ROTATION_NEW_JWK.kid);
-            let tokens = { access_token: access_token, id_token: token };
+        // Build ID token signed with the NEW key (kid = "new-key-2")
+        let payload = {
+            ...f.MOCK_CLAIMS,
+            email: "user-123",
+            nonce: s_data.nonce,
+            at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data
+        };
+        pending_tokens.access_token = access_token;
+        pending_tokens.id_token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", f.ROTATION_NEW_JWK.kid);
 
-            io.http_post = (url) => Result.ok({ 
-                status: 200, 
-                body: { read: () => sprintf("%J", tokens) } 
-            });
+        let request = {
+            query: { code: "c1", state: s_data.state },
+            cookies: { "__Host-luci_sso_state": s_data.token }
+        };
 
-            let request = {
-                path: "/callback",
-                query: { code: "c1", state: s_data.state },
-                cookies: { "__Host-luci_sso_state": s_data.token },
-                env: { HTTPS: "on" }
-            };
-
-            // This should trigger the rotation recovery path
-            let res = handshake.authenticate(make_handshake_deps(io), test_config, request);
-            
-            assert.match(truthy(), res.ok, `Handshake should succeed after JWKS retry (Error: ${res.error}, Details: ${res.details})`);
-            assert.match(2, call_count, "JWKS should have been fetched exactly twice (initial + forced refresh)");
-        });
+        let res = handshake.authenticate(deps, test_config, request);
+        assert.match(truthy(), res.ok, `Handshake should succeed after JWKS retry (Error: ${res.error}, Details: ${res.details})`);
+        assert.match(2, call_count, "JWKS should have been fetched exactly twice (initial + forced refresh)");
+    });
 });
