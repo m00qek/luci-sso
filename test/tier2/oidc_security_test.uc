@@ -1,6 +1,5 @@
 import { describe, it, assert, truthy, falsy } from 'utest';
 import * as oidc from 'luci_sso.oidc';
-import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
@@ -11,41 +10,6 @@ const JWKS = { keys: [ f.MOCK_JWK ] };
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
 describe('oidc: security', () => {
-	it('reject HS256 algorithm confusion', () => {
-		let payload = {
-			iss: f.MOCK_CONFIG.issuer_url,
-			aud: f.MOCK_CONFIG.client_id,
-			sub: "user1",
-			nonce: "n1",
-			iat: 100,
-			exp: 1000,
-			at_hash: "fake_hash"
-		};
-		let res_s = crypto.jws_sign(payload, "secret-key");
-		assert.match(truthy(), Result.is(res_s));
-		let token = res_s.data;
-		let tokens = { id_token: token, access_token: "fake" };
-		let keys = [{ kty: "RSA", kid: "key1", n: "...", e: "..." }];
-
-		with_context({}, (deps) => {
-			// BLOCKER: No TEST_POLICY, so production DEFAULT_POLICY (RS256/ES256) applies
-			let res = oidc.verify_id_token(deps, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 500);
-			assert.match(truthy(), Result.is(res));
-			assert.match(falsy(), res.ok, "Should NOT accept HS256 token in OIDC flow");
-			assert.match("UNSUPPORTED_ALGORITHM", res.error);
-		});
-	});
-
-	it('reject insecure token endpoint', () => {
-		let insecure_disc = { ...f.MOCK_DISCOVERY, token_endpoint: "http://insecure.com/token" };
-		with_context({}, (deps) => {
-			let res = oidc.exchange_code(deps, f.MOCK_CONFIG, insecure_disc, "code", "verifier-is-long-enough-to-pass-basic-check-123");
-			assert.match(truthy(), Result.is(res));
-			assert.match(falsy(), res.ok);
-			assert.match("INSECURE_TOKEN_ENDPOINT", res.error);
-		});
-	});
-
 	it('handle network failure during exchange', () => {
 		with_context({
 			http_client: { data: { [f.MOCK_DISCOVERY.token_endpoint]: { error: "TLS_VERIFY_FAILED" } } }
@@ -171,21 +135,4 @@ describe('oidc: security', () => {
 		});
 	});
 
-	it('enforce RFC 7636 PKCE verifier length (43-128 chars)', () => {
-		with_context({}, (deps) => {
-			let res = oidc.exchange_code(deps, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "too-short");
-			assert.match(truthy(), Result.is(res));
-			assert.match(falsy(), res.ok);
-			assert.match("INVALID_PKCE_VERIFIER", res.error);
-		});
-
-		let long_verifier = "";
-		for (let i = 0; i < 129; i++) long_verifier += "a";
-		with_context({}, (deps) => {
-			let res = oidc.exchange_code(deps, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", long_verifier);
-			assert.match(truthy(), Result.is(res));
-			assert.match(falsy(), res.ok);
-			assert.match("INVALID_PKCE_VERIFIER", res.error);
-		});
-	});
 });

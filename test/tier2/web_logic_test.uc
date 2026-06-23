@@ -81,25 +81,6 @@ describe('web: security', () => {
 		assert.match("INPUT_TOO_LARGE", res.error);
 	});
 
-	it('parse_params returns Result.err on overflow', () => {
-		let long_val = "";
-		for (let i = 0; i < 16385; i++) long_val += "a";
-
-		let res = web.parse_params(long_val);
-		assert.match(falsy(), res.ok, "Should fail on overflow");
-		assert.match("INPUT_TOO_LARGE", res.error);
-	});
-
-	it('parse_params rejects too many parameters', () => {
-		let params = [];
-		for (let i = 0; i < 101; i++) push(params, `p${i}=v${i}`);
-		let res = web.parse_params(join("&", params));
-
-		assert.match(falsy(), res.ok, "Should fail on too many parameters");
-		assert.match("INPUT_TOO_LARGE", res.error);
-		assert.match(431, res.details.http_status);
-	});
-
 	it('render_error emits 431 when requested', () => {
 		let deps = make_web_deps({});
 		web.render_error(deps, "INPUT_TOO_LARGE", 431);

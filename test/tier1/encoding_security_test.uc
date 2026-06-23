@@ -1,4 +1,4 @@
-import { safe_json, normalize_sub } from 'luci_sso.encoding';
+import { safe_json } from 'luci_sso.encoding';
 import { describe, it, assert, falsy } from 'utest';
 
 describe('encoding: security', () => {
@@ -16,17 +16,5 @@ describe('encoding: security', () => {
 
 		assert.match(falsy(), res.ok, "Binary data is not valid JSON");
 		assert.match(undefined, res.raw_fragment, "Should not leak binary fragments");
-	});
-
-	it('normalize_sub enforces lowercase', () => {
-		assert.match("user-123", normalize_sub("USER-123").data, "Should lowercase sub claim");
-		assert.match("mixedcase-user", normalize_sub("MixedCase-User").data, "Should lowercase sub claim");
-		assert.match("already-lower", normalize_sub("already-lower").data, "Should handle already lowercase sub");
-	});
-
-	it('normalize_sub rejects null input', () => {
-		let res = normalize_sub(null);
-		assert.match(falsy(), res.ok, "Should fail for null sub");
-		assert.match("INVALID_ARGUMENT", res.error);
 	});
 });

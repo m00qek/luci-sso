@@ -1,23 +1,22 @@
-import { describe, it, assert, falsy, mock } from 'utest';
+import { describe, it, assert, falsy } from 'utest';
+import { with_context } from 'context';
 import * as session from 'luci_sso.session';
 
 const FIXED_NOW = 1516239022;
 
-function make_deps(fs) {
-	return { fs, log: () => null, clock: { time: () => FIXED_NOW, sleep: () => null } };
-}
-
 describe('session: verify_state', () => {
 	it('rejects handshake with exp=0 as expired', () => {
-		mock.inject('fs', {}, (fs) => {
-			let deps = make_deps(fs);
+		with_context({
+			fs:    {},
+			clock: { data: { now: FIXED_NOW } }
+		}, (deps) => {
 			let s_res = session.create_state(deps);
 			let handle = s_res.data.token;
 			let path = `/var/run/luci-sso/handshake_${handle}.json`;
 
-			let data = json(fs.readfile(path));
+			let data = json(deps.fs.readfile(path));
 			data.exp = 0;
-			fs.writefile(path, sprintf("%J", data));
+			deps.fs.writefile(path, sprintf("%J", data));
 
 			let res = session.verify_state(deps, handle, 300);
 			assert.match(falsy(), res.ok, "Should fail verification");
@@ -26,15 +25,17 @@ describe('session: verify_state', () => {
 	});
 
 	it('rejects handshake with missing exp as corrupted', () => {
-		mock.inject('fs', {}, (fs) => {
-			let deps = make_deps(fs);
+		with_context({
+			fs:    {},
+			clock: { data: { now: FIXED_NOW } }
+		}, (deps) => {
 			let s_res = session.create_state(deps);
 			let handle = s_res.data.token;
 			let path = `/var/run/luci-sso/handshake_${handle}.json`;
 
-			let data = json(fs.readfile(path));
+			let data = json(deps.fs.readfile(path));
 			delete data.exp;
-			fs.writefile(path, sprintf("%J", data));
+			deps.fs.writefile(path, sprintf("%J", data));
 
 			let res = session.verify_state(deps, handle, 300);
 			assert.match(falsy(), res.ok, "Should fail verification");
@@ -43,15 +44,17 @@ describe('session: verify_state', () => {
 	});
 
 	it('rejects handshake with missing iat as corrupted', () => {
-		mock.inject('fs', {}, (fs) => {
-			let deps = make_deps(fs);
+		with_context({
+			fs:    {},
+			clock: { data: { now: FIXED_NOW } }
+		}, (deps) => {
 			let s_res = session.create_state(deps);
 			let handle = s_res.data.token;
 			let path = `/var/run/luci-sso/handshake_${handle}.json`;
 
-			let data = json(fs.readfile(path));
+			let data = json(deps.fs.readfile(path));
 			delete data.iat;
-			fs.writefile(path, sprintf("%J", data));
+			deps.fs.writefile(path, sprintf("%J", data));
 
 			let res = session.verify_state(deps, handle, 300);
 			assert.match(falsy(), res.ok, "Should fail verification");
