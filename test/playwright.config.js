@@ -5,7 +5,7 @@ module.exports = defineConfig({
   fullyParallel: false,
   retries: 0,
   workers: 1,
-  reporter: [['./reporter.js']],
+  reporter: [['list']],
   use: {
     baseURL: process.env.BASE_URL,
     ignoreHTTPSErrors: false,
@@ -17,7 +17,7 @@ module.exports = defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { 
+      use: {
         ...devices['Desktop Chrome'],
         launchOptions: {
           executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,

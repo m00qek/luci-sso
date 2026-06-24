@@ -42,8 +42,7 @@ services:
       - ./base-startup.sh:/usr/local/bin/base-startup.sh:ro
       - ../test/e2e:/app/tests:ro
       - ../files/www/luci-static/resources/luci-sso-login.js:/app/luci-sso-login.js:ro
-      - ./services/browser/playwright.config.js:/app/playwright.config.js:ro
-      - ./services/browser/reporter.js:/app/reporter.js:ro
+      - ../test/playwright.config.js:/app/playwright.config.js:ro
     labels:
       cert.fqdn: "${FQDN_BROWSER}"
     depends_on:
