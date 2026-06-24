@@ -3,6 +3,7 @@ return {
     lib_paths: [
         "/usr/lib/ucode",
         "/usr/share/luci-sso/test",
+        "/usr/share/luci-sso/test/unit",
     ],
     mocks: {
         fs:          null,

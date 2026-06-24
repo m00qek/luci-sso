@@ -59,8 +59,8 @@ define Build/Prepare
 endef
 
 define Package/$(PKG_NAME)/install
-	$(INSTALL_DIR) $(1)/usr/share/ucode/luci_sso
-	$(CP) ./src/* $(1)/usr/share/ucode/luci_sso/
+	$(INSTALL_DIR) $(1)/usr/share/ucode
+	$(CP) ./src/luci_sso $(1)/usr/share/ucode/
 	$(INSTALL_DIR) $(1)/etc/config
 	$(CP) ./files/etc/config/luci-sso $(1)/etc/config/luci-sso
 	$(INSTALL_DIR) $(1)/etc/luci-sso
