@@ -1,11 +1,9 @@
-import { describe, it, assert, contains } from 'utest';
+import { describe, it, assert, contains, mock } from 'utest';
 import * as http_client from 'luci_sso.components.http_client';
 
 const URL = 'https://example.com/api';
 
 /**
- * Builds a matched (uclient, uloop, fs) triple for a given scenario.
- *
  * behavior keys:
  *   alloc_fail  – uclient.new() returns null
  *   ssl_init    – false → ssl_init() returns false
@@ -14,79 +12,65 @@ const URL = 'https://example.com/api';
  *   status      – HTTP status code (default 200)
  *   body        – response body string (default '')
  *   invalid_data – true → con.read() returns an integer (triggers INVALID_DATA_TYPE)
- *   net_error   – string code passed to the error callback
- *   fs_lsdir    – override for fs.lsdir (default: () => null)
- *   fs_access   – override for fs.access (default: () => false)
+ *   net_error   – error code passed to the error callback
+ *   fs_lsdir    – behavior fn for fs.lsdir
+ *   fs_access   – behavior fn for fs.access
  */
-function make_suite(behavior) {
+function with_http_suite(behavior, cb) {
 	behavior = behavior || {};
+	let ssl_opts_captured = null;
 
-	let captured_cb = null;
-	let ssl_opts    = null;
-
-	let read_calls = 0;
-	let body_str   = (behavior.body != null) ? behavior.body : '';
-	let chunks     = length(body_str) > 0 ? [body_str] : [];
-
-	let con = {
-		ssl_init:    (opts) => { ssl_opts = opts; return behavior.ssl_init !== false; },
-		set_timeout: () => null,
-		connect:     () => behavior.connect  !== false,
-		request:     () => behavior.request  !== false,
-		get_headers: () => behavior.headers  || {},
-		status:      () => ({ status: behavior.status || 200 }),
-		disconnect:  () => null,
-		read: () => {
-			if (behavior.invalid_data && read_calls === 0) { read_calls++; return 42; }
-			return read_calls < length(chunks) ? chunks[read_calls++] : null;
-		},
+	let uclient_beh = {
+		ssl_init: (opts) => { ssl_opts_captured = opts; return behavior.ssl_init !== false; },
 	};
+	if (behavior.connect === false) uclient_beh.connect = () => false;
+	if (behavior.request === false) uclient_beh.request = () => false;
+	if (behavior.alloc_fail)       uclient_beh['new']  = () => null;
+	if (behavior.invalid_data) {
+		let first = true;
+		uclient_beh.read = () => { if (first) { first = false; return 42; } return null; };
+	}
 
-	let uloop = {
-		init:  () => null,
-		timer: () => null,
-		end:   () => null,
-		run: () => {
-			if (!captured_cb) return;
-			if (behavior.net_error) {
-				captured_cb.error(null, behavior.net_error);
-			} else {
-				captured_cb.header_done();
-				captured_cb.data_read();
-				captured_cb.data_eof();
-			}
-		},
-	};
-
-	let uclient = {
-		new: (url, null_, callbacks) => {
-			captured_cb = callbacks;
-			return behavior.alloc_fail ? null : con;
+	let uclient_data = {};
+	if (!behavior.alloc_fail) {
+		if (behavior.net_error) {
+			uclient_data[URL] = { error: behavior.net_error, body: null };
+		} else {
+			uclient_data[URL] = {
+				status: behavior.status || 200,
+				body:   (behavior.body != null) ? behavior.body : '',
+			};
 		}
-	};
+	}
 
-	let fs = {
-		lsdir:  behavior.fs_lsdir  || (() => null),
-		access: behavior.fs_access || (() => false),
-	};
+	let fs_beh = {};
+	if (behavior.fs_lsdir)  fs_beh.lsdir  = behavior.fs_lsdir;
+	if (behavior.fs_access) fs_beh.access = behavior.fs_access;
 
-	return {
-		client:   http_client.create(uclient, uloop, fs),
-		ssl_opts: () => ssl_opts,
-	};
+	mock.inject_all({
+		uclient: { data: uclient_data, behavior: uclient_beh },
+		uloop:   {},
+		fs:      { behavior: fs_beh },
+	}, (deps) => {
+		cb(http_client.create(deps.uclient, deps.uloop, deps.fs), () => ssl_opts_captured);
+	});
 }
 
 // ─── HTTPS enforcement ────────────────────────────────────────────────────────
 
 describe('components.http_client: HTTPS enforcement', () => {
-	let s = make_suite();
-
 	it('get returns HTTPS_REQUIRED for http:// URL', () => {
-		assert.match(contains({ ok: false, error: 'HTTPS_REQUIRED' }), s.client.get('http://example.com/api', {}));
+		with_http_suite({}, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTPS_REQUIRED' }),
+				client.get('http://example.com/api', {}));
+		});
 	});
 
 	it('post returns HTTPS_REQUIRED for http:// URL', () => {
-		assert.match(contains({ ok: false, error: 'HTTPS_REQUIRED' }), s.client.post('http://example.com/api', {}));
+		with_http_suite({}, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTPS_REQUIRED' }),
+				client.post('http://example.com/api', {}));
+		});
 	});
 });
 
@@ -94,23 +78,31 @@ describe('components.http_client: HTTPS enforcement', () => {
 
 describe('components.http_client: connection failures', () => {
 	it('returns HTTP_REQUEST_FAILED when uclient allocation fails', () => {
-		assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
-			make_suite({ alloc_fail: true }).client.get(URL, {}));
+		with_http_suite({ alloc_fail: true }, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
+				client.get(URL, {}));
+		});
 	});
 
 	it('returns HTTP_REQUEST_FAILED when ssl_init fails', () => {
-		assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
-			make_suite({ ssl_init: false }).client.get(URL, {}));
+		with_http_suite({ ssl_init: false }, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
+				client.get(URL, {}));
+		});
 	});
 
 	it('returns HTTP_REQUEST_FAILED when connect fails', () => {
-		assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
-			make_suite({ connect: false }).client.get(URL, {}));
+		with_http_suite({ connect: false }, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
+				client.get(URL, {}));
+		});
 	});
 
 	it('returns HTTP_REQUEST_FAILED when request fails', () => {
-		assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
-			make_suite({ request: false }).client.get(URL, {}));
+		with_http_suite({ request: false }, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
+				client.get(URL, {}));
+		});
 	});
 });
 
@@ -118,13 +110,17 @@ describe('components.http_client: connection failures', () => {
 
 describe('components.http_client: successful requests', () => {
 	it('get returns ok with status and body', () => {
-		let res = make_suite({ status: 200, body: '{"ok":true}' }).client.get(URL, {});
-		assert.match(contains({ ok: true, data: { status: 200, body: '{"ok":true}' } }), res);
+		with_http_suite({ status: 200, body: '{"ok":true}' }, (client) => {
+			assert.match(contains({ ok: true, data: { status: 200, body: '{"ok":true}' } }),
+				client.get(URL, {}));
+		});
 	});
 
 	it('post returns ok with status and body', () => {
-		let res = make_suite({ status: 201, body: 'created' }).client.post(URL, { body: 'payload' });
-		assert.match(contains({ ok: true, data: { status: 201, body: 'created' } }), res);
+		with_http_suite({ status: 201, body: 'created' }, (client) => {
+			assert.match(contains({ ok: true, data: { status: 201, body: 'created' } }),
+				client.post(URL, { body: 'payload' }));
+		});
 	});
 });
 
@@ -132,21 +128,27 @@ describe('components.http_client: successful requests', () => {
 
 describe('components.http_client: error handling', () => {
 	it('returns HTTP_REQUEST_FAILED on network error from uclient', () => {
-		assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
-			make_suite({ net_error: '5' }).client.get(URL, {}));
+		with_http_suite({ net_error: '5' }, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
+				client.get(URL, {}));
+		});
 	});
 
 	it('returns HTTP_REQUEST_FAILED when response body exceeds 256 KB', () => {
 		let s = 'a';
 		while (length(s) < 262145) s += s;
 		s = substr(s, 0, 262145);
-		assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
-			make_suite({ body: s }).client.get(URL, {}));
+		with_http_suite({ body: s }, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
+				client.get(URL, {}));
+		});
 	});
 
 	it('returns HTTP_REQUEST_FAILED for non-string data chunk from uclient', () => {
-		assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
-			make_suite({ invalid_data: true }).client.get(URL, {}));
+		with_http_suite({ invalid_data: true }, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED' }),
+				client.get(URL, {}));
+		});
 	});
 });
 
@@ -154,9 +156,12 @@ describe('components.http_client: error handling', () => {
 
 describe('components.http_client: CA file discovery', () => {
 	function ca_files_for(lsdir, access) {
-		let s = make_suite({ fs_lsdir: lsdir, fs_access: access });
-		s.client.get(URL, {});
-		return s.ssl_opts().ca_files;
+		let result = null;
+		with_http_suite({ fs_lsdir: lsdir, fs_access: access }, (client, ssl_opts) => {
+			client.get(URL, {});
+			result = ssl_opts().ca_files;
+		});
+		return result;
 	}
 
 	function includes(arr, val) {
@@ -184,8 +189,6 @@ describe('components.http_client: CA file discovery', () => {
 	});
 
 	it('deduplicates a file that appears in both the directory listing and well-known paths', () => {
-		// /etc/ssl/certs/ca-certificates.crt is a well-known path; if lsdir also returns it
-		// the map must not add it twice.
 		let files = ca_files_for(
 			() => ['ca-certificates.crt'],
 			(path) => path === '/etc/ssl/certs/ca-certificates.crt'
