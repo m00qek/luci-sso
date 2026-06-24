@@ -1,4 +1,4 @@
-import { describe, it, assert, contains, mock } from 'utest';
+import { describe, it, prop, gen, assert, contains, mock } from 'utest';
 import * as token from 'luci_sso.session.token';
 import * as crypto from 'luci_sso.crypto';
 import * as common from 'luci_sso.session.common';
@@ -259,4 +259,23 @@ describe('session.token: verify', () => {
 			);
 		});
 	});
+});
+
+// ─── roundtrip PBT ───────────────────────────────────────────────────────────
+
+describe('session.token: create → verify roundtrip', () => {
+	prop('holds for any string sub, including special characters',
+		gen.string({ min_len: 1, max_len: 50 }),
+		(sub) => {
+			mock.inject_all(KEY_STATE, (injected) => {
+				let deps = { fs: injected.fs, clock: injected.clock, log: () => null };
+				let created = token.create(deps, { sub });
+				assert.match(contains({ ok: true }), created);
+				assert.match(
+					contains({ ok: true, data: { user: sub } }),
+					token.verify(deps, created.data, 0)
+				);
+			});
+		}
+	);
 });

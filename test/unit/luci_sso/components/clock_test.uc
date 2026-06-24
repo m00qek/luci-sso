@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, prop, gen, assert } from 'utest';
 import * as clock from 'luci_sso.components.clock';
 
 function make_uloop() {
@@ -62,6 +62,14 @@ describe('components.clock: sleep() — valid inputs', () => {
 		clock.create(ul).sleep(30);
 		assert.match(30000, ul.timer_ms());
 	});
+
+	prop('sleep(n) always passes n * 1000 ms to uloop.timer for any integer in [0, 30]',
+		gen.int(0, 30), (n) => {
+			let ul = make_uloop();
+			clock.create(ul).sleep(n);
+			assert.match(n * 1000, ul.timer_ms());
+		}
+	);
 });
 
 // ─── sleep() — CONTRACT_VIOLATION ────────────────────────────────────────────

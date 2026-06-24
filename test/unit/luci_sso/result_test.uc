@@ -1,4 +1,4 @@
-import { describe, it, assert } from 'utest';
+import { describe, it, prop, gen, assert } from 'utest';
 import * as Result from 'luci_sso.result';
 
 // ─── ok ──────────────────────────────────────────────────────────────────────
@@ -31,6 +31,10 @@ describe('result: ok', () => {
 	it('is recognised by Result.is()', () => {
 		assert.match(true, Result.is(Result.ok('x')));
 	});
+
+	prop('ok preserves any string payload exactly', gen.string({ max_len: 100 }), (s) => {
+		assert.match(s, Result.ok(s).data);
+	});
 });
 
 // ─── err ─────────────────────────────────────────────────────────────────────
@@ -58,6 +62,10 @@ describe('result: err', () => {
 
 	it('is recognised by Result.is()', () => {
 		assert.match(true, Result.is(Result.err('CODE')));
+	});
+
+	prop('err preserves any alphanumeric error code exactly', gen.alphanumeric({ min_len: 1, max_len: 30 }), (code) => {
+		assert.match(code, Result.err(code).error);
 	});
 });
 

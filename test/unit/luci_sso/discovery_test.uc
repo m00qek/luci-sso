@@ -54,4 +54,14 @@ describe('discovery: find_jwk', () => {
 			assert.match(contains({ ok: true, data: keys[0] }), discovery.find_jwk(keys, null));
 		}
 	);
+
+	// The complement: a kid absent from the list is never found.
+	// '!!!' contains characters gen.alphanumeric() never produces, so it can
+	// never collide with any generated kid.
+	prop('find_jwk never finds a kid that is absent from the list',
+		gen.array(gen.record({ kid: gen.alphanumeric({ min_len: 1, max_len: 10 }) }), { min_len: 0, max_len: 10 }),
+		(keys) => {
+			assert.match(contains({ ok: false }), discovery.find_jwk(keys, '!!!absent!!!'));
+		}
+	);
 });
