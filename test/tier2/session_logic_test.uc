@@ -1,5 +1,6 @@
 import { describe, it, assert, truthy, has_length, falsy, mock } from 'utest';
 import * as session from 'luci_sso.session';
+import * as native from 'luci_sso.native';
 
 const FIXED_NOW = 1516239022;
 
@@ -9,8 +10,8 @@ function make_clock(now) {
 
 describe('session: logic', () => {
 	it('handshake lifecycle (creation, validation, atomic consumption)', () => {
-		mock.inject_all({ fs: {}, native: {} }, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {} }, (injected) => {
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(FIXED_NOW) };
 
 			let state_res = session.create_state(deps);
 			assert.match(truthy(), state_res.ok);
@@ -31,8 +32,8 @@ describe('session: logic', () => {
 		let handle = "corrupted-handle";
 		let path = `/var/run/luci-sso/handshake_${handle}.json`;
 
-		mock.inject_all({ fs: { data: { [path]: "{ invalid json !!! }" } }, native: {} }, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: { data: { [path]: "{ invalid json !!! }" } } }, (injected) => {
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.verify_state(deps, handle, 300);
 			assert.match(falsy(), res.ok);
 			assert.match("STATE_CORRUPTED", res.error);
@@ -42,7 +43,7 @@ describe('session: logic', () => {
 	it('enforce clock tolerance boundaries', () => {
 		let now = FIXED_NOW;
 
-		mock.inject_all({ fs: {}, native: {} }, (injected) => {
+		mock.inject_all({ fs: {} }, (injected) => {
 			let handshake = {
 				state: "s",
 				nonce: "n",
@@ -53,7 +54,7 @@ describe('session: logic', () => {
 			let handle = "expired-token";
 			injected.fs.writefile(`/var/run/luci-sso/handshake_${handle}.json`, sprintf("%J", handshake));
 
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(now) };
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(now) };
 			let res = session.verify_state(deps, handle, 10);
 			assert.match(falsy(), res.ok);
 			assert.match("HANDSHAKE_EXPIRED", res.error);
@@ -61,8 +62,8 @@ describe('session: logic', () => {
 	});
 
 	it('reject malformed state handles', () => {
-		mock.inject_all({ fs: {}, native: {} }, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {} }, (injected) => {
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.verify_state(deps, "../evil", 300);
 			assert.match("MALFORMED_STATE_COOKIE", res.error);
 		});
@@ -78,9 +79,8 @@ describe('session: logic', () => {
 				data: { [`${path}.consumed`]: sprintf("%J", data) },
 				behavior: { rename: () => false }
 			},
-			native: {},
 		}, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.verify_state(deps, handle, 300);
 			assert.match(falsy(), res.ok, "Should NOT recover state from .consumed if rename failed (Strict One-Time Use)");
 			assert.match("STATE_NOT_FOUND", res.error);
@@ -145,9 +145,8 @@ describe('session: logic', () => {
 					})()
 				}
 			},
-			native: {},
 		}, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: log_fn, clock: make_clock(base_now) };
+			let deps = { fs: injected.fs, native, log: log_fn, clock: make_clock(base_now) };
 			let res = session.get_secret_key(deps);
 			assert.match(truthy(), res.ok, "Should succeed by self-healing the stale lock");
 			assert.match(has_length(32), res.data, "Should return a valid 32-byte key");
@@ -167,8 +166,8 @@ describe('session: logic', () => {
 	});
 
 	it('secret key persistence (atomic race resilience)', () => {
-		mock.inject_all({ fs: {}, native: {} }, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {} }, (injected) => {
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res1 = session.get_secret_key(deps);
 			let res2 = session.get_secret_key(deps);
 			assert.match(res2.data, res1.data);
@@ -232,8 +231,8 @@ describe('session: logic', () => {
 	});
 
 	it('explicit state consumption (cleanup)', () => {
-		mock.inject_all({ fs: {}, native: {} }, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {} }, (injected) => {
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let state_res = session.create_state(deps);
 			let handle = state_res.data.token;
 			let path = `/var/run/luci-sso/handshake_${handle}.json`;
@@ -246,8 +245,8 @@ describe('session: logic', () => {
 	});
 
 	it('atomic handshake state creation', () => {
-		mock.inject_all({ fs: {}, native: {} }, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {} }, (injected) => {
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.create_state(deps);
 			assert.match(truthy(), res.ok, `create_state failed: ${res.error}`);
 
@@ -301,9 +300,8 @@ describe('session: get_secret_key', () => {
 				data: { "/etc/luci-sso": "" },
 				behavior: { readfile: () => null, rename: () => false }
 			},
-			native: {},
 		}, (injected) => {
-			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
+			let deps = { fs: injected.fs, native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.get_secret_key(deps);
 			assert.match(falsy(), res.ok, "W1: get_secret_key MUST fail if atomic rename fails");
 			assert.match("SYSTEM_KEY_WRITE_FAILED", res.error, "W1: Expected error code for rename failure");

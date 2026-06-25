@@ -1,5 +1,6 @@
 import { describe, it, assert, truthy, mock } from 'utest';
 import * as session from 'luci_sso.session';
+import * as native from 'luci_sso.native';
 
 const LOCK_PATH = "/etc/luci-sso/secret.key.lock";
 const KEY_TMP_PATH = "/etc/luci-sso/secret.key.tmp";
@@ -26,8 +27,8 @@ function make_stale_lock_behavior() {
 
 describe('session: get_secret_key', () => {
 	it('reproduction of permanent lockout on stale lock', () => {
-		mock.inject_all({ fs: { behavior: make_stale_lock_behavior() }, native: {} }, (injected) => {
-			let res = session.get_secret_key({ fs: injected.fs, native: injected.native, log: () => null, clock: { time: () => NOW, sleep: () => null } });
+		mock.inject_all({ fs: { behavior: make_stale_lock_behavior() } }, (injected) => {
+			let res = session.get_secret_key({ fs: injected.fs, native, log: () => null, clock: { time: () => NOW, sleep: () => null } });
 			assert.match(truthy(), res.ok, "Should succeed with self-healing");
 			assert.match(32, length(res.data), "Should return a 32-byte key");
 		});
@@ -36,9 +37,9 @@ describe('session: get_secret_key', () => {
 	it('self-healing log and cleanup verification', () => {
 		let log_calls = [];
 
-		mock.inject_all({ fs: { behavior: make_stale_lock_behavior() }, native: {} }, (injected) => {
+		mock.inject_all({ fs: { behavior: make_stale_lock_behavior() } }, (injected) => {
 			let log = (level, msg) => push(log_calls, [level, msg]);
-			session.get_secret_key({ fs: injected.fs, native: injected.native, log, clock: { time: () => NOW, sleep: () => null } });
+			session.get_secret_key({ fs: injected.fs, native, log, clock: { time: () => NOW, sleep: () => null } });
 
 			let warn_found = false;
 			for (let e in log_calls) {

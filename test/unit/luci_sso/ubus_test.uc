@@ -1,6 +1,7 @@
 import { describe, it, assert, contains, mock, spy } from 'utest';
 import * as ubus_mod from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
+import * as native from 'luci_sso.native';
 
 const NOW     = 1700000000;
 const SID     = 'aabbccdd11223344aabbccdd11223344';
@@ -24,7 +25,7 @@ function build_deps(proxies) {
 	}
 	if (proxies.fs)     deps.fs     = proxies.fs;
 	if (proxies.clock)  deps.clock  = proxies.clock;
-	if (proxies.native) deps.native = proxies.native;
+	deps.native = proxies.native ?? native;
 	return deps;
 }
 
@@ -183,14 +184,14 @@ describe('ubus: reap_stale_tokens', () => {
 
 describe('ubus: register_token', () => {
 	it('returns INVALID_TOKEN for null', () => {
-		mock.inject_all({ fs: { strict: true }, native: {} }, (proxies) => {
+		mock.inject_all({ fs: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'INVALID_TOKEN' }),
 				ubus_mod.register_token(build_deps(proxies), null));
 		});
 	});
 
 	it('returns INVALID_TOKEN for a non-string', () => {
-		mock.inject_all({ fs: { strict: true }, native: {} }, (proxies) => {
+		mock.inject_all({ fs: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'INVALID_TOKEN' }),
 				ubus_mod.register_token(build_deps(proxies), 42));
 		});
@@ -198,14 +199,14 @@ describe('ubus: register_token', () => {
 
 	it('returns ok() for a new token (lock directory created successfully)', () => {
 		// Default fs proxy mkdir returns true
-		mock.inject_all({ fs: { strict: true }, native: {} }, (proxies) => {
+		mock.inject_all({ fs: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: true }),
 				ubus_mod.register_token(build_deps(proxies), 'access-token'));
 		});
 	});
 
 	it('returns TOKEN_REPLAYED when the lock directory already exists', () => {
-		mock.inject_all({ fs: { strict: true, behavior: { mkdir: () => false } }, native: {} }, (proxies) => {
+		mock.inject_all({ fs: { strict: true, behavior: { mkdir: () => false } } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'TOKEN_REPLAYED' }),
 				ubus_mod.register_token(build_deps(proxies), 'access-token'));
 		});
@@ -233,7 +234,7 @@ describe('ubus: create_passwordless_session — guards', () => {
 	});
 
 	it('returns UBUS_SESSION_FAILED when session creation fails', () => {
-		mock.inject_all({ ubus: { strict: true, data: { "session:create": () => null } }, fs: { strict: true }, native: {} }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true, data: { "session:create": () => null } }, fs: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }),
 				ubus_mod.create_passwordless_session(
 					build_deps(proxies), 'root', PERMS_USER, 'u@e.com', 'at', 'rt', 'it'
@@ -245,7 +246,6 @@ describe('ubus: create_passwordless_session — guards', () => {
 		mock.inject_all({
 			ubus:   { strict: true, data: { "session:create": {} } },
 			fs:     { strict: true },
-			native: {},
 		}, (proxies) => {
 			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }),
 				ubus_mod.create_passwordless_session(
@@ -259,7 +259,6 @@ describe('ubus: create_passwordless_session — non-admin', () => {
 	it('returns ok(sid) for a user with specific permissions', () => {
 		mock.inject_all({
 			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:set": {} } },
-			native: {},
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: SID }),
 				ubus_mod.create_passwordless_session(
@@ -274,7 +273,6 @@ describe('ubus: create_passwordless_session — admin wildcard', () => {
 		mock.inject_all({
 			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:set": {} } },
 			fs:     { strict: true, behavior: { lsdir: () => [] } },
-			native: {},
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: SID }),
 				ubus_mod.create_passwordless_session(
@@ -287,7 +285,6 @@ describe('ubus: create_passwordless_session — admin wildcard', () => {
 		mock.inject_all({
 			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:set": {} } },
 			fs:     { strict: true, behavior: { lsdir: () => [] } },
-			native: {},
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: SID }),
 				ubus_mod.create_passwordless_session(
@@ -300,7 +297,6 @@ describe('ubus: create_passwordless_session — admin wildcard', () => {
 		mock.inject_all({
 			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:destroy": {} } },
 			fs:     { strict: true, behavior: { lsdir: () => null } },
-			native: {},
 		}, (proxies) => {
 			let deps = build_deps(proxies);
 			let res = ubus_mod.create_passwordless_session(
@@ -343,7 +339,6 @@ describe('ubus: _grant_all_luci_acls', () => {
 					readfile: readfile_fn || (() => null),
 				},
 			},
-			native: {},
 		}, (proxies) => {
 			let deps = build_deps(proxies);
 			ubus_mod.create_passwordless_session(

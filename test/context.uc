@@ -1,6 +1,7 @@
 'use strict';
 import { mock } from 'utest';
 import * as Result from 'luci_sso.result';
+import * as real_native from 'luci_sso.native';
 
 function build_deps(proxies) {
 	let deps = {};
@@ -58,10 +59,16 @@ function do_inject(cfg, remaining, proxies, cb) {
 		};
 		inject_state = { ...state, strict: true, data };
 	} else if (name === 'native') {
-		// Do not force strict on native: unmocked calls fall through to the real
-		// C extension via the proxy fallback. Tests that need CSPRNG failure can
-		// pass an explicit behavior override in their cfg.
-		inject_state = state;
+		if (state.behavior) {
+			// Behavior override requested (e.g. CSPRNG failure): go through the proxy.
+			inject_state = state;
+		} else {
+			// No override needed: inject the real C extension directly so tier tests
+			// exercise real crypto without relying on the proxy's real fallthrough.
+			proxies[name] = real_native;
+			do_inject(cfg, rest, proxies, cb);
+			return;
+		}
 	} else {
 		inject_state = { ...state, strict: true };
 	}
