@@ -1,4 +1,4 @@
-import { describe, it, assert, mock } from 'utest';
+import { describe, it, assert, mock, spy } from 'utest';
 import * as common from 'luci_sso.session.common';
 
 // ─── constants ───────────────────────────────────────────────────────────────
@@ -33,14 +33,14 @@ describe('session.common: constants', () => {
 
 describe('session.common: ensure_handshake_dir', () => {
 	it('calls mkdir with HANDSHAKE_DIR', () => {
-		mock.inject_all({ fs: {} }, (injected) => {
+		mock.inject_all({ fs: { strict: true } }, (injected) => {
 			common.ensure_handshake_dir({ fs: injected.fs });
-			assert.match(common.HANDSHAKE_DIR, injected.fs.__utest__.calls.mkdir[0][0]);
+			assert.match(common.HANDSHAKE_DIR, spy(injected.fs).calls.mkdir[0][0]);
 		});
 	});
 
 	it('does not throw when mkdir throws', () => {
-		mock.inject_all({ fs: { behavior: { mkdir: () => { die('EPERM'); } } } }, (injected) => {
+		mock.inject_all({ fs: { strict: true, behavior: { mkdir: () => { die('EPERM'); } } } }, (injected) => {
 			common.ensure_handshake_dir({ fs: injected.fs });
 		});
 	});

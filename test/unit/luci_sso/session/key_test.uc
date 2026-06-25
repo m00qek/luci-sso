@@ -28,7 +28,7 @@ describe('session.key: get — key exists on disk', () => {
 	it('returns the key when the file is non-empty', () => {
 		let data = {};
 		data[common.SECRET_KEY_PATH] = SECRET;
-		mock.inject_all({ fs: { data }, clock: { data: { now: NOW } } }, (injected) => {
+		mock.inject_all({ fs: { strict: true, data }, clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			assert.match(contains({ ok: true, data: SECRET }), key.get(make_deps(injected)));
 		});
 	});
@@ -40,14 +40,14 @@ describe('session.key: get — lock acquired', () => {
 	afterEach(() => { crypto.set_native(null); });
 
 	it('generates and returns a 32-byte key when the file is absent', () => {
-		mock.inject_all({ fs: { data: {} }, clock: { data: { now: NOW } } }, (injected) => {
+		mock.inject_all({ fs: { strict: true, data: {} }, clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			let res = key.get(make_deps(injected));
 			assert.match(contains({ ok: true, data: has_length(32) }), res);
 		});
 	});
 
 	it('persists the generated key to SECRET_KEY_PATH', () => {
-		mock.inject_all({ fs: { data: {} }, clock: { data: { now: NOW } } }, (injected) => {
+		mock.inject_all({ fs: { strict: true, data: {} }, clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			key.get(make_deps(injected));
 			let stored = injected.fs.readfile(common.SECRET_KEY_PATH);
 			assert.match(32, length(stored));
@@ -56,15 +56,15 @@ describe('session.key: get — lock acquired', () => {
 
 	it('returns CRYPTO_INIT_FAILED when CSPRNG fails', () => {
 		crypto.set_native(broken_random);
-		mock.inject_all({ fs: { data: {} }, clock: { data: { now: NOW } } }, (injected) => {
+		mock.inject_all({ fs: { strict: true, data: {} }, clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			assert.match(contains({ ok: false, error: 'CRYPTO_INIT_FAILED' }), key.get(make_deps(injected)));
 		});
 	});
 
 	it('returns SYSTEM_KEY_WRITE_FAILED when writefile fails', () => {
 		mock.inject_all({
-			fs: { data: {}, behavior: { writefile: () => false } },
-			clock: { data: { now: NOW } }
+			fs: { strict: true, data: {}, behavior: { writefile: () => false } },
+			clock: { strict: true, data: { now: NOW } }
 		}, (injected) => {
 			assert.match(contains({ ok: false, error: 'SYSTEM_KEY_WRITE_FAILED' }), key.get(make_deps(injected)));
 		});
@@ -72,8 +72,8 @@ describe('session.key: get — lock acquired', () => {
 
 	it('returns SYSTEM_KEY_WRITE_FAILED when rename fails', () => {
 		mock.inject_all({
-			fs: { data: {}, behavior: { rename: () => false } },
-			clock: { data: { now: NOW } }
+			fs: { strict: true, data: {}, behavior: { rename: () => false } },
+			clock: { strict: true, data: { now: NOW } }
 		}, (injected) => {
 			assert.match(contains({ ok: false, error: 'SYSTEM_KEY_WRITE_FAILED' }), key.get(make_deps(injected)));
 		});
@@ -88,8 +88,8 @@ describe('session.key: get — lock contention', () => {
 		let data = {};
 		data[LOCK] = '';
 		mock.inject_all({
-			fs: { data, behavior: { stat: () => ({ mtime: NOW - 31, size: 0 }) } },
-			clock: { data: { now: NOW } }
+			fs: { strict: true, data, behavior: { stat: () => ({ mtime: NOW - 31, size: 0 }) } },
+			clock: { strict: true, data: { now: NOW } }
 		}, (injected) => {
 			assert.match(contains({ ok: true, data: has_length(32) }), key.get(make_deps(injected)));
 		});
@@ -101,6 +101,7 @@ describe('session.key: get — lock contention', () => {
 		let read_calls = 0;
 		mock.inject_all({
 			fs: {
+				strict: true,
 				data: {},
 				behavior: {
 					mkdir:    () => false,
@@ -112,7 +113,7 @@ describe('session.key: get — lock contention', () => {
 					}
 				}
 			},
-			clock: { data: { now: NOW } }
+			clock: { strict: true, data: { now: NOW } }
 		}, (injected) => {
 			assert.match(contains({ ok: true, data: SECRET }), key.get(make_deps(injected)));
 		});
@@ -121,10 +122,11 @@ describe('session.key: get — lock contention', () => {
 	it('returns SYSTEM_KEY_UNAVAILABLE after all retries are exhausted', () => {
 		mock.inject_all({
 			fs: {
+				strict: true,
 				data: { [common.SECRET_KEY_PATH]: '' },
-				behavior: { mkdir: () => false }
+				behavior: { mkdir: () => false, stat: () => null }
 			},
-			clock: { data: { now: NOW } }
+			clock: { strict: true, data: { now: NOW } }
 		}, (injected) => {
 			assert.match(contains({ ok: false, error: 'SYSTEM_KEY_UNAVAILABLE' }), key.get(make_deps(injected)));
 		});

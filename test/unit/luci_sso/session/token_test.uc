@@ -8,14 +8,15 @@ const NOW    = 1700000000;
 
 // key.get succeeds: secret file pre-seeded in the in-memory fs
 const KEY_STATE = {
-	fs:    { data: { '/etc/luci-sso/secret.key': SECRET } },
-	clock: { data: { now: NOW } },
+	fs:    { strict: true, data: { '/etc/luci-sso/secret.key': SECRET } },
+	clock: { strict: true, data: { now: NOW } },
 };
 
 // key.get fails: empty key file + lock held. mkdir is the only op with no data equivalent.
+// stat: () => null prevents the strict die on fs.stat(lock_path) which is outside try/catch.
 const KEY_FAIL_STATE = {
-	fs:    { data: { '/etc/luci-sso/secret.key': '' }, behavior: { mkdir: () => false } },
-	clock: { data: { now: NOW } },
+	fs:    { strict: true, data: { '/etc/luci-sso/secret.key': '' }, behavior: { mkdir: () => false, stat: () => null } },
+	clock: { strict: true, data: { now: NOW } },
 };
 
 // ─── create ──────────────────────────────────────────────────────────────────

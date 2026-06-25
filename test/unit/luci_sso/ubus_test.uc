@@ -53,29 +53,28 @@ describe('ubus: get_session', () => {
 	});
 
 	it('returns INVALID_SID for null', () => {
-		mock.inject_all({ ubus: {} }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'INVALID_SID' }),
 				ubus_mod.get_session(build_deps(proxies), null));
 		});
 	});
 
 	it('returns INVALID_SID for a non-string', () => {
-		mock.inject_all({ ubus: {} }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'INVALID_SID' }),
 				ubus_mod.get_session(build_deps(proxies), 42));
 		});
 	});
 
 	it('returns SESSION_NOT_FOUND when the ubus call fails', () => {
-		// No "session:get" data → proxy returns null → Result.err → SESSION_NOT_FOUND
-		mock.inject_all({ ubus: {} }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true, data: { "session:get": () => null } } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'SESSION_NOT_FOUND' }),
 				ubus_mod.get_session(build_deps(proxies), SID));
 		});
 	});
 
 	it('returns SESSION_NOT_FOUND when the response values field is not an object', () => {
-		mock.inject_all({ ubus: { data: { "session:get": { values: 'string' } } } }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true, data: { "session:get": { values: 'string' } } } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'SESSION_NOT_FOUND' }),
 				ubus_mod.get_session(build_deps(proxies), SID));
 		});
@@ -83,7 +82,7 @@ describe('ubus: get_session', () => {
 
 	it('returns ok(values) on success', () => {
 		let vals = { username: 'root', oidc_user: 'alice@example.com' };
-		mock.inject_all({ ubus: { data: { "session:get": { values: vals } } } }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true, data: { "session:get": { values: vals } } } }, (proxies) => {
 			assert.match(
 				contains({ ok: true, data: { username: 'root', oidc_user: 'alice@example.com' } }),
 				ubus_mod.get_session(build_deps(proxies), SID));
@@ -100,22 +99,21 @@ describe('ubus: destroy_session', () => {
 	});
 
 	it('returns INVALID_SID for null', () => {
-		mock.inject_all({ ubus: {} }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'INVALID_SID' }),
 				ubus_mod.destroy_session(build_deps(proxies), null));
 		});
 	});
 
 	it('returns UBUS_ERROR when the destroy call fails', () => {
-		// No "session:destroy" data → proxy returns null → Result.err → UBUS_ERROR
-		mock.inject_all({ ubus: {} }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true, data: { "session:destroy": () => null } } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'UBUS_ERROR' }),
 				ubus_mod.destroy_session(build_deps(proxies), SID));
 		});
 	});
 
 	it('returns ok() on success', () => {
-		mock.inject_all({ ubus: { data: { "session:destroy": {} } } }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true, data: { "session:destroy": {} } } }, (proxies) => {
 			assert.match(contains({ ok: true }),
 				ubus_mod.destroy_session(build_deps(proxies), SID));
 		});
@@ -127,8 +125,8 @@ describe('ubus: destroy_session', () => {
 describe('ubus: reap_stale_tokens', () => {
 	it('returns ok(0) when the token directory does not exist', () => {
 		mock.inject_all({
-			fs:    { behavior: { lsdir: () => null } },
-			clock: { data: { now: NOW } },
+			fs:    { strict: true, behavior: { lsdir: () => null } },
+			clock: { strict: true, data: { now: NOW } },
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: 0 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
 		});
@@ -136,8 +134,8 @@ describe('ubus: reap_stale_tokens', () => {
 
 	it('returns ok(0) when the token directory is empty', () => {
 		mock.inject_all({
-			fs:    { behavior: { lsdir: () => [] } },
-			clock: { data: { now: NOW } },
+			fs:    { strict: true, behavior: { lsdir: () => [] } },
+			clock: { strict: true, data: { now: NOW } },
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: 0 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
 		});
@@ -146,13 +144,14 @@ describe('ubus: reap_stale_tokens', () => {
 	it('does not reap files younger than 24 hours', () => {
 		mock.inject_all({
 			fs: {
+				strict: true,
 				behavior: {
 					lsdir:  () => ['tok1'],
 					stat:   () => ({ mtime: NOW - 86399 }),
 					unlink: () => null,
 				},
 			},
-			clock: { data: { now: NOW } },
+			clock: { strict: true, data: { now: NOW } },
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: 0 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
 		});
@@ -161,13 +160,14 @@ describe('ubus: reap_stale_tokens', () => {
 	it('reaps files older than 24 hours', () => {
 		mock.inject_all({
 			fs: {
+				strict: true,
 				behavior: {
 					lsdir:  () => ['tok1', 'tok2'],
 					stat:   () => ({ mtime: NOW - 86401 }),
 					unlink: () => null,
 				},
 			},
-			clock: { data: { now: NOW } },
+			clock: { strict: true, data: { now: NOW } },
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: 2 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
 		});
@@ -176,13 +176,14 @@ describe('ubus: reap_stale_tokens', () => {
 	it('reaps only files past the threshold when ages are mixed', () => {
 		mock.inject_all({
 			fs: {
+				strict: true,
 				behavior: {
 					lsdir:  () => ['old', 'new'],
 					stat:   (path) => ({ mtime: path === TOK_DIR + '/old' ? NOW - 86401 : NOW - 100 }),
 					unlink: () => null,
 				},
 			},
-			clock: { data: { now: NOW } },
+			clock: { strict: true, data: { now: NOW } },
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: 1 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
 		});
@@ -193,14 +194,14 @@ describe('ubus: reap_stale_tokens', () => {
 
 describe('ubus: register_token', () => {
 	it('returns INVALID_TOKEN for null', () => {
-		mock.inject_all({ fs: {} }, (proxies) => {
+		mock.inject_all({ fs: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'INVALID_TOKEN' }),
 				ubus_mod.register_token(build_deps(proxies), null));
 		});
 	});
 
 	it('returns INVALID_TOKEN for a non-string', () => {
-		mock.inject_all({ fs: {} }, (proxies) => {
+		mock.inject_all({ fs: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'INVALID_TOKEN' }),
 				ubus_mod.register_token(build_deps(proxies), 42));
 		});
@@ -208,14 +209,14 @@ describe('ubus: register_token', () => {
 
 	it('returns ok() for a new token (lock directory created successfully)', () => {
 		// Default fs proxy mkdir returns true
-		mock.inject_all({ fs: {} }, (proxies) => {
+		mock.inject_all({ fs: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: true }),
 				ubus_mod.register_token(build_deps(proxies), 'access-token'));
 		});
 	});
 
 	it('returns TOKEN_REPLAYED when the lock directory already exists', () => {
-		mock.inject_all({ fs: { behavior: { mkdir: () => false } } }, (proxies) => {
+		mock.inject_all({ fs: { strict: true, behavior: { mkdir: () => false } } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'TOKEN_REPLAYED' }),
 				ubus_mod.register_token(build_deps(proxies), 'access-token'));
 		});
@@ -243,8 +244,7 @@ describe('ubus: create_passwordless_session — guards', () => {
 	});
 
 	it('returns UBUS_SESSION_FAILED when session creation fails', () => {
-		// No "session:create" data → proxy returns null → Result.err → UBUS_SESSION_FAILED
-		mock.inject_all({ ubus: {}, fs: {} }, (proxies) => {
+		mock.inject_all({ ubus: { strict: true, data: { "session:create": () => null } }, fs: { strict: true } }, (proxies) => {
 			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }),
 				ubus_mod.create_passwordless_session(
 					build_deps(proxies), 'root', PERMS_USER, 'u@e.com', 'at', 'rt', 'it'
@@ -254,8 +254,8 @@ describe('ubus: create_passwordless_session — guards', () => {
 
 	it('returns UBUS_SESSION_FAILED when the session response carries no sid', () => {
 		mock.inject_all({
-			ubus: { data: { "session:create": {} } },
-			fs:   {},
+			ubus: { strict: true, data: { "session:create": {} } },
+			fs:   { strict: true },
 		}, (proxies) => {
 			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }),
 				ubus_mod.create_passwordless_session(
@@ -268,7 +268,7 @@ describe('ubus: create_passwordless_session — guards', () => {
 describe('ubus: create_passwordless_session — non-admin', () => {
 	it('returns ok(sid) for a user with specific permissions', () => {
 		mock.inject_all({
-			ubus: { data: { "session:create": { ubus_rpc_session: SID } } },
+			ubus: { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:set": {} } },
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: SID }),
 				ubus_mod.create_passwordless_session(
@@ -281,8 +281,8 @@ describe('ubus: create_passwordless_session — non-admin', () => {
 describe('ubus: create_passwordless_session — admin wildcard', () => {
 	it('detects wildcard in read and grants full access', () => {
 		mock.inject_all({
-			ubus: { data: { "session:create": { ubus_rpc_session: SID } } },
-			fs:   { behavior: { lsdir: () => [] } },
+			ubus: { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:set": {} } },
+			fs:   { strict: true, behavior: { lsdir: () => [] } },
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: SID }),
 				ubus_mod.create_passwordless_session(
@@ -293,8 +293,8 @@ describe('ubus: create_passwordless_session — admin wildcard', () => {
 
 	it('detects wildcard in write and grants full access', () => {
 		mock.inject_all({
-			ubus: { data: { "session:create": { ubus_rpc_session: SID } } },
-			fs:   { behavior: { lsdir: () => [] } },
+			ubus: { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:set": {} } },
+			fs:   { strict: true, behavior: { lsdir: () => [] } },
 		}, (proxies) => {
 			assert.match(contains({ ok: true, data: SID }),
 				ubus_mod.create_passwordless_session(
@@ -305,8 +305,8 @@ describe('ubus: create_passwordless_session — admin wildcard', () => {
 
 	it('returns UBUS_SESSION_FAILED and destroys the session when ACL scan fails', () => {
 		mock.inject_all({
-			ubus: { data: { "session:create": { ubus_rpc_session: SID } } },
-			fs:   { behavior: { lsdir: () => null } },
+			ubus: { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:destroy": {} } },
+			fs:   { strict: true, behavior: { lsdir: () => null } },
 		}, (proxies) => {
 			let deps = build_deps(proxies);
 			let res = ubus_mod.create_passwordless_session(
@@ -325,7 +325,7 @@ describe('ubus: create_passwordless_session — CSPRNG failure', () => {
 	it('returns CRYPTO_INIT_FAILED when CSPRNG fails', () => {
 		crypto.set_native(broken_random);
 		mock.inject_all({
-			ubus: { data: { "session:create": { ubus_rpc_session: SID } } },
+			ubus: { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {} } },
 		}, (proxies) => {
 			assert.match(contains({ ok: false, error: 'CRYPTO_INIT_FAILED' }),
 				ubus_mod.create_passwordless_session(
@@ -343,8 +343,9 @@ describe('ubus: _grant_all_luci_acls', () => {
 	function acl_grants_for(lsdir_fn, readfile_fn) {
 		let grants = null;
 		mock.inject_all({
-			ubus: { data: { "session:create": { ubus_rpc_session: SID } } },
+			ubus: { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:set": {} } },
 			fs: {
+				strict: true,
 				behavior: {
 					lsdir:    lsdir_fn    || (() => []),
 					readfile: readfile_fn || (() => null),

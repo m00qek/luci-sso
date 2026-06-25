@@ -45,12 +45,12 @@ function with_http_suite(behavior, cb) {
 
 	let fs_beh = {};
 	if (behavior.fs_lsdir)  fs_beh.lsdir  = behavior.fs_lsdir;
-	if (behavior.fs_access) fs_beh.access = behavior.fs_access;
+	fs_beh.access = behavior.fs_access || (() => false);
 
 	mock.inject_all({
-		uclient: { data: uclient_data, behavior: uclient_beh },
-		uloop:   {},
-		fs:      { behavior: fs_beh },
+		uclient: { strict: true, data: uclient_data, behavior: uclient_beh },
+		uloop:   { strict: true },
+		fs:      { strict: true, behavior: fs_beh },
 	}, (deps) => {
 		cb(http_client.create(deps.uclient, deps.uloop, deps.fs), () => ssl_opts_captured);
 	});
