@@ -6,6 +6,7 @@ import * as ubus_mod    from 'ubus';
 import * as log         from 'log';
 import * as uloop       from 'uloop';
 import * as uclient     from 'uclient';
+import * as native      from 'luci_sso.native';
 import * as http_client from 'luci_sso.components.http_client';
 import * as clock_mod   from 'luci_sso.components.clock';
 import * as Result      from 'luci_sso.result';
@@ -23,7 +24,8 @@ export function create() {
 	let _conn = ubus_mod.connect();
 
 	return {
-		fs:    fs,
+		fs:     fs,
+		native: native,
 		http:  http_client.create(uclient, uloop, fs),
 		ubus:  {
 			call: (obj, method, args) => {
