@@ -1,4 +1,4 @@
-import { describe, it, afterEach, assert, contains, mock } from 'utest';
+import { describe, it, afterEach, assert, contains, mock, spy } from 'utest';
 import * as ubus_mod from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
 import * as crypto from 'luci_sso.crypto';
@@ -25,8 +25,8 @@ function build_deps(proxies) {
 	let deps = { log: () => null };
 	if (proxies.ubus) {
 		let conn = proxies.ubus.connect();
+		deps._ubus_conn = conn;
 		deps.ubus = {
-			__utest__: conn ? conn.__utest__ : null,
 			call: (obj, method, args) => {
 				let raw = conn.call(obj, method, args);
 				if (raw === null) return Result.err("UBUS_ERROR");
@@ -313,7 +313,7 @@ describe('ubus: create_passwordless_session — admin wildcard', () => {
 				deps, 'root', PERMS_ADMIN, 'a@e.com', 'at', 'rt', 'it'
 			);
 			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }), res);
-			let destroys = filter(deps.ubus.__utest__.calls.call, (c) => c[1] === 'destroy');
+			let destroys = filter(spy(deps._ubus_conn).calls.call, (c) => c[1] === 'destroy');
 			assert.match(1, length(destroys));
 		});
 	});
@@ -355,7 +355,7 @@ describe('ubus: _grant_all_luci_acls', () => {
 			ubus_mod.create_passwordless_session(
 				deps, 'root', PERMS_ADMIN, 'a@e.com', 'at', 'rt', 'it'
 			);
-			grants = filter(deps.ubus.__utest__.calls.call,
+			grants = filter(spy(deps._ubus_conn).calls.call,
 				(c) => c[1] === 'grant' && c[2].scope === 'access-group');
 		});
 		return grants;

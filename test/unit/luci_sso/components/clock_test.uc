@@ -1,4 +1,4 @@
-import { describe, it, prop, gen, assert, mock } from 'utest';
+import { describe, it, prop, gen, assert, mock, spy } from 'utest';
 import * as clock from 'luci_sso.components.clock';
 
 // ─── time() ──────────────────────────────────────────────────────────────────
@@ -42,28 +42,28 @@ describe('components.clock: sleep() — valid inputs', () => {
 	it('passes seconds * 1000 as ms to uloop.timer', () => {
 		mock.inject_all({ uloop: {} }, (deps) => {
 			clock.create(deps.uloop).sleep(2);
-			assert.match(2000, deps.uloop.__utest__.calls.timer[0][0]);
+			assert.match(2000, spy(deps.uloop).calls.timer[0][0]);
 		});
 	});
 
 	it('accepts a double (fractional seconds) without throwing', () => {
 		mock.inject_all({ uloop: {} }, (deps) => {
 			clock.create(deps.uloop).sleep(0.5);
-			assert.match(1, length(deps.uloop.__utest__.calls.init));
+			assert.match(1, length(spy(deps.uloop).calls.init));
 		});
 	});
 
 	it('accepts 0 (lower boundary)', () => {
 		mock.inject_all({ uloop: {} }, (deps) => {
 			clock.create(deps.uloop).sleep(0);
-			assert.match(0, deps.uloop.__utest__.calls.timer[0][0]);
+			assert.match(0, spy(deps.uloop).calls.timer[0][0]);
 		});
 	});
 
 	it('accepts 30 (upper boundary)', () => {
 		mock.inject_all({ uloop: {} }, (deps) => {
 			clock.create(deps.uloop).sleep(30);
-			assert.match(30000, deps.uloop.__utest__.calls.timer[0][0]);
+			assert.match(30000, spy(deps.uloop).calls.timer[0][0]);
 		});
 	});
 
@@ -71,7 +71,7 @@ describe('components.clock: sleep() — valid inputs', () => {
 		gen.int(0, 30), (n) => {
 			mock.inject_all({ uloop: {} }, (deps) => {
 				clock.create(deps.uloop).sleep(n);
-				assert.match(n * 1000, deps.uloop.__utest__.calls.timer[0][0]);
+				assert.match(n * 1000, spy(deps.uloop).calls.timer[0][0]);
 			});
 		}
 	);
