@@ -1,5 +1,6 @@
 import { describe, it, assert, truthy, falsy } from 'utest';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import * as oidc from 'luci_sso.oidc';
 import * as encoding from 'luci_sso.encoding';
 import { with_context } from 'context';
@@ -198,7 +199,7 @@ describe('oidc: ID token', () => {
 	it('support multi-audience arrays', () => {
 		let keys = JWKS.keys;
 		let at = "mock-at";
-		let full_hash = crypto.hash_sha256(at).data;
+		let full_hash = crypto.hash_sha256(native, at).data;
 		let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 		let time = 1516239022;
 
@@ -226,7 +227,7 @@ describe('oidc: ID token', () => {
 	it('support AZP claim', () => {
 		let keys = JWKS.keys;
 		let at = "mock-at";
-		let full_hash = crypto.hash_sha256(at).data;
+		let full_hash = crypto.hash_sha256(native, at).data;
 		let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 		let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], at_hash: ah };
 		let time = 1516239022;
@@ -263,7 +264,7 @@ describe('oidc: ID token', () => {
 	it('enforce nonce matching', () => {
 		let keys = JWKS.keys;
 		let at = "mock-at";
-		let full_hash = crypto.hash_sha256(at).data;
+		let full_hash = crypto.hash_sha256(native, at).data;
 		let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 		let payload = { ...f.MOCK_CLAIMS, at_hash: ah };
 		let token = h.generate_id_token(payload, PRIVKEY, "RS256");
@@ -305,7 +306,7 @@ describe('oidc: ID token', () => {
 	it('at_hash validation ensures token binding', () => {
 		let access_token = "valid-access-token-123";
 		let keys = JWKS.keys;
-		let full_hash = crypto.hash_sha256(access_token).data;
+		let full_hash = crypto.hash_sha256(native, access_token).data;
 		let left_half = encoding.binary_truncate(full_hash, 16).data;
 		let correct_hash = encoding.b64url_encode(left_half).data;
 		let time = 1516239022;
@@ -333,7 +334,7 @@ describe('oidc: ID token', () => {
 	it('at_hash validation byte-safety torture', () => {
 		let access_token = "at-hash-torture-input-1";
 		let keys = JWKS.keys;
-		let full_hash = crypto.hash_sha256(access_token).data;
+		let full_hash = crypto.hash_sha256(native, access_token).data;
 		let left_half = encoding.binary_truncate(full_hash, 16).data;
 		let correct_at_hash = encoding.b64url_encode(left_half).data;
 
@@ -347,7 +348,7 @@ describe('oidc: ID token', () => {
 	it('require azp when aud has multiple audiences', () => {
 		let keys = JWKS.keys;
 		let at = "mock-at";
-		let full_hash = crypto.hash_sha256(at).data;
+		let full_hash = crypto.hash_sha256(native, at).data;
 		let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 		let payload = {
 			...f.MOCK_CLAIMS,
@@ -367,7 +368,7 @@ describe('oidc: ID token', () => {
 	it('accept single-element aud array without azp', () => {
 		let keys = JWKS.keys;
 		let at = "mock-at";
-		let full_hash = crypto.hash_sha256(at).data;
+		let full_hash = crypto.hash_sha256(native, at).data;
 		let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 		let payload = {
 			...f.MOCK_CLAIMS,
@@ -386,7 +387,7 @@ describe('oidc: ID token', () => {
 	it('reject azp mismatch even for single-element aud', () => {
 		let keys = JWKS.keys;
 		let at = "mock-at";
-		let full_hash = crypto.hash_sha256(at).data;
+		let full_hash = crypto.hash_sha256(native, at).data;
 		let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
 		let payload = {
 			...f.MOCK_CLAIMS,

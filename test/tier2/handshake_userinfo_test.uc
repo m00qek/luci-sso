@@ -3,6 +3,7 @@ import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
@@ -28,7 +29,7 @@ describe('handshake: userinfo', () => {
 				behavior: {
 					post: (url, opts) => {
 						let access_token = "at-123";
-						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
 						let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash };
 						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
 						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
@@ -74,7 +75,7 @@ describe('handshake: userinfo', () => {
 				behavior: {
 					post: (url, opts) => {
 						let access_token = "at-456";
-						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
 						let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash };
 						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
 						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };

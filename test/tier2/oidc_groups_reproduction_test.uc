@@ -3,6 +3,7 @@ import * as oidc from 'luci_sso.oidc';
 import * as handshake from 'luci_sso.handshake';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
@@ -13,7 +14,7 @@ describe('oidc: reproduction', () => {
 	it('verify_id_token drops groups claim', () => {
 		let keys = [ f.MOCK_JWK ];
 		let at = "mock-at";
-		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
+		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
 		let groups = ["admin", "dev"];
 		let payload = { ...f.MOCK_CLAIMS, at_hash: ah, groups: groups };
 		let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
@@ -63,7 +64,7 @@ describe('handshake: reproduction', () => {
 								email: null,
 								groups: null,
 								nonce: nonce_ref,
-								at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data
+								at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data
 							};
 							let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };

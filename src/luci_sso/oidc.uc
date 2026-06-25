@@ -178,7 +178,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	let jwk_res = find_jwk(keys, header.kid);
 	if (!jwk_res.ok) return jwk_res;
 
-	let pem_res = crypto.jwk_to_pem(jwk_res.data);
+	let pem_res = crypto.jwk_to_pem(deps.native, jwk_res.data);
 	if (!pem_res.ok) return pem_res;
 
 	// MANDATORY Claims Check
@@ -197,7 +197,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		pre_parsed_header: header
 	};
 
-	let result = crypto.jwt_verify(tokens.id_token, pem_res.data, validation_opts);
+	let result = crypto.jwt_verify(deps.native, tokens.id_token, pem_res.data, validation_opts);
 	if (!result.ok) return result;
 
 	let payload = result.data;
@@ -249,7 +249,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		return Result.err(MISSING_AT_HASH);
 	}
 
-	let hash_res = crypto.hash_sha256(tokens.access_token);
+	let hash_res = crypto.hash_sha256(deps.native, tokens.access_token);
 	if (!hash_res.ok) return hash_res;
 	let full_hash = hash_res.data;
 

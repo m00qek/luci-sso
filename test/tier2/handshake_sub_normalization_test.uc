@@ -2,6 +2,7 @@ import { describe, it, assert, truthy } from 'utest';
 import * as handshake from 'luci_sso.handshake';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
@@ -39,7 +40,7 @@ describe('handshake: reproduction', () => {
 				behavior: {
 					post: (url, opts) => {
 						let access_token = "at-123";
-						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
 						// ID Token has lowercase sub; UserInfo returns UPPERCASE sub — normalization must reconcile
 						let payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: null, nonce: nonce_captured, at_hash };
 						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");

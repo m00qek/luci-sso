@@ -29,6 +29,9 @@ function build_deps(proxies) {
 	if (proxies.clock)
 		deps.clock = proxies.clock.create(null, null);
 
+	if (proxies.native)
+		deps.native = proxies.native;
+
 	deps.log = function(level, msg) {};
 
 	return deps;
@@ -54,6 +57,11 @@ function do_inject(cfg, remaining, proxies, cb) {
 			...(state.data || {})
 		};
 		inject_state = { ...state, strict: true, data };
+	} else if (name === 'native') {
+		// Do not force strict on native: unmocked calls fall through to the real
+		// C extension via the proxy fallback. Tests that need CSPRNG failure can
+		// pass an explicit behavior override in their cfg.
+		inject_state = state;
 	} else {
 		inject_state = { ...state, strict: true };
 	}
@@ -64,6 +72,10 @@ function do_inject(cfg, remaining, proxies, cb) {
 }
 
 export const with_context = function(cfg, cb) {
-	let names = keys(cfg);
-	do_inject(cfg, names, {}, cb);
+	// Always inject native so deps.native is populated. If the caller does not
+	// specify native in cfg, default to {} (non-strict; falls through to the real
+	// C extension via the proxy fallback). Explicit cfg entries take precedence.
+	let effective_cfg = { native: {}, ...cfg };
+	let names = keys(effective_cfg);
+	do_inject(effective_cfg, names, {}, cb);
 };

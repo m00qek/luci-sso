@@ -1,6 +1,7 @@
 import { describe, it, assert, truthy, falsy } from 'utest';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
@@ -12,11 +13,11 @@ describe('security: JWT', () => {
 		let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" })).data;
 		let token = none_header + "." + payload + ".";
 
-		let res1 = crypto.jwt_verify(token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" });
+		let res1 = crypto.jwt_verify(native, token, "secret", { alg: "RS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" });
 		assert.match(truthy(), Result.is(res1));
 		assert.match("ALGORITHM_MISMATCH", res1.error);
 
-		let res2 = crypto.jws_verify(token, "secret");
+		let res2 = crypto.jws_verify(native, token, "secret");
 		assert.match(truthy(), Result.is(res2));
 		assert.match("UNSUPPORTED_ALGORITHM", res2.error);
 	});
@@ -26,14 +27,14 @@ describe('security: JWT', () => {
 		let payload = encoding.b64url_encode(sprintf("%J", { sub: "admin" })).data;
 		let stripped = header + "." + payload + ".";
 
-		let res = crypto.jwt_verify(stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" });
+		let res = crypto.jwt_verify(native, stripped, "secret", { alg: "HS256", now: 123, clock_tolerance: 300, iss: "https://example.com", aud: "client" });
 		assert.match(truthy(), Result.is(res));
 		assert.match("INVALID_SIGNATURE_ENCODING", res.error);
 	});
 
 	it('payload integrity', () => {
 		let secret = "secret";
-		let res_s = crypto.jws_sign({foo: "bar"}, secret);
+		let res_s = crypto.jws_sign(native, {foo: "bar"}, secret);
 		assert.match(truthy(), Result.is(res_s));
 		assert.match(truthy(), res_s.ok);
 		let good_token = res_s.data;
@@ -42,7 +43,7 @@ describe('security: JWT', () => {
 		let bad_payload = encoding.b64url_encode("{ invalid json }").data;
 		let tampered = parts[0] + "." + bad_payload + "." + parts[2];
 
-		let res = crypto.jws_verify(tampered, secret);
+		let res = crypto.jws_verify(native, tampered, secret);
 		assert.match(truthy(), Result.is(res));
 		assert.match("INVALID_SIGNATURE", res.error, "Tampering must invalidate HMAC signature");
 	});

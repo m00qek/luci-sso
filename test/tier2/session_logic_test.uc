@@ -1,7 +1,5 @@
 import { describe, it, assert, truthy, has_length, falsy, mock } from 'utest';
 import * as session from 'luci_sso.session';
-import * as crypto from 'luci_sso.crypto';
-import * as native from 'luci_sso.native';
 
 const FIXED_NOW = 1516239022;
 
@@ -11,8 +9,8 @@ function make_clock(now) {
 
 describe('session: logic', () => {
 	it('handshake lifecycle (creation, validation, atomic consumption)', () => {
-		mock.inject('fs', {}, (fs) => {
-			let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {}, native: {} }, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
 
 			let state_res = session.create_state(deps);
 			assert.match(truthy(), state_res.ok);
@@ -33,8 +31,8 @@ describe('session: logic', () => {
 		let handle = "corrupted-handle";
 		let path = `/var/run/luci-sso/handshake_${handle}.json`;
 
-		mock.inject('fs', { data: { [path]: "{ invalid json !!! }" } }, (fs) => {
-			let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: { data: { [path]: "{ invalid json !!! }" } }, native: {} }, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.verify_state(deps, handle, 300);
 			assert.match(falsy(), res.ok);
 			assert.match("STATE_CORRUPTED", res.error);
@@ -44,7 +42,7 @@ describe('session: logic', () => {
 	it('enforce clock tolerance boundaries', () => {
 		let now = FIXED_NOW;
 
-		mock.inject('fs', {}, (fs) => {
+		mock.inject_all({ fs: {}, native: {} }, (injected) => {
 			let handshake = {
 				state: "s",
 				nonce: "n",
@@ -53,9 +51,9 @@ describe('session: logic', () => {
 				exp: now - 100
 			};
 			let handle = "expired-token";
-			fs.writefile(`/var/run/luci-sso/handshake_${handle}.json`, sprintf("%J", handshake));
+			injected.fs.writefile(`/var/run/luci-sso/handshake_${handle}.json`, sprintf("%J", handshake));
 
-			let deps = { fs, log: () => null, clock: make_clock(now) };
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(now) };
 			let res = session.verify_state(deps, handle, 10);
 			assert.match(falsy(), res.ok);
 			assert.match("HANDSHAKE_EXPIRED", res.error);
@@ -63,8 +61,8 @@ describe('session: logic', () => {
 	});
 
 	it('reject malformed state handles', () => {
-		mock.inject('fs', {}, (fs) => {
-			let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {}, native: {} }, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.verify_state(deps, "../evil", 300);
 			assert.match("MALFORMED_STATE_COOKIE", res.error);
 		});
@@ -75,11 +73,14 @@ describe('session: logic', () => {
 		let path = `/var/run/luci-sso/handshake_${handle}.json`;
 		let data = { state: "s", exp: 2000000000 };
 
-		mock.inject('fs', {
-			data: { [`${path}.consumed`]: sprintf("%J", data) },
-			behavior: { rename: () => false }
-		}, (fs) => {
-			let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({
+			fs: {
+				data: { [`${path}.consumed`]: sprintf("%J", data) },
+				behavior: { rename: () => false }
+			},
+			native: {},
+		}, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.verify_state(deps, handle, 300);
 			assert.match(falsy(), res.ok, "Should NOT recover state from .consumed if rename failed (Strict One-Time Use)");
 			assert.match("STATE_NOT_FOUND", res.error);
@@ -124,26 +125,29 @@ describe('session: logic', () => {
 		let log_calls = [];
 		let log_fn = (level, msg) => push(log_calls, [level, msg]);
 
-		mock.inject('fs', {
-			behavior: {
-				readfile: () => null,
-				stat: (path) => {
-					if (path === lock_path) return { mtime: base_now - 31 };
-					return null;
-				},
-				mkdir: (() => {
-					let lock_calls = 0;
-					return (path) => {
-						if (path === lock_path) {
-							lock_calls++;
-							return lock_calls > 1;
-						}
-						return true;
-					};
-				})()
-			}
-		}, (fs) => {
-			let deps = { fs, log: log_fn, clock: make_clock(base_now) };
+		mock.inject_all({
+			fs: {
+				behavior: {
+					readfile: () => null,
+					stat: (path) => {
+						if (path === lock_path) return { mtime: base_now - 31 };
+						return null;
+					},
+					mkdir: (() => {
+						let lock_calls = 0;
+						return (path) => {
+							if (path === lock_path) {
+								lock_calls++;
+								return lock_calls > 1;
+							}
+							return true;
+						};
+					})()
+				}
+			},
+			native: {},
+		}, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: log_fn, clock: make_clock(base_now) };
 			let res = session.get_secret_key(deps);
 			assert.match(truthy(), res.ok, "Should succeed by self-healing the stale lock");
 			assert.match(has_length(32), res.data, "Should return a valid 32-byte key");
@@ -153,18 +157,18 @@ describe('session: logic', () => {
 			assert.match(truthy(), warn_found, "Should log a warning about stale lock");
 
 			let unlink_found = false;
-			for (let call in fs.__utest__.calls.unlink) if (call[0] === lock_path) unlink_found = true;
+			for (let call in injected.fs.__utest__.calls.unlink) if (call[0] === lock_path) unlink_found = true;
 			assert.match(truthy(), unlink_found, "Should have removed the stale lock");
 
 			let mkdir_found = false;
-			for (let call in fs.__utest__.calls.mkdir) if (call[0] === lock_path) mkdir_found = true;
+			for (let call in injected.fs.__utest__.calls.mkdir) if (call[0] === lock_path) mkdir_found = true;
 			assert.match(truthy(), mkdir_found, "Should have re-acquired the lock");
 		});
 	});
 
 	it('secret key persistence (atomic race resilience)', () => {
-		mock.inject('fs', {}, (fs) => {
-			let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {}, native: {} }, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res1 = session.get_secret_key(deps);
 			let res2 = session.get_secret_key(deps);
 			assert.match(res2.data, res1.data);
@@ -228,28 +232,28 @@ describe('session: logic', () => {
 	});
 
 	it('explicit state consumption (cleanup)', () => {
-		mock.inject('fs', {}, (fs) => {
-			let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {}, native: {} }, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let state_res = session.create_state(deps);
 			let handle = state_res.data.token;
 			let path = `/var/run/luci-sso/handshake_${handle}.json`;
 
-			assert.match(truthy(), fs.readfile(path), "Handshake file should exist");
+			assert.match(truthy(), injected.fs.readfile(path), "Handshake file should exist");
 
 			session.consume_state(deps, handle);
-			assert.match(falsy(), fs.readfile(path), "Handshake file should have been deleted");
+			assert.match(falsy(), injected.fs.readfile(path), "Handshake file should have been deleted");
 		});
 	});
 
 	it('atomic handshake state creation', () => {
-		mock.inject('fs', {}, (fs) => {
-			let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({ fs: {}, native: {} }, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.create_state(deps);
 			assert.match(truthy(), res.ok, `create_state failed: ${res.error}`);
 
-			let writefile_calls = fs.__utest__.calls.writefile || [];
-			let chmod_calls     = fs.__utest__.calls.chmod     || [];
-			let rename_calls    = fs.__utest__.calls.rename    || [];
+			let writefile_calls = injected.fs.__utest__.calls.writefile || [];
+			let chmod_calls     = injected.fs.__utest__.calls.chmod     || [];
+			let rename_calls    = injected.fs.__utest__.calls.rename    || [];
 
 			let write_op = length(writefile_calls) > 0 ? writefile_calls[0] : null;
 			assert.match(truthy(), write_op, "Should have performed a writefile operation");
@@ -268,51 +272,38 @@ describe('session: logic', () => {
 	});
 
 	it('detect CSPRNG failure during secret key generation (B1)', () => {
-		crypto.set_native({ ...native, random: () => null });
-
-		let res = null;
-		let err = null;
-		try {
-			mock.inject('fs', { behavior: { readfile: () => null } }, (fs) => {
-				res = session.get_secret_key({ fs, log: () => null, clock: make_clock(FIXED_NOW) });
-			});
-		} catch (e) {
-			err = e;
-		}
-		crypto.set_native(null);
-		if (err) die(err);
-
-		assert.match(falsy(), res.ok, "Should fail when random() returns null");
-		assert.match("CRYPTO_INIT_FAILED", res.error);
+		mock.inject_all({
+			fs:     { behavior: { readfile: () => null } },
+			native: { behavior: { random: () => null } },
+		}, (injected) => {
+			let res = session.get_secret_key({ fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) });
+			assert.match(falsy(), res.ok, "Should fail when random() returns null");
+			assert.match("CRYPTO_INIT_FAILED", res.error);
+		});
 	});
 
 	it('detect CSPRNG failure during handshake creation (B2)', () => {
-		crypto.set_native({ ...native, random: () => null });
-
-		let res = null;
-		let err = null;
-		try {
-			mock.inject('fs', {}, (fs) => {
-				res = session.create_state({ fs, log: () => null, clock: make_clock(FIXED_NOW) });
-			});
-		} catch (e) {
-			err = e;
-		}
-		crypto.set_native(null);
-		if (err) die(err);
-
-		assert.match(falsy(), res.ok, "Should fail when random() returns null");
-		assert.match("CRYPTO_INIT_FAILED", res.error);
+		mock.inject_all({
+			fs:     {},
+			native: { behavior: { random: () => null } },
+		}, (injected) => {
+			let res = session.create_state({ fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) });
+			assert.match(falsy(), res.ok, "Should fail when random() returns null");
+			assert.match("CRYPTO_INIT_FAILED", res.error);
+		});
 	});
 });
 
 describe('session: get_secret_key', () => {
 	it('W1 rename failure regression', () => {
-		mock.inject('fs', {
-			data: { "/etc/luci-sso": "" },
-			behavior: { readfile: () => null, rename: () => false }
-		}, (fs) => {
-			let deps = { fs, log: () => null, clock: make_clock(FIXED_NOW) };
+		mock.inject_all({
+			fs: {
+				data: { "/etc/luci-sso": "" },
+				behavior: { readfile: () => null, rename: () => false }
+			},
+			native: {},
+		}, (injected) => {
+			let deps = { fs: injected.fs, native: injected.native, log: () => null, clock: make_clock(FIXED_NOW) };
 			let res = session.get_secret_key(deps);
 			assert.match(falsy(), res.ok, "W1: get_secret_key MUST fail if atomic rename fails");
 			assert.match("SYSTEM_KEY_WRITE_FAILED", res.error, "W1: Expected error code for rename failure");

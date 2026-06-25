@@ -14,9 +14,9 @@ import { INSECURE_ISSUER_URL, INSECURE_FETCH_URL, DISCOVERY_NETWORK_ERROR, DISCO
  * Generates a unique cache path for an identifier (issuer or JWKS URI).
  * @private
  */
-function get_cache_path(id_res, prefix) {
+function get_cache_path(native, id_res, prefix) {
 	if (!id_res.ok) return null;
-	let hash_res = crypto.hash_sha256(id_res.data);
+	let hash_res = crypto.hash_sha256(native, id_res.data);
 	if (!hash_res.ok) return hash_res;
 	let h_res = encoding.b64url_encode(hash_res.data);
 	if (!h_res.ok) return null;
@@ -56,7 +56,7 @@ function _write_cache(deps, path, data) {
 	try {
 		let cache_data = { ...data, cached_at: deps.clock.time() };
 
-		let res = crypto.random(8);
+		let res = crypto.random(deps.native, 8);
 		if (!res.ok) {
 			deps.log("error", "Cache write aborted: CSPRNG failure");
 			return;
@@ -87,7 +87,7 @@ export function discover(deps, issuer, options) {
 	if (!normalized_issuer_res.ok) return normalized_issuer_res;
 	let normalized_issuer = normalized_issuer_res.data;
 
-	let cache_path = options.cache_path || get_cache_path(normalized_issuer_res, "discovery");
+	let cache_path = options.cache_path || get_cache_path(deps.native, normalized_issuer_res, "discovery");
 	let ttl = options.ttl || 86400; // 24 hours default (production standard)
 
 	let cached = _read_cache(deps, cache_path, ttl);
@@ -106,7 +106,7 @@ export function discover(deps, issuer, options) {
 	fetch_url += ".well-known/openid-configuration";
 
 	let res_http = deps.http.get(fetch_url, { verify: true });
-	let issuer_id = crypto.safe_id(normalized_issuer);
+	let issuer_id = crypto.safe_id(deps.native, normalized_issuer);
 
 	if (!res_http.ok || res_http.data.status != 200) {
 		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
@@ -145,7 +145,7 @@ export function discover(deps, issuer, options) {
 
 	let config_issuer_res = encoding.normalize_url(config.issuer);
 	if (!config_issuer_res.ok || !crypto.constant_time_eq(config_issuer_res.data, normalized_issuer)) {
-		deps.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(config_issuer_res.data) : "INVALID"}]`);
+		deps.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(deps.native, config_issuer_res.data) : "INVALID"}]`);
 		return Result.err(DISCOVERY_ISSUER_MISMATCH,
 			 `Expected issuer_id ${issuer_id}` );
 	}
@@ -192,9 +192,9 @@ export function fetch_jwks(deps, jwks_uri, options) {
 	if (!encoding.is_https(normalized_uri)) return Result.err(INSECURE_JWKS_URI);
 
 	options = options || {};
-	let cache_path = options.cache_path || get_cache_path(normalized_uri_res, "jwks");
+	let cache_path = options.cache_path || get_cache_path(deps.native, normalized_uri_res, "jwks");
 	let ttl = options.ttl || 86400; // 24 hours default
-	let uri_id = crypto.safe_id(normalized_uri);
+	let uri_id = crypto.safe_id(deps.native, normalized_uri);
 
 	if (!options.force) {
 		let cached = _read_cache(deps, cache_path, ttl);

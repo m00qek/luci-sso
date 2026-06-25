@@ -171,7 +171,7 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 		}
 	}
 
-	deps.log("info", `ID Token successfully validated for [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}]`);
+	deps.log("info", `ID Token successfully validated for [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}]`);
 
 	// MANDATORY: Register token AFTER verification (DoS Prevention)
 	let access_token = tokens.access_token;
@@ -264,7 +264,7 @@ export function authenticate(deps, config, request, policy) {
 	let res_perms = config_mod.find_roles_for_user(config, user_data);
 
 	if (!res_perms.ok) {
-		deps.log("warn", `User [sub_id: ${crypto.safe_id(user_data.sub)}] matched no roles [session_id: ${session_id}]`);
+		deps.log("warn", `User [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] matched no roles [session_id: ${session_id}]`);
 		return Result.err(USER_NOT_AUTHORIZED, { http_status: 403 });
 	}
 
@@ -284,7 +284,7 @@ export function authenticate(deps, config, request, policy) {
 		return Result.err(UBUS_LOGIN_FAILED, { http_status: 500 });
 	}
 
-	deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(user_data.sub)}] [session_id: ${session_id}] (mapped to role=${perms.role_name})`);
+	deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}] (mapped to role=${perms.role_name})`);
 
 	return Result.ok({
 		sid: ubus_res.data,

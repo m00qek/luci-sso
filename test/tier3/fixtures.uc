@@ -9,6 +9,8 @@
  * DO NOT use these in Unit Tests.
  */
 
+import * as native from 'luci_sso.native';
+
 // HS256 Secret (Anchor)
 export const ANCHOR_SECRET = "anchor-secret-32-character-str!!!";
 
@@ -42,5 +44,5 @@ export function sign_anchor_token(crypto, issuer, email, now, nonce, at_hash) {
 		at_hash: at_hash
 	};
 	// We use sign_jws which creates HS256
-	return crypto.jws_sign(payload, ANCHOR_SECRET);
+	return crypto.jws_sign(native, payload, ANCHOR_SECRET);
 };

@@ -2,6 +2,7 @@ import { describe, it, assert, truthy, falsy } from 'utest';
 import * as handshake from 'luci_sso.handshake';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 import * as h from 'lib.helpers';
@@ -32,7 +33,7 @@ describe('handshake: warning', () => {
 				},
 				behavior: {
 					post: (url, opts) => {
-						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(long_lived_token).data, 0, 16)).data;
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, long_lived_token).data, 0, 16)).data;
 						let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_ref, at_hash };
 						let id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
 						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: long_lived_token, id_token }) } };
@@ -96,7 +97,7 @@ describe('handshake: warning', () => {
 					},
 					behavior: {
 						post: (url, opts) => {
-							let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
+							let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
 							let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_ref, at_hash };
 							let id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };

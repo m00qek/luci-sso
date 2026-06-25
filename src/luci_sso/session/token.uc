@@ -31,7 +31,7 @@ export function create(deps, user_data) {
 		exp: now + common.SESSION_DURATION
 	};
 
-	return crypto.jws_sign(payload, secret);
+	return crypto.jws_sign(deps.native, payload, secret);
 };
 
 /**
@@ -51,7 +51,7 @@ export function verify(deps, token_str, clock_tolerance) {
 	if (!res.ok) return res;
 	let secret = res.data;
 
-	let result = crypto.jws_verify(token_str, secret);
+	let result = crypto.jws_verify(deps.native, token_str, secret);
 	if (!result.ok) return Result.err("SESSION_SIGNATURE_INVALID", result.error);
 
 	let session = result.data;

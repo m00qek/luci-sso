@@ -48,7 +48,7 @@ export function get(deps) {
 		if (acquired) {
 			try {
 				// 2. We are the generator: Generate and Write
-				let res = crypto.random(32);
+				let res = crypto.random(deps.native, 32);
 				if (!res.ok) {
 					deps.log("error", "CRITICAL: CSPRNG failure during secret key generation");
 					try { deps.fs.unlink(lock_path); } catch (e) {}

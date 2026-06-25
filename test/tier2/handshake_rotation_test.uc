@@ -2,6 +2,7 @@ import { describe, it, assert, truthy } from 'utest';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import * as encoding from 'luci_sso.encoding';
 import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
@@ -56,7 +57,7 @@ describe('handshake: recovery', () => {
 				...f.MOCK_CLAIMS,
 				email: "user-123",
 				nonce: s_data.nonce,
-				at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data
+				at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data
 			};
 			pending_tokens.access_token = access_token;
 			pending_tokens.id_token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", f.ROTATION_NEW_JWK.kid);

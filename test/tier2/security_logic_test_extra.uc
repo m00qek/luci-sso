@@ -2,8 +2,6 @@ import { describe, it, assert, truthy, falsy, spy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as oidc from 'luci_sso.oidc';
 import * as ubus from 'luci_sso.ubus';
-import * as crypto from 'luci_sso.crypto';
-import * as native from 'luci_sso.native';
 import { with_context } from 'context';
 import * as f from 'tier2.fixtures';
 
@@ -117,30 +115,20 @@ describe('security', () => {
 	});
 
 	it('detect CSPRNG failure during CSRF token generation (B3)', () => {
-		crypto.set_native({ ...native, random: () => null });
-
-		let res = null;
-		let err = null;
-		try {
-			with_context({
-				fs: {},
-				ubus: {
-					data: {
-						"session:create": { ubus_rpc_session: "sid" },
-						"session:grant": {},
-						"session:set": {}
-					}
+		with_context({
+			fs: {},
+			ubus: {
+				data: {
+					"session:create": { ubus_rpc_session: "sid" },
+					"session:grant": {},
+					"session:set": {}
 				}
-			}, (deps) => {
-				res = ubus.create_passwordless_session(deps, "root", { read: ["*"], write: ["*"] }, "user@example.com", "at", "rt", "it");
-			});
-		} catch (e) {
-			err = e;
-		}
-		crypto.set_native(null);
-		if (err) die(err);
-
-		assert.match(falsy(), res.ok, "MUST reject session creation if CSPRNG fails");
-		assert.match("CRYPTO_INIT_FAILED", res.error);
+			},
+			native: { behavior: { random: () => null } },
+		}, (deps) => {
+			let res = ubus.create_passwordless_session(deps, "root", { read: ["*"], write: ["*"] }, "user@example.com", "at", "rt", "it");
+			assert.match(falsy(), res.ok, "MUST reject session creation if CSPRNG fails");
+			assert.match("CRYPTO_INIT_FAILED", res.error);
+		});
 	});
 });

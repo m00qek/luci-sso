@@ -92,10 +92,10 @@ export function create(deps) {
 		}
 	}
 
-	let res_p = crypto.pkce_pair();
-	let res_s = crypto.random(16);
-	let res_n = crypto.random(16);
-	let res_h = crypto.random(32);
+	let res_p = crypto.pkce_pair(deps.native);
+	let res_s = crypto.random(deps.native, 16);
+	let res_n = crypto.random(deps.native, 16);
+	let res_h = crypto.random(deps.native, 32);
 
 	if (!res_p.ok || !res_s.ok || !res_n.ok || !res_h.ok) {
 		deps.log("error", "CRITICAL: CSPRNG failure during handshake state generation");
@@ -118,7 +118,7 @@ export function create(deps) {
 	let now = deps.clock.time();
 
 	let data = {
-		id: crypto.safe_id(handle), // Correlation ID for logs
+		id: crypto.safe_id(deps.native, handle), // Correlation ID for logs
 		state: state,
 		code_verifier: pkce.verifier,
 		nonce: nonce,
@@ -196,7 +196,7 @@ export function verify(deps, handle, clock_tolerance) {
 	let path = `${common.HANDSHAKE_DIR}/handshake_${handle}.json`;
 	let consume_path = `${path}.consumed`;
 	let content = null;
-	let session_id = crypto.safe_id(handle);
+	let session_id = crypto.safe_id(deps.native, handle);
 
 	try {
 		// MANDATORY: Atomic one-time use.

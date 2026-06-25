@@ -1,25 +1,13 @@
-import { describe, it, afterEach, assert, contains, has_length, mock } from 'utest';
+import { describe, it, assert, contains, has_length, mock } from 'utest';
 import * as key from 'luci_sso.session.key';
 import * as common from 'luci_sso.session.common';
-import * as crypto from 'luci_sso.crypto';
-import * as real_native from 'luci_sso.native';
 
 const NOW    = 1700000000;
 const SECRET = 'aaaabbbbccccddddeeeeffffgggghhhh';
 const LOCK   = common.SECRET_KEY_PATH + '.lock';
 
-const broken_random = {
-	random:             () => null,
-	sha256:             real_native.sha256,
-	hmac_sha256:        real_native.hmac_sha256,
-	verify_rs256:       real_native.verify_rs256,
-	verify_es256:       real_native.verify_es256,
-	jwk_rsa_to_pem:     real_native.jwk_rsa_to_pem,
-	jwk_ec_p256_to_pem: real_native.jwk_ec_p256_to_pem,
-};
-
 function make_deps(injected) {
-	return { fs: injected.fs, clock: injected.clock, log: () => null };
+	return { fs: injected.fs, clock: injected.clock, native: injected.native, log: () => null };
 }
 
 // ─── key exists on disk ───────────────────────────────────────────────────────
@@ -37,17 +25,15 @@ describe('session.key: get — key exists on disk', () => {
 // ─── lock acquired — generation path ─────────────────────────────────────────
 
 describe('session.key: get — lock acquired', () => {
-	afterEach(() => { crypto.set_native(null); });
-
 	it('generates and returns a 32-byte key when the file is absent', () => {
-		mock.inject_all({ fs: { strict: true, data: {} }, clock: { strict: true, data: { now: NOW } } }, (injected) => {
+		mock.inject_all({ fs: { strict: true, data: {} }, clock: { strict: true, data: { now: NOW } }, native: {} }, (injected) => {
 			let res = key.get(make_deps(injected));
 			assert.match(contains({ ok: true, data: has_length(32) }), res);
 		});
 	});
 
 	it('persists the generated key to SECRET_KEY_PATH', () => {
-		mock.inject_all({ fs: { strict: true, data: {} }, clock: { strict: true, data: { now: NOW } } }, (injected) => {
+		mock.inject_all({ fs: { strict: true, data: {} }, clock: { strict: true, data: { now: NOW } }, native: {} }, (injected) => {
 			key.get(make_deps(injected));
 			let stored = injected.fs.readfile(common.SECRET_KEY_PATH);
 			assert.match(32, length(stored));
@@ -55,16 +41,20 @@ describe('session.key: get — lock acquired', () => {
 	});
 
 	it('returns CRYPTO_INIT_FAILED when CSPRNG fails', () => {
-		crypto.set_native(broken_random);
-		mock.inject_all({ fs: { strict: true, data: {} }, clock: { strict: true, data: { now: NOW } } }, (injected) => {
+		mock.inject_all({
+			fs:     { strict: true, data: {} },
+			clock:  { strict: true, data: { now: NOW } },
+			native: { behavior: { random: () => null } },
+		}, (injected) => {
 			assert.match(contains({ ok: false, error: 'CRYPTO_INIT_FAILED' }), key.get(make_deps(injected)));
 		});
 	});
 
 	it('returns SYSTEM_KEY_WRITE_FAILED when writefile fails', () => {
 		mock.inject_all({
-			fs: { strict: true, data: {}, behavior: { writefile: () => false } },
-			clock: { strict: true, data: { now: NOW } }
+			fs:     { strict: true, data: {}, behavior: { writefile: () => false } },
+			clock:  { strict: true, data: { now: NOW } },
+			native: {},
 		}, (injected) => {
 			assert.match(contains({ ok: false, error: 'SYSTEM_KEY_WRITE_FAILED' }), key.get(make_deps(injected)));
 		});
@@ -72,8 +62,9 @@ describe('session.key: get — lock acquired', () => {
 
 	it('returns SYSTEM_KEY_WRITE_FAILED when rename fails', () => {
 		mock.inject_all({
-			fs: { strict: true, data: {}, behavior: { rename: () => false } },
-			clock: { strict: true, data: { now: NOW } }
+			fs:     { strict: true, data: {}, behavior: { rename: () => false } },
+			clock:  { strict: true, data: { now: NOW } },
+			native: {},
 		}, (injected) => {
 			assert.match(contains({ ok: false, error: 'SYSTEM_KEY_WRITE_FAILED' }), key.get(make_deps(injected)));
 		});
@@ -88,8 +79,9 @@ describe('session.key: get — lock contention', () => {
 		let data = {};
 		data[LOCK] = '';
 		mock.inject_all({
-			fs: { strict: true, data, behavior: { stat: () => ({ mtime: NOW - 31, size: 0 }) } },
-			clock: { strict: true, data: { now: NOW } }
+			fs:     { strict: true, data, behavior: { stat: () => ({ mtime: NOW - 31, size: 0 }) } },
+			clock:  { strict: true, data: { now: NOW } },
+			native: {},
 		}, (injected) => {
 			assert.match(contains({ ok: true, data: has_length(32) }), key.get(make_deps(injected)));
 		});

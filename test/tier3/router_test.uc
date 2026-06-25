@@ -1,6 +1,7 @@
 import { describe, it, assert, truthy, falsy, spy } from 'utest';
 import * as router from 'luci_sso.router';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
@@ -152,7 +153,7 @@ describe('router: callback', () => {
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
-			let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
+			let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
 			let payload = { ...tf.MOCK_CLAIMS, iss: "https://idp.com", email: "user-123", nonce: handshake_data.nonce, at_hash: at_hash };
 			pending_id_token = h.generate_id_token(payload, tf.MOCK_PRIVKEY, "RS256");
 
@@ -205,7 +206,7 @@ describe('router: callback', () => {
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
-			let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
+			let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
 			let payload = { ...tf.MOCK_CLAIMS, iss: "https://idp.com", email: "user-123", nonce: handshake_data.nonce, at_hash: at_hash };
 			pending_id_token = h.generate_id_token(payload, tf.ROTATION_NEW_PRIVKEY, "RS256", tf.ROTATION_NEW_JWK.kid);
 
@@ -248,7 +249,7 @@ describe('router: callback', () => {
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
-			let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(at).data, 0, 16)).data;
+			let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
 			pending_id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", sub: "unknown", email: "unknown@example.com", nonce: handshake_data.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
@@ -261,7 +262,7 @@ describe('router: callback', () => {
 
 	it('reject token replay', () => {
 		let access_token = "ALREADY_USED";
-		let res_h = crypto.hash_sha256_hex(access_token);
+		let res_h = crypto.hash_sha256_hex(native, access_token);
 		assert.match(truthy(), Result.is(res_h));
 		let token_id = res_h.data;
 		let preregistered = `/var/run/luci-sso/tokens/${token_id}`;
@@ -296,7 +297,7 @@ describe('router: callback', () => {
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
-			let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(access_token).data, 0, 16)).data;
+			let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
 			pending_id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", email: "user-123", nonce: handshake_data.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });

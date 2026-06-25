@@ -91,7 +91,7 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 			objects: [[obj, func]]
 		});
 		if (!res.ok) {
-			deps.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(sid)}] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
+			deps.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(deps.native, sid)}] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
 		}
 	};
 	let is_admin = false;
@@ -110,7 +110,7 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 		// LuCI specific: Expand and grant all known access-groups
 		let acl_res = _grant_all_luci_acls(deps, sid);
 		if (!acl_res.ok) {
-			deps.log("error", `Failed to grant LuCI ACLs for wildcard admin [sid: ${crypto.safe_id(sid)}]`);
+			deps.log("error", `Failed to grant LuCI ACLs for wildcard admin [sid: ${crypto.safe_id(deps.native, sid)}]`);
 			deps.ubus.call("session", "destroy", { ubus_rpc_session: sid });
 			return Result.err(UBUS_SESSION_FAILED);
 		}
@@ -124,7 +124,7 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 	}
 
 	// 3. Generate CSRF token
-	let res_csrf = crypto.random(32);
+	let res_csrf = crypto.random(deps.native, 32);
 	if (!res_csrf.ok) {
 		deps.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
 		return Result.err(CRYPTO_INIT_FAILED);
@@ -149,7 +149,7 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 		}
 	});
 
-	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(oidc_email)}] mapped to ${username}`);
+	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${username}`);
 
 	return Result.ok(sid);
 };
@@ -218,7 +218,7 @@ export function register_token(deps, access_token) {
 		try { deps.fs.mkdir(TOKEN_REGISTRY_DIR, 0700); } catch(e) {}
 
 		// 2. Generate a unique cryptographic ID for the token (64-char hex digest)
-		let res_h = crypto.hash_sha256_hex(access_token);
+		let res_h = crypto.hash_sha256_hex(deps.native, access_token);
 		if (!res_h.ok) return res_h;
 
 		let token_id = res_h.data;

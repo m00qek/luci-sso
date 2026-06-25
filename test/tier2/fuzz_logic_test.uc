@@ -1,5 +1,6 @@
 import { describe, it, assert, truthy, falsy } from 'utest';
 import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 
@@ -39,7 +40,7 @@ describe('fuzz: logic', () => {
 
 	it('bit flipping resistance', () => {
 		let secret = "secret";
-		let res_s = crypto.jws_sign({foo: "bar"}, secret);
+		let res_s = crypto.jws_sign(native, {foo: "bar"}, secret);
 		assert.match(truthy(), Result.is(res_s));
 		assert.match(truthy(), res_s.ok);
 		let token = res_s.data;
@@ -55,7 +56,7 @@ describe('fuzz: logic', () => {
 
 		let tampered_token = parts[0] + "." + parts[1] + "." + encoding.b64url_encode(tampered_sig).data;
 
-		let result = crypto.jws_verify(tampered_token, secret);
+		let result = crypto.jws_verify(native, tampered_token, secret);
 		assert.match(truthy(), Result.is(result));
 		assert.match("INVALID_SIGNATURE", result.error, "Bit flipping must invalidate signature");
 	});
@@ -69,11 +70,10 @@ describe('fuzz: logic', () => {
 		let b64_payload = encoding.b64url_encode(sprintf("%J", payload)).data;
 		let signed_data = b64_header + "." + b64_payload;
 
-		let import_native = require('luci_sso.native');
-		let signature = import_native.hmac_sha256(secret, signed_data);
+		let signature = native.hmac_sha256(secret, signed_data);
 		let token = signed_data + "." + encoding.b64url_encode(signature).data;
 
-		let result = crypto.jws_verify(token, secret);
+		let result = crypto.jws_verify(native, token, secret);
 		assert.match(truthy(), Result.is(result));
 		assert.match(truthy(), result.ok, "Should verify despite extra header fields (Forward Compatibility)");
 		assert.match("bar", result.data.foo);
