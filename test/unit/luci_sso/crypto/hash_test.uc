@@ -1,115 +1,66 @@
-import { describe, it, prop, gen, assert, equals, not, contains, regex, has_length } from 'utest';
-import * as real_native from 'luci_sso.native';
+import { describe, it, assert, contains, mock, spy } from 'utest';
 import * as hash from 'luci_sso.crypto.hash';
-import * as f0 from 'tier0.fixtures';
-import { hex_to_bin } from 'fixtures.native';
 
-const broken = { sha256: () => null };
+// These tests fake `native` (via test/proxies/native.uc) so they exercise only
+// the ucode wrapper logic — type guards, Result shaping, hex encoding, error
+// branches. Crypto correctness (real SHA-256 vectors) lives in test/native.
 
-// SHA-256 known vectors (verified with sha256sum and openssl dgst -sha256)
-const VECTORS = [
-	{ input: '',    hex: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' },
-	{ input: 'abc', hex: 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad' },
-];
+// Raw bytes from hex (ucode '\xNN' literals ≥0x80 encode as UTF-8, so build
+// digests with chr() to get genuine bytes).
+function unhex(h) {
+	let s = '';
+	for (let i = 0; i < length(h); i += 2) s += chr(hex(substr(h, i, 2)));
+	return s;
+}
+
+// A digest whose bytes exercise %02x formatting: 0x00 (leading zero),
+// 0x0f (high-nibble zero), 0xa5, 0xff.
+const FAKE_DIGEST_HEX = '000fa5ff';
+const FAKE_DIGEST     = unhex(FAKE_DIGEST_HEX);
 
 // ─── sha256 ──────────────────────────────────────────────────────────────────
 
 describe('crypto.hash: sha256', () => {
-	it('rejects non-string input', () => {
-		for (let v in [null, 42, [], {}]) {
-			assert.match(contains({ ok: false, error: 'INVALID_ARGUMENT' }), hash.sha256(real_native, v));
-		}
+	it('returns INVALID_ARGUMENT for non-string input without calling native', () => {
+		mock.inject('native', { strict: true }, (native) => {
+			for (let v in [null, 42, [], {}])
+				assert.match(contains({ ok: false, error: 'INVALID_ARGUMENT' }), hash.sha256(native, v));
+		});
 	});
 
-	it('returns Result.ok with exactly 32 raw bytes for any string', () => {
-		assert.match(contains({ ok: true, data: has_length(32) }), hash.sha256(real_native, 'hello'));
+	it('forwards the input to native.sha256 and wraps the digest in Result.ok', () => {
+		mock.inject('native', { strict: true, data: { sha256: FAKE_DIGEST } }, (native) => {
+			let res = hash.sha256(native, 'hello');
+			assert.match(contains({ ok: true, data: FAKE_DIGEST }), res);
+			assert.match('hello', spy(native).calls.sha256[0][0]);
+		});
 	});
 
-	it('returns CRYPTO_ERROR when native.sha256 fails', () => {
-		assert.match(contains({ ok: false, error: 'CRYPTO_ERROR' }), hash.sha256(broken, 'hello'));
+	it('maps a null native.sha256 result to CRYPTO_ERROR', () => {
+		mock.inject('native', { strict: true, data: { sha256: null } }, (native) => {
+			assert.match(contains({ ok: false, error: 'CRYPTO_ERROR' }), hash.sha256(native, 'hello'));
+		});
 	});
-
-	it('is deterministic', () => {
-		let a = hash.sha256(real_native, 'deterministic-input');
-		let b = hash.sha256(real_native, 'deterministic-input');
-		assert.match(contains({ ok: true }), a);
-		assert.match(contains({ ok: true }), b);
-		assert.match(a.data, b.data);
-	});
-
-	it('known vector: SHA256_STANDARD', () => {
-		assert.match(
-			contains({ ok: true, data: equals(hex_to_bin(f0.SHA256_STANDARD.hex)) }),
-			hash.sha256(real_native, f0.SHA256_STANDARD.msg)
-		);
-	});
-
-	it('known vector: SHA256_NULL_BYTES', () => {
-		assert.match(
-			contains({ ok: true, data: equals(hex_to_bin(f0.SHA256_NULL_BYTES.hex)) }),
-			hash.sha256(real_native, f0.SHA256_NULL_BYTES.msg)
-		);
-	});
-
-	it('distinct inputs produce distinct digests', () => {
-		let a = hash.sha256(real_native, 'input-a');
-		let b = hash.sha256(real_native, 'input-b');
-		assert.match(contains({ ok: true }), a);
-		assert.match(contains({ ok: true }), b);
-		assert.match(not(equals(a.data)), b.data);
-	});
-
-	prop('always returns 32 bytes for any string input',
-		gen.string({ max_len: 200 }),
-		(s, ctx) => {
-			ctx.classify('empty', length(s) === 0);
-			assert.match(contains({ ok: true, data: has_length(32) }), hash.sha256(real_native, s));
-		}
-	);
 });
 
 // ─── sha256_hex ──────────────────────────────────────────────────────────────
 
 describe('crypto.hash: sha256_hex', () => {
-	it('rejects non-string input', () => {
-		for (let v in [null, 42, [], {}]) {
-			assert.match(contains({ ok: false }), hash.sha256_hex(real_native, v));
-		}
+	it('lowercase-hex-encodes the raw digest, preserving leading zeros', () => {
+		mock.inject('native', { strict: true, data: { sha256: FAKE_DIGEST } }, (native) => {
+			assert.match(contains({ ok: true, data: FAKE_DIGEST_HEX }), hash.sha256_hex(native, 'x'));
+		});
 	});
 
-	it('returns a 64-character lowercase hex string', () => {
-		assert.match(contains({ ok: true, data: regex(/^[0-9a-f]{64}$/) }), hash.sha256_hex(real_native, 'hello'));
+	it('propagates INVALID_ARGUMENT for non-string input', () => {
+		mock.inject('native', { strict: true }, (native) => {
+			assert.match(contains({ ok: false, error: 'INVALID_ARGUMENT' }), hash.sha256_hex(native, 42));
+		});
 	});
 
-	it('returns CRYPTO_ERROR when native.sha256 fails', () => {
-		assert.match(contains({ ok: false, error: 'CRYPTO_ERROR' }), hash.sha256_hex(broken, 'hello'));
+	it('propagates CRYPTO_ERROR when native.sha256 fails', () => {
+		mock.inject('native', { strict: true, data: { sha256: null } }, (native) => {
+			assert.match(contains({ ok: false, error: 'CRYPTO_ERROR' }), hash.sha256_hex(native, 'x'));
+		});
 	});
-
-	it('is consistent with sha256 raw output', () => {
-		let raw = hash.sha256(real_native, 'consistency-check');
-		let hex = hash.sha256_hex(real_native, 'consistency-check');
-		assert.match(contains({ ok: true }), raw);
-		assert.match(contains({ ok: true }), hex);
-
-		let expected = '';
-		for (let i = 0; i < 32; i++)
-			expected += sprintf('%02x', ord(raw.data, i));
-		assert.match(expected, hex.data);
-	});
-
-	it('known vector: sha256_hex("")', () => {
-		assert.match(contains({ ok: true, data: VECTORS[0].hex }), hash.sha256_hex(real_native, VECTORS[0].input));
-	});
-
-	it('known vector: sha256_hex("abc")', () => {
-		assert.match(contains({ ok: true, data: VECTORS[1].hex }), hash.sha256_hex(real_native, VECTORS[1].input));
-	});
-
-	prop('always returns 64 lowercase hex chars for any string',
-		gen.string({ max_len: 200 }),
-		(s, ctx) => {
-			ctx.classify('empty', length(s) === 0);
-			assert.match(contains({ ok: true, data: regex(/^[0-9a-f]{64}$/) }), hash.sha256_hex(real_native, s));
-		}
-	);
 });
