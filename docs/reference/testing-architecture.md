@@ -59,9 +59,10 @@ the entry point.
 | `router` | real `handshake + web + session + ubus + config` | integration |
 | `deps` (`create()`) / CGI entry | wires the whole graph vs real system modules | integration |
 
-`integration/` is **not** a `src/` mirror — only orchestrators appear
-(`handshake_test.uc`, `router_test.uc`, `logout_test.uc`). Two honest
-consequences:
+`integration/` is **not** a `src/` mirror — only orchestrators and wiring seams
+appear (`handshake_test.uc`, `router_test.uc`, `logout_test.uc`, plus the
+composition root: `bootstrap_test.uc` for `deps.create()`'s channel builders and
+`entry_test.uc` for the CGI `run()` pipeline). Two honest consequences:
 
 1. `unit/` is not a perfect `src/` mirror either — `handshake`, `router` and
    `deps` have no unit file (no isolable unit surface).
