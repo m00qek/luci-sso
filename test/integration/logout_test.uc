@@ -1,7 +1,7 @@
 import { describe, it, assert, truthy, falsy, spy } from 'utest';
 import * as router from 'luci_sso.router';
 import { with_context } from 'context';
-import * as f from 'tier2.fixtures';
+import * as f from 'fixtures.oidc';
 
 // Integration bucket — the logout flow, entered at router.handle(deps, config,
 // request) with a full deps graph (with_context). Covers RP-initiated logout,

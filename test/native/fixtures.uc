@@ -4,7 +4,7 @@
  * All cryptographic values are mathematically verified with OpenSSL. This file
  * owns the native known-answer vectors (SHA-256, HMAC-SHA256, RSA, EC) and the
  * JWK binary parameters. The one genuinely shared vector, PLUMBING_RSA, lives
- * in tier1.fixtures (it is also used by the crypto facade test).
+ * in fixtures.rsa (it is also used by the crypto facade test).
  *
  * JWK binary parameters were extracted from the corresponding PEM keys using:
  *   openssl rsa -pubin -in pub.pem -text -noout   (for RSA n/e)
@@ -12,7 +12,7 @@
  */
 
 import * as encoding from 'luci_sso.encoding';
-import { PLUMBING_RSA } from 'tier1.fixtures';
+import { PLUMBING_RSA } from 'fixtures.rsa';
 
 export const hex_to_bin = function(h) {
 	let s = '';

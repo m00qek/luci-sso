@@ -5,7 +5,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
 import * as Result from 'luci_sso.result';
 import { with_context } from 'context';
-import * as f from 'tier2.fixtures';
+import * as f from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
 // Real-flow coverage below enters at oidc's exported functions with a faked deps

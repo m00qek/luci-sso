@@ -2,7 +2,7 @@ import { describe, it, prop, gen, assert, contains, truthy, falsy, spy } from 'u
 import * as discovery from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
 import { with_context } from 'context';
-import * as f from 'tier2.fixtures';
+import * as f from 'fixtures.oidc';
 
 // discovery.discover / fetch_jwks need the full deps graph (http + fs cache +
 // clock + native); with_context builds it from proxies (no stubs). Entry point

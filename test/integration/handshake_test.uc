@@ -5,7 +5,7 @@ import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
 import { with_context } from 'context';
-import * as f from 'tier2.fixtures';
+import * as f from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
 // Integration bucket — enter at handshake.initiate / handshake.authenticate with

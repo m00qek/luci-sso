@@ -1,7 +1,7 @@
 import { describe, it, prop, gen, assert, equals, not, contains, has_length, truthy, falsy, regex, is_type } from 'utest';
 import * as native from 'luci_sso.native';
 import * as encoding from 'luci_sso.encoding';
-import { PLUMBING_RSA } from 'tier1.fixtures';
+import { PLUMBING_RSA } from 'fixtures.rsa';
 import * as f0 from 'native.fixtures';
 import { hex_to_bin, JWK_RSA, JWK_EC } from 'native.fixtures';
 

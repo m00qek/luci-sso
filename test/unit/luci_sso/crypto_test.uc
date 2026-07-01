@@ -1,8 +1,8 @@
 import { describe, it, assert, contains, regex, has_length } from 'utest';
 import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
-import { PLUMBING_RSA } from 'tier1.fixtures';
-import { MOCK_JWK } from 'tier2.fixtures';
+import { PLUMBING_RSA } from 'fixtures.rsa';
+import { MOCK_JWK } from 'fixtures.oidc';
 
 const B64URL = /^[A-Za-z0-9_-]+$/;
 const HEX64  = /^[0-9a-f]{64}$/;

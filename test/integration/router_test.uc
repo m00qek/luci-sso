@@ -8,8 +8,8 @@ import * as Result from 'luci_sso.result';
 import * as config_loader from 'luci_sso.config';
 import * as web_mod from 'luci_sso.web';
 import { with_context } from 'context';
-import * as f from 'tier3.fixtures';
-import * as tf from 'tier2.fixtures';
+import * as f from 'fixtures.anchor';
+import * as tf from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
 // Integration bucket — enter at router.handle(deps, config, request, policy) with
