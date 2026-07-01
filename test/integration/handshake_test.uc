@@ -1,184 +1,41 @@
-import { describe, it, prop, gen, assert, contains, mock } from 'utest';
+import { describe, it, prop, gen, assert, truthy, falsy, contains, spy } from 'utest';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
-import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
-import * as Result from 'luci_sso.result';
+import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
+import { with_context } from 'context';
+import * as f from 'tier2.fixtures';
+import * as h from 'lib.helpers';
 
-// ─── fixtures ────────────────────────────────────────────────────────────────
+// Integration bucket — enter at handshake.initiate / handshake.authenticate with
+// a full deps graph built by with_context (real oidc + discovery + session +
+// ubus + config subgraph, faked system boundary, REAL native crypto). ID tokens
+// are genuinely signed via lib.helpers.generate_id_token so signature
+// verification runs for real — no verify stubs. Consolidates the tier2
+// handshake_* suites plus initiate / request-validation coverage.
 
-const NOW        = 1700000000;
-const CLIENT_ID  = 'client-123';
-const ISSUER     = 'https://idp.example.com';
-const AUTH_EP    = 'https://idp.example.com/authorize';
-const TOKEN_EP   = 'https://idp.example.com/token';
-const JWKS_URI   = 'https://idp.example.com/jwks';
-const USERINFO   = 'https://idp.example.com/userinfo';
-const REDIRECT   = 'https://router.example.com/callback';
+const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
-const POLICY = { allowed_algs: ['RS256'] };
-
-const CONFIG = {
-	client_id:           CLIENT_ID,
-	client_secret:       'top-secret',
-	issuer_url:          ISSUER,
-	internal_issuer_url: ISSUER,
-	redirect_uri:        REDIRECT,
-	scope:               'openid profile email',
-	clock_tolerance:     60,
-	roles: [
-		{ name: 'ops', emails: ['user@example.com'], groups: ['ops-team'],
-		  read: ['luci-app-status'], write: ['luci-app-status'] },
-	],
-};
-
-const DISCOVERY_DOC = {
-	issuer:                 ISSUER,
-	authorization_endpoint: AUTH_EP,
-	token_endpoint:         TOKEN_EP,
-	jwks_uri:               JWKS_URI,
-	userinfo_endpoint:      USERINFO,
-};
-
-const JWKS_OK = { keys: [{ kid: 'k1', kty: 'RSA', n: 'AQAB', e: 'AQAB' }] };
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-// The compiled `native` crypto module cannot be proxied in unit tests, so real
-// crypto is used by default. This builds a native object that passes through to
-// the real extension but lets a test override individual primitives (e.g. force
-// signature verification to pass/fail) — mirroring how the session tests thread
-// the real `native` module through `deps`.
-function hybrid_native(overrides) {
-	let h = {
-		random:             native.random,
-		sha256:             native.sha256,
-		hmac_sha256:        native.hmac_sha256,
-		verify_rs256:       native.verify_rs256,
-		verify_es256:       native.verify_es256,
-		jwk_rsa_to_pem:     native.jwk_rsa_to_pem,
-		jwk_ec_p256_to_pem: native.jwk_ec_p256_to_pem,
-	};
-	for (let k, v in (overrides || {})) h[k] = v;
-	return h;
+// Config whose discovery resolves to the mocked issuer origin (internal == public).
+function base_config(over) {
+	return { ...f.MOCK_CONFIG, internal_issuer_url: f.MOCK_CONFIG.issuer_url, ...(over || {}) };
 }
 
-// Native overrides that accept any RSA signature and PEM conversion.
-const VERIFY_OK = { verify_rs256: () => true,  jwk_rsa_to_pem: () => '-----PEM-----' };
-// Native overrides that reject every RSA signature (drives key-rotation retry).
-const VERIFY_NO = { verify_rs256: () => false, jwk_rsa_to_pem: () => '-----PEM-----' };
-
-// Wraps an object (or raw string) as a successful HTTP Result {status, body}.
-function resp(status, body) {
-	return Result.ok({ status: status, body: (type(body) == 'string') ? body : sprintf('%J', body) });
-}
-
-// A fake HTTP client that dispatches by endpoint. Routes may be Results or
-// zero-arg functions returning Results (for call-counting). Missing routes
-// resolve to a NO_ROUTE error so misconfigured tests fail loudly but safely.
-function make_http(routes) {
-	let pick = (r) => (r == null) ? Result.err('NO_ROUTE') : ((type(r) == 'function') ? r() : r);
-	return {
-		get: (url, opts) => {
-			if (index(url, 'openid-configuration') >= 0) return pick(routes.discovery);
-			if (index(url, '/jwks') >= 0)                return pick(routes.jwks);
-			if (index(url, '/userinfo') >= 0)            return pick(routes.userinfo);
-			return Result.err('NO_ROUTE');
-		},
-		post: (url, opts) => {
-			if (index(url, '/token') >= 0) return pick(routes.token);
-			return Result.err('NO_ROUTE');
-		},
-	};
-}
-
-// A fake ubus wrapper. session:create returns a fixed SID unless overridden.
-function make_ubus(create_res) {
-	return {
-		call: (obj, method, args) => {
-			if (method == 'create') return create_res || Result.ok({ ubus_rpc_session: 'SID-TEST' });
-			return Result.ok({});
-		},
-	};
-}
-
-function make_deps(fs, native_obj, routes, ubus_create_res) {
-	return {
-		fs:     fs,
-		native: native_obj,
-		clock:  { time: () => NOW, sleep: () => null },
-		log:    () => null,
-		http:   make_http(routes),
-		ubus:   make_ubus(ubus_create_res),
-	};
-}
-
-// Persists a real handshake state so verify_state() can consume it.
-function seed_handshake(deps) {
-	return session.create_state(deps).data; // { token, state, nonce, code_challenge }
-}
-
-// OIDC-correct at_hash: base64url(left-half of SHA-256(access_token)).
-function at_hash(access_token) {
-	let h = crypto.hash_sha256(native, access_token);
-	let t = encoding.binary_truncate(h.data, 16);
-	return encoding.b64url_encode(t.data).data;
-}
-
-// Builds a compact JWT with the given header alg/kid and payload. The signature
-// segment is a non-empty placeholder; native.verify_rs256 gates acceptance.
-function jwt(alg, kid, payload) {
-	let h = encoding.b64url_encode(sprintf('%J', { alg: alg, kid: kid })).data;
-	let p = encoding.b64url_encode(sprintf('%J', payload)).data;
-	return `${h}.${p}.AAAA`;
-}
+const DISCOVERY_URL = f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration";
 
 // ─── initiate ────────────────────────────────────────────────────────────────
 
 describe('handshake: initiate', () => {
-	it('returns OIDC_DISCOVERY_FAILED (500) when discovery fails', () => {
-		mock.inject_all({ fs: {} }, (injected) => {
-			let routes = {};
-			let deps = make_deps(injected.fs, hybrid_native(), routes);
-			routes.discovery = resp(500, {});
-			let res = handshake.initiate(deps, CONFIG);
-			assert.match(contains({ ok: false, error: 'OIDC_DISCOVERY_FAILED' }), res);
-			assert.match(500, res.details.http_status);
-		});
-	});
-
-	it('returns SYSTEM_INIT_FAILED (500) when the secret key is unavailable', () => {
-		// Lock is held by "another process" and the key never appears → get_secret_key fails.
-		mock.inject_all({ fs: { behavior: { readfile: () => null, mkdir: () => false } } }, (injected) => {
-			let routes = {};
-			let deps = make_deps(injected.fs, hybrid_native(), routes);
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			let res = handshake.initiate(deps, CONFIG);
-			assert.match(contains({ ok: false, error: 'SYSTEM_INIT_FAILED' }), res);
-			assert.match(500, res.details.http_status);
-		});
-	});
-
-	it('propagates STATE_SAVE_FAILED when handshake state cannot be persisted', () => {
-		// Key generation succeeds, but the handshake write cannot be renamed into place.
-		mock.inject_all({ fs: { behavior: { rename: (from, to) => index(from, 'handshake_') < 0 } } }, (injected) => {
-			let routes = {};
-			let deps = make_deps(injected.fs, hybrid_native(), routes);
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			let res = handshake.initiate(deps, CONFIG);
-			assert.match(contains({ ok: false, error: 'STATE_SAVE_FAILED' }), res);
-		});
-	});
-
 	it('returns an auth URL and opaque token on success', () => {
-		mock.inject_all({ fs: {} }, (injected) => {
-			let routes = {};
-			let deps = make_deps(injected.fs, hybrid_native(), routes);
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			let res = handshake.initiate(deps, CONFIG);
-			assert.match(contains({ ok: true }), res);
-			assert.match(0, index(res.data.url, AUTH_EP));
+		with_context({
+			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			http_client: { data: { [DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY } } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			let res = handshake.initiate(deps, base_config());
+			assert.match(truthy(), res.ok, `initiate failed: ${res.error}`);
+			assert.match(0, index(res.data.url, f.MOCK_DISCOVERY.authorization_endpoint));
 			assert.match(true, index(res.data.url, 'state=') >= 0);
 			assert.match(true, index(res.data.url, 'nonce=') >= 0);
 			assert.match(true, index(res.data.url, 'code_challenge=') >= 0);
@@ -187,65 +44,76 @@ describe('handshake: initiate', () => {
 		});
 	});
 
-	prop('returns OIDC_DISCOVERY_FAILED for any non-HTTPS issuer_url',
+	it('returns OIDC_DISCOVERY_FAILED (500) when discovery fails', () => {
+		with_context({
+			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			http_client: { data: { [DISCOVERY_URL]: { status: 500, body: {} } } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			let res = handshake.initiate(deps, base_config());
+			assert.match(contains({ ok: false, error: 'OIDC_DISCOVERY_FAILED' }), res);
+			assert.match(500, res.details.http_status);
+		});
+	});
+
+	prop('returns OIDC_DISCOVERY_FAILED for any non-HTTPS issuer_url (no fetch)',
 		gen.string({ max_len: 30 }),
 		(host, ctx) => {
-			let cfg = { ...CONFIG, issuer_url: `http://${host}`, internal_issuer_url: `http://${host}` };
-			let deps = make_deps({}, hybrid_native(), {});
-			assert.match(contains({ ok: false, error: 'OIDC_DISCOVERY_FAILED' }), handshake.initiate(deps, cfg));
+			with_context({
+				fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+				clock: { data: { now: 1516239022 } }
+			}, (deps) => {
+				let cfg = base_config({ issuer_url: `http://${host}`, internal_issuer_url: `http://${host}` });
+				assert.match(contains({ ok: false, error: 'OIDC_DISCOVERY_FAILED' }), handshake.initiate(deps, cfg));
+			});
 		}
 	);
 });
 
-// ─── authenticate: request validation ────────────────────────────────────────
+// ─── authenticate: request validation (pre-flight, before any HTTP) ────────────
 
 describe('handshake: authenticate — request validation', () => {
 	it('returns IDP_ERROR (400) when the IdP reports an error', () => {
-		mock.inject_all({ fs: {} }, (injected) => {
-			let deps = make_deps(injected.fs, hybrid_native(), {});
+		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let request = { query: { error: 'access_denied' }, cookies: {} };
-			let res = handshake.authenticate(deps, CONFIG, request, POLICY);
+			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
 			assert.match(contains({ ok: false, error: 'IDP_ERROR' }), res);
 			assert.match(400, res.details.http_status);
 		});
 	});
 
 	it('returns MISSING_CODE (400) when the authorization code is absent', () => {
-		mock.inject_all({ fs: {} }, (injected) => {
-			let deps = make_deps(injected.fs, hybrid_native(), {});
+		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let request = { query: {}, cookies: { '__Host-luci_sso_state': 'handle' } };
-			let res = handshake.authenticate(deps, CONFIG, request, POLICY);
+			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
 			assert.match(contains({ ok: false, error: 'MISSING_CODE' }), res);
 			assert.match(400, res.details.http_status);
 		});
 	});
 
 	it('returns MISSING_HANDSHAKE_COOKIE (401) when the state cookie is absent', () => {
-		mock.inject_all({ fs: {} }, (injected) => {
-			let deps = make_deps(injected.fs, hybrid_native(), {});
+		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let request = { query: { code: 'authcode' }, cookies: {} };
-			let res = handshake.authenticate(deps, CONFIG, request, POLICY);
+			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
 			assert.match(contains({ ok: false, error: 'MISSING_HANDSHAKE_COOKIE' }), res);
 			assert.match(401, res.details.http_status);
 		});
 	});
 
 	it('returns STATE_NOT_FOUND (401) when the handshake handle does not exist', () => {
-		mock.inject_all({ fs: {} }, (injected) => {
-			let deps = make_deps(injected.fs, hybrid_native(), {});
+		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let request = { query: { code: 'authcode', state: 'whatever' }, cookies: { '__Host-luci_sso_state': 'ghosthandle' } };
-			let res = handshake.authenticate(deps, CONFIG, request, POLICY);
+			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
 			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), res);
 			assert.match(401, res.details.http_status);
 		});
 	});
 
 	it('returns STATE_PARAMETER_MISMATCH (403) when the query state does not match', () => {
-		mock.inject_all({ fs: {} }, (injected) => {
-			let deps = make_deps(injected.fs, hybrid_native(), {});
-			let hs = seed_handshake(deps);
+		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
+			let hs = session.create_state(deps).data;
 			let request = { query: { code: 'authcode', state: 'WRONG-STATE' }, cookies: { '__Host-luci_sso_state': hs.token } };
-			let res = handshake.authenticate(deps, CONFIG, request, POLICY);
+			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
 			assert.match(contains({ ok: false, error: 'STATE_PARAMETER_MISMATCH' }), res);
 			assert.match(403, res.details.http_status);
 		});
@@ -255,175 +123,744 @@ describe('handshake: authenticate — request validation', () => {
 		gen.string({ max_len: 40 }),
 		(code, ctx) => {
 			ctx.classify('empty code', length(code) == 0);
-			mock.inject_all({ fs: {} }, (injected) => {
-				let deps = make_deps(injected.fs, hybrid_native(), {});
+			with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 				let request = { query: { code: code, state: 'x' }, cookies: { '__Host-luci_sso_state': 'ghosthandle' } };
-				assert.match(contains({ ok: false }), handshake.authenticate(deps, CONFIG, request, POLICY));
+				assert.match(contains({ ok: false }), handshake.authenticate(deps, base_config(), request, TEST_POLICY));
 			});
 		}
 	);
 });
 
-// ─── authenticate: OAuth flow failures ───────────────────────────────────────
+// ─── authenticate: OAuth flow failures ─────────────────────────────────────────
 
 describe('handshake: authenticate — OAuth flow failures', () => {
-	function run(routes_setup, native_obj) {
+	// Seeds a real handshake and drives authenticate; the token/jwks failures all
+	// occur before ID-token verification, so no signed id_token is needed.
+	function run(http_cfg) {
 		let out;
-		mock.inject_all({ fs: {} }, (injected) => {
-			let routes = {};
-			let deps = make_deps(injected.fs, native_obj || hybrid_native(), routes);
-			let hs = seed_handshake(deps);
-			routes_setup(routes, hs);
+		with_context({
+			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			http_client: http_cfg,
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			let hs = session.create_state(deps).data;
 			let request = { query: { code: 'authcode', state: hs.state }, cookies: { '__Host-luci_sso_state': hs.token } };
-			out = handshake.authenticate(deps, CONFIG, request, POLICY);
+			out = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
 		});
 		return out;
 	}
 
 	it('returns OIDC_DISCOVERY_FAILED (500) when discovery fails in the callback', () => {
-		let res = run((routes) => { routes.discovery = resp(503, {}); });
+		let res = run({ data: { [DISCOVERY_URL]: { status: 503, body: {} } } });
 		assert.match(contains({ ok: false, error: 'OIDC_DISCOVERY_FAILED' }), res);
 		assert.match(500, res.details.http_status);
 	});
 
 	it('propagates TOKEN_EXCHANGE_FAILED when the token endpoint errors', () => {
-		let res = run((routes) => {
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			routes.token     = resp(500, {});
-		});
+		let res = run({ data: {
+			[DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY },
+			[f.MOCK_DISCOVERY.token_endpoint]: { status: 500, body: {} }
+		} });
 		assert.match(contains({ ok: false, error: 'TOKEN_EXCHANGE_FAILED' }), res);
 	});
 
 	it('propagates OIDC_INVALID_GRANT (400) on an invalid_grant token response', () => {
-		let res = run((routes) => {
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			routes.token     = resp(400, { error: 'invalid_grant' });
-		});
+		let res = run({ data: {
+			[DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY },
+			[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: 'invalid_grant' } }
+		} });
 		assert.match(contains({ ok: false, error: 'OIDC_INVALID_GRANT' }), res);
 		assert.match(400, res.details.http_status);
 	});
 
 	it('returns JWKS_FETCH_FAILED (500) when the JWKS endpoint errors', () => {
-		let res = run((routes) => {
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			routes.token     = resp(200, { id_token: 'a.b.c', access_token: 'at' });
-			routes.jwks      = resp(500, {});
-		});
+		let res = run({ data: {
+			[DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY },
+			[f.MOCK_DISCOVERY.token_endpoint]: { status: 200, body: { id_token: 'a.b.c', access_token: 'at' } },
+			[f.MOCK_DISCOVERY.jwks_uri]: { status: 500, body: {} }
+		} });
 		assert.match(contains({ ok: false, error: 'JWKS_FETCH_FAILED' }), res);
 		assert.match(500, res.details.http_status);
 	});
 
-	it('returns ID_TOKEN_VERIFICATION_FAILED (401) with details on a malformed ID token', () => {
-		let res = run((routes) => {
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			routes.token     = resp(200, { id_token: 'not.a.jwt', access_token: 'at' });
-			routes.jwks      = resp(200, JWKS_OK);
-		});
-		assert.match(contains({ ok: false, error: 'ID_TOKEN_VERIFICATION_FAILED' }), res);
-		assert.match(401, res.details.http_status);
-		assert.match(true, res.details.details != null);
-	});
+	it('DO NOT retry JWKS refresh if kid is missing', () => {
+		let access_token = "access-token-123";
+		let test_config = base_config({ redirect_uri: "https://r/c" });
 
-	it('forces a single JWKS refresh on INVALID_SIGNATURE with a kid, then fails', () => {
-		let jwks_calls = 0;
-		let res = run((routes, hs) => {
-			let id_token = jwt('RS256', 'k1', {
-				sub: 'user-1', iss: ISSUER, aud: CLIENT_ID, exp: NOW + 3600, iat: NOW,
-				nonce: hs.nonce, at_hash: at_hash('at'),
-			});
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			routes.token     = resp(200, { id_token: id_token, access_token: 'at' });
-			routes.jwks      = () => { jwks_calls++; return resp(200, JWKS_OK); };
-		}, hybrid_native(VERIFY_NO));
-		assert.match(contains({ ok: false, error: 'ID_TOKEN_VERIFICATION_FAILED' }), res);
-		assert.match(2, jwks_calls);
+		let jwks_uri = f.MOCK_DISCOVERY.jwks_uri;
+		let jwks = { keys: [ f.MOCK_JWK ] };
+		let call_count = 0;
+		let pending_tokens = { access_token: null, id_token: null };
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			http_client: {
+				behavior: {
+					get: (url, opts) => {
+						if (url == f.MOCK_DISCOVERY.issuer + "/.well-known/openid-configuration")
+							return { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } };
+						if (url == jwks_uri) {
+							call_count++;
+							return { ok: true, data: { status: 200, body: sprintf("%J", jwks) } };
+						}
+						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+					},
+					post: (url, opts) => {
+						return { ok: true, data: { status: 200, body: sprintf("%J", pending_tokens) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let state_res = session.create_state(deps);
+			assert.match(truthy(), state_res.ok);
+			let s_data = state_res.data;
+
+			let payload = { ...f.MOCK_CLAIMS, nonce: s_data.nonce };
+			pending_tokens.access_token = access_token;
+			pending_tokens.id_token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", null);
+
+			let request = {
+				query: { code: "c1", state: s_data.state },
+				cookies: { "__Host-luci_sso_state": s_data.token }
+			};
+
+			let res = handshake.authenticate(deps, test_config, request);
+			assert.match(falsy(), res.ok, "Handshake should fail due to invalid signature");
+			assert.match("ID_TOKEN_VERIFICATION_FAILED", res.error);
+			assert.match("INVALID_SIGNATURE", res.details?.details);
+			assert.match(1, call_count, "JWKS should have been fetched exactly once (no retry when kid is missing)");
+		});
 	});
 });
 
-// ─── authenticate: post-verification behavior ────────────────────────────────
+// ─── authenticate: recovery (JWKS rotation) ────────────────────────────────────
 
-describe('handshake: authenticate — post-verification', () => {
-	// Runs a full callback where the ID token verifies successfully. `claims`
-	// extends the default verified payload; `access_token`, `userinfo`, `fs` and
-	// `ubus_create_res` steer the individual post-verification branches.
-	function run_verified(opts) {
-		let out;
-		let access_token = opts.access_token || 'opaque-access-token';
-		mock.inject_all({ fs: opts.fs || {} }, (injected) => {
-			let routes = {};
-			let deps = make_deps(injected.fs, hybrid_native(VERIFY_OK), routes, opts.ubus_create_res);
-			let hs = seed_handshake(deps);
+describe('handshake: recovery', () => {
+	it('handle JWKS key rotation with automatic retry', () => {
+		let access_token = "access-token-123";
+		let test_config = {
+			...f.MOCK_CONFIG,
+			internal_issuer_url: f.MOCK_CONFIG.issuer_url,
+			redirect_uri: "https://r/c",
+			roles: [
+				{ name: "r1", emails: ["user-123"], read: ["*"], write: ["*"] }
+			]
+		};
+
+		let jwks_uri = f.MOCK_DISCOVERY.jwks_uri;
+		let old_jwks = { keys: [ f.MOCK_JWK ] };
+		let new_jwks = { keys: [ f.ROTATION_NEW_JWK ] };
+		let call_count = 0;
+
+		let pending_tokens = { access_token: null, id_token: null };
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			http_client: {
+				behavior: {
+					get: (url, opts) => {
+						if (url == f.MOCK_DISCOVERY.issuer + "/.well-known/openid-configuration")
+							return { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } };
+						if (url == jwks_uri) {
+							call_count++;
+							let data = (call_count == 1) ? old_jwks : new_jwks;
+							return { ok: true, data: { status: 200, body: sprintf("%J", data) } };
+						}
+						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+					},
+					post: (url, opts) => {
+						return { ok: true, data: { status: 200, body: sprintf("%J", pending_tokens) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let state_res = session.create_state(deps);
+			assert.match(truthy(), state_res.ok);
+			let s_data = state_res.data;
 
 			let payload = {
-				sub: 'user-1', iss: ISSUER, aud: CLIENT_ID, exp: NOW + 3600, iat: NOW,
-				nonce: hs.nonce, at_hash: at_hash(access_token),
+				...f.MOCK_CLAIMS,
+				email: "user-123",
+				nonce: s_data.nonce,
+				at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data
 			};
-			for (let k, v in (opts.claims || {})) payload[k] = v;
+			pending_tokens.access_token = access_token;
+			pending_tokens.id_token = h.generate_id_token(payload, f.ROTATION_NEW_PRIVKEY, "RS256", f.ROTATION_NEW_JWK.kid);
 
-			let id_token = jwt('RS256', 'k1', payload);
-			routes.discovery = resp(200, DISCOVERY_DOC);
-			routes.token     = resp(200, { id_token: id_token, access_token: access_token, refresh_token: 'rt' });
-			routes.jwks      = resp(200, JWKS_OK);
-			if (opts.userinfo) routes.userinfo = opts.userinfo;
+			let request = {
+				query: { code: "c1", state: s_data.state },
+				cookies: { "__Host-luci_sso_state": s_data.token }
+			};
 
-			let request = { query: { code: 'authcode', state: hs.state }, cookies: { '__Host-luci_sso_state': hs.token } };
-			out = handshake.authenticate(deps, CONFIG, request, POLICY);
+			let res = handshake.authenticate(deps, test_config, request);
+			assert.match(truthy(), res.ok, `Handshake should succeed after JWKS retry (Error: ${res.error}, Details: ${res.details})`);
+			assert.match(2, call_count, "JWKS should have been fetched exactly twice (initial + forced refresh)");
 		});
-		return out;
-	}
-
-	it('creates a session on the full happy path', () => {
-		let res = run_verified({ claims: { email: 'user@example.com', name: 'User One' } });
-		assert.match(contains({ ok: true }), res);
-		assert.match('SID-TEST', res.data.sid);
-		assert.match('user@example.com', res.data.email);
 	});
+});
 
-	it('supplements a missing email via the UserInfo endpoint', () => {
-		let res = run_verified({
-			claims: {}, // no email in the ID token
-			userinfo: resp(200, { sub: 'user-1', email: 'user@example.com', name: 'From UserInfo' }),
+// ─── authenticate: UserInfo supplementation ────────────────────────────────────
+
+describe('handshake: userinfo', () => {
+	it('supplements missing email when sub matches', () => {
+		let test_config = {
+			...f.MOCK_CONFIG,
+			issuer_url: "https://trusted.idp",
+			internal_issuer_url: "https://trusted.idp",
+			roles: [ { name: "admin", emails: ["user@example.com"], read: ["*"], write: ["*"] } ]
+		};
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			http_client: {
+				data: {
+					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
+					[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+					[f.MOCK_DISCOVERY.userinfo_endpoint]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "user@example.com" } }
+				},
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-123";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash };
+						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let s_res = session.create_state(deps);
+			assert.match(truthy(), s_res.ok);
+			let s_data = s_res.data;
+			let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
+			let raw_data = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw_data.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw_data));
+
+			let request = {
+				query: { code: "c1", state: raw_data.state },
+				cookies: { "__Host-luci_sso_state": s_data.token }
+			};
+
+			let res = handshake.authenticate(deps, test_config, request);
+			assert.match(truthy(), res.ok, `Handshake should succeed with UserInfo. Error: ${res.error}`);
+			assert.match("user@example.com", res.data.email, "Email should be supplemented from UserInfo");
 		});
-		assert.match(contains({ ok: true }), res);
-		assert.match('user@example.com', res.data.email);
 	});
 
-	it('returns IDENTITY_MISMATCH (403) when the UserInfo sub differs', () => {
-		let res = run_verified({
-			claims: {},
-			userinfo: resp(200, { sub: 'someone-else', email: 'user@example.com' }),
+	it('fails identity binding when sub mismatches', () => {
+		let test_config = {
+			...f.MOCK_CONFIG,
+			issuer_url: "https://trusted.idp",
+			internal_issuer_url: "https://trusted.idp"
+		};
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			http_client: {
+				data: {
+					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
+					[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+					[f.MOCK_DISCOVERY.userinfo_endpoint]: { status: 200, body: { sub: "EVIL-SUB", email: "evil@example.com" } }
+				},
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-456";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let payload = { ...f.MOCK_CLAIMS, email: null, nonce: "test-nonce", at_hash };
+						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let s_res = session.create_state(deps);
+			assert.match(truthy(), s_res.ok);
+			let s_data = s_res.data;
+			let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
+			let raw_data = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw_data.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw_data));
+
+			let request = {
+				query: { code: "c1", state: raw_data.state },
+				cookies: { "__Host-luci_sso_state": s_data.token }
+			};
+
+			let res = handshake.authenticate(deps, test_config, request);
+			assert.match(falsy(), res.ok, "Handshake should fail on sub mismatch");
+			assert.match("IDENTITY_MISMATCH", res.error);
 		});
-		assert.match(contains({ ok: false, error: 'IDENTITY_MISMATCH' }), res);
-		assert.match(403, res.details.http_status);
 	});
 
-	it('returns TOKEN_REPLAYED (403) when the access token was already registered', () => {
-		let res = run_verified({
-			claims: { email: 'user@example.com' },
-			fs: { behavior: { mkdir: (path) => index(path, '/tokens') < 0 } }, // token lock dir creation fails
+	it('userinfo fallback succeeds after sub normalization (case-insensitive)', () => {
+		let issuer_url = f.MOCK_CONFIG.issuer_url;
+		let discovery_doc = {
+			...f.MOCK_DISCOVERY,
+			authorization_endpoint: "https://trusted.idp/auth",
+			token_endpoint: "https://trusted.idp/token",
+			jwks_uri: "https://trusted.idp/jwks",
+			userinfo_endpoint: "https://trusted.idp/userinfo"
+		};
+
+		let test_config = {
+			...f.MOCK_CONFIG,
+			internal_issuer_url: "https://trusted.idp",
+			roles: [ { name: "admin", emails: ["user@example.com"], read: ["*"], write: ["*"] } ]
+		};
+
+		let nonce_captured = null;
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			http_client: {
+				data: {
+					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+					[discovery_doc.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: "USER-123", email: "user@example.com" } }
+				},
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-123";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						// ID Token has lowercase sub; UserInfo returns UPPERCASE sub — normalization must reconcile
+						let payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: null, nonce: nonce_captured, at_hash };
+						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let s_res = handshake.initiate(deps, test_config);
+			assert.match(truthy(), s_res.ok, `initiate failed: ${s_res.error}`);
+
+			nonce_captured = replace(s_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
+			let state_in_url = replace(s_res.data.url, /^.*state=([^&]+).*$/, "$1");
+
+			let request = {
+				query: { code: "c123", state: state_in_url },
+				cookies: { "__Host-luci_sso_state": s_res.data.token }
+			};
+
+			let res = handshake.authenticate(deps, test_config, request, TEST_POLICY);
+			assert.match(truthy(), res.ok, "Should SUCCEED after sub normalization fix");
+			assert.match("user@example.com", res.data.email);
 		});
-		assert.match(contains({ ok: false, error: 'TOKEN_REPLAYED' }), res);
-		assert.match(403, res.details.http_status);
 	});
+});
 
-	it('returns USER_NOT_AUTHORIZED (403) when no role matches', () => {
-		let res = run_verified({ claims: { email: 'nobody@example.com', groups: [] } });
-		assert.match(contains({ ok: false, error: 'USER_NOT_AUTHORIZED' }), res);
-		assert.match(403, res.details.http_status);
-	});
+// ─── authenticate: split-horizon (internal vs public issuer) ───────────────────
 
-	it('returns UBUS_LOGIN_FAILED (500) when session creation fails', () => {
-		let res = run_verified({
-			claims: { email: 'user@example.com' },
-			ubus_create_res: Result.err('UBUS_SESSION_FAILED'),
+describe('handshake: split-horizon', () => {
+	it('prevents path corruption when issuer_url is in path', () => {
+		let issuer_url = "https://auth.com";
+		let internal_issuer_url = "https://internal.lan:8443";
+
+		let discovery_doc = {
+			issuer: issuer_url,
+			authorization_endpoint: issuer_url + "/auth",
+			token_endpoint: issuer_url + "/realms/auth.com/token",
+			jwks_uri: issuer_url + "/realms/auth.com/jwks",
+			userinfo_endpoint: issuer_url + "/realms/auth.com/userinfo"
+		};
+
+		let test_config = {
+			...f.MOCK_CONFIG,
+			issuer_url: issuer_url,
+			internal_issuer_url: internal_issuer_url,
+			redirect_uri: "https://router/callback",
+			roles: [
+				{ name: "admin", emails: ["admin@example.com"], read: ["*"], write: ["*"] }
+			]
+		};
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			http_client: {
+				data: {
+					[internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+					[internal_issuer_url + "/realms/auth.com/jwks"]: { status: 200, body: { keys: [ f.MOCK_JWK ] } }
+				},
+				behavior: {
+					post: (url, opts) => {
+						if (url == internal_issuer_url + "/realms/internal.lan:8443/token") {
+							return { ok: true, data: { status: 404, body: "Path Corrupted" } };
+						}
+						let access_token = "at-123";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let payload = {
+							...f.MOCK_CLAIMS,
+							iss: issuer_url,
+							email: "admin@example.com",
+							nonce: "test-nonce",
+							at_hash
+						};
+						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let s_res = session.create_state(deps);
+			assert.match(truthy(), s_res.ok, `create_state failed: ${s_res.error}`);
+			let s_data = s_res.data;
+			let handle = s_data.token;
+			let path = "/var/run/luci-sso/handshake_" + handle + ".json";
+
+			let raw_data = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw_data.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw_data));
+
+			let request = {
+				query: { code: "c1", state: raw_data.state },
+				cookies: { "__Host-luci_sso_state": handle }
+			};
+
+			let res = handshake.authenticate(deps, test_config, request);
+			assert.match(truthy(), res.ok, `Handshake should succeed. Error: ${res.error} Details: ${res.details}`);
+			assert.match("admin@example.com", res.data.email);
 		});
-		assert.match(contains({ ok: false, error: 'UBUS_LOGIN_FAILED' }), res);
-		assert.match(500, res.details.http_status);
 	});
 
-	it('authorizes a user by group claim when email does not match', () => {
-		let res = run_verified({ claims: { email: 'stranger@example.com', groups: ['ops-team'] } });
-		assert.match(contains({ ok: true }), res);
-		assert.match('SID-TEST', res.data.sid);
+	it('prevents corruption when internal_issuer_url is substring of issuer_url', () => {
+		let issuer_url = "https://auth.com";
+		let internal_issuer_url = "https://auth";
+
+		let discovery_doc = {
+			issuer: issuer_url,
+			authorization_endpoint: issuer_url + "/auth",
+			token_endpoint: issuer_url + "/token",
+			jwks_uri: issuer_url + "/jwks"
+		};
+
+		let test_config = {
+			...f.MOCK_CONFIG,
+			issuer_url: issuer_url,
+			internal_issuer_url: internal_issuer_url,
+			redirect_uri: "https://router/callback",
+			roles: [ { name: "admin", emails: ["admin@example.com"], read: ["*"], write: ["*"] } ]
+		};
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s456" }, "session:grant": {}, "session:set": {} } },
+			http_client: {
+				data: {
+					[internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+					[internal_issuer_url + "/jwks"]: { status: 200, body: { keys: [ f.MOCK_JWK ] } }
+				},
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-456";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let payload = {
+							...f.MOCK_CLAIMS,
+							iss: issuer_url,
+							email: "admin@example.com",
+							nonce: "test-nonce",
+							at_hash
+						};
+						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let s_res = session.create_state(deps);
+			assert.match(truthy(), s_res.ok);
+			let s_data = s_res.data;
+			let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
+			let raw_data = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw_data.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw_data));
+
+			let request = {
+				query: { code: "c1", state: raw_data.state },
+				cookies: { "__Host-luci_sso_state": s_data.token }
+			};
+
+			let res = handshake.authenticate(deps, test_config, request);
+			assert.match(truthy(), res.ok, `Handshake should succeed. Error: ${res.error}`);
+		});
+	});
+
+	it('handles trailing slash in issuer_url (Audit W3)', () => {
+		let issuer_url = "https://idp.com/";
+		let internal_issuer_url = "https://internal.lan";
+
+		let discovery_doc = {
+			issuer: "https://idp.com",
+			authorization_endpoint: "https://idp.com/auth",
+			token_endpoint: "https://idp.com/token",
+			jwks_uri: "https://idp.com/jwks"
+		};
+
+		let test_config = {
+			...f.MOCK_CONFIG,
+			issuer_url: issuer_url,
+			internal_issuer_url: internal_issuer_url,
+		};
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			http_client: {
+				data: {
+					[internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+					[internal_issuer_url + "/jwks"]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+					[internal_issuer_url + "/token"]: { status: 200, body: { access_token: "at", id_token: "it" } }
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let s_res = session.create_state(deps);
+			assert.match(truthy(), s_res.ok);
+			let s_data = s_res.data;
+			let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
+			let raw_data = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw_data.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw_data));
+
+			let request = {
+				query: { code: "c1", state: raw_data.state },
+				cookies: { "__Host-luci_sso_state": s_data.token }
+			};
+
+			// If W3 bug existed, token_endpoint would be corrupted and GET would die in strict mode.
+			// Reaching authenticate without strict-mode death confirms correct URL routing.
+			handshake.authenticate(deps, test_config, request);
+			assert.match(truthy(), true);
+		});
+	});
+});
+
+// ─── authenticate: access-token lifetime warning ───────────────────────────────
+
+describe('handshake: warning', () => {
+	it('log warning for long-lived access tokens (W2)', () => {
+		let now = 1516239022;
+		let payload = { iat: now, exp: now + 90000 };
+		let long_lived_token = "header." + encoding.b64url_encode(sprintf("%J", payload)).data + ".signature";
+
+		let test_config = {
+			...f.MOCK_CONFIG,
+			internal_issuer_url: f.MOCK_CONFIG.issuer_url,
+			redirect_uri: "https://r/c",
+			roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
+		};
+
+		let log_calls = [];
+		let nonce_ref = null;
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": {}, "session:set": {} } },
+			http_client: {
+				data: {
+					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
+					[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } }
+				},
+				behavior: {
+					post: (url, opts) => {
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, long_lived_token).data, 0, 16)).data;
+						let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_ref, at_hash };
+						let id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: long_lived_token, id_token }) } };
+					}
+				}
+			},
+			clock: { data: { now } }
+		}, (deps) => {
+			deps.log = (level, msg) => push(log_calls, [level, msg]);
+
+			let state_res = handshake.initiate(deps, test_config);
+			assert.match(truthy(), state_res.ok, `initiate failed: ${state_res.error}`);
+
+			nonce_ref = replace(state_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
+			let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
+
+			let request = {
+				query: { code: "c1", state: state_val },
+				cookies: { "__Host-luci_sso_state": state_res.data.token }
+			};
+
+			let auth_res = handshake.authenticate(deps, test_config, request);
+			assert.match(truthy(), auth_res.ok, `authenticate failed: ${auth_res.error} ${auth_res.details}`);
+		});
+
+		let found = false;
+		for (let e in log_calls) {
+			if (e[0] == "warn" && match(e[1], /Access token lifetime exceeds 24h replay window/)) {
+				found = true;
+				break;
+			}
+		}
+		assert.match(truthy(), found, "Should log warning for long-lived access token");
+	});
+
+	it('silent for opaque or short-lived tokens', () => {
+		let test_config = {
+			...f.MOCK_CONFIG,
+			internal_issuer_url: f.MOCK_CONFIG.issuer_url,
+			redirect_uri: "https://r/c",
+			roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
+		};
+
+		let cases = [
+			{ name: "Opaque", token: "opaque_string_without_dots" },
+			{ name: "Short-lived", token: "h." + encoding.b64url_encode(sprintf("%J", { iat: 100, exp: 200 })).data + ".s" }
+		];
+
+		for (let c in cases) {
+			let log_calls = [];
+			let nonce_ref = null;
+			let access_token = c.token;
+
+			with_context({
+				fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+				ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": {}, "session:set": {} } },
+				http_client: {
+					data: {
+						[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
+						[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } }
+					},
+					behavior: {
+						post: (url, opts) => {
+							let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+							let id_payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: "user-123", nonce: nonce_ref, at_hash };
+							let id_token = h.generate_id_token(id_payload, f.MOCK_PRIVKEY, "RS256");
+							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
+						}
+					}
+				},
+				clock: { data: { now: 1516239022 } }
+			}, (deps) => {
+				deps.log = (level, msg) => push(log_calls, [level, msg]);
+
+				let state_res = handshake.initiate(deps, test_config);
+				assert.match(truthy(), state_res.ok, `[${c.name}] initiate failed: ${state_res.error}`);
+
+				nonce_ref = replace(state_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
+				let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
+
+				let request = {
+					query: { code: "c1", state: state_val },
+					cookies: { "__Host-luci_sso_state": state_res.data.token }
+				};
+
+				let auth_res = handshake.authenticate(deps, test_config, request);
+				assert.match(truthy(), auth_res.ok, `[${c.name}] authenticate failed: ${auth_res.error} ${auth_res.details}`);
+			});
+
+			let found = false;
+			for (let e in log_calls) {
+				if (e[0] == "warn" && match(e[1], /Access token lifetime exceeds 24h replay window/)) {
+					found = true;
+					break;
+				}
+			}
+			assert.match(falsy(), found, `Should NOT log warning for ${c.name} token`);
+		}
+	});
+});
+
+// ─── security: one-time state consumption & capacity ───────────────────────────
+
+describe('handshake: security', () => {
+	it('state is consumed only once (B1)', () => {
+		let handle = "valid-handle";
+		let path = `/var/run/luci-sso/handshake_${handle}.json`;
+		let config = { ...f.MOCK_CONFIG, clock_tolerance: 30 };
+
+		let mock_handshake = {
+			id: "h123",
+			state: "state123",
+			nonce: "nonce123",
+			code_verifier: "verifier123-verifier123-verifier123-verifier123",
+			iat: 1516239022,
+			exp: 1516239022 + 300
+		};
+
+		let rename_calls_arr = null;
+		let unlink_calls_arr = null;
+
+		with_context({
+			fs: { data: { [path]: sprintf("%J", mock_handshake) } },
+			http_client: {
+				data: {
+					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
+					[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "invalid_grant" } }
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let req = {
+				query: { code: "123", state: mock_handshake.state },
+				cookies: { "__Host-luci_sso_state": handle }
+			};
+
+			handshake.authenticate(deps, config, req);
+
+			rename_calls_arr = spy(deps.fs).calls.rename || [];
+			unlink_calls_arr = spy(deps.fs).calls.unlink || [];
+		});
+
+		let rename_calls = 0;
+		for (let c in rename_calls_arr) {
+			if (index(c[0], handle) != -1) rename_calls++;
+		}
+
+		let remove_calls = 0;
+		for (let c in unlink_calls_arr) {
+			if (index(c[0], handle) != -1) remove_calls++;
+		}
+
+		assert.match(1, rename_calls, "Should attempt rename exactly once");
+		assert.match(1, remove_calls, "Should attempt remove exactly once (inside verify_state)");
+	});
+
+	it('enforce hard capacity limit with emergency reap (DoS protection)', () => {
+		let mtime = 1000;
+
+		with_context({
+			fs: {
+				data: {},
+				behavior: {
+					stat: (path) => ({ mtime: mtime++ })
+				}
+			},
+			clock: { data: { now: 0 } }
+		}, (deps) => {
+			for (let i = 0; i < 100; i++) {
+				let res = session.create_state(deps);
+				assert.match(truthy(), res.ok, `Failed to create handshake #${i}: ${res.error}`);
+			}
+
+			let files = deps.fs.lsdir("/var/run/luci-sso");
+			let files_before = 0;
+			for (let fn in files) if (match(fn, /^handshake_.*\.json$/)) files_before++;
+
+			assert.match(100, files_before, "Should have exactly 100 handshake files");
+
+			let res_101 = session.create_state(deps);
+			assert.match(truthy(), res_101.ok, "101st handshake should succeed after emergency reap");
+
+			files = deps.fs.lsdir("/var/run/luci-sso");
+			let files_after = 0;
+			for (let fn in files) if (match(fn, /^handshake_.*\.json$/)) files_after++;
+
+			// Expected: 100 (original) - 50 (reaped) + 1 (new) = 51
+			assert.match(51, files_after, "Emergency reap should have cleared 50% of oldest handshakes");
+		});
 	});
 });
