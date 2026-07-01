@@ -864,3 +864,117 @@ describe('handshake: security', () => {
 		});
 	});
 });
+
+// ─── DoS / token registration ordering ─────────────────────────────────────────
+
+describe('handshake: security', () => {
+	it('register_token deferred until after verification (DoS prevention)', () => {
+		let test_config = {
+			...f.MOCK_CONFIG,
+			internal_issuer_url: f.MOCK_CONFIG.issuer_url,
+			redirect_uri: "https://r/c",
+			roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
+		};
+
+		with_context({
+			fs: { data: {} },
+			http_client: {
+				behavior: {
+					get: (url, opts) => {
+						return { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } };
+					},
+					post: (url, opts) => {
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: "at1", id_token: "invalid.id.token" }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let state_res = handshake.initiate(deps, test_config);
+			assert.match(truthy(), state_res.ok, "initiate should succeed");
+			let state_val = replace(state_res.data.url, /^.*state=([^&]+).*$/, "$1");
+			let request = {
+				path: "/callback",
+				query: { code: "c1", state: state_val },
+				cookies: { "__Host-luci_sso_state": state_res.data.token },
+				env: { HTTPS: "on" }
+			};
+
+			let auth_res = handshake.authenticate(deps, test_config, request, { allowed_algs: ["RS256"] });
+			assert.match(falsy(), auth_res.ok, "Authentication should fail due to invalid ID token");
+
+			let mkdir_calls = spy(deps.fs).calls.mkdir;
+			let token_registered = false;
+			for (let call in mkdir_calls) {
+				if (call[0] && index(call[0], "/tokens/") != -1) {
+					token_registered = true;
+					break;
+				}
+			}
+			assert.match(falsy(), token_registered, "Should NOT register token before successful ID token verification");
+		});
+	});
+});
+
+// ─── groups claim propagation (userinfo fallback) ───────────────────────────────
+
+describe('handshake: reproduction', () => {
+	it('userinfo fallback drops groups claim', () => {
+		let issuer_url = f.MOCK_CONFIG.issuer_url;
+		let discovery_doc = {
+			...f.MOCK_DISCOVERY,
+			authorization_endpoint: "https://trusted.idp/auth",
+			token_endpoint: "https://trusted.idp/token",
+			jwks_uri: "https://trusted.idp/jwks",
+			userinfo_endpoint: "https://trusted.idp/userinfo"
+		};
+		let groups = ["idp-admin"];
+		let test_config = {
+			...f.MOCK_CONFIG,
+			internal_issuer_url: "https://trusted.idp",
+			roles: [ { name: "admin", groups: ["idp-admin"], emails: ["user@example.com"], read: ["*"], write: ["*"] } ]
+		};
+		let nonce_ref = null;
+
+		with_context({
+			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			http_client: {
+				data: {
+					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
+					[discovery_doc.jwks_uri]:          { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "user@example.com", groups: groups } }
+				},
+				behavior: {
+					post: (url, opts) => {
+						if (url == discovery_doc.token_endpoint) {
+							let access_token = "at-123";
+							let payload = {
+								...f.MOCK_CLAIMS,
+								email: null,
+								groups: null,
+								nonce: nonce_ref,
+								at_hash: encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data
+							};
+							let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
+						}
+						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let s_res = handshake.initiate(deps, test_config);
+			assert.match(truthy(), s_res.ok, `initiate failed: ${s_res.error}`);
+			nonce_ref = replace(s_res.data.url, /^.*nonce=([^&]+).*$/, "$1");
+			let state_val = replace(s_res.data.url, /^.*state=([^&]+).*$/, "$1");
+			let request = {
+				query: { code: "c123", state: state_val },
+				cookies: { "__Host-luci_sso_state": s_res.data.token }
+			};
+			let res = handshake.authenticate(deps, test_config, request);
+			assert.match(truthy(), res.ok, `Authentication should succeed (Error: ${res.error}, Details: ${res.details})`);
+		});
+	});
+});
