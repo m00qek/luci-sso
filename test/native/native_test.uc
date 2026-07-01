@@ -30,6 +30,15 @@ const WEAK_RSA_PUB =
 	"-----END PUBLIC KEY-----";
 const WEAK_RSA_SIG = b64dec("NQIvIQu5i0YKhIwhsvCqrYeNqKxQTABrufd0ssfVn/JezIJL67hET6S0kCdAQKv4Fv/a4Hxwqtz6FxUTsq4F0A==");
 
+// A second, unrelated valid P-256 public key — used to prove verify_es256 binds
+// to the signing key (every EC_256* fixture shares one key, so a distinct key
+// is needed for the wrong-key negative).
+const EC_256_OTHER_PUB =
+	"-----BEGIN PUBLIC KEY-----\n" +
+	"MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEEzhN1r60isW+NrJob/nIlkL22nxv\n" +
+	"LYytpZi6MtrnMfr+MXm1HiMuJXVzFOdrAv3Hj25MlU+UsVV8FLlqFyT0YQ==\n" +
+	"-----END PUBLIC KEY-----";
+
 // Builds a byte string of exactly `n` bytes.
 function bytes(n) {
 	let s = 'A';
@@ -302,6 +311,10 @@ describe('native: verify_es256', () => {
 
 	it('rejects a valid signature for a different message', () => {
 		assert.match(false, native.verify_es256('wrong-message', hex_to_bin(f0.EC_256.sig_hex), f0.EC_256.pub));
+	});
+
+	it('rejects a valid signature verified against the wrong (but valid) P-256 key', () => {
+		assert.match(false, native.verify_es256(f0.EC_256.msg, hex_to_bin(f0.EC_256.sig_hex), EC_256_OTHER_PUB));
 	});
 
 	it('rejects an RSA public key (cross-algorithm confusion)', () => {
