@@ -103,6 +103,15 @@ describe('crypto.jws: verify', () => {
 		}
 	}));
 
+	it('tolerates unknown header fields (forward compatibility)', () => with_mac((native) => {
+		// Extra/unrecognised header members must not break verification, as long as
+		// alg is supported and the signature checks out.
+		let header  = encoding.b64url_encode(sprintf('%J', { alg: 'HS256', typ: 'JWT', kid: 'k1', malicious_extra: 'ignore-me' })).data;
+		let payload = encoding.b64url_encode(sprintf('%J', { foo: 'bar' })).data;
+		let token   = `${header}.${payload}.${MAC_SIG}`;
+		assert.match(contains({ ok: true, data: contains({ foo: 'bar' }) }), jws.verify(native, token, SECRET));
+	}));
+
 	it('returns INVALID_HEADER_ENCODING for non-base64url header', () => with_strict((native) => {
 		assert.match(contains({ ok: false, error: 'INVALID_HEADER_ENCODING' }), jws.verify(native, '!!!.payload.sig', SECRET));
 	}));

@@ -169,6 +169,21 @@ describe('encoding: safe_json', () => {
 	it('calls .read() on stream-like objects and parses the result', () => {
 		assert.match(contains({ ok: true, data: { c: 3 } }), encoding.safe_json({ read: () => '{"c":3}' }));
 	});
+
+	it('never leaks raw input fragments on failure (Audit W4)', () => {
+		// A parse failure must not echo the offending input back through the error
+		// Result — the input can carry secrets (tokens, PII). Guards both a
+		// malformed-but-textual payload and raw binary.
+		let sensitive = '{"token": "SECRET_1234567890", "garbage": '; // malformed JSON
+		let res = encoding.safe_json(sensitive);
+		assert.match(contains({ ok: false, error: 'PARSE_ERROR' }), res);
+		assert.match(undefined, res.raw_fragment, 'Error Result MUST NOT expose raw_fragment');
+
+		let binary = '\x00\xFF\xDEAD\xBEEF';
+		let res2 = encoding.safe_json(binary);
+		assert.match(contains({ ok: false }), res2);
+		assert.match(undefined, res2.raw_fragment, 'Must not leak binary fragments');
+	});
 });
 
 // ─── normalize_url ───────────────────────────────────────────────────────────

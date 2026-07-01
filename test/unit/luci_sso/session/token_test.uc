@@ -1,4 +1,4 @@
-import { describe, it, prop, gen, assert, contains, mock } from 'utest';
+import { describe, it, prop, gen, assert, contains, falsy, mock } from 'utest';
 import * as token from 'luci_sso.session.token';
 import * as crypto from 'luci_sso.crypto';
 import * as common from 'luci_sso.session.common';
@@ -270,6 +270,19 @@ describe('session.token: verify', () => {
 				token.verify(deps, created.data, 0)
 			);
 		});
+	});
+
+	it('never writes raw PII (email / name) to the log on create (Audit)', () => {
+		let log_calls = [];
+		mock.inject_all(KEY_STATE, (injected) => {
+			let deps = { fs: injected.fs, clock: injected.clock, native: injected.native ?? native, log: (level, msg) => push(log_calls, msg) };
+			let created = token.create(deps, { sub: '123456789', email: 'attacker@evil.com', name: 'Evil Attacker' });
+			assert.match(contains({ ok: true }), created);
+		});
+		for (let msg in log_calls) {
+			assert.match(falsy(), match(msg, /@/),            `Raw email leaked to log: ${msg}`);
+			assert.match(falsy(), match(msg, /Evil Attacker/), `Raw name leaked to log: ${msg}`);
+		}
 	});
 });
 
