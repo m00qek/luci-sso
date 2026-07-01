@@ -1,4 +1,4 @@
-import { describe, it, assert, contains, mock, spy } from 'utest';
+import { describe, it, prop, gen, assert, contains, mock, spy } from 'utest';
 import * as jwt from 'luci_sso.crypto.jwt';
 import * as encoding from 'luci_sso.encoding';
 
@@ -392,4 +392,83 @@ describe('crypto.jwt: verify — pre_parsed_header', () => {
 			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, VALID_PAYLOAD), 'pem', opts)
 		);
 	}));
+});
+
+// ─── claims validation (properties) ───────────────────────────────────────────
+// The time-window state machine, exhaustively probed. Signature is faked-accept
+// (with_pass), so the outcome is a pure function of (claim, now, clock_tolerance).
+
+// The audience pool includes the expected client so membership varies naturally.
+const AUD_POOL = ['alpha-client', BASE_OPTS.aud, 'beta-client', 'gamma-client'];
+
+describe('crypto.jwt: verify — claims (properties)', () => {
+	prop('exp is accepted iff exp >= now - clock_tolerance (else TOKEN_EXPIRED)',
+		gen.tuple(gen.int(0, 300), gen.int(-600, 600)),
+		(t, ctx) => {
+			let tol = t[0], delta = t[1];
+			let opts = { ...BASE_OPTS, clock_tolerance: tol };
+			// iat safely in the past so only the exp branch decides the outcome.
+			let payload = { ...VALID_PAYLOAD, iat: NOW - 1000, exp: NOW + delta };
+			let expect_ok = (NOW + delta) >= (NOW - tol);
+			ctx.classify('accepted', expect_ok);
+			ctx.classify('at boundary', delta === -tol);
+			with_pass((native) => {
+				let res = jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, payload), 'pem', opts);
+				assert.match(expect_ok ? contains({ ok: true }) : contains({ ok: false, error: 'TOKEN_EXPIRED' }), res);
+			});
+		}
+	);
+
+	prop('iat is accepted iff iat <= now + clock_tolerance (else TOKEN_ISSUED_IN_FUTURE)',
+		gen.tuple(gen.int(0, 300), gen.int(-600, 600)),
+		(t, ctx) => {
+			let tol = t[0], delta = t[1];
+			let opts = { ...BASE_OPTS, clock_tolerance: tol };
+			// exp safely in the future so only the iat branch decides the outcome.
+			let payload = { ...VALID_PAYLOAD, exp: NOW + 10000, iat: NOW + delta };
+			let expect_ok = (NOW + delta) <= (NOW + tol);
+			ctx.classify('accepted', expect_ok);
+			ctx.classify('at boundary', delta === tol);
+			with_pass((native) => {
+				let res = jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, payload), 'pem', opts);
+				assert.match(expect_ok ? contains({ ok: true }) : contains({ ok: false, error: 'TOKEN_ISSUED_IN_FUTURE' }), res);
+			});
+		}
+	);
+
+	prop('nbf (when present) is accepted iff nbf <= now + clock_tolerance (else TOKEN_NOT_YET_VALID)',
+		gen.tuple(gen.int(0, 300), gen.int(-600, 600)),
+		(t, ctx) => {
+			let tol = t[0], delta = t[1];
+			let opts = { ...BASE_OPTS, clock_tolerance: tol };
+			let payload = { ...VALID_PAYLOAD, nbf: NOW + delta };
+			let expect_ok = (NOW + delta) <= (NOW + tol);
+			ctx.classify('not yet valid', !expect_ok);
+			with_pass((native) => {
+				let res = jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, payload), 'pem', opts);
+				assert.match(expect_ok ? contains({ ok: true }) : contains({ ok: false, error: 'TOKEN_NOT_YET_VALID' }), res);
+			});
+		}
+	);
+
+	prop('an aud array is accepted iff it is non-empty and contains the expected client',
+		gen.map(gen.array(gen.int(0, 3), { min_len: 0, max_len: 5 }),
+		        (idxs) => map(idxs, (i) => AUD_POOL[i])),
+		(auds, ctx) => {
+			let has_client = false;
+			for (let a in auds) if (a === BASE_OPTS.aud) has_client = true;
+			ctx.classify('empty', length(auds) === 0);
+			ctx.classify('contains client', has_client);
+			let payload = { ...VALID_PAYLOAD, aud: auds };
+			with_pass((native) => {
+				let res = jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, payload), 'pem', BASE_OPTS);
+				if (length(auds) === 0)
+					assert.match(contains({ ok: false, error: 'INVALID_AUDIENCE' }), res);
+				else if (has_client)
+					assert.match(contains({ ok: true }), res);
+				else
+					assert.match(contains({ ok: false, error: 'AUDIENCE_MISMATCH' }), res);
+			});
+		}
+	);
 });
