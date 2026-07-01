@@ -10,9 +10,9 @@ import * as key from 'luci_sso.session.key';
 /**
  * Creates a signed session token.
  *
- * @param {object} deps - { fs, clock, log }
- * @param {object} user_data - User claims from ID token
- * @returns {object} - Result Object {ok, data: token/error}
+ * @param {*} deps Service dependencies: `deps.fs`, `deps.clock`, `deps.native`, `deps.log`.
+ * @param {*} user_data User claims from the OIDC ID token; must include `sub` or `email` as strings.
+ * @returns {Result}
  */
 export function create(deps, user_data) {
 	if (!user_data || (type(user_data.sub) !== "string" && type(user_data.email) !== "string")) {
@@ -37,10 +37,10 @@ export function create(deps, user_data) {
 /**
  * Verifies a session token and returns the session object.
  *
- * @param {object} deps - { fs, clock, log }
- * @param {string} token_str - Signed session token
- * @param {number} clock_tolerance - Clock skew tolerance
- * @returns {object} - Result Object {ok, data: session/error}
+ * @param {*} deps Service dependencies: `deps.fs`, `deps.clock`, `deps.native`, `deps.log`.
+ * @param {string} token_str Signed JWS session token as issued by `token.create`.
+ * @param {int} clock_tolerance Clock skew tolerance in seconds for `iat`/`exp` validation.
+ * @returns {Result}
  */
 export function verify(deps, token_str, clock_tolerance) {
 	if (!token_str) return Result.err("NO_SESSION");

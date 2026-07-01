@@ -8,9 +8,9 @@ import * as hash from 'luci_sso.crypto.hash';
 /**
  * Generates a PKCE Code Verifier.
  * 
- * @param {object} native - Native crypto provider
- * @param {number} [len=43] - Length of verifier
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.random()` seeds the verifier.
+ * @param {int} [len=43] Byte length of the verifier before base64url encoding (32–96).
+ * @returns {Result}
  */
 export function generate_verifier(native, len) {
 	let byte_len = len || 43;
@@ -27,9 +27,9 @@ export function generate_verifier(native, len) {
 /**
  * Calculates a PKCE Code Challenge from a verifier using S256.
  * 
- * @param {object} native - Native crypto provider
- * @param {string} verifier - PKCE verifier string
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.sha256()` hashes the verifier.
+ * @param {string} verifier PKCE code verifier string.
+ * @returns {Result}
  */
 export function calculate_challenge(native, verifier) {
 	let res = hash.sha256(native, verifier);
@@ -42,9 +42,9 @@ export function calculate_challenge(native, verifier) {
 /**
  * Generates a PKCE Verifier and Challenge pair.
  * 
- * @param {object} native - Native crypto provider
- * @param {number} [len] - Optional verifier length
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; used for both CSPRNG and SHA-256.
+ * @param {int} [len] Verifier byte length (defaults to 43; range 32–96).
+ * @returns {Result}
  */
 export function pair(native, len) {
 	let verifier = generate_verifier(native, len);

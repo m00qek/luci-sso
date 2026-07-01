@@ -3,9 +3,9 @@ import * as Result from 'luci_sso.result';
 /**
  * Calculates SHA256 hash.
  * 
- * @param {object} native - Native crypto provider
- * @param {string} str - Data to hash
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.sha256()` computes the digest.
+ * @param {string} str Data to hash.
+ * @returns {Result}
  */
 export function sha256(native, str) {
 	if (type(str) != "string")
@@ -21,9 +21,9 @@ export function sha256(native, str) {
 /**
  * Calculates SHA256 hash and returns it as a 64-character hex digest.
  * 
- * @param {object} native - Native crypto provider
- * @param {string} str - Data to hash
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.sha256()` computes the digest.
+ * @param {string} str Data to hash.
+ * @returns {Result}
  */
 export function sha256_hex(native, str) {
 	let res = sha256(native, str);

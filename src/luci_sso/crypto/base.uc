@@ -10,6 +10,10 @@ import * as Result from 'luci_sso.result';
  * like ucode due to GC, hash-table-backed strings, and variable-time ord().
  * This function provides a best-effort mitigation by using the XOR-accumulator 
  * pattern and avoiding logical branching based on secret content.
+ *
+ * @param {string} a First operand; treated as the known value (e.g. stored hash or HMAC).
+ * @param {string} b Second operand; treated as the received value.
+ * @returns {boolean}
  */
 export function constant_time_eq(a, b) {
 	if (type(a) != "string" || type(b) != "string")
@@ -42,9 +46,9 @@ export function constant_time_eq(a, b) {
 /**
  * Generates cryptographically secure random bytes.
  * 
- * @param {object} io - I/O provider
- * @param {number} [len=32] - Number of bytes to generate
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.random()` is called to obtain bytes.
+ * @param {int} [len=32] Number of random bytes to generate (1–4096).
+ * @returns {Result}
  */
 export function random(native, len) {
 	let byte_len = len || 32;
@@ -67,8 +71,9 @@ export function random(native, len) {
  * NOT be used for cryptographic identity or primary key indexing where
  * collisions could lead to security vulnerabilities.
  * 
- * @param {string} token - The sensitive token or handle.
- * @returns {string} - The 16-character safe ID, or '[INVALID]'.
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.sha256()` is called to hash the token.
+ * @param {string} token Sensitive token or handle to redact for safe log correlation.
+ * @returns {string} 16-char hex prefix of SHA256, or '[INVALID]' / '[ERROR]'.
  */
 export function safe_id(native, token) {
 	if (!token || type(token) != "string" || length(token) < 8)

@@ -10,8 +10,8 @@ import { CRYPTO_INIT_FAILED } from 'luci_sso.errors';
 /**
  * Internal helper to get/generate the router secret key.
  * Uses atomic rename and re-read pattern to prevent race conditions.
- * @param {object} deps - { fs, clock, log }
- * @returns {object} - Result Object {ok, data: key/error}
+ * @param {*} deps Service dependencies: `deps.fs` for file I/O, `deps.clock` for timestamps, `deps.native` for CSPRNG, `deps.log` for logging.
+ * @returns {Result}
  */
 export function get(deps) {
 	let key = null;

@@ -23,11 +23,11 @@ function decode_header(raw_header, alg) {
 /**
  * Parses and validates an OIDC JWT (Public Key: RS256/ES256).
  * 
- * @param {object} native - Native crypto provider
- * @param {string} token - JWT string
- * @param {string} pubkey - PEM public key
- * @param {object} options - Validation options {alg, iss, aud, skew}
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.verify_rs256()` or `native.verify_es256()` validates the signature.
+ * @param {string} token Compact JWT string (`header.payload.signature`).
+ * @param {string} pubkey PEM-encoded RSA or EC public key matching `options.alg`.
+ * @param {*} options Validation options: `{alg, iss, aud, now, clock_tolerance}`.
+ * @returns {Result}
  */
 export function verify(native, token, pubkey, options) {
 	if (type(token) != "string")

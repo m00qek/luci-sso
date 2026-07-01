@@ -60,9 +60,9 @@ function oct_to_pem(native, jwk) {
  * Converts a JWK object to a PEM string.
  * Supports RSA, EC (P-256), and octet (symmetric) key types.
  * 
- * @param {object} native - Native crypto provider
- * @param {object} jwk - JWK object
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.jwk_rsa_to_pem()` or `native.jwk_ec_p256_to_pem()` performs the conversion.
+ * @param {*} jwk JWK object; must have `kty` (`"RSA"`, `"EC"`, or `"oct"`) plus the corresponding key fields.
+ * @returns {Result}
  */
 export function to_pem(native, jwk) {
 	if (!jwk || type(jwk) != "object")

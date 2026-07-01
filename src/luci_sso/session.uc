@@ -1,39 +1,16 @@
-import * as key from 'luci_sso.session.key';
-import * as handshake from 'luci_sso.session.handshake';
-import * as token from 'luci_sso.session.token';
-
 /**
- * Facade for the modular session system.
- * Re-exports components for backward compatibility.
+ * Public session façade for luci-sso.
+ * @module luci_sso_session
  */
 
-// --- Key Management ---
-export function get_secret_key(deps) {
-	return key.get(deps);
-};
+import * as key       from 'luci_sso.session.key';
+import * as handshake from 'luci_sso.session.handshake';
+import * as token     from 'luci_sso.session.token';
 
-// --- Handshake Lifecycle ---
-export function create_state(deps) {
-	return handshake.create(deps);
-};
-
-export function consume_state(deps, handle) {
-	return handshake.consume(deps, handle);
-};
-
-export function verify_state(deps, handle, clock_tolerance) {
-	return handshake.verify(deps, handle, clock_tolerance);
-};
-
-export function reap_stale_handshakes(deps, clock_tolerance) {
-	return handshake.reap(deps, clock_tolerance);
-};
-
-// --- Session Tokens ---
-export function create(deps, user_data) {
-	return token.create(deps, user_data);
-};
-
-export function verify(deps, token_str, clock_tolerance) {
-	return token.verify(deps, token_str, clock_tolerance);
-};
+export const get_secret_key        = key.get;
+export const create_state          = handshake.create;
+export const consume_state         = handshake.consume;
+export const verify_state          = handshake.verify;
+export const reap_stale_handshakes = handshake.reap;
+export const create                = token.create;
+export const verify                = token.verify;

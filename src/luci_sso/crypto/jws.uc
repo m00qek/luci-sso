@@ -7,10 +7,10 @@ const LIMIT_TOKEN_SIZE = 16384; // 16 KB
 /**
  * Signs a payload using HMAC-SHA256 and returns a JWS (Compact Serialization).
  * 
- * @param {object} native - Native crypto provider
- * @param {object} payload - Data to sign
- * @param {string} secret - Binary secret key
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.hmac_sha256()` produces the signature.
+ * @param {*} payload JSON-serialisable object to embed as the JWS payload.
+ * @param {string} secret Raw 32-byte HMAC-SHA-256 key.
+ * @returns {Result}
  */
 export function sign(native, payload, secret) {
 	if (type(payload) != "object")
@@ -42,10 +42,10 @@ export function sign(native, payload, secret) {
 /**
  * Verifies a JWS (HMAC-SHA256) and returns the parsed payload if valid.
  * 
- * @param {object} native - Native crypto provider
- * @param {string} token - Compact JWS string
- * @param {string} secret - Binary secret key
- * @returns {object} - Result Object {ok, data/error}
+ * @param {module:luci_sso.native} native Compiled crypto extension; `native.hmac_sha256()` recomputes the expected MAC.
+ * @param {string} token Compact JWS string (`header.payload.signature`).
+ * @param {string} secret Raw 32-byte HMAC-SHA-256 key; must match the signing key.
+ * @returns {Result}
  */
 export function verify(native, token, secret) {
 	if (type(token) != "string")

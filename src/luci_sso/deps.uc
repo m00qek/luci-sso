@@ -1,5 +1,24 @@
 'use strict';
 
+/**
+ * Production dependency factory for luci-sso.
+ *
+ * Wires all real system modules (fs, ubus, uci, native crypto, HTTP client,
+ * clock) into the single `deps` object consumed by every handler. Tests
+ * replace individual entries via utest proxies instead of calling this.
+ *
+ * @module luci_sso_deps
+ * @typedef {{
+ *   fs:     module:fs,
+ *   native: module:luci_sso.native,
+ *   http:   HttpClient,
+ *   ubus:   {call: (obj: string, method: string, args: *) => Result},
+ *   uci:    *,
+ *   clock:  Clock,
+ *   log:    (level: string, msg: string) => void
+ * }} Deps
+ */
+
 import * as fs          from 'fs';
 import * as uci         from 'uci';
 import * as ubus_mod    from 'ubus';
@@ -11,6 +30,14 @@ import * as http_client from 'luci_sso.components.http_client';
 import * as clock_mod   from 'luci_sso.components.clock';
 import * as Result      from 'luci_sso.result';
 
+/**
+ * Constructs the production `Deps` object.
+ *
+ * Opens a syslog channel, connects to ubus, and instantiates the HTTP client
+ * and clock components. Called once at handler startup; never called in tests.
+ *
+ * @returns {Deps}
+ */
 export function create() {
 	log.openlog("luci-sso", log.LOG_PID, log.LOG_USER);
 

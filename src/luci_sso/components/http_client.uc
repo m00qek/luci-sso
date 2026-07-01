@@ -1,5 +1,16 @@
 'use strict';
 
+/**
+ * HTTPS-only HTTP client component backed by uclient and uloop.
+ *
+ * Enforces TLS on every request (`HTTPS_REQUIRED` for plain-HTTP URLs),
+ * verifies server certificates against the system CA bundle, and caps
+ * response bodies at 256 KB.
+ *
+ * @module luci_sso_components_http_client
+ * @typedef {{get: (url: string, opts: *) => Result, post: (url: string, opts: *) => Result}} HttpClient
+ */
+
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import { SSL_INIT_FAILED } from 'luci_sso.errors';
@@ -82,12 +93,12 @@ function do_request(uclient, uloop, fs, method, url, opts) {
 }
 
 /**
- * Creates an HTTPS-only HTTP client.
+ * Creates an HttpClient.
  *
- * @param {object} uclient - The uclient module (or a utest proxy of it)
- * @param {object} uloop   - The uloop module (or a utest proxy of it)
- * @param {object} fs      - The fs module (or a utest proxy of it)
- * @returns {{ get, post }}
+ * @param {*} uclient uclient C library handle used to open TLS connections.
+ * @param {module:uloop} uloop uloop module (or utest proxy) that drives the I/O event loop.
+ * @param {module:fs} fs fs module (or utest proxy) used to discover system CA certificates.
+ * @returns {HttpClient}
  */
 export function create(uclient, uloop, fs) {
 	return {

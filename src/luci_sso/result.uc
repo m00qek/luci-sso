@@ -1,30 +1,45 @@
 'use strict';
 
 /**
- * Standardized Result object for luci-sso.
- * Provides a unified way to handle success and failure branches.
+ * Standardised result monad for luci-sso.
+ *
+ * Every fallible operation returns a `Result`. On success `ok` is `true`
+ * and `data` carries the value. On failure `ok` is `false`, `error` holds
+ * a short uppercase code (e.g. `"INVALID_SID"`), and `details` may carry
+ * additional diagnostic context that is never forwarded to callers.
+ *
+ * @module luci_sso_result
+ * @typedef {{ok: boolean, data: *, error: string, details: *}} Result
  */
 
 const ResultMethods = {};
 
 /**
- * Checks if an object is a valid Result instance.
+ * Returns `true` if `obj` was produced by `ok()` or `err()`.
+ *
+ * @param {*} obj Value to test.
+ * @returns {boolean}
  */
 export function is(obj) {
 	return type(obj) == "object" && proto(obj) == ResultMethods;
 };
 
 /**
- * Creates a successful Result.
+ * Wraps a successful value in a Result.
+ *
+ * @param {*} data Success payload; may be `null` for void operations.
+ * @returns {Result}
  */
 export function ok(data) {
 	return proto({ ok: true, data: data }, ResultMethods);
 };
 
 /**
- * Creates a failed Result.
- * @param {string} error - Error code
- * @param {any} [details] - Optional error details or context object
+ * Wraps a failure in a Result.
+ *
+ * @param {string} error Short uppercase error code identifying the failure.
+ * @param {*} [details] Optional diagnostic context (stack trace, raw error string, etc.).
+ * @returns {Result}
  */
 export function err(error, details) {
 	return proto({ ok: false, error: error, details: details }, ResultMethods);

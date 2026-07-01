@@ -34,9 +34,9 @@ function _emergency_reap(deps, files) {
 
 /**
  * Removes handshake files older than the duration.
- * @param {object} deps - { fs, clock, log }
- * @param {number} clock_tolerance - Clock skew tolerance
- * @returns {object} - Result Object {ok, data: count/error}
+ * @param {*} deps Service dependencies: `deps.fs` and `deps.clock`.
+ * @param {int} clock_tolerance Extra grace seconds added beyond the handshake TTL before a file is reaped.
+ * @returns {Result}
  */
 export function reap(deps, clock_tolerance) {
 	if (type(clock_tolerance) !== "int") die("CONTRACT_VIOLATION: reap expects mandatory integer clock_tolerance");
@@ -65,8 +65,8 @@ export function reap(deps, clock_tolerance) {
 /**
  * Creates an opaque handshake state on the server.
  *
- * @param {object} deps - { fs, clock, log }
- * @returns {object} - Result Object {ok, data/error}
+ * @param {*} deps Service dependencies: `deps.fs`, `deps.clock`, `deps.native`, `deps.log`.
+ * @returns {Result}
  */
 export function create(deps) {
 	common.ensure_handshake_dir(deps);
@@ -163,8 +163,9 @@ export function create(deps) {
  * Explicitly consumes (deletes) a handshake state.
  * Used for cleanup on terminal auth failures.
  *
- * @param {object} deps - { fs }
- * @param {string} handle - Opaque handshake handle
+ * @param {*} deps Service dependencies: `deps.fs`.
+ * @param {string} handle Opaque base64url handle from the client cookie.
+ * @returns {void}
  */
 export function consume(deps, handle) {
 	if (!handle || type(handle) !== "string") return;
@@ -179,10 +180,10 @@ export function consume(deps, handle) {
 /**
  * Verifies and consumes a handshake state handle.
  *
- * @param {object} deps - { fs, clock, log }
- * @param {string} handle - Opaque handshake handle
- * @param {number} clock_tolerance - Clock skew tolerance
- * @returns {object} - Result Object {ok, data/error}
+ * @param {*} deps Service dependencies: `deps.fs`, `deps.clock`, `deps.native`, `deps.log`.
+ * @param {string} handle Opaque base64url handle from the client cookie.
+ * @param {int} clock_tolerance Clock skew tolerance in seconds for `iat`/`exp` validation.
+ * @returns {Result}
  */
 export function verify(deps, handle, clock_tolerance) {
 	if (type(handle) !== "string") die("CONTRACT_VIOLATION: verify expects string handle");
