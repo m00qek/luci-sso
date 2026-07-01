@@ -211,6 +211,39 @@ describe('ubus: register_token', () => {
 				ubus_mod.register_token(build_deps(proxies), 'access-token'));
 		});
 	});
+
+	it('locks on the full 64-char SHA-256 token id and rejects a replay of the same token (B2)', () => {
+		let created = {};
+		mock.inject_all({ fs: { strict: true, behavior: {
+			mkdir: (path) => {
+				if (index(path, '/tokens/') >= 0) {
+					if (created[path]) return false;
+					created[path] = true;
+				}
+				return true;
+			}
+		} } }, (proxies) => {
+			let deps = build_deps(proxies);
+			let token = 'my-secret-token-123';
+
+			assert.match(contains({ ok: true }), ubus_mod.register_token(deps, token));
+			let lock_paths = keys(created);
+			assert.match(1, length(lock_paths));
+			assert.match(64, length(replace(lock_paths[0], /^.*\//, '')), 'Token id must be a full 64-char SHA-256 hex digest');
+
+			assert.match(contains({ ok: false, error: 'TOKEN_REPLAYED' }), ubus_mod.register_token(deps, token));
+			assert.match(contains({ ok: true }), ubus_mod.register_token(deps, token + 'new'));
+			assert.match(2, length(keys(created)));
+		});
+	});
+
+	it('succeeds when the base tokens dir mkdir returns false but the per-token lock is created', () => {
+		mock.inject_all({ fs: { strict: true, behavior: {
+			mkdir: (path) => match(path, /tokens$/) ? false : true, // base dir "already exists"; lock dir created
+		} } }, (proxies) => {
+			assert.match(contains({ ok: true }), ubus_mod.register_token(build_deps(proxies), 'token-123'));
+		});
+	});
 });
 
 // ─── create_passwordless_session ─────────────────────────────────────────────
@@ -266,6 +299,23 @@ describe('ubus: create_passwordless_session — non-admin', () => {
 				));
 		});
 	});
+
+	it('issues a session CSRF token of at least 256 bits (43+ base64url chars) (B3)', () => {
+		let token_len = 0;
+		mock.inject_all({
+			ubus: { strict: true, data: {
+				"session:create": { ubus_rpc_session: SID },
+				"session:grant":  {},
+				"session:set":    (args) => { token_len = length(args.values.token); return {}; },
+			} },
+		}, (proxies) => {
+			assert.match(contains({ ok: true, data: SID }),
+				ubus_mod.create_passwordless_session(
+					build_deps(proxies), 'guest', PERMS_USER, 'u@e.com', 'at', 'rt', 'it'
+				));
+			assert.match(true, token_len >= 43, 'CSRF token MUST be at least 256 bits (43+ chars)');
+		});
+	});
 });
 
 describe('ubus: create_passwordless_session — admin wildcard', () => {
@@ -305,6 +355,19 @@ describe('ubus: create_passwordless_session — admin wildcard', () => {
 			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }), res);
 			let destroys = filter(spy(deps._ubus_conn).calls.call, (c) => c[1] === 'destroy');
 			assert.match(1, length(destroys));
+		});
+	});
+
+	it('grants the standard ubus/uci/file/cgi-io scopes for a wildcard admin session', () => {
+		mock.inject_all({
+			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": {}, "session:set": {} } },
+			fs:     { strict: true, behavior: { lsdir: () => [] } },
+		}, (proxies) => {
+			let deps = build_deps(proxies);
+			ubus_mod.create_passwordless_session(deps, 'root', { read: ['*'], write: ['*'] }, 'a@e.com', 'at', 'rt', 'it');
+			let scopes = map(filter(spy(deps._ubus_conn).calls.call, (c) => c[1] === 'grant'), (c) => c[2].scope);
+			for (let s in ['ubus', 'uci', 'file', 'cgi-io'])
+				assert.match(true, index(scopes, s) != -1, `should grant ${s} scope`);
 		});
 	});
 });
@@ -382,5 +445,26 @@ describe('ubus: _grant_all_luci_acls', () => {
 		assert.match(1, length(reads));
 		assert.match(1, length(writes));
 		assert.match('luci-base', reads[0][2].objects[0][0]);
+	});
+
+	it('robustly skips malformed JSON, array roots, non-object values, and luci- substrings in values', () => {
+		// Grants collected across mixed ACL files: one valid, one invalid JSON,
+		// one array root, one non-object value, one non-luci key with "luci-" in its value.
+		let grants = acl_grants_for(
+			(p) => p === ACL_DIR ? ['valid.json', 'bad.json', 'array.json', 'invalid_val.json', 'nonluci.json'] : [],
+			(p) => {
+				if (index(p, 'valid.json')       >= 0) return '{"luci-base":{"description":"ok"}}';
+				if (index(p, 'bad.json')         >= 0) return '{ invalid json !!! }';
+				if (index(p, 'array.json')       >= 0) return '["luci-broken"]';
+				if (index(p, 'invalid_val.json') >= 0) return '{"luci-evil":"not-an-object"}';
+				if (index(p, 'nonluci.json')     >= 0) return '{"non-luci":{"comment":"luci-fake here"}}';
+				return null;
+			}
+		);
+		let granted = map(grants, (c) => c[2].objects[0][0]);
+		assert.match(true, index(granted, 'luci-base') != -1, 'grants the valid luci- key');
+		assert.match(-1, index(granted, 'luci-broken'), 'no grant from an array root');
+		assert.match(-1, index(granted, 'luci-evil'), 'no grant when value is not an object');
+		assert.match(-1, index(granted, 'luci-fake'), 'no grant for a luci- substring found only in a value (N2)');
 	});
 });
