@@ -1,4 +1,4 @@
-import { describe, it, assert, falsy, mock } from 'utest';
+import { describe, it, assert, falsy, mock, spy } from 'utest';
 import * as session from 'luci_sso.session';
 
 describe('session: reproduction', () => {
@@ -17,7 +17,7 @@ describe('session: reproduction', () => {
 			assert.match(falsy(), res.ok, "Should fail due to read error");
 
 			// CRITICAL: Must remove .consumed file even if read fails
-			let unlink_calls = fs.__utest__.calls.unlink || [];
+			let unlink_calls = spy(fs).calls.unlink || [];
 			let consume_removed = false;
 			for (let call in unlink_calls) {
 				if (call[0] === consume_path) consume_removed = true;

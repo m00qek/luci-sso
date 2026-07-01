@@ -1,4 +1,4 @@
-import { describe, it, assert, falsy, mock } from 'utest';
+import { describe, it, assert, falsy, mock, spy } from 'utest';
 import * as session from 'luci_sso.session';
 
 describe('session: get_secret_key', () => {
@@ -12,7 +12,7 @@ describe('session: get_secret_key', () => {
 			assert.match(falsy(), res.ok, "get_secret_key should fail when write_file fails");
 			assert.match("SYSTEM_KEY_WRITE_FAILED", res.error);
 
-			let unlink_calls = fs.__utest__.calls.unlink || [];
+			let unlink_calls = spy(fs).calls.unlink || [];
 			let lock_removed = false;
 			for (let call in unlink_calls) {
 				if (call[0] === "/etc/luci-sso/secret.key.lock") lock_removed = true;

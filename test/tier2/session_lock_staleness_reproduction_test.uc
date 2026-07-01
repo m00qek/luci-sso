@@ -1,4 +1,4 @@
-import { describe, it, assert, truthy, mock } from 'utest';
+import { describe, it, assert, truthy, mock, spy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as native from 'luci_sso.native';
 
@@ -48,14 +48,14 @@ describe('session: get_secret_key', () => {
 			}
 			assert.match(truthy(), warn_found, "Should log self-healing event");
 
-			let unlink_calls = injected.fs.__utest__.calls.unlink || [];
+			let unlink_calls = spy(injected.fs).calls.unlink || [];
 			let lock_removed = false;
 			for (let call in unlink_calls) {
 				if (call[0] === LOCK_PATH) lock_removed = true;
 			}
 			assert.match(truthy(), lock_removed, "Should remove the stale lock");
 
-			let write_calls = injected.fs.__utest__.calls.writefile || [];
+			let write_calls = spy(injected.fs).calls.writefile || [];
 			let tmp_written = false;
 			for (let call in write_calls) {
 				if (call[0] === KEY_TMP_PATH) tmp_written = true;

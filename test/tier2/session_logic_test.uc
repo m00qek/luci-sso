@@ -1,4 +1,4 @@
-import { describe, it, assert, truthy, has_length, falsy, mock } from 'utest';
+import { describe, it, assert, truthy, has_length, falsy, mock, spy } from 'utest';
 import * as session from 'luci_sso.session';
 import * as native from 'luci_sso.native';
 
@@ -156,11 +156,11 @@ describe('session: logic', () => {
 			assert.match(truthy(), warn_found, "Should log a warning about stale lock");
 
 			let unlink_found = false;
-			for (let call in injected.fs.__utest__.calls.unlink) if (call[0] === lock_path) unlink_found = true;
+			for (let call in spy(injected.fs).calls.unlink) if (call[0] === lock_path) unlink_found = true;
 			assert.match(truthy(), unlink_found, "Should have removed the stale lock");
 
 			let mkdir_found = false;
-			for (let call in injected.fs.__utest__.calls.mkdir) if (call[0] === lock_path) mkdir_found = true;
+			for (let call in spy(injected.fs).calls.mkdir) if (call[0] === lock_path) mkdir_found = true;
 			assert.match(truthy(), mkdir_found, "Should have re-acquired the lock");
 		});
 	});
@@ -250,9 +250,9 @@ describe('session: logic', () => {
 			let res = session.create_state(deps);
 			assert.match(truthy(), res.ok, `create_state failed: ${res.error}`);
 
-			let writefile_calls = injected.fs.__utest__.calls.writefile || [];
-			let chmod_calls     = injected.fs.__utest__.calls.chmod     || [];
-			let rename_calls    = injected.fs.__utest__.calls.rename    || [];
+			let writefile_calls = spy(injected.fs).calls.writefile || [];
+			let chmod_calls     = spy(injected.fs).calls.chmod     || [];
+			let rename_calls    = spy(injected.fs).calls.rename    || [];
 
 			let write_op = length(writefile_calls) > 0 ? writefile_calls[0] : null;
 			assert.match(truthy(), write_op, "Should have performed a writefile operation");
