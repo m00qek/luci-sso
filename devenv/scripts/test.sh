@@ -27,7 +27,7 @@ translate_unit_paths() {
   local modules=$1
   local translated=""
   for mod in $modules; do
-    # test/tier2/crypto_test.uc -> /usr/share/luci-sso/test/tier2/crypto_test.uc
+    # test/unit/luci_sso/crypto_test.uc -> /usr/share/luci-sso/test/unit/luci_sso/crypto_test.uc
     local t="/usr/share/luci-sso/$(echo "$mod" | sed -E 's|^\.\./||')"
     if [ -z "$translated" ]; then
       translated="$t"
