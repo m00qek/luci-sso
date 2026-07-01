@@ -5,10 +5,17 @@ import * as native from 'luci_sso.native';
 import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
+import * as config_loader from 'luci_sso.config';
+import * as web_mod from 'luci_sso.web';
 import { with_context } from 'context';
 import * as f from 'tier3.fixtures';
 import * as tf from 'tier2.fixtures';
 import * as h from 'lib.helpers';
+
+// Integration bucket — enter at router.handle(deps, config, request, policy) with
+// a full deps graph built by with_context (real module subgraph, faked system
+// boundary). Covers dispatch, login/callback, rate-limit, security, and error
+// mapping. The logout flow lives in logout_test.uc.
 
 const TEST_SECRET = "integration-test-secret-32-bytes!!!";
 const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
@@ -410,85 +417,6 @@ describe('router: security', () => {
 	});
 });
 
-describe('router: logout', () => {
-	it('OIDC RP-initiated logout', () => {
-		let ubus_get_called = false;
-		let ubus_destroy_called = false;
-		let DISC_WITH_LOGOUT = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
-
-		with_context({
-			fs: { data: {} },
-			ubus: {
-				data: {
-					"session:get": (args) => { ubus_get_called = true; return { values: { oidc_id_token: "mock-id-token", token: "csrf-123" } }; },
-					"session:destroy": (args) => { ubus_destroy_called = true; return {}; }
-				}
-			},
-			http_client: {
-				data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: DISC_WITH_LOGOUT } }
-			},
-			clock: { data: { now: 1516239022 } }
-		}, (deps) => {
-			let req = mock_request("/logout", { stoken: "csrf-123" }, { "sysauth": "session-12345" }, { HTTP_HOST: "router.lan" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
-
-			assert.match(truthy(), res.ok);
-			assert.match(302, res.data.status);
-			assert.match(0, index(res.data.headers["Location"], "https://idp.com/logout"), "Should redirect to IdP logout");
-			assert.match(truthy(), index(res.data.headers["Location"], "id_token_hint=mock-id-token") != -1, "Should include id_token_hint");
-			assert.match(truthy(), match(res.data.headers["Location"], /post_logout_redirect_uri=https%3A%2F%2Frouter%2F(&|$)/), "Should include EXACT post_logout_redirect_uri");
-		});
-
-		assert.match(truthy(), ubus_get_called, "Should have retrieved session for id_token_hint");
-		assert.match(truthy(), ubus_destroy_called, "Should have destroyed local session");
-	});
-
-	it('fallback to local logout', () => {
-		let ubus_destroy_called = false;
-
-		with_context({
-			fs: { data: {} },
-			ubus: {
-				data: {
-					"session:get": (args) => ({ values: { token: "csrf-456" } }),
-					"session:destroy": (args) => { ubus_destroy_called = true; return {}; }
-				}
-			},
-			http_client: {
-				data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } }
-			},
-			clock: { data: { now: 1516239022 } }
-		}, (deps) => {
-			let req = mock_request("/logout", { stoken: "csrf-456" }, { "sysauth": "session-12345" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
-			assert.match(truthy(), res.ok);
-			assert.match(302, res.data.status);
-			assert.match("/", res.data.headers["Location"]);
-		});
-
-		assert.match(truthy(), ubus_destroy_called);
-	});
-
-	it('prevent unauthenticated redirect', () => {
-		let DISC_WITH_LOGOUT = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
-
-		with_context({
-			fs: { data: {} },
-			http_client: {
-				data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: DISC_WITH_LOGOUT } }
-			},
-			clock: { data: { now: 1516239022 } }
-		}, (deps) => {
-			let req = mock_request("/logout", {}, {}, { HTTP_HOST: "router.lan" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
-
-			assert.match(truthy(), res.ok);
-			assert.match(302, res.data.status);
-			assert.match("/", res.data.headers["Location"], "Should redirect to root for unauthenticated logout");
-		});
-	});
-});
-
 describe('router: routing', () => {
 	it('handle unhandled system path', () => {
 		with_context({
@@ -498,6 +426,176 @@ describe('router: routing', () => {
 			let res = router.handle(deps, MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
 			assert.match(falsy(), res.ok);
 			assert.match(404, res.details.http_status);
+		});
+	});
+});
+
+// ─── folded reproduction cases (← tier2 router_*, cgi_error, dos_ratelimit) ────
+
+describe('router: enabled action (reproduction)', () => {
+	it('enabled endpoint returns JSON even if disabled (W2)', () => {
+		let mock_uci = {
+			"luci-sso": {
+				"default": { ".type": "oidc", "enabled": "0" }
+			}
+		};
+
+		with_context({
+			fs:    { data: {} },
+			uci:   { data: mock_uci },
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let getenv = (k) => {
+				let env = { PATH_INFO: "/", QUERY_STRING: "action=enabled", HTTP_HOST: "luci.test" };
+				return env[k] || null;
+			};
+
+			let res_req = web_mod.request({ getenv });
+			assert.match(truthy(), res_req.ok);
+			let req = res_req.data;
+
+			let res_c = config_loader.load({ uci: deps.uci, log: deps.log });
+			assert.match(falsy(), res_c.ok);
+			assert.match("SSO_DISABLED", res_c.error);
+
+			let res_router = router.handle(deps, null, req);
+			assert.match(truthy(), res_router.ok, "Action 'enabled' MUST succeed even without config");
+			assert.match(200, res_router.data.status);
+			assert.match('{"enabled": false}', res_router.data.body);
+		});
+	});
+});
+
+describe('router: null config guard (reproduction)', () => {
+	it('null config guard (B2)', () => {
+		with_context({
+			fs:    { data: {} },
+			uci:   { data: {} },
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let req = { path: "/", query: {}, cookies: {}, headers: {} };
+			let res = router.handle(deps, null, req);
+			assert.match(falsy(), res.ok, "Should fail when config is null");
+			assert.match("SSO_DISABLED", res.error);
+			assert.match(503, res.details.http_status);
+		});
+	});
+});
+
+describe('router: global rate limiting (reproduction)', () => {
+	it('enforces a global request limit and exempts action=enabled (N3)', () => {
+		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
+
+		with_context({
+			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			uci:         { data: { "luci-sso": { "default": { ".type": "oidc", "enabled": "0" } } } },
+			ubus:        { data: {} },
+			http_client: { data: {
+				[tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY }
+			} },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			let request = { path: "/", query: {}, cookies: {} };
+
+			for (let i = 1; i <= 60; i++) {
+				let res = router.handle(deps, test_config, request);
+				if (i <= 50) {
+					assert.match(truthy(), res.ok, `Request ${i} SHOULD succeed (within limit)`);
+				} else {
+					assert.match(falsy(), res.ok, `Request ${i} SHOULD fail (exceeded limit)`);
+					assert.match("TOO_MANY_REQUESTS", res.error);
+				}
+			}
+
+			let action_req = { path: "/", query: { action: "enabled" }, cookies: {} };
+			for (let i = 0; i < 5; i++) {
+				let res = router.handle(deps, test_config, action_req);
+				assert.match(truthy(), res.ok, "Action=Enabled SHOULD be exempt from rate limiting to prevent UI DoS (N3)");
+				assert.match(200, res.data.status);
+			}
+		});
+	});
+});
+
+describe('router: rate-limit persistence atomicity (reproduction)', () => {
+	it('persists the rate-limit file via write-tmp + atomic rename', () => {
+		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
+
+		const RATELIMIT_FILE = "/var/run/luci-sso/ratelimit.json";
+		const TMP_FILE = RATELIMIT_FILE + ".tmp";
+
+		let writefile_calls = null;
+		let rename_calls = null;
+
+		with_context({
+			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			ubus:        { data: {} },
+			http_client: { data: {
+				[tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY }
+			} },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			let request = { path: "/", query: {}, cookies: {} };
+			router.handle(deps, test_config, request);
+			writefile_calls = spy(deps.fs).calls.writefile || [];
+			rename_calls    = spy(deps.fs).calls.rename    || [];
+		});
+
+		let wrote_tmp = false;
+		for (let c in writefile_calls) {
+			if (c[0] === TMP_FILE) { wrote_tmp = true; break; }
+		}
+		assert.match(truthy(), wrote_tmp, "Should write to temporary file first");
+
+		let renamed = false;
+		for (let c in rename_calls) {
+			if (c[0] === TMP_FILE && c[1] === RATELIMIT_FILE) { renamed = true; break; }
+		}
+		assert.match(truthy(), renamed, "Should atomically rename tmp to target");
+	});
+});
+
+describe('router: CGI error rendering (reproduction)', () => {
+	it('renders an error response for an unhandled path (W1)', () => {
+		let config = {
+			enabled: true,
+			client_id: "test",
+			issuer_url: "https://idp.test",
+			redirect_uri: "https://luci.test/callback"
+		};
+
+		let stdout_buf = "";
+		let stdout = { write: (s) => { stdout_buf += s; }, flush: () => {} };
+
+		let getenv = (k) => {
+			let env = { PATH_INFO: "/invalid-path", HTTP_HOST: "luci.test" };
+			return env[k] || null;
+		};
+
+		with_context({
+			fs:    { data: {} },
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let web_deps = { getenv, stdout, log: deps.log };
+
+			let res_req = web_mod.request(web_deps);
+			assert.match(truthy(), res_req.ok);
+			let req = res_req.data;
+
+			let res_router = router.handle(deps, config, req);
+			assert.match(falsy(), res_router.ok, "Router should return error for invalid path");
+
+			let rendered_error = false;
+			res_router = router.handle(deps, config, req);
+			if (!res_router.ok) {
+				let status = (type(res_router.details) == "object") ? res_router.details.http_status : 500;
+				web_mod.render_error(web_deps, res_router.error, status);
+				rendered_error = true;
+			} else {
+				web_mod.render(web_deps, res_router.data);
+			}
+
+			assert.match(truthy(), rendered_error, "Should have rendered an error response");
 		});
 	});
 });
