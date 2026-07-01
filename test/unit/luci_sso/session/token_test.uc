@@ -198,6 +198,16 @@ describe('session.token: verify', () => {
 		});
 	});
 
+	it('returns SESSION_EXPIRED for exp == 0 (truthiness bypass regression, Audit B1)', () => {
+		// exp: 0 must be treated as a valid past timestamp, not as "absent". A truthy
+		// guard (`if (exp && ...)`) would skip the expiry check and wrongly accept it.
+		mock.inject_all(KEY_STATE, (injected) => {
+			let deps = { fs: injected.fs, clock: injected.clock, native: injected.native ?? native, log: () => null };
+			let tok = crypto.jws_sign(native, { user: 'x', iat: NOW - 10, exp: 0 }, SECRET);
+			assert.match(contains({ ok: false, error: 'SESSION_EXPIRED' }), token.verify(deps, tok.data, 300));
+		});
+	});
+
 	it('accepts exp exactly at the clock tolerance boundary (exp == now - tolerance)', () => {
 		// verify uses '<' not '<=': exp < (now - tolerance), so the boundary value passes
 		mock.inject_all(KEY_STATE, (injected) => {

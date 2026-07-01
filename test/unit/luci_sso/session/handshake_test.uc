@@ -1,4 +1,4 @@
-import { describe, it, assert, contains, regex, mock } from 'utest';
+import { describe, it, assert, contains, regex, truthy, spy, mock } from 'utest';
 import * as handshake from 'luci_sso.session.handshake';
 import * as common from 'luci_sso.session.common';
 import * as native from 'luci_sso.native';
@@ -146,6 +146,34 @@ describe('session.handshake: create', () => {
 			data[DIR + '/handshake_' + sprintf('%04d', i) + '.json'] = '{}';
 		mock.inject_all({ fs: { data, strict: true }, clock: { data: { now: NOW } } }, (injected) => {
 			assert.match(contains({ ok: false, error: 'HANDSHAKE_CAPACITY_EXCEEDED' }), handshake.create(make_deps(injected)));
+		});
+	});
+
+	it('writes atomically: tmp file, chmod 0600, then rename to the final path', () => {
+		mock.inject_all({ fs: { data: {}, strict: true }, clock: { data: { now: NOW } } }, (injected) => {
+			let res = handshake.create(make_deps(injected));
+			assert.match(contains({ ok: true }), res);
+
+			let write_op  = (spy(injected.fs).calls.writefile || [])[0];
+			let chmod_op  = (spy(injected.fs).calls.chmod     || [])[0];
+			let rename_op = (spy(injected.fs).calls.rename    || [])[0];
+
+			assert.match(truthy(), write_op, 'Should have performed a writefile');
+			assert.match(truthy(), index(write_op[0], '.tmp') > 0, `Should write to a tmp file first. Got: ${write_op[0]}`);
+			assert.match(write_op[0], chmod_op[0], 'chmod should target the tmp file');
+			assert.match(0600,        chmod_op[1], 'chmod should set 0600');
+			assert.match(write_op[0], rename_op[0], 'rename should move from the tmp file');
+			assert.match(-1,          index(rename_op[1], '.tmp'), `rename target must not be temporary. Got: ${rename_op[1]}`);
+		});
+	});
+
+	it('returns CRYPTO_INIT_FAILED when the CSPRNG fails (Audit B2)', () => {
+		mock.inject_all({
+			fs:     { data: {}, strict: true },
+			clock:  { data: { now: NOW } },
+			native: { behavior: { random: () => null } },
+		}, (injected) => {
+			assert.match(contains({ ok: false, error: 'CRYPTO_INIT_FAILED' }), handshake.create(make_deps(injected)));
 		});
 	});
 });
@@ -357,6 +385,38 @@ describe('session.handshake: verify', () => {
 			let deps = make_deps(injected);
 			assert.match(contains({ ok: false, error: 'HANDSHAKE_EXPIRED' }), handshake.verify(deps, HANDLE, 0));
 			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }),    handshake.verify(deps, HANDLE, 0));
+		});
+	});
+
+	it('removes the .consumed file even when the post-rename read fails (Audit W5)', () => {
+		// verify renames the state to <path>.consumed, then reads it. If the read
+		// fails, the .consumed file must still be unlinked so it cannot linger.
+		let data = {};
+		data[PATH] = make_state({});
+		mock.inject_all({
+			fs:    { strict: true, data, behavior: { readfile: () => null } },
+			clock: { strict: true, data: { now: NOW } },
+		}, (injected) => {
+			let res = handshake.verify(make_deps(injected), HANDLE, 0);
+			assert.match(contains({ ok: false }), res, 'Should fail due to the read error');
+
+			let removed = false;
+			for (let call in (spy(injected.fs).calls.unlink || []))
+				if (call[0] === PATH + '.consumed') removed = true;
+			assert.match(truthy(), removed, 'Must unlink the .consumed file even when the read fails');
+		});
+	});
+
+	it('does not recover state from a pre-existing .consumed file when rename fails (strict one-time use)', () => {
+		// An attacker-planted <path>.consumed must never be honoured: if the atomic
+		// rename that claims the state fails, verify must report STATE_NOT_FOUND.
+		let data = {};
+		data[PATH + '.consumed'] = make_state({ exp: NOW + 100000 });
+		mock.inject_all({
+			fs:    { strict: true, data, behavior: { rename: () => false } },
+			clock: { strict: true, data: { now: NOW } },
+		}, (injected) => {
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(make_deps(injected), HANDLE, 0));
 		});
 	});
 });

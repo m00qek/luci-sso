@@ -1,4 +1,4 @@
-import { describe, it, assert, contains, has_length, mock } from 'utest';
+import { describe, it, assert, contains, has_length, truthy, mock } from 'utest';
 import * as key from 'luci_sso.session.key';
 import * as common from 'luci_sso.session.common';
 import * as native from 'luci_sso.native';
@@ -66,6 +66,21 @@ describe('session.key: get — lock acquired', () => {
 			clock: { strict: true, data: { now: NOW } },
 		}, (injected) => {
 			assert.match(contains({ ok: false, error: 'SYSTEM_KEY_WRITE_FAILED' }), key.get(make_deps(injected)));
+		});
+	});
+
+	it('never returns ok(null) when a syscall dies mid-generation (Audit B5)', () => {
+		// A die() inside chmod must be caught and surfaced as an error Result — never
+		// swallowed into Result.ok(null), which would hand callers a null secret key.
+		mock.inject_all({
+			fs:    { strict: true, data: {}, behavior: { chmod: () => die('Permission denied (mocked)') } },
+			clock: { strict: true, data: { now: NOW } },
+		}, (injected) => {
+			let res = key.get(make_deps(injected));
+			assert.match(contains({ ok: false }), res);
+			assert.match(truthy(),
+				res.error === 'SYSTEM_KEY_GENERATION_FAILED' || res.error === 'SYSTEM_KEY_WRITE_FAILED',
+				`Expected a generation/write failure, got: ${res.error}`);
 		});
 	});
 });
