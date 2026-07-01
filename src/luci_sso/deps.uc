@@ -38,32 +38,49 @@ import * as Result      from 'luci_sso.result';
  *
  * @returns {Deps}
  */
-export function create() {
-	log.openlog("luci-sso", log.LOG_PID, log.LOG_USER);
-
-	const syslog = function(level, msg) {
-		let priority = (level == "error")   ? log.LOG_ERR     :
-		               (level == "warn")    ? log.LOG_WARNING  :
-		               (level == "debug")   ? log.LOG_DEBUG    : log.LOG_INFO;
-		log.syslog(priority, msg);
+/**
+ * Wraps a raw ubus connection into the `deps.ubus` channel: a single `call`
+ * method that normalises the outcome into a Result.
+ *
+ * @param {*} conn - The object returned by `ubus.connect()` (may be null).
+ * @returns {{call: (obj: string, method: string, args: *) => Result}}
+ */
+export function ubus_channel(conn) {
+	return {
+		call: (obj, method, args) => {
+			if (!conn) return Result.err("UBUS_CONNECT_FAILED");
+			let res = conn.call(obj, method, args);
+			if (res === null) return Result.err("UBUS_ERROR");
+			return Result.ok(res);
+		}
 	};
+};
 
-	let _conn = ubus_mod.connect();
+/**
+ * Opens a syslog channel and returns the `deps.log` function, mapping the
+ * caller's level string to the corresponding syslog priority.
+ *
+ * @param {module:log} log_mod - The `log` module (or a compatible stand-in).
+ * @returns {(level: string, msg: string) => void}
+ */
+export function syslog_channel(log_mod) {
+	log_mod.openlog("luci-sso", log_mod.LOG_PID, log_mod.LOG_USER);
+	return function(level, msg) {
+		let priority = (level == "error")   ? log_mod.LOG_ERR     :
+		               (level == "warn")    ? log_mod.LOG_WARNING  :
+		               (level == "debug")   ? log_mod.LOG_DEBUG    : log_mod.LOG_INFO;
+		log_mod.syslog(priority, msg);
+	};
+};
 
+export function create() {
 	return {
 		fs:     fs,
 		native: native,
-		http:  http_client.create(uclient, uloop, fs),
-		ubus:  {
-			call: (obj, method, args) => {
-				if (!_conn) return Result.err("UBUS_CONNECT_FAILED");
-				let res = _conn.call(obj, method, args);
-				if (res === null) return Result.err("UBUS_ERROR");
-				return Result.ok(res);
-			}
-		},
-		uci:   uci.cursor(),
-		clock: clock_mod.create(uloop),
-		log:   syslog
+		http:   http_client.create(uclient, uloop, fs),
+		ubus:   ubus_channel(ubus_mod.connect()),
+		uci:    uci.cursor(),
+		clock:  clock_mod.create(uloop),
+		log:    syslog_channel(log)
 	};
 };

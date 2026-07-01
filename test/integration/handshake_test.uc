@@ -867,7 +867,7 @@ describe('handshake: security', () => {
 
 // ─── DoS / token registration ordering ─────────────────────────────────────────
 
-describe('handshake: security', () => {
+describe('handshake: token registration ordering', () => {
 	it('register_token deferred until after verification (DoS prevention)', () => {
 		let test_config = {
 			...f.MOCK_CONFIG,
