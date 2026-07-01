@@ -73,7 +73,7 @@ run_unit() {
   if [ -n "$modules" ]; then
     bundles=$(translate_unit_paths "$modules")
   else
-    bundles="/usr/share/luci-sso/test/native /usr/share/luci-sso/test/tier0 /usr/share/luci-sso/test/tier1 /usr/share/luci-sso/test/tier2 /usr/share/luci-sso/test/tier3 /usr/share/luci-sso/test/tier4 /usr/share/luci-sso/test/unit/luci_sso /usr/share/luci-sso/test/unit/luci_sso/components /usr/share/luci-sso/test/unit/luci_sso/crypto /usr/share/luci-sso/test/unit/luci_sso/session"
+    bundles="/usr/share/luci-sso/test/native /usr/share/luci-sso/test/integration /usr/share/luci-sso/test/tier1 /usr/share/luci-sso/test/tier2 /usr/share/luci-sso/test/tier3 /usr/share/luci-sso/test/tier4 /usr/share/luci-sso/test/unit/luci_sso /usr/share/luci-sso/test/unit/luci_sso/components /usr/share/luci-sso/test/unit/luci_sso/crypto /usr/share/luci-sso/test/unit/luci_sso/session"
   fi
 
   docker compose $COMPOSE_FLAGS exec openwrt \
