@@ -103,11 +103,32 @@ function handle_callback(deps, config, request, policy) {
 	let res = handshake.authenticate(deps, config, request, policy);
 	if (!res.ok) return res;
 
+	// SameSite=Lax, not Strict. This is hardening, NOT the fix for issue #11 --
+	// that was cookie-path shadowing, handled below. Measured: Chromium still
+	// sends Strict cookies here, because it compares against the immediately
+	// preceding hop and callback -> /cgi-bin/luci/ is same-site. Safari instead
+	// evaluates the whole redirect chain, which begins at the IdP, and would
+	// withhold a Strict cookie. Lax is correct for a cookie that has to survive
+	// a return from an external IdP, and still sends nothing on cross-site
+	// POST, iframe or XHR, so CSRF protection is unaffected -- the same
+	// reasoning already applied to __Host-luci_sso_state above.
 	return Result.ok(response(302, {
 		"Location": "/cgi-bin/luci/",
 		"Set-Cookie": [
-			`sysauth_https=${res.data.sid}; HttpOnly; Secure; SameSite=Strict; Path=/`,
-			`sysauth=${res.data.sid}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+			`sysauth_https=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
+			`sysauth=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
+			// Issue #11. LuCI's own login sets these at path=build_url()
+			// (/cgi-bin/luci), we set them at Path=/. Same name, different path
+			// means both coexist, and RFC 6265 sends the LONGER path first —
+			// LuCI reads only the first value, so a leftover cookie from an
+			// earlier password login silently shadows the session we just
+			// created and the user is bounced back to the login page.
+			// We cannot simply adopt /cgi-bin/luci: this module's own
+			// /cgi-bin/luci-sso/logout endpoint has to read the cookie, and
+			// /cgi-bin/luci does not path-match /cgi-bin/luci-sso. So keep
+			// Path=/ and expire the shadowing copy instead.
+			"sysauth_https=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
+			"sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
 			"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 		]
 	}));
@@ -171,8 +192,14 @@ function handle_logout(deps, config, request) {
 	return Result.ok(response(302, {
 		"Location": logout_url,
 		"Set-Cookie": [
-			"sysauth_https=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
-			"sysauth=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
+			// Mirrors the attributes used when setting them (see handle_callback).
+			"sysauth_https=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
+			"sysauth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
+			// And the /cgi-bin/luci copies, for the same reason handle_callback
+			// expires them: clearing only Path=/ would leave a LuCI-path cookie
+			// behind, so an SSO logout would not actually end the LuCI session.
+			"sysauth_https=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
+			"sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0"
 		]
 	}));
 };

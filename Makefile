@@ -28,7 +28,22 @@ export CRYPTO_LIB  ?= mbedtls
 export PKG_DEPENDS := $(shell grep 'PKG_DEPENDS:=' $(PROJECT_ROOT)/openwrt/luci-sso/Makefile | sed 's/PKG_DEPENDS:=//' | tr '+' ' ' | tr ' ' '\n' | sort -u | tr '\n' ' ')
 
 export DOMAIN := luci-sso.test
-export FQDN_IDP := idp.$(DOMAIN)
+
+# The IdP deliberately sits on a DIFFERENT registrable domain from LuCI.
+#
+# SameSite is evaluated on the registrable domain (eTLD+1), not the host. With
+# the IdP at idp.$(DOMAIN) the whole OIDC round-trip was SAME-site, so the
+# browser sent SameSite=Strict session cookies on the return from the IdP and
+# the suite went green — while against a real IdP (accounts.google.com) that
+# navigation is cross-site, the cookies are withheld, and the user lands back
+# on the login page. That was issue #11, invisible to e2e by construction.
+#
+# Under the Public Suffix List's default rule an unknown TLD is itself the
+# public suffix, so luci-sso.test and luci-sso-idp.test are distinct
+# registrable domains and the round-trip is genuinely cross-site here too.
+export IDP_DOMAIN := luci-sso-idp.test
+
+export FQDN_IDP := idp.$(IDP_DOMAIN)
 export FQDN_LUCI := luci.$(DOMAIN)
 export FQDN_BROWSER := browser.$(DOMAIN)
 
