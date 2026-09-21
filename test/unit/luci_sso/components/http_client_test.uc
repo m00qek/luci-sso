@@ -44,7 +44,10 @@ function with_http_suite(behavior, cb) {
 	}
 
 	let fs_beh = {};
-	if (behavior.fs_lsdir)  fs_beh.lsdir  = behavior.fs_lsdir;
+	// get_system_ca_files() always lists /etc/ssl/certs. utest >= 1.5.0 dies in
+	// strict mode on lsdir() for a directory the mock has never seen, so default
+	// it to an empty listing the same way access defaults to false.
+	fs_beh.lsdir  = behavior.fs_lsdir  || (() => []);
 	fs_beh.access = behavior.fs_access || (() => false);
 
 	mock.inject_all({

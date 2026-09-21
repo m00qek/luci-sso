@@ -26,7 +26,10 @@ const WITH_SECRET = {
 
 // empty fs for the handshake create / reap paths.
 const EMPTY_FS = {
-	fs:    { strict: true, data: {} },
+	// handshake.create/reap list HANDSHAKE_DIR; utest >= 1.5.0 dies in strict
+	// mode on an lsdir() of a directory the mock has never seen. The tombstoned
+	// child declares it as known-but-empty.
+	fs:    { strict: true, data: { [common.HANDSHAKE_DIR + '/.utest-keep']: null } },
 	clock: { strict: true, data: { now: NOW } },
 };
 
