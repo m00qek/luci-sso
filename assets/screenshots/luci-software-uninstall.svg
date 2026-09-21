@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="480" viewBox="0 0 900 480">
+  <rect width="900" height="480" fill="#f5f5f5" stroke="#ccc" stroke-width="1"/>
+
+  <!-- Browser chrome -->
+  <rect width="900" height="40" fill="#e0e0e0"/>
+  <rect x="10" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="40" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="70" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="100" y="8" width="700" height="24" rx="12" fill="#fff" stroke="#ccc"/>
+  <text x="450" y="24" font-family="monospace" font-size="12" fill="#666" text-anchor="middle">https://192.168.1.1/cgi-bin/luci/admin/system/software</text>
+
+  <!-- LuCI header -->
+  <rect y="40" width="900" height="50" fill="#1a237e"/>
+  <text x="20" y="72" font-family="sans-serif" font-size="18" font-weight="bold" fill="white">OpenWrt - Software</text>
+
+  <!-- Content area -->
+  <rect x="20" y="110" width="860" height="340" rx="4" fill="white" stroke="#ddd"/>
+  
+  <!-- Tabs -->
+  <rect x="40" y="130" width="80" height="32" rx="4" fill="#eee"/>
+  <text x="80" y="151" font-family="sans-serif" font-size="12" fill="#333" text-anchor="middle">Actions</text>
+  
+  <rect x="125" y="130" width="80" height="32" rx="4" fill="#1a237e"/>
+  <text x="165" y="151" font-family="sans-serif" font-size="12" fill="white" text-anchor="middle">Installed</text>
+
+  <!-- Filter box -->
+  <text x="600" y="151" font-family="sans-serif" font-size="12" fill="#666">Filter:</text>
+  <rect x="640" y="130" width="220" height="32" rx="4" fill="#f9f9f9" stroke="#ccc"/>
+  <text x="650" y="151" font-family="sans-serif" font-size="12" fill="#333">luci-sso</text>
+
+  <!-- Table with luci-sso -->
+  <rect x="40" y="180" width="820" height="240" fill="#fff" stroke="#eee"/>
+  <line x1="40" y1="210" x2="860" y2="210" stroke="#ddd"/>
+  
+  <!-- Row 1 -->
+  <text x="60" y="235" font-family="sans-serif" font-size="12" fill="#333">luci-sso</text>
+  <rect x="780" y="220" width="60" height="24" rx="4" fill="#f44336"/>
+  <text x="810" y="236" font-family="sans-serif" font-size="11" fill="white" text-anchor="middle">Remove</text>
+
+  <!-- Row 2 -->
+  <line x1="40" y1="255" x2="860" y2="255" stroke="#eee"/>
+  <text x="60" y="280" font-family="sans-serif" font-size="12" fill="#333">luci-sso-crypto-mbedtls</text>
+  <rect x="780" y="265" width="60" height="24" rx="4" fill="#f44336"/>
+  <text x="810" y="281" font-family="sans-serif" font-size="11" fill="white" text-anchor="middle">Remove</text>
+
+  <!-- Placeholder banner -->
+  <rect x="0" y="430" width="900" height="50" fill="rgba(0,0,0,0.5)"/>
+  <text x="450" y="460" font-family="sans-serif" font-size="13" fill="#fff8e1" text-anchor="middle">[ PLACEHOLDER — Replace with actual screenshot of LuCI Software > Installed tab filtered by "luci-sso" ]</text>
+</svg>

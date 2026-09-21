@@ -1,0 +1,2013 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.">
+      
+      
+      
+        <link rel="canonical" href="https://m00qek.github.io/luci-sso/explanation/threat-model/">
+      
+      
+        <link rel="prev" href="../architecture/">
+      
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Threat Model - LuCI SSO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#about-the-threat-model" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+              <button class="md-banner__button md-icon" aria-label="Don't show this again">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+              </button>
+            
+            
+  <strong>Beta:</strong> This project and its documentation are under active development. APIs and configuration options may change before the 1.0 release.
+
+          </div>
+          
+            <script>var content,el=document.querySelector("[data-md-component=announce]");el&&(content=el.querySelector(".md-typeset"),__md_hash(content.innerHTML)===__md_get("__announce")&&(el.hidden=!0))</script>
+          
+        </aside>
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="LuCI SSO" class="md-header__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LuCI SSO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Threat Model
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../.." class="md-tabs__link">
+        
+  
+    
+  
+  Welcome
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../tutorials/" class="md-tabs__link">
+          
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../how-to/" class="md-tabs__link">
+          
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../reference/" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../" class="md-tabs__link">
+          
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="LuCI SSO" class="md-nav__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    LuCI SSO
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Welcome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/first-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Public IdP)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/pocket-id-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Self-hosted)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/building/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building from Source
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../tutorials/dev-onboarding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Developer Onboarding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    How-to Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            How-to Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Providers
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            Providers
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/generic-oidc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Generic OIDC Provider
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/google/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Google
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/github/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Github
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/authelia/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authelia
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/keycloak/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keycloak
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/authentik/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authentik
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/providers/pocket-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pocket ID
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Sysadmin
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Sysadmin
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/install-ca-certificate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing a Private CA Certificate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrading
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/rotate-credentials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Rotating Credentials
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/rbac/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Role-Based Access Control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/split-horizon/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Split-Horizon Networking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/backup-restore/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Backing Up and Restoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/sysadmin/uninstall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Removing luci-sso
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Developer
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            Developer
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/development-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Development Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/adding-crypto-backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a New Crypto Backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running Tests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/fuzzing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running the Fuzzer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/documentation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Writing Documentation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../how-to/developer/adding-documented-interfaces/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding Error Codes, Limits, and Cookies
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/log-messages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Log Messages
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/http-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HTTP API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/uci-config/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UCI Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/internal-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Internal API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/style-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Style Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/testing-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/rfc-compliance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RFC Compliance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/devenv-targets/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    devenv Targets
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Explanation
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Explanation
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../about/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About LuCI SSO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../design-philosophy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Design Philosophy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../oidc-flow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the OIDC Login Flow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../session-lifecycle/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Session Lifecycle
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../crypto-backends/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About Crypto Backends
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../security-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Security Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Threat Model
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Threat Model
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-attack-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      The attack surface
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authorization-code-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authorization code injection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      Token replay
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#access-token-substitution" class="md-nav__link">
+    <span class="md-ellipsis">
+      Access token substitution
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing-side-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timing side-channels
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-corruption-in-the-c-bridge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory corruption in the C bridge
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#denial-of-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      Denial of service
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is out of scope
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-attack-surface" class="md-nav__link">
+    <span class="md-ellipsis">
+      The attack surface
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#authorization-code-injection" class="md-nav__link">
+    <span class="md-ellipsis">
+      Authorization code injection
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#token-replay" class="md-nav__link">
+    <span class="md-ellipsis">
+      Token replay
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#access-token-substitution" class="md-nav__link">
+    <span class="md-ellipsis">
+      Access token substitution
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#timing-side-channels" class="md-nav__link">
+    <span class="md-ellipsis">
+      Timing side-channels
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memory-corruption-in-the-c-bridge" class="md-nav__link">
+    <span class="md-ellipsis">
+      Memory corruption in the C bridge
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#denial-of-service" class="md-nav__link">
+    <span class="md-ellipsis">
+      Denial of service
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-out-of-scope" class="md-nav__link">
+    <span class="md-ellipsis">
+      What is out of scope
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<h1 id="about-the-threat-model">About the Threat Model<a class="headerlink" href="#about-the-threat-model" title="Permanent link">&para;</a></h1>
+<p>A router's admin interface is a high-value target. Whoever controls LuCI controls the network: DNS, firewall rules, routing, VPN tunnels. <code>luci-sso</code> sits directly in front of that access, which means its failure modes are not abstract — a broken authentication implementation hands an attacker the network.</p>
+<p>This document describes the landscape of threats that shaped the design, how each is addressed, and where residual risk remains. It pairs with the <a href="../security-model/">Security Model</a>, which explains the specific cryptographic mechanisms; and with <a href="../oidc-flow/">About the OIDC Login Flow</a>, which traces the sequence of events for each login.</p>
+<hr />
+<h2 id="the-attack-surface">The attack surface<a class="headerlink" href="#the-attack-surface" title="Permanent link">&para;</a></h2>
+<p><code>luci-sso</code> operates at the boundary between three parties that do not fully trust each other:</p>
+<ul>
+<li>
+<p><strong>The browser</strong> is an untrusted environment. Browser history, extensions, local scripts, injected JavaScript, and logged HTTP requests can all observe anything that passes through a URL — including redirect parameters. The browser also runs code from arbitrary origins unless strict Content Security Policy headers prevent it.</p>
+</li>
+<li>
+<p><strong>The identity provider</strong> is trusted to authenticate users correctly but is not trusted to issue arbitrary tokens that the router accepts without verification. A misconfigured, compromised, or rogue IdP should not be able to forge access to the router.</p>
+</li>
+<li>
+<p><strong>The network</strong> between the router and the IdP is assumed to be untrusted. HTTPS is mandatory for all back-channel communication for exactly this reason — the router enforces it in code and refuses to proceed if any endpoint URL uses plain HTTP.</p>
+</li>
+</ul>
+<p>The router itself is the trusted party. All security-critical state (PKCE verifiers, nonces, handshake files, the token registry) lives only on the router.</p>
+<pre class="mermaid"><code>graph TD
+    Browser["Browser\n(untrusted environment)"]
+    Router["Router · luci-sso\n(trusted party)"]
+    IdP["Identity Provider\n(trusted to authenticate;\nnot trusted unconditionally)"]
+
+    Browser &lt;--&gt;|"front-channel: redirects + cookies"| Router
+    Browser &lt;--&gt;|"front-channel: redirects"| IdP
+    Router --&gt;|"back-channel: token exchange &amp;amp; JWKS\n(HTTPS mandatory)"| IdP</code></pre>
+<p><strong>Textual summary:</strong> The browser communicates with both the router and the IdP via front-channel redirects — these pass through the untrusted browser environment. The router's back-channel communication to the IdP (token exchange, JWKS fetch) bypasses the browser entirely and is protected by mandatory HTTPS. Security-critical state never leaves the router.</p>
+<hr />
+<h2 id="authorization-code-injection">Authorization code injection<a class="headerlink" href="#authorization-code-injection" title="Permanent link">&para;</a></h2>
+<p>When a user clicks "Login with SSO", the router generates an authorization code challenge and redirects the browser to the IdP. The IdP authenticates the user and redirects back with a short-lived authorization code. An attacker who obtains that code — perhaps by observing a shared browser, logging redirect URLs, or using a CSRF-style trick to force another user's browser to submit the attacker's code — has a potential entry point.</p>
+<p>PKCE closes this. The router generates a random <code>code_verifier</code>, keeps it on the router filesystem, and sends only a SHA256 hash of it (<code>code_challenge</code>) to the IdP. When the code is exchanged for tokens, the router must present the verifier — and only the router has it. An intercepted code is worthless without the verifier, which never left the router.</p>
+<p>CSRF is separately prevented by the <code>state</code> parameter. The router generates a random state value, binds it to the browser session via a cookie, and checks the returned <code>state</code> at callback time using constant-time comparison. This ensures the callback request was initiated by the same browser that started the flow, not injected by a third party.</p>
+<hr />
+<h2 id="token-replay">Token replay<a class="headerlink" href="#token-replay" title="Permanent link">&para;</a></h2>
+<p>An attacker who captures a valid ID Token — from a logged network segment, a browser extension, or a compromised IdP response — might attempt to present it in a different session, perhaps after the legitimate user has logged out.</p>
+<p>The <code>nonce</code> prevents this. The router generates a random nonce at flow initiation, embeds it in the authorization request, and the IdP must include it verbatim in the ID Token. The router verifies the nonce against the stored handshake state before accepting the token. Because the handshake file is deleted atomically at the moment of first use, the nonce can only be verified once — a replayed token with the same nonce finds no matching handshake to validate against.</p>
+<p>After a successful login, the SHA256 hash of the access token is registered in the token registry (<code>/var/run/luci-sso/tokens/</code>). This is a distinct layer of protection: even if an attacker captures an access token that was already used for a valid login, attempting to reuse it will fail because the hash is already registered.</p>
+<hr />
+<h2 id="access-token-substitution">Access token substitution<a class="headerlink" href="#access-token-substitution" title="Permanent link">&para;</a></h2>
+<p>The token exchange is a back-channel request from the router to the IdP's token endpoint. An attacker with man-in-the-middle capability on that back-channel could, in theory, let the ID Token through unchanged while substituting a different access token.</p>
+<p>The <code>at_hash</code> claim prevents this. The ID Token contains a binding to the access token: it includes the base64url-encoded first half of the SHA256 of the access token. The router recomputes this value from the actual access token it received and compares it using constant-time equality. If the access token has been substituted, the <code>at_hash</code> check fails and the login is rejected.</p>
+<hr />
+<h2 id="timing-side-channels">Timing side-channels<a class="headerlink" href="#timing-side-channels" title="Permanent link">&para;</a></h2>
+<p>Security-critical string comparisons — nonce verification, state verification, <code>at_hash</code> verification, logout CSRF token verification — all use a constant-time equality function. On an embedded device where cryptographic operations are measurable, a naive <code>==</code> comparison would leak information through timing: an attacker probing whether the first byte matches, then the second, could potentially reconstruct secret values by measuring response latency.</p>
+<p>Constant-time comparison eliminates this by ensuring the comparison always takes the same amount of time regardless of how many bytes match. The implementation is in the native C bridge rather than ucode, both for performance and because compiler optimizations can inadvertently reintroduce timing variance in higher-level languages.</p>
+<hr />
+<h2 id="memory-corruption-in-the-c-bridge">Memory corruption in the C bridge<a class="headerlink" href="#memory-corruption-in-the-c-bridge" title="Permanent link">&para;</a></h2>
+<p>The native C bridge handles JWT parsing, JWK deserialization, RSA/EC signature verification, and PKCE computation. These are the operations that directly process attacker-controlled data — the contents of tokens issued by the IdP. A memory safety bug in this code could allow an attacker who controls the IdP to achieve arbitrary code execution on the router.</p>
+<p>The bridge is hardened at multiple levels. All input is length-checked before any parsing begins — the 16 KB input limit in <code>web.uc</code> applies before data reaches the C layer, and the C code enforces its own bounds checks internally. EC public keys are validated (coordinate length, curve membership) before use. Memory containing sensitive material — private keys, raw token bytes, PKCE secrets — is zeroed immediately after use.</p>
+<p>Coverage-guided fuzz testing exercises the parsing paths continuously. AddressSanitizer is enabled in CI to catch out-of-bounds reads and writes during test runs. The goal is not to eliminate all possible bugs — that is impossible to guarantee — but to make exploitation difficult and ensure that common classes of memory error are caught before they reach a release.</p>
+<hr />
+<h2 id="denial-of-service">Denial of service<a class="headerlink" href="#denial-of-service" title="Permanent link">&para;</a></h2>
+<p>An unauthenticated attacker can initiate login flows by sending requests to the <code>/</code> endpoint. Each request writes a handshake state file and makes a network connection to the IdP for discovery. Without a rate limit, this would allow an attacker to exhaust router memory, fill <code>/var/run/</code>, or overload the IdP with discovery requests.</p>
+<p>The rate limiter allows 50 requests per 60-second window across all sources. This is a global limit, not per-source, which means a high-volume external attack will trigger it — but so will a legitimate user hammering the login button. The limit is set conservatively, since a human completing a login flow generates at most two or three requests (initiate, callback, logout).</p>
+<p>The <code>?action=enabled</code> probe is exempt from rate limiting — it reads a single UCI value and produces no side effects, so it is safe to poll from monitoring scripts.</p>
+<hr />
+<h2 id="what-is-out-of-scope">What is out of scope<a class="headerlink" href="#what-is-out-of-scope" title="Permanent link">&para;</a></h2>
+<p>Some threats exist that <code>luci-sso</code> cannot address on its own:</p>
+<p><strong>IdP compromise.</strong> If the identity provider itself is compromised, an attacker who controls it can issue arbitrary tokens that pass all of <code>luci-sso</code>'s verification. The nonce, PKCE, and <code>at_hash</code> checks all assume the IdP is behaving correctly. Defence against a fully compromised IdP requires additional layers outside the scope of this project — for example, network segmentation that limits what a compromised router can reach.</p>
+<p><strong>Physical access to the router.</strong> An attacker with physical access to the router can read UCI configuration (including the client secret), mount the filesystem, or reset to factory defaults. luci-sso does not protect against physical access; that is an operational security concern.</p>
+<p><strong>TLS failure.</strong> All back-channel security assumes the router correctly verifies the IdP's TLS certificate. If the router's CA bundle is corrupted or if the TLS verification is bypassed (for example, by <code>curl -k</code> in a custom script), the guarantee that the router is talking to the real IdP is lost. luci-sso enforces HTTPS at the URL level; the underlying TLS library must be correctly configured.</p>
+<p><strong>Session after logout.</strong> UBUS sessions persist in router memory. If a user logs out but does not clear their browser cookies, the session cookie could be reused within its remaining lifetime. Logout triggers destruction of the UBUS session on the router, so the cookie becomes worthless as soon as the router processes the logout request — but only if the browser actually reaches <code>/logout</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../..", "features": ["announce.dismiss", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
