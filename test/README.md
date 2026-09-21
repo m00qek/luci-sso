@@ -1,81 +1,77 @@
 # Tests
 
-Unit tests, integration tests, and fuzz tests for `luci-sso`.
+Native, unit, integration, and end-to-end tests for `luci-sso`.
 
-For architecture details and writing guidance, see [Testing Architecture](https://m00qek.github.io/luci-sso/reference/testing-architecture/) and [How to Run Tests](https://m00qek.github.io/luci-sso/how-to/developer/testing/).
+For the full rationale, see
+[Testing Architecture](https://m00qek.github.io/luci-sso/reference/testing-architecture/)
+and [How to Run Tests](https://m00qek.github.io/luci-sso/how-to/developer/testing/).
 
 ---
 
 ## Running tests
 
 ```bash
-make -C devenv unit-test                          # All tiers
-make -C devenv unit-test VERBOSE=1                # With per-test output
-make -C devenv unit-test FILTER='compliance.*SHA' # Regex filter on test names
-make -C devenv unit-test MODULES='test/tier2/oidc_logic_test.uc'  # Specific file
+make unit-test                          # native + unit + integration
+make unit-test VERBOSE=1                # with per-test output
+make unit-test FILTER='session.key'     # regex filter on test titles
+make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'  # a single file/dir
 
-make -C devenv up && make -C devenv e2e-test      # Full E2E (requires Docker)
-make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls  # Fuzz (60s)
+make up && make e2e-test                # full browser E2E (requires Docker)
+make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls  # C-level fuzzer (~60s)
 ```
 
-## Tier overview
+## Buckets
 
-| Tier | Directory | What it tests |
+| Bucket | Path | Entry point |
 | :--- | :--- | :--- |
-| 0 | `tier0/` | Native C crypto primitives, memory safety |
-| 1 | `tier1/` | ucode crypto layer, constant-time comparisons |
-| 2 | `tier2/` | Business logic — OIDC state machine, role mapping, config |
-| 3 | `tier3/` | Integration — CGI headers, UBUS session management |
-| 4 | `tier4/` | Framework self-tests |
+| **native** | `native/` | `luci_sso.native` FFI exports (crypto KAT, memory safety, hardening) |
+| **unit** | `unit/**` (mirrors `src/`) | one module's exported function; system boundary faked |
+| **integration** | `integration/**` | an orchestrator/wiring seam (`handshake`, `router`, `logout`) |
+| **e2e** | `e2e/` | Playwright → real uhttpd/rpcd/IdP |
+
+Shared helpers: `fixtures/` (`fixtures.rsa`, `fixtures.oidc`, `fixtures.anchor`),
+`lib/helpers.uc` (real signed JWTs), `context.uc` (`with_context` deps builder),
+`proxies/` (component proxies). Module resolution and the proxied modules are
+configured in `utest.config.uc`.
 
 ---
 
-## Mock DSL quick reference
+## Mocking quick reference
+
+The system boundary is faked with `mock.inject_all` (or `mock.inject`), which
+returns **proxies** driven by a `{ strict, data, behavior }` spec. Prefer
+`data:` over `behavior:`; never hand-write a stub object when a proxy exists.
 
 ```javascript
-import * as mock from 'mock';
+import { describe, it, assert, contains, spy, mock } from 'utest';
+import * as key from 'luci_sso.session.key';
 
-let factory = mock.create();
-
-// Basic: set environment variables, get an io object
-factory.with_env({ PATH_INFO: "/callback" }, (io) => {
-    let req = web.request(io);
-});
-
-// Files: raw strings or metadata objects
-factory.with_files({
-    "/etc/config/luci-sso": "config oidc 'default'\n...",
-    "/etc/stale.lock": { ".type": "directory", ".mtime": 1516230000 },
-}, (io) => {
-    let st = io.stat("/etc/stale.lock");
-});
-
-// Network: stub HTTP responses
-factory.with_responses({
-    "https://idp/.well-known/openid-configuration": { issuer: "https://idp" }
-}, (io) => { ... });
-
-// Chaining: accumulate state across calls
-factory.with_files({ "/etc/key": "abc" }, (io) => {
-    factory.using(io).with_responses({ "https://idp/jwks": {...} }).spy((io2) => {
-        router.handle(io2, ...);
+describe('session.key: get', () => {
+    it('returns the on-disk secret', () => {
+        mock.inject_all({
+            fs:    { strict: true, data: { '/etc/luci-sso/secret.key': SECRET } },
+            clock: { strict: true, data: { now: 1700000000 } },
+        }, (injected) => {
+            let deps = { fs: injected.fs, clock: injected.clock, native, log: () => null };
+            assert.match(contains({ ok: true, data: SECRET }), key.get(deps));
+            assert.match('/etc/luci-sso/secret.key', spy(injected.fs).calls.readfile[0][0]);
+        });
     });
 });
-
-// Spying: verify side-effects after execution
-let data = factory.with_ubus({ "session:destroy": {} }).spy((io) => {
-    router.handle(io, ...);
-});
-assert(data.called("ubus", "session", "destroy"));
-assert(data.called("log", "warn"));
 ```
 
-## Assertions
+Integration and deps-graph-heavy tests use `with_context(cfg, cb)`, which
+assembles every proxy into a full `deps` object and seeds the runtime state.
 
-| Function | Passes when |
+## Assertions (utest)
+
+| Form | Passes when |
 | :--- | :--- |
-| `assert(cond, [msg])` | `cond` is truthy |
-| `assert_eq(actual, expected, [msg])` | deep equality |
-| `assert_match(actual, regex, [msg])` | string matches regex |
-| `assert_throws(fn, [msg])` | `fn` throws |
-| `assert_fail([msg])` | never — unconditional failure |
+| `assert.match(expected, actual, [msg])` | `actual` matches `expected` (value or matcher) |
+| `assert.throws(fn, /regex/, [msg])` | `fn` throws and the message matches |
+| `contains({ … })` | object/array contains the given subset (nestable) |
+| `truthy()` / `falsy()` | value is truthy / falsy |
+| `has_length(n)` / `is_type(t)` / `regex(/…/)` / `pred(fn)` | length / type / regex / predicate matches |
+
+Structure tests with `describe` / `it`; property-based tests with
+`prop(name, gen.…, (value) => { … })`.

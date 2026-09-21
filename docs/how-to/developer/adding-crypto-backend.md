@@ -48,12 +48,12 @@ endif()
 
 1.  **Build** your new backend:
     ```bash
-    make -C devenv compile CRYPTO_LIB=boringssl
+    make compile CRYPTO_LIB=boringssl
     ```
 
 2.  **Run** Tier 0 compliance tests:
     ```bash
-    make -C devenv unit-test FILTER=native_compliance
+    make unit-test FILTER=native_compliance
     ```
 
 If the compliance tests pass, the backend is correctly mapping its internal library functions to the `luci-sso` expected interface.

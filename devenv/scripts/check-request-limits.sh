@@ -2,7 +2,7 @@
 # Bidirectional constraint: every LIMIT_* constant in any source file must be
 # declared as metadata in some doc file, and vice versa, with matching values.
 #
-# Source anchor:  const LIMIT_NAME = VALUE   anywhere under files/**/*.uc
+# Source anchor:  const LIMIT_NAME = VALUE   anywhere under src/**/*.uc
 # Doc anchor:     <!-- LIMIT_NAME=VALUE -->   anywhere under docs/reference/**/*.md
 #
 # CI runs this via .github/workflows/lint.yml.
@@ -14,7 +14,7 @@ fail=0
 
 # Extract LIMIT_NAME=VALUE pairs from all .uc source files (const declarations only)
 code_limits=$(
-    find files/ -name '*.uc' -exec grep -hoP 'LIMIT_[A-Z_]+\s*=\s*[0-9]+' {} + \
+    find src/ -name '*.uc' -exec grep -hoP 'LIMIT_[A-Z_]+\s*=\s*[0-9]+' {} + \
     | sed 's/[[:space:]]//g' \
     | sort -u
 )
@@ -27,7 +27,7 @@ doc_limits=$(
     | sort -u
 )
 
-[ -z "$code_limits" ] && { echo "ERROR: no LIMIT_* constants found under files/"; exit 1; }
+[ -z "$code_limits" ] && { echo "ERROR: no LIMIT_* constants found under src/"; exit 1; }
 [ -z "$doc_limits" ]  && { echo "ERROR: no LIMIT_* metadata comments found under docs/"; exit 1; }
 
 while IFS= read -r entry; do
@@ -52,4 +52,4 @@ done <<< "$doc_limits"
     printf '\nKeep LIMIT_* constants in source and <!-- LIMIT_*=VALUE --> comments in docs in sync.\n'
     exit 1
 }
-echo "OK: request limits — files/**/*.uc ↔ docs/reference/*.md"
+echo "OK: request limits — src/**/*.uc ↔ docs/reference/*.md"

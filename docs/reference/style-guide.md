@@ -2,7 +2,7 @@
 
 This document is the technical reference for coding standards in the luci-sso project. For the reasoning behind these standards, see [Design Philosophy](../explanation/design-philosophy.md).
 
-Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, and trailing semicolons on exported functions. For real-world implementations, see `files/usr/share/ucode/luci_sso/` (production) and `test/tier*/` (tests).
+Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, and trailing semicolons on exported functions. For real-world implementations, see `src/` (production) and `test/tier*/` (tests).
 
 ---
 
@@ -573,7 +573,7 @@ if (substr(url, 0, 8) !== "https://") ...
 
 ```
 luci-sso/
-├── files/usr/share/ucode/luci_sso/
+├── src/
 │   ├── crypto.uc      # High-level crypto API (wraps native)
 │   ├── oidc.uc        # OIDC protocol (exchange, verification)
 │   ├── discovery.uc   # OIDC metadata fetching and caching
@@ -787,7 +787,7 @@ More accurate naming for future P-384 support.
 Before submitting PR, verify:
 
 - [ ] All functions have tests
-- [ ] All tests pass (`make -C devenv test`)
+- [ ] All tests pass (`make test`)
 - [ ] No secrets in code/logs
 - [ ] Error handling follows guide (exceptions vs result objects)
 - [ ] I/O uses dependency injection

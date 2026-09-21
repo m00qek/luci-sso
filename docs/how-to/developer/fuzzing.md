@@ -13,7 +13,7 @@ You must specify which crypto library you want to fuzz (mbedtls, openssl, or wol
 
 ```bash
 # Run for 60 seconds (default)
-make -C devenv fuzzer-test CRYPTO_LIB=mbedtls
+make fuzzer-test CRYPTO_LIB=mbedtls
 ```
 
 ### 2. Custom Duration
@@ -21,10 +21,10 @@ For deep-dive discovery, you can increase the fuzzing time:
 
 ```bash
 # Run for 10 minutes
-make -C devenv fuzzer-test CRYPTO_LIB=openssl TIME=600
+make fuzzer-test CRYPTO_LIB=openssl TIME=600
 
 # Enable leak detection (disabled by default to speed up initial discovery)
-make -C devenv fuzzer-test CRYPTO_LIB=mbedtls DETECT_LEAKS=1
+make fuzzer-test CRYPTO_LIB=mbedtls DETECT_LEAKS=1
 ```
 
 ## Analyzing Crashes

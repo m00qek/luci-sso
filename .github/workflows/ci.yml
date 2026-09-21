@@ -62,10 +62,10 @@ jobs:
         id: vars
         run: |
           # Use --no-print-directory and xargs to ensure perfectly clean strings
-          DEPENDS=$(make -s --no-print-directory -C devenv print-env VAR=PKG_DEPENDS | xargs)
-          VERSION=$(make -s --no-print-directory -C devenv print-env VAR=SDK_VERSION | xargs)
-          NODE_V=$(make -s --no-print-directory -C devenv print-env VAR=NODE_VERSION | xargs)
-          ALPINE_V=$(make -s --no-print-directory -C devenv print-env VAR=ALPINE_VERSION | xargs)
+          DEPENDS=$(make -s --no-print-directory print-env VAR=PKG_DEPENDS | xargs)
+          VERSION=$(make -s --no-print-directory print-env VAR=SDK_VERSION | xargs)
+          NODE_V=$(make -s --no-print-directory print-env VAR=NODE_VERSION | xargs)
+          ALPINE_V=$(make -s --no-print-directory print-env VAR=ALPINE_VERSION | xargs)
           ARCH="x86-64"
 
           echo "pkg_depends=$DEPENDS" >> $GITHUB_OUTPUT
@@ -83,25 +83,27 @@ jobs:
         with:
           filters: |
             native:
-              - 'src/**'
+              - 'mod/**'
               - 'test/fuzz_test.c'
               - 'devenv/services/fuzzer/**'
             code:
               - 'src/**'
-              - 'files/**/*.uc'
+              - 'mod/**'
+              - 'files/**'
               - 'test/**'
+              - 'openwrt/**'
               - 'devenv/services/idp/**'
               - 'devenv/services/browser/**'
               - 'devenv/services/pki/**'
               - 'devenv/services/openwrt/**'
-              - 'devenv/Makefile'
+              - 'Makefile'
             fuzzer: 'devenv/services/fuzzer/**'
             openwrt: 'devenv/services/openwrt/**'
             sdk: 'devenv/services/sdk/**'
             idp: 'devenv/services/idp/**'
             browser: 'devenv/services/browser/**'
             pki: 'devenv/services/pki/**'
-            makefile: 'devenv/Makefile'
+            makefile: 'Makefile'
 
   build-versioned:
     name: Build ${{ matrix.service }} (${{ matrix.openwrt_version }})
@@ -213,7 +215,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Fuzz Tests (60s)
-        run: make -sC devenv fuzzer-test
+        run: make -s fuzzer-test
 
   test-integration:
     name: Verification (${{ matrix.crypto }} / ${{ matrix.openwrt_version }})
@@ -237,20 +239,20 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Pull images
-        run: make -sC devenv pull
+        run: make -s pull
 
       - name: Compile
-        run: make -sC devenv compile
+        run: make -s compile
 
       - name: Start environment
-        run: make -sC devenv up
+        run: make -s up
 
       - name: Unit Tests
-        run: make -sC devenv unit-test VERBOSE=1
+        run: make -s unit-test VERBOSE=1
 
       - name: E2E Tests
-        run: make -sC devenv e2e-test
+        run: make -s e2e-test
 
       - name: Stop environment
         if: always()
-        run: make -sC devenv down
+        run: make -s down

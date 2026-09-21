@@ -1,0 +1,217 @@
+import * as crypto from 'luci_sso.crypto';
+import * as oidc from 'luci_sso.oidc';
+import * as session from 'luci_sso.session';
+import * as ubus from 'luci_sso.ubus';
+import * as lucihttp from 'lucihttp';
+import * as discovery from 'luci_sso.discovery';
+import * as handshake from 'luci_sso.handshake';
+import * as config_mod from 'luci_sso.config';
+import * as encoding from 'luci_sso.encoding';
+import * as Result from 'luci_sso.result';
+import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'luci_sso.errors';
+
+/**
+ * Main CGI Router for luci-sso.
+ * deps = { fs, http, ubus, uci, log, clock }
+ */
+
+const RATELIMIT_DIR = "/var/run/luci-sso";
+const RATELIMIT_FILE = RATELIMIT_DIR + "/ratelimit.json";
+const LIMIT_WINDOW = 60;   // 60 seconds
+const LIMIT_REQUESTS = 50; // 50 requests per window
+
+/**
+ * Checks and updates the global rate limit state.
+ * @private
+ */
+function _check_rate_limit(deps) {
+	let now = deps.clock.time();
+	let state = { count: 0, window_start: now };
+
+	let raw = deps.fs.readfile(RATELIMIT_FILE);
+	if (raw) {
+		let res = encoding.safe_json(raw);
+		if (res.ok) {
+			state = res.data;
+		}
+	}
+
+	// Reset window if it has expired
+	if (now - state.window_start > LIMIT_WINDOW) {
+		state.count = 1;
+		state.window_start = now;
+	} else {
+		state.count++;
+	}
+
+	// Persist state atomically
+	let tmp_file = RATELIMIT_FILE + ".tmp";
+	if (deps.fs.writefile(tmp_file, sprintf("%J", state))) {
+		if (!deps.fs.rename(tmp_file, RATELIMIT_FILE)) {
+			deps.log("error", "Failed to atomically install rate limit state file");
+			deps.fs.unlink(tmp_file);
+		}
+	} else {
+		// Log but continue if we can't write (resilience)
+		deps.log("error", "Failed to write rate limit state file");
+	}
+
+	if (state.count > LIMIT_REQUESTS) {
+		deps.log("warn", `Rate limit exceeded: ${state.count} requests in current window [limit: ${LIMIT_REQUESTS}]`);
+		return false;
+	}
+
+	return true;
+};
+
+/**
+ * Creates a response object.
+ * @private
+ */
+function response(status, headers, body) {
+	return {
+		status: status || 200,
+		headers: headers || {},
+		body: body || ""
+	};
+};
+
+/**
+ * Handles the initial login redirect.
+ * @private
+ */
+function handle_login(deps, config) {
+	let reap_res = session.reap_stale_handshakes(deps, config.clock_tolerance);
+	if (reap_res.ok && reap_res.data > 0) {
+		deps.log("info", `Cleaned up ${reap_res.data} stale handshakes`);
+	}
+
+	let res = handshake.initiate(deps, config);
+	if (!res.ok) return res;
+
+	return Result.ok(response(302, {
+		"Location": res.data.url,
+		"Set-Cookie": `__Host-luci_sso_state=${res.data.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
+	}));
+};
+
+/**
+ * Handles the OIDC callback path.
+ * @private
+ */
+function handle_callback(deps, config, request, policy) {
+	let res = handshake.authenticate(deps, config, request, policy);
+	if (!res.ok) return res;
+
+	return Result.ok(response(302, {
+		"Location": "/cgi-bin/luci/",
+		"Set-Cookie": [
+			`sysauth_https=${res.data.sid}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+			`sysauth=${res.data.sid}; HttpOnly; Secure; SameSite=Strict; Path=/`,
+			"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
+		]
+	}));
+};
+
+/**
+ * Handles the logout request.
+ * @private
+ */
+function handle_logout(deps, config, request) {
+	let cookies = request.cookies || {};
+	let query = request.query || {};
+	let sid = cookies.sysauth_https || cookies.sysauth;
+	let id_token_hint = null;
+
+	if (!sid) {
+		return Result.ok(response(302, { "Location": "/" }));
+	}
+
+	let session_res = ubus.get_session(deps, sid);
+	if (!session_res.ok) {
+		// Session expired or invalid - treat like unauthenticated
+		return Result.ok(response(302, { "Location": "/" }));
+	}
+
+	// CSRF Protection: Verify that the 'stoken' parameter matches the session token
+	let provided_token = query.stoken || "";
+	let session_token = session_res.data.token || "";
+	if (!provided_token || !session_token || !crypto.constant_time_eq(provided_token, session_token)) {
+		deps.log("warn", "Logout attempt with invalid or missing CSRF token");
+		return Result.err(CSRF_CHECK_FAILED, { http_status: 403 });
+	}
+	id_token_hint = session_res.data.oidc_id_token;
+	ubus.destroy_session(deps, sid);
+
+	let logout_url = "/";
+
+	// OIDC RP-Initiated Logout
+	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
+	if (disc_res.ok && disc_res.data.end_session_endpoint) {
+		let end_session = disc_res.data.end_session_endpoint;
+
+		// BLOCKER FIX: Enforce HTTPS on end_session_endpoint (W2)
+		if (encoding.is_https(end_session)) {
+			let sep = (index(end_session, '?') == -1) ? '?' : '&';
+
+			logout_url = end_session;
+			if (id_token_hint) {
+				logout_url += `${sep}id_token_hint=${lucihttp.urlencode(id_token_hint, 1)}`;
+				sep = '&';
+			}
+
+			let redirect_uri = config.redirect_uri || "";
+			let m = match(redirect_uri, /^(https:\/\/[^\/]+).*/);
+			if (m) {
+				let post_logout = m[1] + "/";
+				logout_url += `${sep}post_logout_redirect_uri=${lucihttp.urlencode(post_logout, 1)}`;
+			}
+		}
+	}
+	return Result.ok(response(302, {
+		"Location": logout_url,
+		"Set-Cookie": [
+			"sysauth_https=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0",
+			"sysauth=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0"
+		]
+	}));
+};
+
+/**
+ * Main entry point for the router.
+ * @param {object} deps - { fs, http, ubus, uci, log, clock }
+ */
+export function handle(deps, config, request, policy) {
+	let path = request.path || "/";
+	if (substr(path, 0, 1) != "/") path = "/" + path;
+	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
+
+	// SHORT-CIRCUIT: Action check (Does not require config or rate limit budget)
+	if (path == "/") {
+		let query = request.query || {};
+		if (query.action == "enabled") {
+			let enabled_res = config_mod.is_enabled({ uci: deps.uci, log: deps.log });
+			let enabled = (enabled_res.ok && enabled_res.data === true);
+			return Result.ok(response(200, { "Content-Type": "application/json" }, sprintf('{"enabled": %s}', enabled ? "true" : "false")));
+		}
+	}
+
+	// MANDATORY: Rate limit (Protects handshake state generation and token exchange)
+	if (!_check_rate_limit(deps)) {
+		return Result.err(TOO_MANY_REQUESTS, { http_status: 429 });
+	}
+
+	// MANDATORY: Config guard
+	if (!config) {
+		return Result.err(SSO_DISABLED, { http_status: 503 });
+	}
+	if (path == "/") {
+		return handle_login(deps, config);
+	} else if (path == "/callback") {
+		return handle_callback(deps, config, request, policy);
+	} else if (path == "/logout") {
+		return handle_logout(deps, config, request);
+	}
+
+	return Result.err(NOT_FOUND, { http_status: 404 });
+};

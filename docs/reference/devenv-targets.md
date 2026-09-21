@@ -1,6 +1,6 @@
-# devenv Makefile Reference
+# Makefile Reference
 
-All development commands run through `devenv/Makefile`. Invoke them as `make -C devenv <target> [VARIABLE=value ...]` from the project root.
+All development commands run through `Makefile`. Invoke them as `make <target> [VARIABLE=value ...]` from the project root.
 
 ---
 
@@ -57,7 +57,7 @@ All development commands run through `devenv/Makefile`. Invoke them as `make -C 
 | Target | Stack | Description |
 | :--- | :--- | :--- |
 | `sync-headers` | CI | Copy C headers from the SDK container into `devenv/.include/` for LSP support. |
-| `print-env` | — | Print the value of a Makefile variable. Usage: `make -C devenv print-env VAR=SDK_ARCH` |
+| `print-env` | — | Print the value of a Makefile variable. Usage: `make print-env VAR=SDK_ARCH` |
 
 ---
 
@@ -107,28 +107,28 @@ Common `SDK_ARCH` values:
 
 ```bash
 # Start the CI stack and run all tests
-make -C devenv up
-make -C devenv unit-test
+make up
+make unit-test
 
 # Run only OIDC discovery tests, with verbose output
-make -C devenv unit-test FILTER='oidc.*discovery' VERBOSE=1
+make unit-test FILTER='oidc.*discovery' VERBOSE=1
 
 # Run a single test file
-make -C devenv unit-test MODULES='test/tier2/oidc_logic_test.uc'
+make unit-test MODULES='test/tier2/oidc_logic_test.uc'
 
 # Build and test with the wolfssl backend
-make -C devenv compile CRYPTO_LIB=wolfssl
-make -C devenv unit-test CRYPTO_LIB=wolfssl
+make compile CRYPTO_LIB=wolfssl
+make unit-test CRYPTO_LIB=wolfssl
 
 # Build an IPK for a MIPS router
-make -C devenv package SDK_ARCH=mipsel_24kc
+make package SDK_ARCH=mipsel_24kc
 
 # Fuzz the mbedtls backend for 10 minutes with leak detection
-make -C devenv fuzzer-test CRYPTO_LIB=mbedtls TIME=600 DETECT_LEAKS=1
+make fuzzer-test CRYPTO_LIB=mbedtls TIME=600 DETECT_LEAKS=1
 
 # Open a shell in the running openwrt container
-make -C devenv shell
+make shell
 
 # Start the local stack and open the router in a browser at https://localhost:8443
-make -C devenv local-up
+make local-up
 ```

@@ -18,7 +18,7 @@ First, we need to know our router's CPU architecture. On the router, navigate to
 Now, let's run the build. Replace `SDK_ARCH` with the architecture we found in Step 1:
 
 ```bash
-make -C devenv package SDK_ARCH=aarch64_generic
+make package SDK_ARCH=aarch64_generic
 ```
 
 The build system will automatically pull the correct OpenWrt SDK container for our target and compile the package inside it. The first run may take a few minutes to download the SDK image.

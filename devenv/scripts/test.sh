@@ -27,8 +27,8 @@ translate_unit_paths() {
   local modules=$1
   local translated=""
   for mod in $modules; do
-    # test/tier2/crypto_test.uc -> tier2.crypto_test
-    local t=$(echo "$mod" | sed -E 's|^(\.\./)?test/||' | sed 's|\.uc$||' | tr '/' '.')
+    # test/unit/luci_sso/crypto_test.uc -> /usr/share/luci-sso/test/unit/luci_sso/crypto_test.uc
+    local t="/usr/share/luci-sso/$(echo "$mod" | sed -E 's|^\.\./||')"
     if [ -z "$translated" ]; then
       translated="$t"
     else
@@ -62,12 +62,26 @@ run_unit() {
   log_info "🧪 Running unit tests in openwrt container..."
   docker compose $COMPOSE_FLAGS exec openwrt \
     sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
-  docker compose $COMPOSE_FLAGS exec -e MODULES="$(translate_unit_paths "$modules")" -e FILTER="$filter" -e VERBOSE="$VERBOSE" openwrt ucode \
-    -L /usr/share/ucode \
-    -L /usr/lib/ucode \
-    -L /usr/share/ucode/luci_sso \
-    -L /usr/share/luci-sso/test \
-    /usr/share/luci-sso/test/runner.uc
+
+  local reporter
+  [ "$VERBOSE" = "1" ] && reporter="detailed" || reporter="compact"
+
+  local filter_flag=""
+  [ -n "$filter" ] && filter_flag="-f $filter"
+
+  local bundles
+  if [ -n "$modules" ]; then
+    bundles=$(translate_unit_paths "$modules")
+  else
+    bundles="/usr/share/luci-sso/test/native /usr/share/luci-sso/test/integration /usr/share/luci-sso/test/unit/luci_sso /usr/share/luci-sso/test/unit/luci_sso/components /usr/share/luci-sso/test/unit/luci_sso/crypto /usr/share/luci-sso/test/unit/luci_sso/session"
+  fi
+
+  docker compose $COMPOSE_FLAGS exec openwrt \
+    utest \
+    -c /usr/share/luci-sso/test/utest.config.uc \
+    -r "$reporter" \
+    $filter_flag \
+    $bundles
 }
 
 run_e2e() {
