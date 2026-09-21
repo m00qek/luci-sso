@@ -17,14 +17,27 @@
         // We look for the "Log in" button produced by LuCI.js (not the hidden static one)
         var primaryBtn = null;
         
-        // Target: The positive button in the login form or modal
-        var candidates = document.querySelectorAll('.cbi-button-positive, .btn.login, button.important');
+        // Target: The positive button in the login form or modal.
+        // Two different markups exist upstream, and only the first was handled
+        // before (issue #10):
+        //   bootstrap (own sysauth.ut):
+        //     <button class="btn cbi-button-positive important">Log in</button>
+        //   luci-base generic sysauth.ut, used by material, openwrt,
+        //   openwrt-2020 and footstrap:
+        //     <input type="submit" value="Log in" class="btn cbi-button cbi-button-apply" />
+        // This script is only ever injected into sysauth.ut, so matching
+        // .cbi-button-apply cannot collide with a Save & Apply button — the
+        // login page has none.
+        var candidates = document.querySelectorAll('.cbi-button-positive, .btn.login, button.important, .cbi-button-apply');
         for (var i = 0; i < candidates.length; i++) {
             var c = candidates[i];
             // Ignore the hidden static form
             if (c.offsetParent !== null || c.closest('.modal')) {
-                // Heuristic: Must be a submit-like button
-                if (c.textContent.match(/Log in|Anmelden|Login|Sign in/i) || c.classList.contains('cbi-button-apply')) {
+                // Heuristic: Must be a submit-like button. <input> carries its
+                // label in value=, not as a text node, so textContent is empty
+                // for the generic template's submit input.
+                var label = (c.tagName === 'INPUT') ? (c.value || '') : (c.textContent || '');
+                if (label.match(/Log in|Anmelden|Login|Sign in/i) || c.classList.contains('cbi-button-apply')) {
                     primaryBtn = c;
                     break;
                 }

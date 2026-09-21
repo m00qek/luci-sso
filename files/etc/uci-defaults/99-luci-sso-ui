@@ -27,9 +27,16 @@ PATCH_SYSAUTH() {
 <script src=\"/luci-static/resources/luci-sso-login.js\"></script>" "$FILE"
 }
 
-# Apply to global and bootstrap-specific templates
+# Patch the generic template plus EVERY theme that ships its own override.
+# material, openwrt and openwrt-2020 fall back to the generic one; bootstrap and
+# footstrap override it, and a theme that overrides it never sees the generic
+# patch — that was issue #10. Enumerating themes by name is what caused the bug,
+# so glob instead: any theme installed now or later is covered automatically.
+# PATCH_SYSAUTH no-ops on a non-existent path, so an unmatched glob is harmless.
 PATCH_SYSAUTH "/usr/share/ucode/luci/template/sysauth.ut"
-PATCH_SYSAUTH "/usr/share/ucode/luci/template/themes/bootstrap/sysauth.ut"
+for SYSAUTH in /usr/share/ucode/luci/template/themes/*/sysauth.ut; do
+    PATCH_SYSAUTH "$SYSAUTH"
+done
 
 # 3. Nuclear Cache Clear
 rm -rf /tmp/luci-modulecache/* 2>/dev/null

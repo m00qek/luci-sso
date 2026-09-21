@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-sso
-PKG_VERSION:=0.9.0
+PKG_VERSION:=0.9.1
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=António Móra <m00qek@gmail.com>
@@ -89,7 +89,11 @@ sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
 
 # Revert UI patches
 sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/sysauth.ut 2>/dev/null
-sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/themes/bootstrap/sysauth.ut 2>/dev/null
+# Glob, to mirror 99-luci-sso-ui: revert every theme that was patched, including
+# ones that did not exist when this was written.
+for f in /usr/share/ucode/luci/template/themes/*/sysauth.ut; do
+	[ -f "$f" ] && sed -i '/luci-sso-login.js/d' "$f" 2>/dev/null
+done
 
 # Remove the SSO ACL entry and reload rpcd so the permission is revoked
 # immediately. opkg removes the file after prerm exits, so we delete it here
