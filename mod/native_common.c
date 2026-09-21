@@ -89,6 +89,14 @@ static uc_value_t *uc_native_hmac_sha256(uc_vm_t *vm, size_t nargs) {
     const unsigned char *msg = (const unsigned char *)ucv_string_get(v_msg);
     size_t msg_len = ucv_string_length(v_msg);
 
+    /* Security: an empty key means the caller lost its secret somewhere upstream.
+     * HMAC is defined for a zero-length key, so the backends disagree here:
+     * mbedtls' PSA refuses it, while wolfSSL's wc_HmacSetKey and OpenSSL's
+     * EVP_MAC accept it and return a MAC computed with no secret at all. Reject
+     * it here so every backend fails loudly rather than two of three silently
+     * authenticating with nothing. */
+    if (key_len == 0) return NULL;
+
     VALIDATE_INPUT_SIZES_NULL(msg_len, 0, key_len);
 
     unsigned char mac[NATIVE_SHA256_SIZE];
@@ -131,6 +139,12 @@ static uc_value_t *uc_native_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
     size_t n_len = ucv_string_length(v_n);
     const unsigned char *e = (const unsigned char *)ucv_string_get(v_e);
     size_t e_len = ucv_string_length(v_e);
+
+    /* Security: the modulus is attacker-supplied (it arrives in a JWKS document),
+     * so it needs the same 16 KB ceiling as every other input. This check was
+     * missing: mbedtls happened to reject an oversized modulus during key import,
+     * but wolfSSL and OpenSSL did not, so the ceiling was never actually enforced. */
+    VALIDATE_INPUT_SIZES_NULL(n_len, 0, e_len);
 
     /* Security: Reject exponents that are: Empty, Even, or Not exactly 65537 (RFC 4871) 
      * We only support the standard F4 exponent (0x010001) for safety and simplicity. */
