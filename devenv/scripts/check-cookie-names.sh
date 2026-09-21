@@ -2,7 +2,7 @@
 # Bidirectional constraint: every cookie name used in any source file must be
 # documented in some doc file, and vice versa.
 #
-# Source anchor:  __Host-* or sysauth* string literals in files/**/*.uc
+# Source anchor:  __Host-* or sysauth* string literals in src/**/*.uc
 # Doc anchor:     ### `name` headings inside any ## Cookies section in docs/reference/**/*.md
 #
 # CI runs this via .github/workflows/lint.yml.
@@ -14,7 +14,7 @@ fail=0
 
 # Extract cookie names from all .uc source files
 src_cookies=$(
-    find files/ -name '*.uc' -exec grep -hoE '(__Host-[a-zA-Z0-9_-]+|sysauth(_https)?)' {} + \
+    find src/ -name '*.uc' -exec grep -hoE '(__Host-[a-zA-Z0-9_-]+|sysauth(_https)?)' {} + \
     | sort -u
 )
 
@@ -27,7 +27,7 @@ doc_cookies=$(
     | sort -u
 )
 
-[ -z "$src_cookies" ] && { echo "ERROR: no cookie names found under files/"; exit 1; }
+[ -z "$src_cookies" ] && { echo "ERROR: no cookie names found under src/"; exit 1; }
 [ -z "$doc_cookies" ] && { echo "ERROR: no cookie headings found in any ## Cookies section under docs/"; exit 1; }
 
 while IFS= read -r name; do
@@ -50,4 +50,4 @@ done <<< "$doc_cookies"
     printf '\nKeep cookie name strings in source and ### `name` headings in ## Cookies sections in docs in sync.\n'
     exit 1
 }
-echo "OK: cookie names — files/**/*.uc ↔ docs/reference/*.md"
+echo "OK: cookie names — src/**/*.uc ↔ docs/reference/*.md"
