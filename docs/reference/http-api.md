@@ -102,7 +102,7 @@ The LuCI session cookie for HTTPS connections.
 | Name | `sysauth_https` |
 | `HttpOnly` | Yes |
 | `Secure` | Yes |
-| `SameSite` | `Strict` |
+| `SameSite` | `Lax` |
 | `Path` | `/` |
 | `Max-Age` | Not set — session cookie (expires when browser closes) |
 
@@ -115,7 +115,7 @@ A compatibility alias for `sysauth_https`. LuCI reads whichever is present.
 | Name | `sysauth` |
 | `HttpOnly` | Yes |
 | `Secure` | Yes |
-| `SameSite` | `Strict` |
+| `SameSite` | `Lax` |
 | `Path` | `/` |
 
 ---
