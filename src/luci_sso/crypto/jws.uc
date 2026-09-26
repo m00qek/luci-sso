@@ -3,6 +3,7 @@
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as base from 'luci_sso.crypto.base';
+import { CRYPTO_ERROR, INVALID_PAYLOAD_ENCODING, INVALID_PAYLOAD_JSON, INVALID_SIGNATURE, INVALID_SIGNATURE_ENCODING, TOKEN_TOO_LARGE, UNSUPPORTED_ALGORITHM } from 'luci_sso.errors';
 
 const LIMIT_TOKEN_SIZE = 16384; // 16 KB
 
@@ -32,7 +33,7 @@ export function sign(native, payload, secret) {
 
 	let signature = native.hmac_sha256(secret, signed_data);
 	if (!signature)
-		return Result.err("CRYPTO_ERROR", "hmac_sha256 failed");
+		return Result.err(CRYPTO_ERROR, "hmac_sha256 failed");
 
 	let s_res = encoding.b64url_encode(signature);
 	if (!s_res.ok)
@@ -57,7 +58,7 @@ export function verify(native, token, secret) {
 		die("CONTRACT_VIOLATION: jws.verify expects string secret");
 
 	if (length(token) > LIMIT_TOKEN_SIZE)
-		return Result.err("TOKEN_TOO_LARGE");
+		return Result.err(TOKEN_TOO_LARGE);
 
 	let parts = split(token, ".", 4);
 	if (length(parts) != 3)
@@ -74,26 +75,26 @@ export function verify(native, token, secret) {
 	
 	let header = res_h.data;
 	if (header.alg != "HS256")
-		return Result.err("UNSUPPORTED_ALGORITHM", header.alg);
+		return Result.err(UNSUPPORTED_ALGORITHM, header.alg);
 
 	// 2. Verify Signature
 	let signed_data = parts[0] + "." + parts[1];
 	let s_res = encoding.b64url_decode(parts[2]);
 	if (!s_res.ok)
-		return Result.err("INVALID_SIGNATURE_ENCODING");
+		return Result.err(INVALID_SIGNATURE_ENCODING);
 
 	let calculated_sig = native.hmac_sha256(secret, signed_data);
 	if (!calculated_sig || !base.constant_time_eq(calculated_sig, s_res.data))
-		return Result.err("INVALID_SIGNATURE");
+		return Result.err(INVALID_SIGNATURE);
 
 	// 3. Decode Payload
 	let p_res = encoding.b64url_decode(parts[1]);
 	if (!p_res.ok)
-		return Result.err("INVALID_PAYLOAD_ENCODING");
+		return Result.err(INVALID_PAYLOAD_ENCODING);
 	
 	let res_p = encoding.safe_json(p_res.data);
 	if (!res_p.ok)
-		return Result.err("INVALID_PAYLOAD_JSON");
+		return Result.err(INVALID_PAYLOAD_JSON);
 
 	return Result.ok(res_p.data);
 };

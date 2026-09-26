@@ -75,6 +75,37 @@ export const MISSING_ACCESS_TOKEN      = "MISSING_ACCESS_TOKEN";
 export const MISSING_AT_HASH           = "MISSING_AT_HASH";
 export const AT_HASH_MISMATCH          = "AT_HASH_MISMATCH";
 
+// ID token verification detail (logged inside ID_TOKEN_VERIFICATION_FAILED)
+export const INVALID_JWT_HEADER          = "INVALID_JWT_HEADER";
+export const NO_KEYS_AVAILABLE           = "NO_KEYS_AVAILABLE";
+export const KEY_NOT_FOUND               = "KEY_NOT_FOUND";
+export const MISSING_KTY                 = "MISSING_KTY";
+export const UNSUPPORTED_KTY             = "UNSUPPORTED_KTY";
+export const MISSING_RSA_PARAMS          = "MISSING_RSA_PARAMS";
+export const INVALID_RSA_PARAMS_ENCODING = "INVALID_RSA_PARAMS_ENCODING";
+export const UNSUPPORTED_CURVE           = "UNSUPPORTED_CURVE";
+export const MISSING_EC_PARAMS           = "MISSING_EC_PARAMS";
+export const INVALID_EC_PARAMS_ENCODING  = "INVALID_EC_PARAMS_ENCODING";
+export const MISSING_OCT_PARAM           = "MISSING_OCT_PARAM";
+export const INVALID_OCT_PARAM_ENCODING  = "INVALID_OCT_PARAM_ENCODING";
+export const PEM_CONVERSION_FAILED       = "PEM_CONVERSION_FAILED";
+export const TOKEN_TOO_LARGE             = "TOKEN_TOO_LARGE";
+export const MALFORMED_JWT               = "MALFORMED_JWT";
+export const INVALID_PAYLOAD_ENCODING    = "INVALID_PAYLOAD_ENCODING";
+export const INVALID_SIGNATURE_ENCODING  = "INVALID_SIGNATURE_ENCODING";
+export const INVALID_PAYLOAD_JSON        = "INVALID_PAYLOAD_JSON";
+export const INVALID_EXP_CLAIM           = "INVALID_EXP_CLAIM";
+export const TOKEN_EXPIRED               = "TOKEN_EXPIRED";
+export const INVALID_NBF_CLAIM           = "INVALID_NBF_CLAIM";
+export const TOKEN_NOT_YET_VALID         = "TOKEN_NOT_YET_VALID";
+export const INVALID_IAT_CLAIM           = "INVALID_IAT_CLAIM";
+export const TOKEN_ISSUED_IN_FUTURE      = "TOKEN_ISSUED_IN_FUTURE";
+export const ISSUER_MISMATCH             = "ISSUER_MISMATCH";
+export const INVALID_AUDIENCE            = "INVALID_AUDIENCE";
+export const MALFORMED_AUDIENCE          = "MALFORMED_AUDIENCE";
+export const AUDIENCE_MISMATCH           = "AUDIENCE_MISMATCH";
+export const INVALID_ARGUMENT            = "INVALID_ARGUMENT";
+
 // UserInfo
 export const INSECURE_USERINFO_ENDPOINT = "INSECURE_USERINFO_ENDPOINT";
 export const USERINFO_FETCH_FAILED      = "USERINFO_FETCH_FAILED";
@@ -93,6 +124,14 @@ export const UBUS_LOGIN_FAILED         = "UBUS_LOGIN_FAILED";
 export const UBUS_CONNECT_FAILED       = "UBUS_CONNECT_FAILED";
 export const UBUS_ERROR                = "UBUS_ERROR";
 export const UBUS_SESSION_FAILED       = "UBUS_SESSION_FAILED";
+
+// Back-channel HTTP (logged by discovery, token exchange and UserInfo)
+export const HTTP_REQUEST_FAILED = "HTTP_REQUEST_FAILED";
+export const HTTPS_REQUIRED      = "HTTPS_REQUIRED";
+
+// Token replay registry (logged when registration fails)
+export const INVALID_TOKEN = "INVALID_TOKEN";
+export const SYSTEM_ERROR  = "SYSTEM_ERROR";
 
 // Routing
 export const NOT_FOUND                 = "NOT_FOUND";

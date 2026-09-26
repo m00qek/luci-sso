@@ -2,53 +2,54 @@
 
 import { b64url_decode } from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
+import { INVALID_EC_PARAMS_ENCODING, INVALID_OCT_PARAM_ENCODING, INVALID_RSA_PARAMS_ENCODING, MISSING_EC_PARAMS, MISSING_KTY, MISSING_OCT_PARAM, MISSING_RSA_PARAMS, PEM_CONVERSION_FAILED, UNSUPPORTED_CURVE, UNSUPPORTED_KTY } from 'luci_sso.errors';
 
 function rsa_to_pem(native, jwk) {
 	if (!jwk.n || !jwk.e)
-		return Result.err("MISSING_RSA_PARAMS");
+		return Result.err(MISSING_RSA_PARAMS);
 
 	let n_res = b64url_decode(jwk.n);
 	let e_res = b64url_decode(jwk.e);
 
 	if (!n_res.ok || !e_res.ok)
-		return Result.err("INVALID_RSA_PARAMS_ENCODING");
+		return Result.err(INVALID_RSA_PARAMS_ENCODING);
 
 	let pem = native.jwk_rsa_to_pem(n_res.data, e_res.data);
 
 	if (!pem)
-		return Result.err("PEM_CONVERSION_FAILED");
+		return Result.err(PEM_CONVERSION_FAILED);
 
 	return Result.ok(pem);
 };
 
 function ec_to_pem(native, jwk) {
 	if (jwk.crv != "P-256")
-		return Result.err("UNSUPPORTED_CURVE");
+		return Result.err(UNSUPPORTED_CURVE);
 
 	if (!jwk.x || !jwk.y)
-		return Result.err("MISSING_EC_PARAMS");
+		return Result.err(MISSING_EC_PARAMS);
 
 	let x_res = b64url_decode(jwk.x);
 	let y_res = b64url_decode(jwk.y);
 
 	if (!x_res.ok || !y_res.ok)
-		return Result.err("INVALID_EC_PARAMS_ENCODING");
+		return Result.err(INVALID_EC_PARAMS_ENCODING);
 
 	let pem = native.jwk_ec_p256_to_pem(x_res.data, y_res.data);
 
 	if (!pem)
-		return Result.err("PEM_CONVERSION_FAILED");
+		return Result.err(PEM_CONVERSION_FAILED);
 
 	return Result.ok(pem);
 };
 
 function oct_to_pem(native, jwk) {
 	if (!jwk.k)
-		return Result.err("MISSING_OCT_PARAM");
+		return Result.err(MISSING_OCT_PARAM);
 
 	let result = b64url_decode(jwk.k);
 	if (!result.ok)
-		return Result.err("INVALID_OCT_PARAM_ENCODING");
+		return Result.err(INVALID_OCT_PARAM_ENCODING);
 
 	return result;
 };
@@ -71,7 +72,7 @@ export function to_pem(native, jwk) {
 		die("CONTRACT_VIOLATION: jwk_to_pem expects object jwk");
 
 	if (!jwk.kty)
-		return Result.err("MISSING_KTY");
+		return Result.err(MISSING_KTY);
 
 	let conversion_table = {
 		"RSA": rsa_to_pem,
@@ -81,7 +82,7 @@ export function to_pem(native, jwk) {
 
 	let fn = conversion_table[jwk.kty];
 	if (!fn)
-		return Result.err("UNSUPPORTED_KTY");
+		return Result.err(UNSUPPORTED_KTY);
 
 	return fn(native, jwk);
 };

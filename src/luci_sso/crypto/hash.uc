@@ -1,6 +1,7 @@
 'use strict';
 
 import * as Result from 'luci_sso.result';
+import { CRYPTO_ERROR, INVALID_ARGUMENT } from 'luci_sso.errors';
 
 /**
  * Calculates SHA256 hash.
@@ -11,11 +12,11 @@ import * as Result from 'luci_sso.result';
  */
 export function sha256(native, str) {
 	if (type(str) != "string")
-		return Result.err("INVALID_ARGUMENT", "hash_sha256 expects string input");
+		return Result.err(INVALID_ARGUMENT, "hash_sha256 expects string input");
 
 	let hash = native.sha256(str);
 	if (!hash)
-		return Result.err("CRYPTO_ERROR");
+		return Result.err(CRYPTO_ERROR);
 
 	return Result.ok(hash);
 };

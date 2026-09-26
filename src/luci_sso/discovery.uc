@@ -3,7 +3,7 @@
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
-import { INSECURE_ISSUER_URL, INSECURE_FETCH_URL, DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCOVERY_MISSING_ISSUER, DISCOVERY_ISSUER_MISMATCH, DISCOVERY_MISSING_ENDPOINT, INSECURE_ENDPOINT, INSECURE_JWKS_URI, JWKS_FETCH_FAILED, JWKS_NETWORK_ERROR, INVALID_JWKS_FORMAT } from 'luci_sso.errors';
+import { INSECURE_ISSUER_URL, INSECURE_FETCH_URL, DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCOVERY_MISSING_ISSUER, DISCOVERY_ISSUER_MISMATCH, DISCOVERY_MISSING_ENDPOINT, INSECURE_ENDPOINT, INSECURE_JWKS_URI, JWKS_FETCH_FAILED, JWKS_NETWORK_ERROR, INVALID_JWKS_FORMAT, KEY_NOT_FOUND, NO_KEYS_AVAILABLE } from 'luci_sso.errors';
 
 /**
  * Implementation of OIDC Discovery and JWKS management.
@@ -245,10 +245,10 @@ export function find_jwk(keys, kid) {
 	if (type(keys) != "array") die("CONTRACT_VIOLATION: keys must be an array");
 	if (!kid) {
 		if (length(keys) > 0) return Result.ok(keys[0]);
-		return Result.err("NO_KEYS_AVAILABLE");
+		return Result.err(NO_KEYS_AVAILABLE);
 	}
 	for (let i, key in keys) {
 		if (key.kid === kid) return Result.ok(key);
 	}
-	return Result.err("KEY_NOT_FOUND", kid);
+	return Result.err(KEY_NOT_FOUND, kid);
 };

@@ -121,7 +121,7 @@ These occur while validating the ID Token returned by the IdP.
 | `MISSING_ID_TOKEN` | Token endpoint response does not include an `id_token` field | IdP returned a token response without an ID Token. The IdP must include `id_token` in the authorization code flow response. |
 | `UNSUPPORTED_ALGORITHM` | ID Token `alg` header is not `RS256` or `ES256` | The IdP signed the token with an unsupported algorithm. Configure the IdP to use RS256 or ES256. Symmetric algorithms (HS256) are intentionally rejected. |
 | `INVALID_SIGNATURE` | JWT signature verification failed | The token's cryptographic signature is invalid. Triggers an automatic JWKS refresh and retry; if it fails again, `ID_TOKEN_VERIFICATION_FAILED` is emitted. |
-| `ID_TOKEN_VERIFICATION_FAILED` | Signature verification failed even after refreshing the JWK Set | The token cannot be verified with any of the IdP's published public keys. |
+| `ID_TOKEN_VERIFICATION_FAILED` | The ID Token failed any validation step — signature (even after a JWK Set refresh), claims, or key conversion | This code is the HTTP-facing summary. The log line `OAuth flow failed [...]: ID_TOKEN_VERIFICATION_FAILED ({ "details": "<CODE>", ... })` names the specific reason; see [ID Token Verification Detail Codes](#id-token-verification-detail-codes). |
 | `MISSING_SUB_CLAIM` | ID Token has no `sub` (subject) claim | Token is missing the user identifier. Required by OIDC Core. |
 | `MISSING_EXP_CLAIM` | ID Token has no `exp` (expiration) claim | Token is missing expiration. Required by OIDC Core. |
 | `MISSING_IAT_CLAIM` | ID Token has no `iat` (issued at) claim | Token is missing issue time. Required by OIDC Core. |
@@ -132,6 +132,50 @@ These occur while validating the ID Token returned by the IdP.
 | `MISSING_ACCESS_TOKEN` | Token endpoint response does not include an `access_token` field | The IdP returned an ID Token but no access token. `luci-sso` requires an access token to verify `at_hash` binding. |
 | `MISSING_AT_HASH` | ID Token has no `at_hash` claim | Access token binding is mandatory. IdP must include `at_hash` when issuing ID Tokens with an access token. |
 | `AT_HASH_MISMATCH` | `at_hash` does not match the hash of the access token | The access token has been substituted. Token binding violation. |
+
+---
+
+## ID Token Verification Detail Codes
+
+These never reach the browser. They appear only in the `details` of an `ID_TOKEN_VERIFICATION_FAILED` log line and name the exact check that failed:
+
+```
+luci-sso[1234]: OAuth flow failed [session_id: 1a2b...]: ID_TOKEN_VERIFICATION_FAILED ({ "details": "TOKEN_EXPIRED", "http_status": 401 })
+```
+
+Codes from the table above that can also appear here include `UNSUPPORTED_ALGORITHM`, `INVALID_SIGNATURE`, the `MISSING_*` claim codes, `NONCE_MISMATCH`, `AZP_MISMATCH`, `AT_HASH_MISMATCH`, `DISCOVERY_ISSUER_MISMATCH` and `CRYPTO_ERROR`.
+
+| Code | Trigger | What it means |
+| :--- | :--- | :--- |
+| `INVALID_JWT_HEADER` | The ID Token's first segment is not Base64URL-encoded JSON | The IdP returned a malformed token. |
+| `TOKEN_TOO_LARGE` | The ID Token exceeds 16 KB | Rejected before parsing as a hardening measure. An IdP stuffing very large claims into the token can trigger it. |
+| `MALFORMED_JWT` | The ID Token does not have exactly three dot-separated segments | The IdP returned something that is not a compact JWS. |
+| `INVALID_PAYLOAD_ENCODING` | The ID Token payload segment is not valid Base64URL | Malformed token from the IdP. |
+| `INVALID_SIGNATURE_ENCODING` | The ID Token signature segment is empty or not valid Base64URL | Malformed token from the IdP. |
+| `INVALID_PAYLOAD_JSON` | The ID Token payload is not valid JSON | Malformed token from the IdP. |
+| `NO_KEYS_AVAILABLE` | The token has no `kid` header and the JWK Set is empty | The IdP publishes no signing keys at its `jwks_uri`. |
+| `KEY_NOT_FOUND` | No key in the JWK Set has the token's `kid`, even after a forced refresh | The IdP signed with a key it does not publish. Usually a key rotation that has not propagated; retry, then check the IdP's `jwks_uri`. |
+| `MISSING_KTY` | The selected JWK has no `kty` field | The IdP's JWK Set is malformed. |
+| `UNSUPPORTED_KTY` | The selected JWK's `kty` is not `RSA`, `EC` or `oct` | The IdP uses a key type `luci-sso` cannot verify. |
+| `MISSING_RSA_PARAMS` | An `RSA` JWK lacks `n` or `e` | The IdP's JWK Set is malformed. |
+| `INVALID_RSA_PARAMS_ENCODING` | An `RSA` JWK's `n` or `e` is not valid Base64URL | The IdP's JWK Set is malformed. |
+| `UNSUPPORTED_CURVE` | An `EC` JWK uses a curve other than `P-256` | Only ES256 (P-256) is supported. Configure the IdP to sign with P-256 or RS256. |
+| `MISSING_EC_PARAMS` | An `EC` JWK lacks `x` or `y` | The IdP's JWK Set is malformed. |
+| `INVALID_EC_PARAMS_ENCODING` | An `EC` JWK's `x` or `y` is not valid Base64URL | The IdP's JWK Set is malformed. |
+| `MISSING_OCT_PARAM` | An `oct` JWK lacks `k` | The IdP's JWK Set is malformed. |
+| `INVALID_OCT_PARAM_ENCODING` | An `oct` JWK's `k` is not valid Base64URL | The IdP's JWK Set is malformed. |
+| `PEM_CONVERSION_FAILED` | The native crypto bridge rejected the key | An RSA exponent other than 65537, an RSA modulus over 16 KB, or an EC point that is not on the P-256 curve. RSA keys under 2048 bits are rejected later, at signature verification, and surface as `INVALID_SIGNATURE`. |
+| `INVALID_EXP_CLAIM` | `exp` is present but not an integer | The IdP issued a non-compliant token. |
+| `TOKEN_EXPIRED` | `exp` is earlier than now minus `clock_tolerance` | The token had already expired when it arrived. Check NTP on the router and the IdP. |
+| `INVALID_NBF_CLAIM` | `nbf` is present but not an integer | The IdP issued a non-compliant token. |
+| `TOKEN_NOT_YET_VALID` | `nbf` is later than now plus `clock_tolerance` | The router clock is behind the IdP. Check NTP synchronization. |
+| `INVALID_IAT_CLAIM` | `iat` is present but not an integer | The IdP issued a non-compliant token. |
+| `TOKEN_ISSUED_IN_FUTURE` | `iat` is later than now plus `clock_tolerance` | The router clock is behind the IdP. Check NTP synchronization. |
+| `ISSUER_MISMATCH` | The token's `iss` claim does not match the configured `issuer_url` | The token was issued by a different issuer. Verify `issuer_url` matches the IdP's issuer identifier exactly. |
+| `INVALID_AUDIENCE` | `aud` is an empty array | The IdP issued a non-compliant token. |
+| `MALFORMED_AUDIENCE` | An element of the `aud` array is not a string | The IdP issued a non-compliant token. |
+| `AUDIENCE_MISMATCH` | No `aud` value equals the configured `client_id` | The token was issued for a different client. Check `client_id`. |
+| `INVALID_ARGUMENT` | The access token in the token response is not a string, so `at_hash` cannot be computed | The IdP returned a malformed token response. |
 
 ---
 
@@ -157,7 +201,9 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 | :--- | :--- | :--- |
 | `USER_NOT_AUTHORIZED` | User's email and groups match no configured `config role` section, **or** a matching role exists but has no `read` or `write` permissions defined | The user's identity matched no role, or the matched role defines no permissions. The log line immediately preceding this code identifies which condition was triggered. |
 | `TOKEN_REPLAYED` | The access token is already present in the local replay-protection registry | A previously used token was submitted again. This is either a replay attack or the user completed two logins with the same token. |
-| `TOKEN_REGISTRY_ERROR` | The router could not write the access token to the local replay-protection registry | Check disk space and write permissions on `/var/run/luci-sso/tokens/`. |
+| `TOKEN_REGISTRY_ERROR` | The router could not write the access token to the local replay-protection registry | Check disk space and write permissions on `/var/run/luci-sso/tokens/`. The preceding `Access token registry write failed` line names the cause: `INVALID_TOKEN`, `SYSTEM_ERROR`, or a hashing code such as `CRYPTO_ERROR`. |
+| `INVALID_TOKEN` | The access token to register is missing or not a string | The IdP's token response has no usable `access_token`. Logged before `TOKEN_REGISTRY_ERROR`. |
+| `SYSTEM_ERROR` | Creating the registry entry raised an exception | A filesystem failure under `/var/run/luci-sso/tokens/`. Logged before `TOKEN_REGISTRY_ERROR`, with the exception text on an earlier line. |
 | `CSRF_CHECK_FAILED` | Logout request is missing or has an invalid `stoken` CSRF parameter | Possible CSRF attack on the logout endpoint, or an expired/replayed logout link. |
 
 ---
@@ -170,7 +216,7 @@ These occur when creating the LuCI session via UBUS after successful authorizati
 | :--- | :--- | :--- |
 | `UBUS_LOGIN_FAILED` | UBUS session creation returned an error | LuCI's session manager rejected the login. Check that `rpcd` and `uhttpd` are running. |
 | `UBUS_CONNECT_FAILED` | Router could not connect to the UBUS socket | `ubusd` is not running or the socket path is inaccessible. |
-| `UBUS_ERROR` | A UBUS method call returned null | UBUS call failed at the transport level. |
+| `UBUS_ERROR` | A UBUS method call failed and ubus reported an error | The call reached `ubusd` but the target (usually `rpcd`'s `session` object) rejected it. The ubus error text is carried in the details. |
 | `UBUS_SESSION_FAILED` | Session grant injection failed | UBUS session was created but ACL injection failed. Check `rpcd` permissions. |
 
 ---
@@ -182,6 +228,8 @@ These indicate infrastructure-level failures unrelated to the OIDC flow.
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
 | `SYSTEM_INIT_FAILED` | Secret key subsystem failed during the first login attempt — covers key generation failures, write failures, and lock-wait timeouts | The secret key subsystem failed on first use. A `CRITICAL:` diagnostic line immediately precedes this code in the log, identifying the specific cause (e.g. `Failed to write secret key`, `CSPRNG failure`). |
+| `HTTPS_REQUIRED` | A back-channel request was attempted to a non-HTTPS URL | Appears in `Discovery fetch failed`, `JWKS fetch failed`, `Token exchange network error` and `UserInfo fetch network error` lines. Normally unreachable, because every endpoint is HTTPS-checked earlier. |
+| `HTTP_REQUEST_FAILED` | A back-channel HTTPS request did not complete | Appears in the same log lines as `HTTPS_REQUIRED`. Covers DNS, TCP and TLS failures, a timeout, or a response over 256 KB. Test with `curl` from the router. |
 | `SSL_INIT_FAILED` | TLS initialization failed | TLS context initialization failed. The system CA certificate store is missing or inaccessible. |
 | `CRYPTO_ERROR` | A cryptographic operation returned an unexpected error | Internal error in the native C crypto bridge. |
 | `CRYPTO_INIT_FAILED` | The PSA Crypto subsystem failed to initialize | MbedTLS PSA layer unavailable. May indicate a missing `mbedtls` package. |

@@ -8,7 +8,7 @@ import * as discovery from 'luci_sso.discovery';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_mod from 'luci_sso.config';
-import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISMATCH, OIDC_DISCOVERY_FAILED, JWKS_FETCH_FAILED, ID_TOKEN_VERIFICATION_FAILED, IDENTITY_MISMATCH, TOKEN_REPLAYED, TOKEN_REGISTRY_ERROR, USER_NOT_AUTHORIZED, UBUS_LOGIN_FAILED, SYSTEM_INIT_FAILED } from 'luci_sso.errors';
+import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISMATCH, OIDC_DISCOVERY_FAILED, JWKS_FETCH_FAILED, ID_TOKEN_VERIFICATION_FAILED, IDENTITY_MISMATCH, TOKEN_REPLAYED, TOKEN_REGISTRY_ERROR, USER_NOT_AUTHORIZED, UBUS_LOGIN_FAILED, SYSTEM_INIT_FAILED, INVALID_SIGNATURE, KEY_NOT_FOUND } from 'luci_sso.errors';
 
 /**
  * Orchestration logic for the OIDC Login Handshake.
@@ -113,9 +113,9 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 	// Key Rotation Recovery
 	if (!verify_res.ok) {
 		let should_retry = false;
-		if (verify_res.error == "KEY_NOT_FOUND") {
+		if (verify_res.error == KEY_NOT_FOUND) {
 			should_retry = true;
-		} else if (verify_res.error == "INVALID_SIGNATURE") {
+		} else if (verify_res.error == INVALID_SIGNATURE) {
 			let parts = split(tokens.id_token, ".");
 			let res_h = encoding.safe_json(encoding.b64url_decode(parts[0]));
 			if (res_h.ok && res_h.data.kid) {
@@ -177,7 +177,7 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 	let access_token = tokens.access_token;
 	let reg_res = ubus.register_token(deps, access_token);
 	if (!reg_res.ok) {
-		if (reg_res.error == "TOKEN_REPLAYED") {
+		if (reg_res.error == TOKEN_REPLAYED) {
 			deps.log("warn", `Replay attack detected: access token already registered [session_id: ${session_id}]`);
 			return Result.err(TOKEN_REPLAYED, { http_status: 403 });
 		}

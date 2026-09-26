@@ -29,6 +29,7 @@ import * as native      from 'luci_sso.native';
 import * as http_client from 'luci_sso.components.http_client';
 import * as clock_mod   from 'luci_sso.components.clock';
 import * as Result      from 'luci_sso.result';
+import { UBUS_CONNECT_FAILED, UBUS_ERROR } from 'luci_sso.errors';
 
 /**
  * Wraps a raw ubus connection into the `deps.ubus` channel: a single `call`
@@ -44,11 +45,11 @@ import * as Result      from 'luci_sso.result';
 export function ubus_channel(conn) {
 	return {
 		call: (obj, method, args) => {
-			if (!conn) return Result.err("UBUS_CONNECT_FAILED");
+			if (!conn) return Result.err(UBUS_CONNECT_FAILED);
 			let res = conn.call(obj, method, args);
 			if (res === null) {
 				let e = conn.error();
-				if (e) return Result.err("UBUS_ERROR", e);
+				if (e) return Result.err(UBUS_ERROR, e);
 			}
 			return Result.ok(res);
 		}

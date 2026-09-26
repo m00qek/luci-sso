@@ -3,7 +3,7 @@
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
-import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED } from 'luci_sso.errors';
+import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED, INVALID_TOKEN, SYSTEM_ERROR, TOKEN_REPLAYED } from 'luci_sso.errors';
 
 /**
  * Logic for interacting with UBUS sessions.
@@ -192,7 +192,7 @@ const TOKEN_REGISTRY_DIR = "/var/run/luci-sso/tokens";
  */
 export function register_token(deps, access_token) {
 	try {
-		if (!access_token || type(access_token) != "string") return Result.err("INVALID_TOKEN");
+		if (!access_token || type(access_token) != "string") return Result.err(INVALID_TOKEN);
 
 		// 1. Ensure registry exists
 		try { deps.fs.mkdir(TOKEN_REGISTRY_DIR, 0700); } catch(e) {}
@@ -208,10 +208,10 @@ export function register_token(deps, access_token) {
 		if (deps.fs.mkdir(lock_path, 0700)) {
 			return Result.ok();
 		}
-		return Result.err("TOKEN_REPLAYED");
+		return Result.err(TOKEN_REPLAYED);
 	} catch (e) {
 		deps.log("error", `Exception in register_token: ${e}`);
-		return Result.err("SYSTEM_ERROR", e);
+		return Result.err(SYSTEM_ERROR, e);
 	}
 };
 

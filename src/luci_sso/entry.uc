@@ -16,6 +16,7 @@
 import * as web from 'luci_sso.web';
 import * as config from 'luci_sso.config';
 import * as router from 'luci_sso.router';
+import { SSO_DISABLED } from 'luci_sso.errors';
 
 /**
  * Emits a router Result to the client: renders the response on success, or a
@@ -52,7 +53,7 @@ export function run(deps, web_deps) {
 		// so the login button can probe availability on an unconfigured router.
 		let res_c = config.load({ uci: deps.uci, log: deps.log });
 		if (!res_c.ok) {
-			if (res_c.error == "SSO_DISABLED" && req.path == "/" && req.query.action == "enabled") {
+			if (res_c.error == SSO_DISABLED && req.path == "/" && req.query.action == "enabled") {
 				emit(web_deps, router.handle(deps, null, req));
 				return;
 			}

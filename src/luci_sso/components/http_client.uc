@@ -13,7 +13,7 @@
 
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
-import { SSL_INIT_FAILED } from 'luci_sso.errors';
+import { SSL_INIT_FAILED, HTTPS_REQUIRED, HTTP_REQUEST_FAILED } from 'luci_sso.errors';
 
 const LIMIT_RESPONSE_SIZE = 262144; // 256 KB
 
@@ -103,23 +103,23 @@ function do_request(uclient, uloop, fs, method, url, opts) {
 export function create(uclient, uloop, fs) {
 	return {
 		get: function(url, opts) {
-			if (!encoding.is_https(url)) return Result.err("HTTPS_REQUIRED");
+			if (!encoding.is_https(url)) return Result.err(HTTPS_REQUIRED);
 			let res = do_request(uclient, uloop, fs, 'GET', url, {
 				timeout: 10000,
 				headers: (opts && opts.headers) ? opts.headers : {}
 			});
-			if (!res.ok) return Result.err("HTTP_REQUEST_FAILED", res.error);
+			if (!res.ok) return Result.err(HTTP_REQUEST_FAILED, res.error);
 			return Result.ok({ status: res.data.status, body: res.data.body });
 		},
 
 		post: function(url, opts) {
-			if (!encoding.is_https(url)) return Result.err("HTTPS_REQUIRED");
+			if (!encoding.is_https(url)) return Result.err(HTTPS_REQUIRED);
 			let res = do_request(uclient, uloop, fs, 'POST', url, {
 				timeout: 10000,
 				headers: (opts && opts.headers) ? opts.headers : {},
 				post_data: (opts && opts.body) ? opts.body : null
 			});
-			if (!res.ok) return Result.err("HTTP_REQUEST_FAILED", res.error);
+			if (!res.ok) return Result.err(HTTP_REQUEST_FAILED, res.error);
 			return Result.ok({ status: res.data.status, body: res.data.body });
 		}
 	};

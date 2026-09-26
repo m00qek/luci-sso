@@ -1,6 +1,7 @@
 'use strict';
 
 import * as Result from 'luci_sso.result';
+import { INVALID_ARGUMENT, TOKEN_TOO_LARGE } from 'luci_sso.errors';
 
 /**
  * Implementation of RFC 7515 Base64URL encoding and decoding.
@@ -74,7 +75,7 @@ export function b64url_decode(str) {
 		die("CONTRACT_VIOLATION: b64url_decode expects string");
 	
 	if (length(str) > MAX_UTILS_SIZE)
-		return Result.err("TOKEN_TOO_LARGE");
+		return Result.err(TOKEN_TOO_LARGE);
 
 	let b64 = b64url_to_b64(str);
 	if (b64 == null)
@@ -167,7 +168,7 @@ export function safe_json(data) {
  */
 export function normalize_url(url) {
 	if (type(url) != "string")
-		return Result.err("INVALID_ARGUMENT", "normalize_url expects string");
+		return Result.err(INVALID_ARGUMENT, "normalize_url expects string");
 	
 	let res = url;
 	let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
@@ -201,7 +202,7 @@ export function normalize_url(url) {
  */
 export function normalize_sub(sub) {
 	if (type(sub) != "string")
-		return Result.err("INVALID_ARGUMENT", "normalize_sub expects string");
+		return Result.err(INVALID_ARGUMENT, "normalize_sub expects string");
 
 	return Result.ok(lc(sub));
 };
