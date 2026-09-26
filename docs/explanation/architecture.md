@@ -14,7 +14,7 @@ The reason this matters: OpenWrt routers can't run network tests. Without this s
 
 ### Module responsibilities
 
-*   **`router.uc`** — HTTP dispatcher and rate limiter. Receives every request from the CGI entry point, enforces the global rate limit, and routes to the correct handler (`/` → login, `/callback` → code exchange, `/logout` → session teardown).
+*   **`router.uc`** — HTTP dispatcher. Receives every request from the CGI entry point, applies the per-client rate limits from `ratelimit.uc`, and routes to the correct handler (`/` → login, `/callback` → code exchange, `/logout` → session teardown).
 *   **`handshake.uc`** — The OIDC state machine. Orchestrates the full authorization code flow: generates state and nonce, exchanges the code for tokens, validates them, and injects the resulting identity into LuCI's session.
 *   **`oidc.uc`** — Pure protocol validation. Given a token and claims, checks: is the issuer right? Is the audience right? Is it expired? Does the nonce match? All of this with no I/O.
 *   **`discovery.uc`** — Fetches and caches OIDC metadata from the IdP's `/.well-known/openid-configuration`. Caches to `/var/run/luci-sso/` (tmpfs) for 24 hours. The cache survives the router staying up but is cleared on every reboot — the first login after a reboot always fetches fresh discovery data. A stale cache is used as a fallback only when the IdP becomes temporarily unreachable while the router is already running.

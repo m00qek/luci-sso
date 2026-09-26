@@ -83,9 +83,19 @@ Coverage-guided fuzz testing exercises the parsing paths continuously. AddressSa
 
 An unauthenticated attacker can initiate login flows by sending requests to the `/` endpoint. Each request writes a handshake state file and makes a network connection to the IdP for discovery. Without a rate limit, this would allow an attacker to exhaust router memory, fill `/var/run/`, or overload the IdP with discovery requests.
 
-The rate limiter allows 50 requests per 60-second window across all sources. This is a global limit, not per-source, which means a high-volume external attack will trigger it — but so will a legitimate user hammering the login button. The limit is set conservatively, since a human completing a login flow generates at most two or three requests (initiate, callback, logout).
+Three defences work together, and each is designed so that the attacker's traffic cannot take down other users' logins.
+
+**Per-client rate limits.** Each client (its source address; the `/64` for IPv6) may start at most 10 logins per 5 minutes and make at most 30 requests per minute. The callback and logout count only toward the second budget. One busy or hostile client is refused with `429` and a `Retry-After` header, and everyone else is unaffected. There is deliberately no router-wide budget: a shared counter is exactly what would let one client lock everybody out. The router-wide backstop for CPU is uhttpd's own cap on concurrent CGI processes.
+
+**A bounded handshake table that never evicts live logins.** At most 500 logins can be in progress at once. When the table is full, only handshakes that can no longer be completed (past their expiry plus clock tolerance) are removed. If every slot holds a live handshake, the *new* login is refused with `503`. Users already at the IdP keep their place.
+
+**Callbacks cannot cancel someone else's login.** The handshake cookie is `SameSite=Lax`, so a cross-site link to `/callback` carries it. The router compares the returned `state` before consuming the handshake, so such a link with a made-up `state` gets `403` and the victim's pending login is untouched.
 
 The `?action=enabled` probe is exempt from rate limiting — it reads a single UCI value and produces no side effects, so it is safe to poll from monitoring scripts.
+
+**Residual risk.** An attacker who controls many addresses, or many IPv6 `/64`s, gets a separate budget for each. With about 50 of them, each starting 10 logins, they can fill the 500-slot handshake table and keep it full, blocking *new* SSO logins for as long as the flood lasts. Logins already in progress survive, and password login at `/cgi-bin/luci` is unaffected, so administrators are never locked out.
+
+**Reverse proxies.** Behind a reverse proxy, `REMOTE_ADDR` is the proxy's address, so every client shares one budget. That is no worse than the old global counter. `X-Forwarded-For` is deliberately not trusted: any client can set it, so honouring it would let an attacker choose a fresh budget per request.
 
 ---
 
