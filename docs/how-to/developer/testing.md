@@ -1,12 +1,12 @@
 # How to Run Tests
 
-`luci-sso` sorts its tests into four buckets: **native**, **unit**, **integration** and **e2e**. See [Testing Architecture](../../reference/testing-architecture.md) for what each bucket covers and how to write new tests.
+`luci-sso` sorts its tests into five buckets: **native**, **unit**, **integration**, **system** and **e2e**. See [Testing Architecture](../../reference/testing-architecture.md) for what each bucket covers and how to write new tests.
 
 ---
 
 ## Native, Unit & Integration Tests
 
-`make unit-test` runs three buckets inside the `openwrt` container using the `ucode` interpreter: `test/native` (the compiled crypto module), `test/unit` (one module at a time) and `test/integration` (orchestrators and wiring). No real router or network access is required, but the CI stack must be running:
+`make unit-test` runs four buckets inside the `openwrt` container using the `ucode` interpreter: `test/native` (the compiled crypto module), `test/unit` (one module at a time), `test/integration` (orchestrators and wiring) and `test/system` (checks against the container's real rpcd). No real router or network access is required, but the CI stack must be running:
 
 ```bash
 make up
@@ -27,6 +27,7 @@ make unit-test FILTER='discovery'
 # Run a specific test file or directory
 make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'
 make unit-test MODULES='test/integration'
+make unit-test MODULES='test/system'
 
 # Select the crypto backend to test (mbedtls, wolfssl, openssl)
 make unit-test CRYPTO_LIB=wolfssl

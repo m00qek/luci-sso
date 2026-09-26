@@ -11,7 +11,7 @@ and [How to Run Tests](https://m00qek.github.io/luci-sso/how-to/developer/testin
 ## Running tests
 
 ```bash
-make unit-test                          # native + unit + integration
+make unit-test                          # native + unit + integration + system
 make unit-test VERBOSE=1                # with per-test output
 make unit-test FILTER='session.handshake' # regex filter on test titles
 make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'  # a single file/dir
@@ -27,6 +27,7 @@ make fuzzer-test CRYPTO_LIB=mbedtls     # C-level fuzzer (~60s)
 | **native** | `native/` | `luci_sso.native` FFI exports (crypto KAT, memory safety, hardening) |
 | **unit** | `unit/**` (mirrors `src/`) | one module's exported function; system boundary faked |
 | **integration** | `integration/**` | an orchestrator/wiring seam (`handshake`, `router`, `logout`) |
+| **system** | `system/` | the real rpcd, no browser (e.g. rpcd parity of SSO session ACLs) |
 | **e2e** | `e2e/` | Playwright → real uhttpd/rpcd/IdP |
 
 Shared helpers: `fixtures/` (`fixtures.rsa`, `fixtures.oidc`),

@@ -79,6 +79,14 @@ Coverage-guided fuzz testing exercises the parsing paths continuously. AddressSa
 
 ---
 
+## Privilege of an SSO session
+
+A signed-in user must get exactly what their role allows, no more. `luci-sso` creates the LuCI session itself, so it also decides its rights. For every role except full admin, it grants what rpcd would grant a password login with the same `read` and `write` lists, by expanding each access group's ACL file the same way rpcd does. A `*` wildcard only ever matches `luci-*` groups. Only `write '*'` yields unrestricted access.
+
+The risk is drift: if a future rpcd combined ACL files differently, SSO sessions could quietly get more or less than intended. A system test compares an SSO session with a real rpcd password login for several role shapes on every CI run, on each supported OpenWrt release, and fails on any difference.
+
+---
+
 ## Denial of service
 
 An unauthenticated attacker can initiate login flows by sending requests to the `/` endpoint. Each request writes a handshake state file and makes a network connection to the IdP for discovery. Without a rate limit, this would allow an attacker to exhaust router memory, fill `/var/run/`, or overload the IdP with discovery requests.

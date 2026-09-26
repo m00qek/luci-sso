@@ -38,7 +38,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 
 | Target | Stack | Description |
 | :--- | :--- | :--- |
-| `unit-test` | CI | Run the native, unit and integration test buckets. Requires `up`. |
+| `unit-test` | CI | Run the native, unit, integration and system test buckets. Requires `up`. |
 | `e2e-test` | CI | Run browser-based end-to-end tests via Playwright. Requires `up`. |
 | `test` | CI | Alias for `unit-test` followed by `e2e-test`. |
 | `watch-tests` | CI | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. Requires `inotify-tools` on the host. |

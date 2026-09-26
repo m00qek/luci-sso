@@ -1,6 +1,6 @@
 # Testing Architecture
 
-`luci-sso` organises its tests into four **buckets** by scope and intended
+`luci-sso` organises its tests into five **buckets** by scope and intended
 assertion — not by which collaborators are faked. Faking is total and free at
 every level (see [Core principle](#core-principle-everything-funnels-through-deps)),
 so the dividing line is the **entry point** and what each test asserts.
@@ -10,10 +10,14 @@ so the dividing line is the **entry point** and what each test asserts.
 | **native** | `test/native/` | `luci_sso.native` exports | n/a (is the boundary) | none — `native` (+ pure helpers) only |
 | **unit** | `test/unit/**/*_test.uc` (mirrors `src/`) | one src module's exports | faked | may run for real, but incidental |
 | **integration** | `test/integration/**/*_test.uc` | an orchestrator / composition seam | faked | real subgraph, asserted |
+| **system** | `test/system/` | the real rpcd in the openwrt container, no browser | real | real |
 | **e2e** | `test/e2e/` (Playwright) | browser → real uhttpd/rpcd/IdP | real | real |
 
-Run the unit/integration/native buckets with `make unit-test`; the browser
-suite with `make e2e-test`; the C-level fuzzer with `make fuzzer-test`.
+Run the native/unit/integration/system buckets with `make unit-test`; the
+browser suite with `make e2e-test`; the C-level fuzzer with `make fuzzer-test`.
+`make e2e-test` runs each spec file as its own Playwright invocation and resets
+the rate-limit state before each, since every browser request comes from one
+address; the limiter itself is covered by unit and integration tests.
 
 ---
 
@@ -70,6 +74,29 @@ composition root: `bootstrap_test.uc` for `deps.create()`'s channel builders and
    `verify_state = handshake.verify`, …). Its wiring is covered by
    `unit/luci_sso/session_test.uc`; the submodules' behaviour lives in
    `unit/luci_sso/session/{handshake,common}_test.uc`.
+
+---
+
+## The `system` bucket: the guard against rpcd rule drift
+
+`luci-sso` creates LuCI sessions itself, so it must grant the concrete
+`ubus`/`uci`/`file`/`cgi-io` rights rpcd would give a password login with the
+same `read`/`write` lists (`ubus.uc`, `_expand_role`). The group *definitions*
+are read from `acl.d` at every login, but the *combining rules* (write implies
+read, table vs array notation, globs, negations) are a copy of rpcd's C code.
+
+`test/system/rpcd_parity_test.uc` is what keeps that copy honest. For several
+role shapes (read `*`, a specific read group, a specific write group, a mixed
+role, globs with a negation) it creates a temporary rpcd password login with the
+same lists, creates an SSO session through the real code, and requires the two
+sessions' ACLs to be identical, printing every entry that differs. Full admin is
+checked for coverage instead: its raw `*` grants must cover everything an rpcd
+`*` login gets, with one known, pinned difference (the `unauthenticated` group's
+marker). CI runs it on every OpenWrt release in the matrix, so an rpcd that
+changes its rules fails CI instead of breaking users' roles.
+
+Use this bucket only for invariants that need the real daemon; everything else
+stays in unit/integration with faked `deps`.
 
 ---
 
