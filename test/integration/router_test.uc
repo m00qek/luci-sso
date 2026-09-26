@@ -457,76 +457,59 @@ describe('router: null config guard (reproduction)', () => {
 	});
 });
 
-describe('router: global rate limiting (reproduction)', () => {
-	it('enforces a global request limit and exempts action=enabled (N3)', () => {
+describe('router: per-client rate limiting', () => {
+	const DISC = { [tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY } };
+	const login = (addr) => ({ path: "/", query: {}, cookies: {}, client: addr });
+
+	it('limits one client\'s login initiations and leaves other clients alone', () => {
 		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
+		with_context({ fs: { data: {} }, http_client: { data: DISC }, clock: { data: { now: 1516239022 } } }, (deps) => {
+			for (let i = 1; i <= 10; i++)
+				assert.match(truthy(), router.handle(deps, test_config, login("198.51.100.9")).ok, `initiation ${i}`);
 
+			let res = router.handle(deps, test_config, login("198.51.100.9"));
+			assert.match("TOO_MANY_REQUESTS", res.error);
+			assert.match(429, res.details.http_status);
+			assert.match(truthy(), res.details.retry_after > 0, "tells the client when to retry");
+
+			assert.match(truthy(), router.handle(deps, test_config, login("198.51.100.10")).ok,
+				"a different client still gets through");
+		});
+	});
+
+	it('does not charge callbacks to the login budget', () => {
+		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
+		with_context({ fs: { data: {} }, http_client: { data: DISC }, clock: { data: { now: 1516239022 } } }, (deps) => {
+			let cb = { path: "/callback", query: { code: "c", state: "s" }, cookies: {}, client: "198.51.100.9" };
+			for (let i = 0; i < 15; i++) router.handle(deps, test_config, cb);
+			assert.match(truthy(), router.handle(deps, test_config, login("198.51.100.9")).ok);
+		});
+	});
+
+	it('exempts action=enabled from every budget (N3)', () => {
+		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
 		with_context({
-			fs:          { data: {} },
-			uci:         { data: { "luci-sso": { "default": { ".type": "oidc", "enabled": "0" } } } },
-			ubus:        { data: {} },
-			http_client: { data: {
-				[tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY }
-			} },
-			clock:       { data: { now: 1516239022 } }
+			fs: { data: {} },
+			uci: { data: { "luci-sso": { "default": { ".type": "oidc", "enabled": "1" } } } },
+			http_client: { data: DISC },
+			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let request = { path: "/", query: {}, cookies: {} };
-
-			for (let i = 1; i <= 60; i++) {
-				let res = router.handle(deps, test_config, request);
-				if (i <= 50) {
-					assert.match(truthy(), res.ok, `Request ${i} SHOULD succeed (within limit)`);
-				} else {
-					assert.match(falsy(), res.ok, `Request ${i} SHOULD fail (exceeded limit)`);
-					assert.match("TOO_MANY_REQUESTS", res.error);
-				}
-			}
-
-			let action_req = { path: "/", query: { action: "enabled" }, cookies: {} };
-			for (let i = 0; i < 5; i++) {
-				let res = router.handle(deps, test_config, action_req);
-				assert.match(truthy(), res.ok, "Action=Enabled SHOULD be exempt from rate limiting to prevent UI DoS (N3)");
+			for (let i = 0; i < 11; i++) router.handle(deps, test_config, login("198.51.100.9"));
+			let probe = { path: "/", query: { action: "enabled" }, cookies: {}, client: "198.51.100.9" };
+			for (let i = 0; i < 40; i++) {
+				let res = router.handle(deps, test_config, probe);
+				assert.match(truthy(), res.ok, "the enabled probe is never rate limited");
 				assert.match(200, res.data.status);
 			}
 		});
 	});
-});
 
-describe('router: rate-limit persistence atomicity (reproduction)', () => {
-	it('persists the rate-limit file via write-tmp + atomic rename', () => {
+	it('treats a request without REMOTE_ADDR as the shared unknown client', () => {
 		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
-
-		const RATELIMIT_FILE = "/var/run/luci-sso/ratelimit.json";
-		const TMP_FILE = RATELIMIT_FILE + ".tmp";
-
-		let writefile_calls = null;
-		let rename_calls = null;
-
-		with_context({
-			fs:          { data: {} },
-			ubus:        { data: {} },
-			http_client: { data: {
-				[tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY }
-			} },
-			clock:       { data: { now: 1516239022 } }
-		}, (deps) => {
-			let request = { path: "/", query: {}, cookies: {} };
-			router.handle(deps, test_config, request);
-			writefile_calls = spy(deps.fs).calls.writefile || [];
-			rename_calls    = spy(deps.fs).calls.rename    || [];
+		with_context({ fs: { data: {} }, http_client: { data: DISC }, clock: { data: { now: 1516239022 } } }, (deps) => {
+			for (let i = 0; i < 10; i++) router.handle(deps, test_config, { path: "/", query: {}, cookies: {} });
+			assert.match("TOO_MANY_REQUESTS", router.handle(deps, test_config, login("not-an-address")).error);
 		});
-
-		let wrote_tmp = false;
-		for (let c in writefile_calls) {
-			if (c[0] === TMP_FILE) { wrote_tmp = true; break; }
-		}
-		assert.match(truthy(), wrote_tmp, "Should write to temporary file first");
-
-		let renamed = false;
-		for (let c in rename_calls) {
-			if (c[0] === TMP_FILE && c[1] === RATELIMIT_FILE) { renamed = true; break; }
-		}
-		assert.match(truthy(), renamed, "Should atomically rename tmp to target");
 	});
 });
 

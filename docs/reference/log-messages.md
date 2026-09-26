@@ -230,7 +230,7 @@ These indicate infrastructure-level failures unrelated to the OIDC flow.
 | `SSL_INIT_FAILED` | TLS initialization failed | Logged as the cause of `HTTP_REQUEST_FAILED`: `HTTP_REQUEST_FAILED (SSL_INIT_FAILED)`. TLS could not be set up before connecting; the TLS library or the system CA store is missing. An untrusted IdP certificate is reported as `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` instead. |
 | `CRYPTO_ERROR` | A cryptographic operation returned an unexpected error | Internal error in the native C crypto bridge. |
 | `CRYPTO_INIT_FAILED` | The PSA Crypto subsystem failed to initialize | MbedTLS PSA layer unavailable. May indicate a missing `mbedtls` package. |
-| `TOO_MANY_REQUESTS` | More than 50 requests in a 60-second window across all sources (global counter) | Rate limit hit. Indicates automated scanning or a misconfigured client retrying rapidly. |
+| `TOO_MANY_REQUESTS` | One client exceeded a per-client budget: 10 login initiations in 5 minutes, or 30 requests in a minute | A preceding `Login rate limit exceeded` or `Request rate limit exceeded` line identifies the budget and a hashed client id. Other clients are unaffected. Usually automated scanning or a client retrying in a loop. |
 | `INPUT_TOO_LARGE` | Query string, cookies, or environment variable exceeds 16 KB | Request exceeded the hard input limit. Rejects excessively large inputs as a hardening measure. |
 | `NOT_FOUND` | Request path is not `/`, `/callback`, or `/logout` | The browser or a client hit an unrecognized path under the CGI script. |
 

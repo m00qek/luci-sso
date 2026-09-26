@@ -100,6 +100,21 @@ describe('entry: run', () => {
 		assert.match(-1, index(wd.out(), "99999"), "the value stays out of the page");
 	});
 
+	it('sends Retry-After with a 429', () => {
+		// Eleven login initiations from one client: the eleventh is refused.
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": ENABLED_UCI } },
+		               http_client: { data: { "https://idp.com/.well-known/openid-configuration": { status: 503, body: "" } } },
+		               clock: { data: { now: NOW } } }, (deps) => {
+			let wd;
+			for (let i = 0; i < 11; i++) {
+				wd = web_deps({ PATH_INFO: "/", REMOTE_ADDR: "203.0.113.5" });
+				entry.run(deps, wd);
+			}
+			assert.match(truthy(), index(wd.out(), "Status: 429 Too Many Requests") >= 0);
+			assert.match(truthy(), match(wd.out(), /\nRetry-After: [0-9]+\n/) != null, "Retry-After header present");
+		});
+	});
+
 	it('loads config and routes when SSO is enabled', () => {
 		// config.load succeeds → router.handle runs against the live config; the
 		// action=enabled short-circuit reflects the loaded (enabled) state.

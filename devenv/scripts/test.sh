@@ -94,6 +94,11 @@ run_e2e() {
 
   docker compose $COMPOSE_FLAGS exec openwrt \
     sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
+  # Every browser request comes from one address, so the per-client rate limit
+  # (10 login initiations per 5 minutes) applies to the whole suite. One run
+  # stays inside it; back-to-back runs would not. Start each run with fresh
+  # budgets instead of loosening the production limit.
+  docker compose $COMPOSE_FLAGS exec openwrt rm -f /var/run/luci-sso/ratelimit.json
   docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test $(translate_e2e_paths "$modules") $grep_flag
 }
 

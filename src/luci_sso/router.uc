@@ -9,61 +9,13 @@ import * as handshake from 'luci_sso.handshake';
 import * as config_mod from 'luci_sso.config';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
+import * as ratelimit from 'luci_sso.ratelimit';
 import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'luci_sso.errors';
 
 /**
  * Main CGI Router for luci-sso.
  * deps = { fs, http, ubus, uci, log, clock }
  */
-
-const RATELIMIT_DIR = "/var/run/luci-sso";
-const RATELIMIT_FILE = RATELIMIT_DIR + "/ratelimit.json";
-const LIMIT_WINDOW = 60;   // 60 seconds
-const LIMIT_REQUESTS = 50; // 50 requests per window
-
-/**
- * Checks and updates the global rate limit state.
- * @private
- */
-function _check_rate_limit(deps) {
-	let now = deps.clock.time();
-	let state = { count: 0, window_start: now };
-
-	let raw = deps.fs.readfile(RATELIMIT_FILE);
-	if (raw) {
-		let res = encoding.safe_json(raw);
-		if (res.ok) {
-			state = res.data;
-		}
-	}
-
-	// Reset window if it has expired
-	if (now - state.window_start > LIMIT_WINDOW) {
-		state.count = 1;
-		state.window_start = now;
-	} else {
-		state.count++;
-	}
-
-	// Persist state atomically
-	let tmp_file = RATELIMIT_FILE + ".tmp";
-	if (deps.fs.writefile(tmp_file, sprintf("%J", state))) {
-		if (!deps.fs.rename(tmp_file, RATELIMIT_FILE)) {
-			deps.log("error", "Failed to atomically install rate limit state file");
-			deps.fs.unlink(tmp_file);
-		}
-	} else {
-		// Log but continue if we can't write (resilience)
-		deps.log("error", "Failed to write rate limit state file");
-	}
-
-	if (state.count > LIMIT_REQUESTS) {
-		deps.log("warn", `Rate limit exceeded: ${state.count} requests in current window [limit: ${LIMIT_REQUESTS}]`);
-		return false;
-	}
-
-	return true;
-};
 
 /**
  * Creates a response object.
@@ -230,9 +182,12 @@ export function handle(deps, config, request) {
 		}
 	}
 
-	// Rate limit before anything that writes handshake state or calls the IdP.
-	if (!_check_rate_limit(deps)) {
-		return Result.err(TOO_MANY_REQUESTS, { http_status: 429 });
+	// Per-client rate limit before anything that writes handshake state or
+	// calls the IdP. GET / (the action=enabled probe returned above) starts a
+	// login and also spends the client's login budget.
+	let rl = ratelimit.check(deps, ratelimit.client_key(request.client), path == "/");
+	if (!rl.allowed) {
+		return Result.err(TOO_MANY_REQUESTS, { http_status: 429, retry_after: rl.retry_after });
 	}
 
 	// Every remaining path needs a loaded config.

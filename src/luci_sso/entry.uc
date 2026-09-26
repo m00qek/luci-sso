@@ -26,7 +26,10 @@ import { SSO_DISABLED } from 'luci_sso.errors';
 function emit(web_deps, res) {
 	if (!res.ok) {
 		let status = (type(res.details) == "object") ? res.details.http_status : 500;
-		web.render_error(web_deps, res.error, status);
+		let extra = null;
+		if (type(res.details) == "object" && type(res.details.retry_after) == "int" && res.details.retry_after > 0)
+			extra = { "Retry-After": `${res.details.retry_after}` };
+		web.render_error(web_deps, res.error, status, extra);
 	} else {
 		web.render(web_deps, res.data);
 	}

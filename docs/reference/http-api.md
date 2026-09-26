@@ -166,9 +166,9 @@ An unexpected crash returns the same page with status `500` and a generic messag
 | `401 Unauthorized` | Authentication flow failed |
 | `403 Forbidden` | CSRF token missing or invalid on logout |
 | `404 Not Found` | Path does not match any endpoint |
-| `429 Too Many Requests` | Rate limit exceeded |
+| `429 Too Many Requests` | Per-client rate limit exceeded; `Retry-After` says when to retry |
 | `431 Request Header Fields Too Large` | Input exceeded 16 KB |
-| `503 Service Unavailable` | SSO is not configured or not enabled |
+| `503 Service Unavailable` | SSO is not configured or not enabled, or 500 logins are already in progress |
 | `500 Internal Server Error` | Unexpected crash or system failure |
 
 For the mapping from internal error codes to HTTP statuses, see [Log Messages](log-messages.md).
@@ -179,8 +179,11 @@ For the mapping from internal error codes to HTTP statuses, see [Log Messages](l
 
 These constraints apply to all rate-limited endpoints:
 
-<!-- LIMIT_REQUESTS=50 -->
-<!-- LIMIT_WINDOW=60 -->
+<!-- LIMIT_LOGIN_REQUESTS=10 -->
+<!-- LIMIT_LOGIN_WINDOW=300 -->
+<!-- LIMIT_CLIENT_REQUESTS=30 -->
+<!-- LIMIT_CLIENT_WINDOW=60 -->
+<!-- LIMIT_TRACKED_CLIENTS=256 -->
 <!-- LIMIT_INPUT_LEN=16384 -->
 <!-- LIMIT_PARAM_COUNT=100 -->
 <!-- LIMIT_PENDING_HANDSHAKES=500 -->
@@ -191,12 +194,16 @@ These constraints apply to all rate-limited endpoints:
 | Maximum cookie header length | 16 384 bytes |
 | Maximum number of query parameters | 100 |
 | Maximum number of cookies | 100 |
-| Rate limit | 50 requests per 60-second window |
+| Login initiations (`GET /`) per client | 10 per 5 minutes |
+| Rate-limited requests per client | 30 per minute |
+| Clients tracked at once | 256; the least recently seen is forgotten first |
 | Logins in progress (handshakes) | 500 at once; expired ones are removed to make room, live ones never are. Beyond that, a new login gets `503` |
 
-The rate limit is global — it counts all requests across all source addresses. It does not apply to `?action=enabled`.
+Rate limits are per client. A client is its source address as uhttpd reports it (`REMOTE_ADDR`): the full address for IPv4, the `/64` prefix for IPv6, and one shared bucket for an address that cannot be parsed. `GET /` spends both budgets; `/callback`, `/logout` and unknown paths spend only the per-minute one. `?action=enabled` is never limited. There is no router-wide limit: uhttpd's cap on concurrent CGI processes bounds the total load.
 
-Requests that exceed the size limits return `431`. Requests that exceed the rate limit return `429`.
+Behind a reverse proxy, every client arrives with the proxy's address and shares one budget. `X-Forwarded-For` is not trusted.
+
+Requests that exceed the size limits return `431`. Requests that exceed a rate limit return `429` with a `Retry-After` header giving the seconds until that budget resets.
 
 ---
 

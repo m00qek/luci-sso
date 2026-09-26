@@ -576,7 +576,8 @@ luci-sso/
 ├── src/luci_sso/          # ucode modules, installed as luci_sso.*
 │   ├── entry.uc           # CGI pipeline: request → config → router → response
 │   ├── deps.uc            # Production dependency graph (fs, ubus, uci, http, clock, log)
-│   ├── router.uc          # Endpoint dispatch, rate limiting, logout
+│   ├── router.uc          # Endpoint dispatch, logout
+│   ├── ratelimit.uc       # Per-client rate limits
 │   ├── handshake.uc       # OIDC login orchestration
 │   ├── oidc.uc            # Authorization URL, token exchange, ID-token checks, UserInfo
 │   ├── discovery.uc       # Discovery document and JWKS fetching/caching

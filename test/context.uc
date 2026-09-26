@@ -76,7 +76,7 @@ function do_inject(cfg, remaining, proxies, cb) {
 	let state = cfg[name] || {};
 	let inject_state;
 	if (name === 'fs') {
-		// Seed ratelimit file as empty so router._check_rate_limit doesn't
+		// Seed the rate-limit state file as empty so ratelimit.check doesn't
 		// die in strict mode when it reads an uninitialized path.
 		// Seed ACL dir with an empty placeholder so _grant_all_luci_acls
 		// returns Result.ok(0) without trying to destroy the session.

@@ -203,7 +203,7 @@ function _apply_security_headers(headers) {
  * Extracts and parses the request context from the CGI environment.
  *
  * @param {object} deps - { getenv }
- * @returns {object} - Result.ok({path, query, cookies}) or Result.err
+ * @returns {object} - Result.ok({path, query, cookies, client}) or Result.err
  */
 export function request(deps) {
 	let res_path = safe_getenv(deps.getenv, "PATH_INFO");
@@ -214,6 +214,10 @@ export function request(deps) {
 
 	let res_cookie = safe_getenv(deps.getenv, "HTTP_COOKIE");
 	if (!res_cookie.ok) return res_cookie;
+
+	// The client address uhttpd saw, used only as a rate-limit key.
+	let res_addr = safe_getenv(deps.getenv, "REMOTE_ADDR");
+	if (!res_addr.ok) return res_addr;
 
 	let res_params = parse_params(res_qs.data);
 	if (!res_params.ok) return res_params;
@@ -227,7 +231,8 @@ export function request(deps) {
 	return Result.ok({
 		path: path,
 		query: res_params.data,
-		cookies: res_cookies.data
+		cookies: res_cookies.data,
+		client: res_addr.data
 	});
 };
 
@@ -259,8 +264,9 @@ export function render(deps, res) {
  * @param {object} deps - { log, stdout }
  * @param {string} code - Internal error code (SCREAMING_SNAKE_CASE)
  * @param {number} status - HTTP status code
+ * @param {object} [extra] - Additional response headers, e.g. { "Retry-After": "42" }
  */
-export function render_error(deps, code, status) {
+export function render_error(deps, code, status, extra) {
 	let user_msg = ERROR_MAP[code] || GENERIC_MESSAGE;
 
 	deps.log("error", `[${status || 500}] ${code}`);
@@ -269,6 +275,8 @@ export function render_error(deps, code, status) {
 		"Status": HTTP_STATUS_MESSAGES["" + (status || 500)] || "500 Internal Server Error",
 		"Content-Type": "text/html; charset=utf-8"
 	};
+	for (let k, v in (extra || {}))
+		headers[k] = v;
 	_apply_security_headers(headers);
 	_out(deps.stdout, headers, _error_page(user_msg));
 };

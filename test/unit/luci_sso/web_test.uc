@@ -244,6 +244,12 @@ describe('web: render_error', () => {
 		assert.match(-1, index(d.out(), "HANDSHAKE_CAPACITY_EXCEEDED"));
 	});
 
+	it('adds extra headers, such as Retry-After, without dropping the security headers', () => {
+		let d = web_deps({}); web.render_error(d, "TOO_MANY_REQUESTS", 429, { "Retry-After": "42" });
+		assert.match(truthy(), index(d.out(), "Retry-After: 42\n") >= 0);
+		assert.match(truthy(), index(d.out(), "X-Frame-Options: DENY\n") >= 0);
+	});
+
 	it('falls back to a generic message for an unmapped code, without leaking it', () => {
 		let d = web_deps({}); web.render_error(d, "UBUS_LOGIN_FAILED", 500);
 		assert.match(truthy(), index(d.out(), "<p>Sign-in could not be completed. Please try again, or contact your administrator.</p>") != -1, "generic message");
@@ -285,6 +291,18 @@ describe('web: error', () => {
 // ─── request ───────────────────────────────────────────────────────────────────
 
 describe('web: request', () => {
+	it('exposes REMOTE_ADDR as the client address', () => {
+		let res = web.request(web_deps({ PATH_INFO: "/", REMOTE_ADDR: "2001:db8::7" }));
+		assert.match(truthy(), res.ok);
+		assert.match("2001:db8::7", res.data.client);
+	});
+
+	it('returns INPUT_TOO_LARGE for an oversized REMOTE_ADDR', () => {
+		let long_val = "";
+		for (let i = 0; i < 16385; i++) long_val += "1";
+		assert.match("INPUT_TOO_LARGE", web.request(web_deps({ REMOTE_ADDR: long_val })).error);
+	});
+
 	it('returns INPUT_TOO_LARGE when an environment value overflows', () => {
 		let long_val = "";
 		for (let i = 0; i < 16385; i++) long_val += "a";
