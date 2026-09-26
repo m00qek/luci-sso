@@ -64,7 +64,7 @@ Destroys the active LuCI session and redirects the browser. If the IdP advertise
 
 | Query parameter | Description |
 | :--- | :--- |
-| `stoken` | CSRF token. Must match the `token` field of the current UBUS session. LuCI includes this automatically in logout links. |
+| `stoken` | CSRF token. Must match the `token` field of the current UBUS session. |
 
 | | |
 | :--- | :--- |
@@ -75,6 +75,9 @@ Destroys the active LuCI session and redirects the browser. If the IdP advertise
 | **Error on missing/invalid `stoken`** | `403` — CSRF check failure |
 
 If no active session is found (cookie absent or session already expired), the endpoint returns `302 /` without error.
+
+!!! note "LuCI's own logout does not call this endpoint"
+    The **Log out** link in LuCI's menu goes to LuCI's dispatcher, not here. It ends the router session, but no RP-Initiated Logout happens and the user stays signed in at the IdP. `luci-sso` does not currently rewrite that link. To end the IdP session as well, send the browser to this endpoint with the session's `token` value as `stoken`.
 
 ---
 

@@ -43,7 +43,7 @@ This is a known, documented residual risk. The mitigation available to administr
 
 ## Logout mechanics
 
-When a user navigates to `/cgi-bin/luci-sso/logout` (or clicks a logout link in LuCI):
+When a browser is sent to `/cgi-bin/luci-sso/logout`:
 
 1. The CSRF token is verified — the request must include the `stoken` parameter matching the session's CSRF token.
 2. The UBUS session is destroyed. The `sysauth_https` and `sysauth` cookies are cleared with `Max-Age=0`.
@@ -52,6 +52,8 @@ When a user navigates to `/cgi-bin/luci-sso/logout` (or clicks a logout link in 
 Destroying the UBUS session is immediate and complete — the session ID in the cookie becomes invalid the moment `rpcd` processes the destroy call. A browser holding a stale cookie after logout will be rejected on the next LuCI request.
 
 The `end_session_endpoint` redirect is best-effort: if the IdP does not support it, the user is logged out of the router but remains authenticated at the IdP. A subsequent "Login with SSO" click will complete immediately without prompting for credentials again.
+
+LuCI's own **Log out** link does not reach this endpoint. It goes through LuCI's dispatcher, which ends the router session but skips RP-Initiated Logout, so the user stays signed in at the IdP with the same effect as above. `luci-sso` does not currently rewrite that link.
 
 ---
 
