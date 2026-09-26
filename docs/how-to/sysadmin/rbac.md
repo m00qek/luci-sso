@@ -12,9 +12,25 @@ The default installation creates one role (`admin`) with full access. Everything
 
 ---
 
+## How the `*` wildcard works
+
+`*` means "every LuCI access group", and its effect depends on which list it is in:
+
+| `read` | `write` | Result |
+| :--- | :--- | :--- |
+| any | `*` | **Full admin.** Read and write on every LuCI access group, plus unrestricted `ubus`, `uci`, `file` and `cgi-io` access. Write implies read. |
+| `*` | empty | **Read-only.** Read on every LuCI access group. No write, and no unrestricted access. |
+| `*` | specific groups | Read on every group; write only on the groups listed. |
+| specific groups | specific groups | Exactly the groups listed. |
+
+!!! warning "Known limitation: roles below full admin"
+    rpcd turns access-group grants into concrete `ubus` and `uci` rights only for password logins. An SSO session that holds read or write grants for specific groups, or read `*`, is therefore refused by rpcd when LuCI pages load their data. Such roles are safe (they cannot do more than granted), but currently see little. Full admin (`write '*'`) is unaffected.
+
+---
+
 ## Basic admin role (full access)
 
-The `*` wildcard grants complete read and write access to all LuCI functionality, present and future:
+`write '*'` grants complete read and write access to all LuCI functionality, present and future. Set `read '*'` too, for clarity:
 
 ```uci
 config role 'admin'

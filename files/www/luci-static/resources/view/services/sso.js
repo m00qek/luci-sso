@@ -148,12 +148,12 @@ return view.extend({
 		o.rmempty = true;
 
 		o = s.option(form.DynamicList, 'read', _('Read Access'),
-			_('LuCI access groups granted read access. Use <code>*</code> for all groups.'));
+			_('LuCI access groups granted read access. <code>*</code> reads every group, and nothing more.'));
 		o.modalonly = true;
 		o.rmempty = true;
 
 		o = s.option(form.DynamicList, 'write', _('Write Access'),
-			_('LuCI access groups granted write access. Use <code>*</code> for all groups.'));
+			_('LuCI access groups granted write access. <code>*</code> makes the role a full admin.'));
 		o.modalonly = true;
 		o.rmempty = true;
 

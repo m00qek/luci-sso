@@ -174,7 +174,7 @@ describe('ubus: register_token', () => {
 // ─── create_passwordless_session ─────────────────────────────────────────────
 
 const PERMS_USER  = { read: ['luci-mod-network'], write: ['luci-app-firewall'] };
-const PERMS_ADMIN = { read: ['*'], write: [] };
+const PERMS_ADMIN = { read: ['*'], write: ['*'] };
 
 describe('ubus: create_passwordless_session — guards', () => {
 	it('dies with CONTRACT_VIOLATION when deps.ubus is null', () => {
@@ -309,27 +309,65 @@ describe('ubus: create_passwordless_session — session timeout', () => {
 });
 
 describe('ubus: create_passwordless_session — admin wildcard', () => {
-	it('detects wildcard in read and grants full access', () => {
+	// Every grant a session receives for `perms`, flattened to sorted
+	// "scope object function" strings. The ACL directory holds two groups.
+	function grants_for(perms) {
+		let out = null;
 		mock.inject_all({
-			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
-			fs:     { strict: true, behavior: { lsdir: () => [] } },
+			ubus: { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			fs:   { strict: true, behavior: {
+				lsdir:    (p) => (p === ACL_DIR) ? [ 'luci-base.json' ] : [],
+				readfile: () => '{"luci-base":{},"luci-mod-network":{}}',
+			} },
 		}, (proxies) => {
+			let deps = build_deps(proxies);
 			assert.match(contains({ ok: true, data: SID }),
-				ubus_mod.create_passwordless_session(
-					build_deps(proxies), 'root', { read: ['*'], write: [] }, 'a@e.com', 'at', 'rt', 'it'
-				));
+				ubus_mod.create_passwordless_session(deps, 'root', perms, 'a@e.com', 'at', 'rt', 'it'));
+			out = [];
+			for (let c in filter(spy(deps._ubus_conn).calls.call, (c) => c[1] === 'grant'))
+				for (let o in c[2].objects)
+					push(out, `${c[2].scope} ${o[0]} ${o[1]}`);
+			out = sort(out);
 		});
+		return out;
+	}
+
+	const READ_ALL  = [ 'access-group luci-base read',  'access-group luci-mod-network read' ];
+	const WRITE_ALL = [ 'access-group luci-base write', 'access-group luci-mod-network write' ];
+	const RAW       = [ 'cgi-io * *', 'file * *', 'uci * *', 'ubus * *' ];
+
+	it("read '*' only: read on every luci-* group, no write, no raw scopes", () => {
+		assert.match(READ_ALL, grants_for({ read: ['*'], write: [] }));
 	});
 
-	it('detects wildcard in write and grants full access', () => {
+	it("write '*' only: full admin, since write implies read", () => {
+		assert.match(sort([ ...READ_ALL, ...WRITE_ALL, ...RAW ]), grants_for({ read: [], write: ['*'] }));
+	});
+
+	it("read '*' and write '*': full admin", () => {
+		assert.match(sort([ ...READ_ALL, ...WRITE_ALL, ...RAW ]), grants_for({ read: ['*'], write: ['*'] }));
+	});
+
+	it("read '*' with specific write groups: read everything, write only those groups", () => {
+		assert.match(sort([ ...READ_ALL, 'access-group luci-app-firewall write' ]),
+			grants_for({ read: ['*'], write: ['luci-app-firewall'] }));
+	});
+
+	it('specific groups only: exactly those grants, as before', () => {
+		assert.match(sort([ 'access-group luci-mod-network read', 'access-group luci-app-firewall write' ]),
+			grants_for({ read: ['luci-mod-network'], write: ['luci-app-firewall'] }));
+	});
+
+	it("an ACL scan failure in the read '*' path destroys the session", () => {
 		mock.inject_all({
-			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
-			fs:     { strict: true, behavior: { lsdir: () => [] } },
+			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": UBUS_NO_DATA, "session:destroy": UBUS_NO_DATA } },
+			fs:     { strict: true, behavior: { lsdir: () => null } },
 		}, (proxies) => {
-			assert.match(contains({ ok: true, data: SID }),
-				ubus_mod.create_passwordless_session(
-					build_deps(proxies), 'root', { read: [], write: ['*'] }, 'a@e.com', 'at', 'rt', 'it'
-				));
+			let deps = build_deps(proxies);
+			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }),
+				ubus_mod.create_passwordless_session(deps, 'root', { read: ['*'], write: [] }, 'a@e.com', 'at', 'rt', 'it'));
+			assert.match(1, length(filter(spy(deps._ubus_conn).calls.call, (c) => c[1] === 'destroy')));
+			assert.match(0, length(filter(spy(deps._ubus_conn).calls.call, (c) => c[1] === 'grant')), 'nothing granted before the failure');
 		});
 	});
 

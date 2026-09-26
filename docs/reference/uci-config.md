@@ -27,8 +27,8 @@ A user is assigned a role if ANY of its conditions match (OR logic). Multiple ro
 | :--- | :--- | :--- |
 | `email` | list (string) | Match by OIDC `email` claim. Case-insensitive. |
 | `group` | list (string) | Match by OIDC `groups` claim value. Case-sensitive. For Pocket ID, include the `@PocketID` suffix. |
-| `read` | list (string) | LuCI access groups granted read access. Use `*` for all current and future groups. |
-| `write` | list (string) | LuCI access groups granted write access. Use `*` for all current and future groups. |
+| `read` | list (string) | LuCI access groups granted read access. `*` means read on every LuCI access group, and nothing more. |
+| `write` | list (string) | LuCI access groups granted write access. `*` makes the role a full admin: read and write on every group, plus unrestricted `ubus`, `uci`, `file` and `cgi-io` access. Write implies read. |
 
 ---
 

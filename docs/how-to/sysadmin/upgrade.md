@@ -94,6 +94,21 @@ Then attempt a login from a browser. Check the log if anything goes wrong:
 
 ---
 
+## Roles with only `read '*'`
+
+Older releases treated a `*` in **either** list as full admin. A role that set `list read '*'` without `list write '*'` therefore got full read and write access, plus unrestricted `ubus`, `uci` and `file` access, by mistake. It now gets what the documentation always described: read on every LuCI access group, and nothing more.
+
+If such a role was meant to be a full admin, add the write wildcard:
+
+```bash
+uci add_list luci-sso.<role>.write='*'
+uci commit luci-sso
+```
+
+The shipped `admin` role sets both wildcards and is unaffected.
+
+---
+
 ## Leftover secret key from older versions
 
 Older releases created `/etc/luci-sso/secret.key` on the first login. It once signed session tokens that `luci-sso` stopped issuing when sessions moved to `rpcd`; later releases still generated it but never used it. Current versions neither create nor read it, and upgrading leaves it in place. It is safe to delete:

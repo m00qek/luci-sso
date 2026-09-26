@@ -10,11 +10,11 @@ import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED, INVALID_TOKEN, SYS
  */
 
 /**
- * Internal helper to grant all LuCI access groups to a session.
- * Scans /usr/share/rpcd/acl.d/ for luci-* patterns.
+ * Grants every LuCI access group to a session, in each of `modes`
+ * ("read", "write"). Scans /usr/share/rpcd/acl.d/ for luci-* groups.
  * @private
  */
-function _grant_all_luci_acls(deps, sid) {
+function _grant_all_luci_acls(deps, sid, modes) {
 	let acl_dir = "/usr/share/rpcd/acl.d";
 	let files = deps.fs.lsdir(acl_dir);
 	if (!files) {
@@ -42,16 +42,13 @@ function _grant_all_luci_acls(deps, sid) {
 		}
 
 		if (length(groups) > 0) {
-			deps.ubus.call("session", "grant", {
-				ubus_rpc_session: sid,
-				scope: "access-group",
-				objects: map(groups, (g) => [g, "read"]),
-			});
-			deps.ubus.call("session", "grant", {
-				ubus_rpc_session: sid,
-				scope: "access-group",
-				objects: map(groups, (g) => [g, "write"]),
-			});
+			for (let mode in modes) {
+				deps.ubus.call("session", "grant", {
+					ubus_rpc_session: sid,
+					scope: "access-group",
+					objects: map(groups, (g) => [g, mode]),
+				});
+			}
 			granted += length(groups);
 		}
 	}
@@ -117,33 +114,42 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 			deps.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(deps.native, sid)}] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
 		}
 	};
-	let is_admin = false;
-	for (let r in perms.read) { if (r === "*") { is_admin = true; break; } }
-	if (!is_admin) {
-		for (let w in perms.write) { if (w === "*") { is_admin = true; break; } }
-	}
+	// Wildcards, per role list:
+	//   write '*'  full admin: raw ubus/uci/file/cgi-io grants plus read AND
+	//              write on every luci-* group (write implies read);
+	//   read '*'   read on every luci-* group, nothing else;
+	// otherwise each listed group is granted individually. The two combine:
+	// read '*' with specific write groups reads everything and writes only
+	// those groups.
+	let has_wildcard = (list) => {
+		for (let x in (list || [])) if (x === "*") return true;
+		return false;
+	};
+	let write_all = has_wildcard(perms.write);
+	let read_all  = write_all || has_wildcard(perms.read);
 
-	// If wildcard is detected, we grant full internal access and skip granular access-groups
-	if (is_admin) {
+	if (write_all) {
 		grant_perm("ubus", "*", "*");
 		grant_perm("uci", "*", "*");
 		grant_perm("file", "*", "*");
 		grant_perm("cgi-io", "*", "*");
+	}
 
-		// LuCI specific: Expand and grant all known access-groups
-		let acl_res = _grant_all_luci_acls(deps, sid);
+	if (read_all) {
+		let acl_res = _grant_all_luci_acls(deps, sid, write_all ? [ "read", "write" ] : [ "read" ]);
 		if (!acl_res.ok) {
-			deps.log("error", `Failed to grant LuCI ACLs for wildcard admin [sid: ${crypto.safe_id(deps.native, sid)}]`);
+			deps.log("error", `Failed to grant LuCI ACLs for wildcard role [sid: ${crypto.safe_id(deps.native, sid)}]`);
 			deps.ubus.call("session", "destroy", { ubus_rpc_session: sid });
 			return Result.err(UBUS_SESSION_FAILED);
 		}
 	} else {
-		for (let r in perms.read) {
+		for (let r in perms.read)
 			grant_perm("access-group", r, "read");
-		}
-		for (let w in perms.write) {
+	}
+
+	if (!write_all) {
+		for (let w in perms.write)
 			grant_perm("access-group", w, "write");
-		}
 	}
 
 	// 3. Generate CSRF token
