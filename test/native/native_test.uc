@@ -11,7 +11,7 @@ import { hex_to_bin, JWK_RSA, JWK_EC } from 'native.fixtures';
 // This is the single gate for swapping crypto backends (mbedtls / wolfssl /
 // openssl): it asserts the FFI contract of the seven exported functions —
 // correctness against known-answer vectors, and the security/boundary controls
-// enforced in native_common.c. It imports ONLY `luci_sso.native` (+ pure
+// enforced in mod/native_api.c. It imports ONLY `luci_sso.native` (+ pure
 // helpers/fixtures); it must never route through `luci_sso.crypto`.
 //
 // Contract constants (mod/native.h): MAX_INPUT_SIZE=16384, ES256 sig=64,

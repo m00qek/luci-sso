@@ -272,7 +272,7 @@ Finds a JWK by `kid` (key ID). If `kid` is absent, returns the first key.
 
 The C interface that all crypto backends must implement. See [How to Add a New Crypto Backend](../how-to/developer/adding-crypto-backend.md) for the full walkthrough.
 
-All input buffers are subject to the `NATIVE_MAX_INPUT_SIZE` (16 384 bytes) limit enforced by `web.uc` before data reaches the C layer.
+These are the backend functions. Callers do not reach them directly: `mod/native_api.c` wraps each one with the input guards (the `NATIVE_MAX_INPUT_SIZE` 16 384-byte ceiling on every input, exact ES256 signature and EC coordinate lengths, the F4-only RSA exponent, the empty-HMAC-key rejection, the random length bounds) and guarantees NUL-terminated PEM output. The ucode binding in `mod/native_ucode.c` calls those wrappers.
 
 ### `native_crypto_init()` → `int`
 

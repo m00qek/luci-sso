@@ -111,5 +111,5 @@ Verify the claims in this document by inspecting these source files:
 | ID Token validation, nonce, at_hash, iss, aud, exp | `src/oidc.uc` |
 | Discovery fetch, cache, issuer mismatch detection | `src/discovery.uc` |
 | PKCE generation (S256), constant-time comparisons | `src/crypto.uc` |
-| Algorithm enforcement, JWK parsing, signature verification | `src/native_common.c`, `src/native_mbedtls.c` |
+| Algorithm enforcement, JWK parsing, signature verification | `mod/native_api.c` (input guards), `mod/native_<lib>.c` (backends) |
 | HTTPS enforcement (`is_https()`) | `src/encoding.uc` |

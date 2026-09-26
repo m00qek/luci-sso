@@ -89,11 +89,15 @@ Rules:
   scaffolding). Do **not** route through `luci_sso.crypto` — that is wrapper
   coverage, which belongs to the crypto unit tests.
 
-`native.c` gets three tiers of coverage; this bucket is one of them:
+The native module gets three kinds of coverage; this bucket is one of them:
 
-1. **C-level libFuzzer** (`make fuzzer-test`) — deepest / adversarial.
-2. **native conformance** (this bucket) — the FFI contract.
-3. **transitive** — every crypto/orchestrator test hits real `native.c`
+1. **C-level libFuzzer** (`make fuzzer-test`) — deepest / adversarial. It
+   calls the guarded entry points in `mod/native_api.c`, so it runs the
+   input guards and the backend exactly as production does; only the thin
+   ucode binding (`mod/native_ucode.c`) is outside it.
+2. **native conformance** (this bucket) — the FFI contract, through the
+   compiled module, binding included.
+3. **transitive** — every crypto/orchestrator test hits the real module
    incidentally.
 
 ### `unit/crypto/*` mocks `native`
