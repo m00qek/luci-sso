@@ -477,6 +477,93 @@ describe('handshake: userinfo', () => {
 // ─── authenticate: split-horizon (internal vs public issuer) ───────────────────
 
 describe('handshake: split-horizon', () => {
+	// Full callback with a pathful issuer behind split-horizon. The ID token
+	// carries no email, so UserInfo is fetched too. Every back-channel request
+	// must go to the internal origin with the issuer's path intact; the HTTP
+	// mock is strict, so a request to any public URL dies.
+	function pathful_flow(issuer, internal, paths) {
+		// Endpoint paths are absolute on the IdP's origin, as real IdPs publish
+		// them: some sit under the issuer path (Keycloak), some do not (Authentik).
+		let pub_origin = match(issuer, /^https:\/\/[^\/]+/)[0];
+		let int_origin = replace(internal, /\/$/, "");
+		let issuer_path = replace(substr(issuer, length(pub_origin)), /\/$/, "");
+		let pub  = (p) => pub_origin + p;
+		let priv = (p) => int_origin + p;
+		let discovery_doc = {
+			issuer: issuer,
+			authorization_endpoint: pub(paths.auth),
+			token_endpoint:         pub(paths.token),
+			jwks_uri:               pub(paths.jwks),
+			userinfo_endpoint:      pub(paths.userinfo),
+			end_session_endpoint:   pub(paths.logout),
+		};
+		let config = {
+			...f.MOCK_CONFIG, issuer_url: issuer, internal_issuer_url: internal, redirect_uri: "https://router/callback",
+			roles: [ { name: "admin", emails: ["admin@example.com"], read: ["*"], write: ["*"] } ]
+		};
+		let posted = [], result = null, got = null;
+
+		with_context({
+			fs:    { data: {} },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			http_client: {
+				data: {
+					[priv(issuer_path + "/.well-known/openid-configuration")]: { status: 200, body: discovery_doc },
+					[priv(paths.jwks)]:     { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+					[priv(paths.userinfo)]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "admin@example.com" } },
+				},
+				behavior: {
+					post: (url, opts) => {
+						push(posted, url);
+						if (url != priv(paths.token)) return { ok: true, data: { status: 404, body: "wrong token URL" } };
+						let access_token = "at-pathful";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let claims = { ...f.MOCK_CLAIMS, iss: issuer, nonce: "test-nonce", at_hash };
+						delete claims.email;
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token: h.generate_id_token(claims, f.MOCK_PRIVKEY, "RS256") }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let hs = session.create_state(deps, 0).data;
+			let path = "/var/run/luci-sso/handshake_" + hs.token + ".json";
+			let raw = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw));
+			result = handshake.authenticate(deps, config, { query: { code: "c1", state: raw.state }, cookies: { "__Host-luci_sso_state": hs.token } });
+			got = map(spy(deps.http).calls.get || [], (c) => c[0]);
+		});
+		return { result, posted, got, priv };
+	}
+
+	it('Keycloak-style issuer (/realms/home): token, JWKS and UserInfo go to the internal origin with the path', () => {
+		let r = pathful_flow("https://kc.example.com/realms/home", "https://10.0.0.5:8443", {
+			auth:     "/realms/home/protocol/openid-connect/auth",
+			token:    "/realms/home/protocol/openid-connect/token",
+			jwks:     "/realms/home/protocol/openid-connect/certs",
+			userinfo: "/realms/home/protocol/openid-connect/userinfo",
+			logout:   "/realms/home/protocol/openid-connect/logout",
+		});
+		assert.match(contains({ ok: true, data: contains({ email: "admin@example.com" }) }), r.result, `${r.result.error} ${r.result.details}`);
+		assert.match([ "https://10.0.0.5:8443/realms/home/protocol/openid-connect/token" ], r.posted);
+		assert.match(true, index(r.got, "https://10.0.0.5:8443/realms/home/protocol/openid-connect/certs") >= 0, 'JWKS via internal origin');
+		assert.match(true, index(r.got, "https://10.0.0.5:8443/realms/home/protocol/openid-connect/userinfo") >= 0, 'UserInfo via internal origin');
+	});
+
+	it('Authentik-style issuer (/application/o/luci/): the same, with a trailing slash', () => {
+		let r = pathful_flow("https://auth.example.com/application/o/luci/", "https://10.0.0.6/", {
+			auth: "/application/o/authorize/", token: "/application/o/token/",
+			jwks: "/application/o/luci/jwks/", userinfo: "/application/o/userinfo/",
+			logout: "/application/o/luci/end-session/",
+		});
+		assert.match(contains({ ok: true }), r.result, `${r.result.error} ${r.result.details}`);
+		assert.match([ "https://10.0.0.6/application/o/token/" ], r.posted);
+		assert.match(true, index(r.got, "https://10.0.0.6/application/o/luci/.well-known/openid-configuration") >= 0, 'discovery under the issuer path');
+		assert.match(true, index(r.got, "https://10.0.0.6/application/o/luci/jwks/") >= 0, 'JWKS via internal origin');
+		assert.match(true, index(r.got, "https://10.0.0.6/application/o/userinfo/") >= 0, 'UserInfo via internal origin');
+	});
+
 	it('prevents path corruption when issuer_url is in path', () => {
 		let issuer_url = "https://auth.com";
 		let internal_issuer_url = "https://internal.lan:8443";

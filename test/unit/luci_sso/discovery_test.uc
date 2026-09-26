@@ -478,3 +478,37 @@ describe('discovery: HTTP failure causes are logged', () => {
 		assert.match(1, length(filter(logs, (m) => index(m, "JWKS fetch failed") == 0 && index(m, ": HTTP_REQUEST_FAILED (TIMED_OUT)") > 0)));
 	});
 });
+
+// ─── split-horizon fetch URL ──────────────────────────────────────────────────
+
+describe('discovery: split-horizon fetch', () => {
+	it("fetches from the internal origin with the issuer's path", () => {
+		let issuer = "https://kc.example.com/realms/home";
+		let doc = { ...f.MOCK_DISCOVERY, issuer: issuer };
+		with_context({
+			http_client: { data: { "https://10.0.0.5:8443/realms/home/.well-known/openid-configuration": { status: 200, body: doc } } }
+		}, (deps) => {
+			let res = discovery.discover(deps, issuer, { internal_issuer_url: "https://10.0.0.5:8443" });
+			assert.match(contains({ ok: true, data: contains({ issuer: issuer }) }), res);
+		});
+	});
+
+	it('keeps a trailing slash in the issuer path working (Authentik style)', () => {
+		let issuer = "https://auth.example.com/application/o/luci/";
+		let doc = { ...f.MOCK_DISCOVERY, issuer: issuer };
+		with_context({
+			http_client: { data: { "https://10.0.0.6/application/o/luci/.well-known/openid-configuration": { status: 200, body: doc } } }
+		}, (deps) => {
+			assert.match(contains({ ok: true }), discovery.discover(deps, issuer, { internal_issuer_url: "https://10.0.0.6/" }));
+		});
+	});
+
+	it('fetches from the issuer itself when there is no internal origin', () => {
+		let issuer = "https://kc.example.com/realms/home";
+		with_context({
+			http_client: { data: { [issuer + "/.well-known/openid-configuration"]: { status: 200, body: { ...f.MOCK_DISCOVERY, issuer } } } }
+		}, (deps) => {
+			assert.match(contains({ ok: true }), discovery.discover(deps, issuer));
+		});
+	});
+});

@@ -36,7 +36,7 @@ The browser uses the public `issuer_url` for steps 1–3. The router uses `inter
 
 ## What gets replaced
 
-When `internal_issuer_url` is set, `luci-sso` replaces the **origin** (scheme + host) of the following back-channel URLs with the internal address:
+`internal_issuer_url` is an **origin**: `https://host` or `https://host:port`, with no path. When it is set, `luci-sso` replaces the origin (scheme, host and port) of the following back-channel URLs with it:
 
 | URL | Replaced? |
 | :--- | :--- |
@@ -45,9 +45,22 @@ When `internal_issuer_url` is set, `luci-sso` replaces the **origin** (scheme + 
 | UserInfo endpoint | ✅ Yes |
 | Discovery document fetch | ✅ Yes |
 | Authorization endpoint (browser redirect) | ❌ No — the browser handles this |
+| End-session (logout) endpoint (browser redirect) | ❌ No — the browser handles this |
+| Any endpoint on a host other than `issuer_url`'s | ❌ No — e.g. Google's `googleapis.com` JWKS stays as published |
 | `iss` claim validation | ❌ No — always checked against `issuer_url` |
 
-Only the origin is swapped; the path is preserved. `https://auth.homelab.local/oauth/token` becomes `https://192.168.2.10:8443/oauth/token`.
+Only the origin is swapped; the path and query are kept exactly. `https://auth.homelab.local/oauth/token` becomes `https://192.168.2.10:8443/oauth/token`.
+
+This also works when `issuer_url` has a path, as with Keycloak realms or Authentik applications:
+
+| | Public | Internal |
+| :--- | :--- | :--- |
+| `issuer_url` / `internal_issuer_url` | `https://kc.example.com/realms/home` | `https://10.0.0.5:8443` |
+| Discovery fetch | — | `https://10.0.0.5:8443/realms/home/.well-known/openid-configuration` |
+| Token endpoint | `https://kc.example.com/realms/home/protocol/openid-connect/token` | `https://10.0.0.5:8443/realms/home/protocol/openid-connect/token` |
+
+!!! warning "The internal address must serve the same paths"
+    `internal_issuer_url` with a path, query or fragment (for example `https://10.0.0.5/realms/home`) is rejected with `CONFIG_ERROR`. Give only the origin; the path comes from `issuer_url`. A reverse proxy that exposes the IdP under a *different* path internally than publicly is not supported.
 
 The IdP's discovery document must still declare the public `issuer_url` as its `iss`. `luci-sso` validates the issuer claim against the public address regardless of the internal URL.
 
@@ -134,6 +147,7 @@ Back-channel failures typically appear as `TOKEN_EXCHANGE_FAILED`, `OIDC_DISCOVE
 
 1. The router can reach `internal_issuer_url` — test with `curl -sk <internal_issuer_url>/.well-known/openid-configuration` from the router.
 2. The certificate is trusted — test with `curl -s` (without `-k`) to verify without skipping certificate checks.
-3. The internal URL's origin exactly matches what `replace_origin` expects — it must start with the same scheme and host as `issuer_url`, just with the origin swapped.
+3. `internal_issuer_url` is only an origin. If the log shows `Configuration rejected: internal_issuer_url must be an origin`, remove its path: the issuer's path is added automatically.
+4. The internal address serves the IdP under the same paths as the public one.
 
 For the full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md).

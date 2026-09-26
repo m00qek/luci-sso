@@ -98,8 +98,13 @@ export function load(deps) {
 		return Result.err(CONFIG_ERROR, "No valid roles found in /etc/config/luci-sso");
 	}
 
-	if (oidc_cfg.internal_issuer_url && !encoding.is_https(oidc_cfg.internal_issuer_url)) {
-		return Result.err(CONFIG_ERROR, "internal_issuer_url must use HTTPS");
+	if (oidc_cfg.internal_issuer_url) {
+		if (!encoding.is_https(oidc_cfg.internal_issuer_url))
+			return Result.err(CONFIG_ERROR, "internal_issuer_url must use HTTPS");
+		// Only the origin is replaced; the issuer's path is kept (see
+		// discovery.discover and handshake), so a path here would be ambiguous.
+		if (!encoding.is_origin(oidc_cfg.internal_issuer_url))
+			return Result.err(CONFIG_ERROR, "internal_issuer_url must be an origin (scheme://host[:port]) with no path, query or fragment");
 	}
 
 	return Result.ok({

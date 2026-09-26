@@ -225,6 +225,20 @@ describe('config: load — validation', () => {
 		assert.match(true, index(res.details, 'internal_issuer_url must use HTTPS') >= 0);
 	});
 
+	it('rejects an internal_issuer_url with a path, query or fragment, without echoing it', () => {
+		for (let bad in [ 'https://10.0.0.5/realms/home', 'https://10.0.0.5:8443/x/', 'https://10.0.0.5?a=1', 'https://10.0.0.5#frag' ]) {
+			let res = load_sections({ default: { ...OIDC, internal_issuer_url: bad }, r1: { ...ROLE } });
+			assert.match(contains({ ok: false, error: 'CONFIG_ERROR' }), res, bad);
+			assert.match(true, index(res.details, 'internal_issuer_url must be an origin') == 0, bad);
+			assert.match(-1, index(res.details, '10.0.0.5'), 'the value is never part of the reason');
+		}
+	});
+
+	it('accepts an internal_issuer_url that is an origin, with or without a port or trailing slash', () => {
+		for (let good in [ 'https://10.0.0.5', 'https://10.0.0.5:8443', 'https://idp.lan/', 'https://[fd00::5]:8443/' ])
+			assert.match(true, load_sections({ default: { ...OIDC, internal_issuer_url: good }, r1: { ...ROLE } }).ok, good);
+	});
+
 	it('accepts case-insensitive HTTPS schemes (RFC 3986)', () => {
 		assert.match(true, load_sections({ default: { ...OIDC, issuer_url: 'HTTPS://idp.com' }, r1: { ...ROLE } }).ok);
 		assert.match(true, load_sections({ default: { ...OIDC, redirect_uri: 'HTTPS://app.com/callback' }, r1: { ...ROLE } }).ok);

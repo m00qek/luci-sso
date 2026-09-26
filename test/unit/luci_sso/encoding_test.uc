@@ -330,3 +330,63 @@ describe('encoding: is_https', () => {
 		assert.match(false, encoding.is_https('redirect to https://example.com'));
 	});
 });
+
+// ─── origins (split-horizon) ──────────────────────────────────────────────────
+
+describe('encoding: split_origin', () => {
+	it('normalises scheme, host and default port, and keeps the rest verbatim', () => {
+		assert.match(contains({ ok: true, data: { origin: 'https://kc.example.com', rest: '/Realms/Home?x=A#f' } }),
+			encoding.split_origin('HTTPS://KC.Example.com:443/Realms/Home?x=A#f'));
+		assert.match(contains({ ok: true, data: { origin: 'https://kc.example.com:8443', rest: '' } }),
+			encoding.split_origin('https://kc.example.com:8443'));
+		assert.match(contains({ ok: true, data: { origin: 'http://h', rest: '/' } }), encoding.split_origin('http://h:80/'));
+		assert.match(contains({ ok: true, data: { origin: 'https://[fd00::5]:8443', rest: '/p' } }), encoding.split_origin('https://[fd00::5]:8443/p'));
+	});
+
+	it('refuses non-URLs and userinfo', () => {
+		for (let bad in [ null, '', 'kc.example.com/realms', 'https://', 'https:///path', 'https://user@host/' ])
+			assert.match(false, encoding.split_origin(bad).ok, `${bad}`);
+	});
+});
+
+describe('encoding: is_origin', () => {
+	it('accepts scheme://host[:port] with an optional trailing slash', () => {
+		for (let good in [ 'https://h', 'https://h/', 'https://h:8443', 'HTTPS://H:8443/' ])
+			assert.match(true, encoding.is_origin(good), good);
+	});
+
+	it('rejects a path, query or fragment', () => {
+		for (let bad in [ 'https://h/p', 'https://h//', 'https://h?q', 'https://h/?q', 'https://h#f', 'h' ])
+			assert.match(false, encoding.is_origin(bad), bad);
+	});
+});
+
+describe('encoding: rebase_origin', () => {
+	const ISSUER = 'https://kc.example.com/realms/home';
+	const INTERNAL = 'https://10.0.0.5:8443';
+
+	it("moves a URL on the issuer's origin to the internal origin, keeping path and query", () => {
+		assert.match('https://10.0.0.5:8443/realms/home/protocol/openid-connect/token?a=1',
+			encoding.rebase_origin('https://kc.example.com/realms/home/protocol/openid-connect/token?a=1', ISSUER, INTERNAL));
+	});
+
+	it('matches the origin case-insensitively and ignores the default port', () => {
+		assert.match('https://10.0.0.5:8443/Certs',
+			encoding.rebase_origin('https://KC.EXAMPLE.COM:443/Certs', ISSUER, INTERNAL));
+	});
+
+	it('leaves URLs on other origins alone', () => {
+		assert.match('https://www.googleapis.com/oauth2/v3/certs',
+			encoding.rebase_origin('https://www.googleapis.com/oauth2/v3/certs', 'https://accounts.google.com', INTERNAL));
+		assert.match('https://kc.example.com:8443/token',
+			encoding.rebase_origin('https://kc.example.com:8443/token', ISSUER, INTERNAL), 'a different port is a different origin');
+		assert.match('https://auth.company.com/token',
+			encoding.rebase_origin('https://auth.company.com/token', 'https://auth.com', INTERNAL), 'no prefix matching');
+	});
+
+	it('is a no-op when the internal origin is the issuer origin, or an argument is not a URL', () => {
+		assert.match('https://Kc.example.com/t', encoding.rebase_origin('https://Kc.example.com/t', ISSUER, 'https://kc.example.com/'));
+		assert.match('/relative', encoding.rebase_origin('/relative', ISSUER, INTERNAL));
+		assert.match(null, encoding.rebase_origin(null, ISSUER, INTERNAL));
+	});
+});

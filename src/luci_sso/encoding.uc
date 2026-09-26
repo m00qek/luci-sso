@@ -194,6 +194,65 @@ export function normalize_url(url) {
 };
 
 /**
+ * Splits an absolute URL into its origin and the rest.
+ *
+ * The origin is normalised for comparison: scheme and host lowercased, and
+ * the default port (443 for https, 80 for http) dropped. The rest (path,
+ * query and fragment) is returned verbatim. URLs with userinfo
+ * (user@host) are refused.
+ *
+ * @param {string} url
+ * @returns {object} - Result.ok({ origin, rest }) or Result.err
+ */
+export function split_origin(url) {
+	if (type(url) != "string")
+		return Result.err("INVALID_ARGUMENT", "split_origin expects string");
+
+	let m = match(url, /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]+)(.*)$/);
+	if (!m || index(m[2], "@") >= 0)
+		return Result.err("MALFORMED_URL", "not an absolute URL with a host");
+
+	let scheme = lc(m[1]);
+	let authority = lc(m[2]);
+	if (scheme == "https")
+		authority = replace(authority, /:443$/, "");
+	else if (scheme == "http")
+		authority = replace(authority, /:80$/, "");
+
+	return Result.ok({ origin: `${scheme}://${authority}`, rest: m[3] });
+};
+
+/**
+ * True if `url` is a bare origin: scheme://host[:port], optionally with a
+ * single trailing "/", and no path, query or fragment.
+ *
+ * @param {string} url
+ * @returns {boolean}
+ */
+export function is_origin(url) {
+	let res = split_origin(url);
+	return res.ok && (res.data.rest == "" || res.data.rest == "/");
+};
+
+/**
+ * Moves `url` from one origin to another. If `url`'s origin equals
+ * `from`'s origin, returns `to`'s origin followed by `url`'s path, query and
+ * fragment, unchanged. Otherwise, or if any argument is not a URL, returns
+ * `url` untouched.
+ *
+ * @param {string} url
+ * @param {string} from - A URL whose origin is being replaced (its path is ignored).
+ * @param {string} to - A URL whose origin replaces it (its path is ignored).
+ * @returns {string}
+ */
+export function rebase_origin(url, from, to) {
+	let u = split_origin(url), f = split_origin(from), t = split_origin(to);
+	if (!u.ok || !f.ok || !t.ok) return url;
+	if (u.data.origin != f.data.origin || f.data.origin == t.data.origin) return url;
+	return t.data.origin + u.data.rest;
+};
+
+/**
  * Normalizes a 'sub' claim for comparison.
  * Normalizing to lowercase ensures interoperability.
  * 

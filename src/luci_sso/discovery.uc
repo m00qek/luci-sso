@@ -98,8 +98,18 @@ export function discover(deps, issuer, options) {
 		}
 	}
 
-	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
-	let fetch_url = options.internal_issuer_url || issuer;
+	// Split-horizon: fetch from the internal origin, keeping the issuer's path
+	// (https://kc.example.com/realms/home + internal https://10.0.0.5:8443
+	// -> https://10.0.0.5:8443/realms/home/.well-known/openid-configuration).
+	// The cache key and the issuer check below still use the public issuer.
+	let fetch_url = issuer;
+	if (options.internal_issuer_url) {
+		if (!encoding.is_https(options.internal_issuer_url)) return Result.err(INSECURE_FETCH_URL);
+		let int_res = encoding.split_origin(options.internal_issuer_url);
+		let iss_res = encoding.split_origin(issuer);
+		if (!int_res.ok || !iss_res.ok) return Result.err(INSECURE_FETCH_URL);
+		fetch_url = int_res.data.origin + iss_res.data.rest;
+	}
 	if (!encoding.is_https(fetch_url)) return Result.err(INSECURE_FETCH_URL);
 
 	if (substr(fetch_url, -1) != '/') fetch_url += '/';
