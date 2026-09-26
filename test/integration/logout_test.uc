@@ -1,6 +1,6 @@
 import { describe, it, assert, truthy, falsy, spy } from 'utest';
 import * as router from 'luci_sso.router';
-import { with_context } from 'context';
+import { with_context, UBUS_NO_DATA } from 'context';
 import * as f from 'fixtures.oidc';
 
 // Integration bucket — the logout flow, entered at router.handle(deps, config,
@@ -43,7 +43,7 @@ describe('logout: RP-initiated', () => {
 			ubus: {
 				data: {
 					"session:get": (args) => { ubus_get_called = true; return { values: { oidc_id_token: "mock-id-token", token: "csrf-123" } }; },
-					"session:destroy": (args) => { ubus_destroy_called = true; return {}; }
+					"session:destroy": (args) => { ubus_destroy_called = true; return UBUS_NO_DATA; }
 				}
 			},
 			http_client: {
@@ -73,7 +73,7 @@ describe('logout: RP-initiated', () => {
 			ubus: {
 				data: {
 					"session:get": (args) => ({ values: { token: "csrf-456" } }),
-					"session:destroy": (args) => { ubus_destroy_called = true; return {}; }
+					"session:destroy": (args) => { ubus_destroy_called = true; return UBUS_NO_DATA; }
 				}
 			},
 			http_client: {
@@ -156,7 +156,7 @@ describe('logout: CSRF protection', () => {
 		let ubus_calls3 = null;
 		with_context({
 			fs:          { data: {} },
-			ubus:        { data: { "session:get": mock_session, "session:destroy": {} } },
+			ubus:        { data: { "session:get": mock_session, "session:destroy": UBUS_NO_DATA } },
 			http_client: { data: DISCOVERY_DATA },
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
@@ -177,7 +177,7 @@ describe('logout: CSRF protection', () => {
 		let ubus_calls4 = null;
 		with_context({
 			fs:          { data: {} },
-			ubus:        { data: { "session:get": { error: 404 }, "session:destroy": {} } },
+			ubus:        { data: { "session:get": { error: 404 }, "session:destroy": UBUS_NO_DATA } },
 			http_client: { data: DISCOVERY_DATA },
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
@@ -249,7 +249,7 @@ describe('logout: post-logout redirect origin', () => {
 				},
 				"session:destroy": (args) => {
 					assert.match(sid, args.ubus_rpc_session);
-					return {};
+					return UBUS_NO_DATA;
 				}
 			};
 
@@ -297,7 +297,7 @@ describe('logout: post-logout redirect origin', () => {
 			fs:          { data: {} },
 			ubus:        { data: {
 				"session:get":    { values: { token: stoken, oidc_id_token: "hint" } },
-				"session:destroy": {}
+				"session:destroy": UBUS_NO_DATA
 			} },
 			http_client: { data: {
 				"https://trusted.idp/.well-known/openid-configuration": {
@@ -352,7 +352,7 @@ describe('logout: invalid session and malformed redirect', () => {
 			fs:          { data: {} },
 			ubus:        { data: {
 				"session:get": { values: { token: "valid-stoken", oidc_id_token: id_token, user: "admin" } },
-				"session:destroy": {}
+				"session:destroy": UBUS_NO_DATA
 			} },
 			http_client: { data: {
 				[`${f.MOCK_CONFIG.issuer_url}/.well-known/openid-configuration`]: {
@@ -381,7 +381,7 @@ describe('logout: redirect derivation robustness', () => {
 		let DISC = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
 		let session_data = {
 			"session:get": (args) => ({ values: { oidc_id_token: "hint", token: "csrf" } }),
-			"session:destroy": {}
+			"session:destroy": UBUS_NO_DATA
 		};
 		let discovery_data = {
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: DISC }

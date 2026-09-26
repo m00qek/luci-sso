@@ -4,7 +4,7 @@ import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
-import { with_context } from 'context';
+import { with_context, UBUS_NO_DATA } from 'context';
 import * as f from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
@@ -256,7 +256,7 @@ describe('handshake: recovery', () => {
 
 		with_context({
 			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				behavior: {
 					get: (url, opts) => {
@@ -314,7 +314,7 @@ describe('handshake: userinfo', () => {
 
 		with_context({
 			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
 					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
@@ -418,7 +418,7 @@ describe('handshake: userinfo', () => {
 
 		with_context({
 			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
 					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
@@ -483,7 +483,7 @@ describe('handshake: split-horizon', () => {
 
 		with_context({
 			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
 					[internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
@@ -552,7 +552,7 @@ describe('handshake: split-horizon', () => {
 
 		with_context({
 			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			ubus:  { data: { "session:create": { "ubus_rpc_session": "s456" }, "session:grant": {}, "session:set": {} } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s456" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
 					[internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
@@ -663,7 +663,7 @@ describe('handshake: warning', () => {
 
 		with_context({
 			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": {}, "session:set": {} } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
 					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
@@ -727,7 +727,7 @@ describe('handshake: warning', () => {
 
 			with_context({
 				fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-				ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": {}, "session:set": {} } },
+				ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 				http_client: {
 					data: {
 						[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
@@ -937,7 +937,7 @@ describe('handshake: reproduction', () => {
 
 		with_context({
 			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": {}, "session:set": {} } },
+			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
 					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },

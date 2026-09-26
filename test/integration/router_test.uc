@@ -7,7 +7,7 @@ import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_loader from 'luci_sso.config';
 import * as web_mod from 'luci_sso.web';
-import { with_context } from 'context';
+import { with_context, UBUS_NO_DATA } from 'context';
 import * as f from 'fixtures.anchor';
 import * as tf from 'fixtures.oidc';
 import * as h from 'lib.helpers';
@@ -146,10 +146,10 @@ describe('router: callback', () => {
 			ubus: {
 				data: {
 					"session:create": (args) => { ubus_create_called = true; return { ubus_rpc_session: "session-for-root" }; },
-					"session:grant": {},
+					"session:grant": UBUS_NO_DATA,
 					"session:set": (args) => {
 						if (args && args.values && args.values.oidc_access_token == at) found_set = true;
-						return {};
+						return UBUS_NO_DATA;
 					}
 				}
 			},
@@ -202,8 +202,8 @@ describe('router: callback', () => {
 			ubus: {
 				data: {
 					"session:create": (args) => ({ ubus_rpc_session: "s" }),
-					"session:grant": {},
-					"session:set": {}
+					"session:grant": UBUS_NO_DATA,
+					"session:set": UBUS_NO_DATA
 				}
 			},
 			clock: { data: { now: 1516239022 } }
