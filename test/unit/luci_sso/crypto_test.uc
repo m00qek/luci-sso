@@ -15,18 +15,6 @@ describe('crypto: facade delegation', () => {
 		assert.match(false, crypto.constant_time_eq('abc', 'xyz'));
 	});
 
-	it('jws_sign returns a three-part token', () => {
-		let res = crypto.jws_sign(native, { sub: 'u1' }, 'secret');
-		assert.match(contains({ ok: true }), res);
-		assert.match(3, length(split(res.data, '.')));
-	});
-
-	it('jws_verify roundtrip', () => {
-		let signed = crypto.jws_sign(native, { sub: 'u2' }, 'secret');
-		assert.match(contains({ ok: true }), signed);
-		assert.match(contains({ ok: true, data: contains({ sub: 'u2' }) }), crypto.jws_verify(native, signed.data, 'secret'));
-	});
-
 	it('random returns the correct number of bytes', () => {
 		assert.match(contains({ ok: true, data: has_length(24) }), crypto.random(native, 24));
 	});

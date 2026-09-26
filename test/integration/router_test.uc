@@ -8,7 +8,6 @@ import * as Result from 'luci_sso.result';
 import * as config_loader from 'luci_sso.config';
 import * as web_mod from 'luci_sso.web';
 import { with_context, UBUS_NO_DATA } from 'context';
-import * as f from 'fixtures.anchor';
 import * as tf from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
@@ -16,8 +15,6 @@ import * as h from 'lib.helpers';
 // a full deps graph built by with_context (real module subgraph, faked system
 // boundary). Covers dispatch, login/callback, rate-limit, security, and error
 // mapping. The logout flow lives in logout_test.uc.
-
-const TEST_SECRET = "integration-test-secret-32-bytes!!!";
 
 const MOCK_CONFIG = {
 	...tf.MOCK_CONFIG,
@@ -49,7 +46,7 @@ function mock_request(path, query, cookies, env) {
 describe('router: login', () => {
 	it('handle massive discovery response', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: { "https://idp.com/.well-known/openid-configuration": { error: "RESPONSE_TOO_LARGE" } }
 			},
@@ -63,7 +60,7 @@ describe('router: login', () => {
 
 	it('redirect to healthy IdP', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } }
 			},
@@ -74,26 +71,6 @@ describe('router: login', () => {
 			assert.match(302, res.data.status);
 			assert.match(0, index(res.data.headers["Location"], "https://idp.com/auth"), "Redirect MUST point to auth endpoint");
 		});
-	});
-});
-
-describe('router: bootstrap', () => {
-	it('automatic secret key generation', () => {
-		let final_key = null;
-
-		with_context({
-			fs: { data: {} },
-			http_client: {
-				data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } }
-			},
-			clock: { data: { now: 1516239022 } }
-		}, (deps) => {
-			router.handle(deps, MOCK_CONFIG, mock_request("/"));
-			final_key = deps.fs.readfile("/etc/luci-sso/secret.key");
-		});
-
-		assert.match(truthy(), final_key, "Secret key should exist after bootstrap");
-		assert.match(32, length(final_key), "Secret key should be 32 bytes");
 	});
 });
 
@@ -129,7 +106,7 @@ describe('router: callback', () => {
 		let pending_id_token = null;
 
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -182,7 +159,6 @@ describe('router: callback', () => {
 		with_context({
 			fs: {
 				data: {
-					"/etc/luci-sso/secret.key": TEST_SECRET,
 					[cache_path]: sprintf("%J", { keys: [ tf.MOCK_JWK ], cached_at: 1516239022 })
 				}
 			},
@@ -235,7 +211,7 @@ describe('router: callback', () => {
 		let pending_id_token = null;
 
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -276,7 +252,7 @@ describe('router: callback', () => {
 
 		with_context({
 			fs: {
-				data: { "/etc/luci-sso/secret.key": TEST_SECRET },
+				data: {},
 				behavior: {
 					mkdir: (path, mode) => {
 						if (path == preregistered) return false;
@@ -316,7 +292,7 @@ describe('router: callback', () => {
 
 	it('reject state replay', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -341,7 +317,7 @@ describe('router: callback', () => {
 
 	it('reject code replay', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -364,7 +340,7 @@ describe('router: callback', () => {
 describe('router: security', () => {
 	it('reject PKCE bypass', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -385,12 +361,12 @@ describe('router: security', () => {
 
 	it('skip token registration on verification failure', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
 					"https://idp.com/token": { status: 200, body: { access_token: "DO_NOT_REGISTER_ME", id_token: "invalid.jwt.sig" } },
-					"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+					"https://idp.com/jwks": { status: 200, body: { keys: [ tf.MOCK_JWK ] } }
 				}
 			},
 			clock: { data: { now: 1516239022 } }
@@ -486,7 +462,7 @@ describe('router: global rate limiting (reproduction)', () => {
 		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
 
 		with_context({
-			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:          { data: {} },
 			uci:         { data: { "luci-sso": { "default": { ".type": "oidc", "enabled": "0" } } } },
 			ubus:        { data: {} },
 			http_client: { data: {
@@ -527,7 +503,7 @@ describe('router: rate-limit persistence atomicity (reproduction)', () => {
 		let rename_calls = null;
 
 		with_context({
-			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:          { data: {} },
 			ubus:        { data: {} },
 			http_client: { data: {
 				[tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY }

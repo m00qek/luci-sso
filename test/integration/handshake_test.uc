@@ -28,7 +28,7 @@ const DISCOVERY_URL = f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configurat
 describe('handshake: initiate', () => {
 	it('returns an auth URL and opaque token on success', () => {
 		with_context({
-			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:          { data: {} },
 			http_client: { data: { [DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY } } },
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
@@ -45,7 +45,7 @@ describe('handshake: initiate', () => {
 
 	it('returns OIDC_DISCOVERY_FAILED (500) when discovery fails', () => {
 		with_context({
-			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:          { data: {} },
 			http_client: { data: { [DISCOVERY_URL]: { status: 500, body: {} } } },
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
@@ -59,7 +59,7 @@ describe('handshake: initiate', () => {
 		gen.string({ max_len: 30 }),
 		(host, ctx) => {
 			with_context({
-				fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+				fs:    { data: {} },
 				clock: { data: { now: 1516239022 } }
 			}, (deps) => {
 				let cfg = base_config({ issuer_url: `http://${host}`, internal_issuer_url: `http://${host}` });
@@ -138,7 +138,7 @@ describe('handshake: authenticate — OAuth flow failures', () => {
 	function run(http_cfg) {
 		let out;
 		with_context({
-			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:          { data: {} },
 			http_client: http_cfg,
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
@@ -192,7 +192,7 @@ describe('handshake: authenticate — OAuth flow failures', () => {
 		let pending_tokens = { access_token: null, id_token: null };
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			http_client: {
 				behavior: {
 					get: (url, opts) => {
@@ -255,7 +255,7 @@ describe('handshake: recovery', () => {
 		let pending_tokens = { access_token: null, id_token: null };
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				behavior: {
@@ -313,7 +313,7 @@ describe('handshake: userinfo', () => {
 		};
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
@@ -360,7 +360,7 @@ describe('handshake: userinfo', () => {
 		};
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			http_client: {
 				data: {
 					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
@@ -417,7 +417,7 @@ describe('handshake: userinfo', () => {
 		let nonce_captured = null;
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
@@ -482,7 +482,7 @@ describe('handshake: split-horizon', () => {
 		};
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
@@ -551,7 +551,7 @@ describe('handshake: split-horizon', () => {
 		};
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s456" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
@@ -612,7 +612,7 @@ describe('handshake: split-horizon', () => {
 		};
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			http_client: {
 				data: {
 					[internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
@@ -662,7 +662,7 @@ describe('handshake: warning', () => {
 		let nonce_ref = null;
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {
@@ -726,7 +726,7 @@ describe('handshake: warning', () => {
 			let access_token = c.token;
 
 			with_context({
-				fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+				fs:    { data: {} },
 				ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 				http_client: {
 					data: {
@@ -936,7 +936,7 @@ describe('handshake: reproduction', () => {
 		let nonce_ref = null;
 
 		with_context({
-			fs:    { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
+			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
 			http_client: {
 				data: {

@@ -95,25 +95,7 @@ High-level cryptographic operations. Wraps the native C bridge — all calls go 
 
 ### `constant_time_eq(a, b)` → `bool`
 
-Compares two strings in constant time. Use this for all security-sensitive comparisons (nonces, states, tokens).
-
-### `jws_sign(payload, secret)` → `string`
-
-Creates a JWS compact serialization (HS256) of `payload`. Returns the signed token string.
-
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `payload` | object | JSON-serializable object to sign. |
-| `secret` | string | HMAC key (raw bytes). |
-
-### `jws_verify(token, secret)` → `Result<object>`
-
-Verifies a JWS token and returns the decoded payload.
-
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `token` | string | JWS compact serialization. |
-| `secret` | string | HMAC key (raw bytes). |
+Compares two strings in constant time. Use this for comparisons against a secret or a value derived from one (state, nonce, `at_hash`, CSRF token). Public identifiers are compared with `===`.
 
 ### `jwt_verify(token, pubkey, options)` → `Result<object>`
 

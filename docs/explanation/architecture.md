@@ -18,8 +18,8 @@ The reason this matters: OpenWrt routers can't run network tests. Without this s
 *   **`handshake.uc`** — The OIDC state machine. Orchestrates the full authorization code flow: generates state and nonce, exchanges the code for tokens, validates them, and injects the resulting identity into LuCI's session.
 *   **`oidc.uc`** — Pure protocol validation. Given a token and claims, checks: is the issuer right? Is the audience right? Is it expired? Does the nonce match? All of this with no I/O.
 *   **`discovery.uc`** — Fetches and caches OIDC metadata from the IdP's `/.well-known/openid-configuration`. Caches to `/var/run/luci-sso/` (tmpfs) for 24 hours. The cache survives the router staying up but is cleared on every reboot — the first login after a reboot always fetches fresh discovery data. A stale cache is used as a fallback only when the IdP becomes temporarily unreachable while the router is already running.
-*   **`session.uc`** — Manages handshake state files (creation, consumption, and reaping of stale entries) and session tokens. Acts as a facade over the modular `session/` sub-package.
-*   **`crypto.uc`** — High-level cryptographic API. Wraps the native C bridge, exposes JWS signing/verification and constant-time comparisons.
+*   **`session.uc`** — Manages handshake state files (creation, consumption, and reaping of stale entries). Acts as a facade over the modular `session/` sub-package. The LuCI session itself lives in `rpcd` (see `ubus.uc`); `luci-sso` issues no tokens of its own.
+*   **`crypto.uc`** — High-level cryptographic API. Wraps the native C bridge, exposes ID-token (JWT) verification, JWK conversion, PKCE and constant-time comparisons.
 *   **`config.uc`** — Reads UCI configuration and maps OIDC claims to LuCI roles.
 
 ```mermaid

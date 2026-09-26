@@ -3,26 +3,19 @@ import * as session from 'luci_sso.session';
 import * as common from 'luci_sso.session.common';
 import * as native from 'luci_sso.native';
 
-// session.uc is a pure façade over session.key / session.handshake / session.token.
-// These tests assert the delegation wiring: each public export routes to the
-// correct submodule function. The submodules' own contracts are covered in
-// session/{key,handshake,token}_test.uc; here each assertion is just distinctive
-// enough to prove the right function is behind each name (e.g. a mis-alias of
+// session.uc is a pure façade over session.handshake. These tests assert the
+// delegation wiring: each public export routes to the correct submodule
+// function. The submodule's own contract is covered in
+// session/handshake_test.uc; here each assertion is just distinctive enough to
+// prove the right function is behind each name (e.g. a mis-alias of
 // create_state → consume would change the shape and fail).
 
-const SECRET = 'aaaabbbbccccddddeeeeffffgggghhhh';
 const NOW    = 1700000000;
 const B64URL = /^[A-Za-z0-9_-]+$/;
 
 function make_deps(injected) {
 	return { fs: injected.fs, clock: injected.clock, native: injected.native ?? native, log: () => null };
 }
-
-// fs pre-seeded with the secret key so key.get / token.* succeed.
-const WITH_SECRET = {
-	fs:    { strict: true, data: { [common.SECRET_KEY_PATH]: SECRET } },
-	clock: { strict: true, data: { now: NOW } },
-};
 
 // empty fs for the handshake create / reap paths.
 const EMPTY_FS = {
@@ -34,12 +27,6 @@ const EMPTY_FS = {
 };
 
 describe('session: façade delegation', () => {
-	it('get_secret_key → key.get (returns the on-disk secret)', () => {
-		mock.inject_all(WITH_SECRET, (injected) => {
-			assert.match(contains({ ok: true, data: SECRET }), session.get_secret_key(make_deps(injected)));
-		});
-	});
-
 	it('create_state → handshake.create (returns token/state/nonce/code_challenge)', () => {
 		mock.inject_all(EMPTY_FS, (injected) => {
 			assert.match(
@@ -77,23 +64,6 @@ describe('session: façade delegation', () => {
 	it('reap_stale_handshakes → handshake.reap (returns a count)', () => {
 		mock.inject_all(EMPTY_FS, (injected) => {
 			assert.match(contains({ ok: true, data: 0 }), session.reap_stale_handshakes(make_deps(injected), 0));
-		});
-	});
-
-	it('create → token.create (returns a three-part JWS)', () => {
-		mock.inject_all(WITH_SECRET, (injected) => {
-			let res = session.create(make_deps(injected), { sub: 'uid-123' });
-			assert.match(contains({ ok: true }), res);
-			assert.match(3, length(split(res.data, '.')));
-		});
-	});
-
-	it('verify → token.verify (round-trips a freshly created token)', () => {
-		mock.inject_all(WITH_SECRET, (injected) => {
-			let deps = make_deps(injected);
-			let tok = session.create(deps, { sub: 'uid-123' });
-			assert.match(contains({ ok: true }), tok);
-			assert.match(contains({ ok: true, data: { user: 'uid-123' } }), session.verify(deps, tok.data, 0));
 		});
 	});
 });

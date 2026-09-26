@@ -67,7 +67,7 @@ If the SSO button is still showing, the LuCI cache may not have cleared automati
     rm /etc/config/luci-sso
     ```
 
-    **Session signing key** — `/etc/luci-sso/secret.key` is generated at runtime on first use. Remove the entire directory:
+    **Leftover key from older versions** — older releases created `/etc/luci-sso/secret.key` on first login. Current versions neither create nor read it. If the directory exists, it is safe to delete:
     ```bash
     rm -rf /etc/luci-sso
     ```

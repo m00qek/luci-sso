@@ -94,6 +94,16 @@ Then attempt a login from a browser. Check the log if anything goes wrong:
 
 ---
 
+## Leftover secret key from older versions
+
+Older releases created `/etc/luci-sso/secret.key` on the first login. It once signed session tokens that `luci-sso` stopped issuing when sessions moved to `rpcd`; later releases still generated it but never used it. Current versions neither create nor read it, and upgrading leaves it in place. It is safe to delete:
+
+```bash
+rm -rf /etc/luci-sso
+```
+
+---
+
 ## Upgrading LuCI at the same time
 
 If you upgrade LuCI alongside `luci-sso`, the LuCI upgrade will overwrite `sysauth.ut` and remove the SSO login button. Run the UI setup script after the LuCI upgrade completes:

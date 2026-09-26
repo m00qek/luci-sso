@@ -4,14 +4,6 @@ import * as common from 'luci_sso.session.common';
 // ─── constants ───────────────────────────────────────────────────────────────
 
 describe('session.common: constants', () => {
-	it('SECRET_KEY_PATH', () => {
-		assert.match('/etc/luci-sso/secret.key', common.SECRET_KEY_PATH);
-	});
-
-	it('SESSION_DURATION', () => {
-		assert.match(3600, common.SESSION_DURATION);
-	});
-
 	it('HANDSHAKE_DURATION', () => {
 		assert.match(300, common.HANDSHAKE_DURATION);
 	});

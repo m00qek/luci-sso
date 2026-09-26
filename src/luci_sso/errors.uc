@@ -86,8 +86,6 @@ export const INVALID_RSA_PARAMS_ENCODING = "INVALID_RSA_PARAMS_ENCODING";
 export const UNSUPPORTED_CURVE           = "UNSUPPORTED_CURVE";
 export const MISSING_EC_PARAMS           = "MISSING_EC_PARAMS";
 export const INVALID_EC_PARAMS_ENCODING  = "INVALID_EC_PARAMS_ENCODING";
-export const MISSING_OCT_PARAM           = "MISSING_OCT_PARAM";
-export const INVALID_OCT_PARAM_ENCODING  = "INVALID_OCT_PARAM_ENCODING";
 export const PEM_CONVERSION_FAILED       = "PEM_CONVERSION_FAILED";
 export const TOKEN_TOO_LARGE             = "TOKEN_TOO_LARGE";
 export const MALFORMED_JWT               = "MALFORMED_JWT";
@@ -139,7 +137,6 @@ export const TOO_MANY_REQUESTS         = "TOO_MANY_REQUESTS";
 export const INPUT_TOO_LARGE           = "INPUT_TOO_LARGE";
 
 // System
-export const SYSTEM_INIT_FAILED        = "SYSTEM_INIT_FAILED";
 export const SSL_INIT_FAILED           = "SSL_INIT_FAILED";
 export const CRYPTO_ERROR              = "CRYPTO_ERROR";
 export const CRYPTO_INIT_FAILED        = "CRYPTO_INIT_FAILED";

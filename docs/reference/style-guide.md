@@ -39,9 +39,9 @@ We distinguish between errors caused by the programmer (Contract Bugs) and error
 If a function is called with the wrong types or in an invalid state, this is a bug in the calling code. The system should "fail fast" to prevent undefined behavior.
 
 ```javascript
-export function jws_sign(payload, secret) {
-	if (type(payload) != "object") die("CONTRACT_VIOLATION: payload must be an object");
-	if (type(secret) != "string") die("CONTRACT_VIOLATION: secret must be a string");
+export function verify(native, token, pubkey, options) {
+	if (type(token) != "string") die("CONTRACT_VIOLATION: jwt.verify expects string token");
+	if (type(pubkey) != "string") die("CONTRACT_VIOLATION: jwt.verify expects string pubkey");
 	// ...
 };
 ```
@@ -578,7 +578,7 @@ luci-sso/
 │   ├── oidc.uc        # OIDC protocol (exchange, verification)
 │   ├── discovery.uc   # OIDC metadata fetching and caching
 │   ├── handshake.uc   # OIDC state machine and session orchestration
-│   ├── session.uc     # Session management (JWS tokens)
+│   ├── session.uc     # OIDC handshake state
 │   ├── encoding.uc    # Pure data encoding and string logic
 │   ├── result.uc      # Standard Result object pattern for error handling
 │   ├── jwk.uc         # JSON Web Key management
@@ -635,10 +635,6 @@ export function jwt_verify(token, pubkey, options) {
 	// ...
 };
 
-export function jws_sign(payload, secret) {
-	// ...
-};
-
 export function pkce_pair(len) {
 	// ...
 };
@@ -674,11 +670,11 @@ See [Security Model](../explanation/security-model.md) and [Threat Model](../exp
 
 ```javascript
 // ❌ INCORRECT
-log("Secret key: " + secret);
+log("Client secret: " + config.client_secret);
 log("ID token: " + id_token);
 
 // ✅ CORRECT
-log("Using secret key from " + SECRET_KEY_PATH);
+log("Client secret configured: " + (config.client_secret ? "yes" : "no"));
 log("ID token present: " + (id_token ? "yes" : "no"));
 ```
 
@@ -755,9 +751,9 @@ Reference documentation must be high-density and unambiguous. Avoid narrative pr
 ```
 feat(crypto): Add HMAC-SHA256 implementation
 
-- Implement uc_mbedtls_hmac_sha256 in C
-- Add jws_sign/jws_verify wrappers in ucode
-- Add tests for JWS creation and verification
+- Implement native_hmac_sha256 in each backend
+- Expose hmac_sha256 through the native module
+- Add known-answer tests in test/native
 
 Closes #42
 ```

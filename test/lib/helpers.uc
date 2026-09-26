@@ -1,13 +1,5 @@
-import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as fs from 'fs';
-
-/**
- * Generates a signed HS256 JWT for internal session testing.
- */
-export function generate_internal_token(payload, secret) {
-	return crypto.jws_sign(payload, secret);
-};
 
 /**
  * Generates a high-fidelity signed JWT (RS256 or ES256) for OIDC logic testing.

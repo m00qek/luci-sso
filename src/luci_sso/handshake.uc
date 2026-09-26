@@ -8,7 +8,7 @@ import * as discovery from 'luci_sso.discovery';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_mod from 'luci_sso.config';
-import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISMATCH, OIDC_DISCOVERY_FAILED, JWKS_FETCH_FAILED, ID_TOKEN_VERIFICATION_FAILED, IDENTITY_MISMATCH, TOKEN_REPLAYED, TOKEN_REGISTRY_ERROR, USER_NOT_AUTHORIZED, UBUS_LOGIN_FAILED, SYSTEM_INIT_FAILED, INVALID_SIGNATURE, KEY_NOT_FOUND } from 'luci_sso.errors';
+import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISMATCH, OIDC_DISCOVERY_FAILED, JWKS_FETCH_FAILED, ID_TOKEN_VERIFICATION_FAILED, IDENTITY_MISMATCH, TOKEN_REPLAYED, TOKEN_REGISTRY_ERROR, USER_NOT_AUTHORIZED, UBUS_LOGIN_FAILED, INVALID_SIGNATURE, KEY_NOT_FOUND } from 'luci_sso.errors';
 
 /**
  * Orchestration logic for the OIDC Login Handshake.
@@ -215,10 +215,6 @@ export function initiate(deps, config) {
 	deps.log("info", "Initiating OIDC login flow");
 	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
-
-	// Ensure system is initialized (bootstrap secret key if needed)
-	let key_res = session.get_secret_key(deps);
-	if (!key_res.ok) return Result.err(SYSTEM_INIT_FAILED, { http_status: 500 });
 
 	let handshake_res = session.create_state(deps);
 	if (!handshake_res.ok) return handshake_res;

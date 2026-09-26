@@ -85,9 +85,7 @@ function do_inject(cfg, remaining, proxies, cb) {
 			"/usr/share/rpcd/acl.d/luci-base.json": "",
 			...(state.data || {})
 		};
-		// utest seals fs.rmdir; session.key releases its lock directory with it.
-		let behavior = { rmdir: () => true, ...(state.behavior || {}) };
-		inject_state = { ...state, strict: true, data, behavior };
+		inject_state = { ...state, strict: true, data };
 	} else if (name === 'uci') {
 		// Every OpenWrt router ships /etc/config/luci; ubus.create_passwordless_session
 		// reads luci.sauth.sessiontime from it. Seed the stock value so strict uci

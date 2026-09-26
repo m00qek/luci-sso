@@ -66,10 +66,10 @@ composition root: `bootstrap_test.uc` for `deps.create()`'s channel builders and
 
 1. `unit/` is not a perfect `src/` mirror either — `handshake`, `router` and
    `deps` have no unit file (no isolable unit surface).
-2. `session.uc` is a pure façade (`get_secret_key = key.get`,
+2. `session.uc` is a pure façade (`create_state = handshake.create`,
    `verify_state = handshake.verify`, …). Its wiring is covered by
    `unit/luci_sso/session_test.uc`; the submodules' behaviour lives in
-   `unit/luci_sso/session/{key,handshake,token,common}_test.uc`.
+   `unit/luci_sso/session/{handshake,common}_test.uc`.
 
 ---
 
@@ -99,7 +99,7 @@ Rules:
 ### `unit/crypto/*` mocks `native`
 
 The crypto wrappers pass `native` as an explicit argument, so their unit tests
-inject a literal fake (`crypto.jws_verify({ hmac_sha256: () => 'sig' }, …)`) —
+inject a literal fake (`hash.sha256({ sha256: () => null }, 'x')`) —
 no proxy needed. This keeps `native_test.uc` the single source of
 crypto-correctness truth, lets a fake deterministically hit failure branches real
 crypto won't produce (`verify_rs256 → false ⇒ INVALID_SIGNATURE`), and keeps the
@@ -117,14 +117,16 @@ single module), which hands back **proxies** driven by a spec:
 import { mock, spy } from 'utest';
 
 mock.inject_all({
-    fs:    { strict: true, data: { '/etc/luci-sso/secret.key': SECRET } },
+    fs:    { strict: true,
+             data: { '/var/run/luci-sso/handshake_abc.json': '{}' },
+             behavior: { stat: () => ({ mtime: 1700000000 - 1000 }) } },
     clock: { strict: true, data: { now: 1700000000 } },
 }, (injected) => {
-    let deps = { fs: injected.fs, clock: injected.clock, native, log: () => null };
-    let res  = key.get(deps);
+    let deps = { fs: injected.fs, clock: injected.clock, log: () => null };
+    let res  = handshake.reap(deps, 0);
 
-    assert.match(contains({ ok: true, data: SECRET }), res);
-    assert.match('/etc/luci-sso/secret.key', spy(injected.fs).calls.readfile[0][0]);
+    assert.match(contains({ ok: true, data: 1 }), res);
+    assert.match('/var/run/luci-sso/handshake_abc.json', spy(injected.fs).calls.unlink[0][0]);
 });
 ```
 
@@ -142,8 +144,8 @@ Guidelines:
   `with_context(cfg, cb)` (`test/context.uc`), which assembles every proxy into
   a real `deps` and seeds the runtime state files.
 
-Shared fixtures live in `test/fixtures/` (`fixtures.rsa`, `fixtures.oidc`,
-`fixtures.anchor`); real signed JWTs come from `test/lib/helpers.uc`
+Shared fixtures live in `test/fixtures/` (`fixtures.rsa`, `fixtures.oidc`);
+real signed JWTs come from `test/lib/helpers.uc`
 (`lib.helpers`).
 
 ---

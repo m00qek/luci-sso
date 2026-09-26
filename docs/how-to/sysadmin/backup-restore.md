@@ -9,7 +9,6 @@ This guide covers preserving your `luci-sso` configuration across a router refla
 | Item | Location | Backed up by OpenWrt? | Notes |
 | :--- | :--- | :--- | :--- |
 | UCI configuration | `/etc/config/luci-sso` | Yes — included in the standard sysupgrade backup | Contains IdP credentials, role mappings, and all UCI options. |
-| Secret key | `/etc/luci-sso/secret.key` | No — excluded by default | Generated at runtime on first login. Losing it invalidates any in-flight JWS tokens, but users simply re-authenticate. |
 | Runtime state | `/var/run/luci-sso/` | No — tmpfs, not persistent | Discovery cache and token registry. Rebuilt automatically on next login. |
 | Active sessions | UBUS memory | No | Sessions do not survive a reboot regardless. |
 

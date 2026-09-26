@@ -156,14 +156,12 @@ Codes from the table above that can also appear here include `UNSUPPORTED_ALGORI
 | `NO_KEYS_AVAILABLE` | The token has no `kid` header and the JWK Set is empty | The IdP publishes no signing keys at its `jwks_uri`. |
 | `KEY_NOT_FOUND` | No key in the JWK Set has the token's `kid`, even after a forced refresh | The IdP signed with a key it does not publish. Usually a key rotation that has not propagated; retry, then check the IdP's `jwks_uri`. |
 | `MISSING_KTY` | The selected JWK has no `kty` field | The IdP's JWK Set is malformed. |
-| `UNSUPPORTED_KTY` | The selected JWK's `kty` is not `RSA`, `EC` or `oct` | The IdP uses a key type `luci-sso` cannot verify. |
+| `UNSUPPORTED_KTY` | The selected JWK's `kty` is not `RSA` or `EC` | The IdP uses a key type `luci-sso` cannot verify. Symmetric (`oct`) keys are refused: ID tokens must be signed with RS256 or ES256. |
 | `MISSING_RSA_PARAMS` | An `RSA` JWK lacks `n` or `e` | The IdP's JWK Set is malformed. |
 | `INVALID_RSA_PARAMS_ENCODING` | An `RSA` JWK's `n` or `e` is not valid Base64URL | The IdP's JWK Set is malformed. |
 | `UNSUPPORTED_CURVE` | An `EC` JWK uses a curve other than `P-256` | Only ES256 (P-256) is supported. Configure the IdP to sign with P-256 or RS256. |
 | `MISSING_EC_PARAMS` | An `EC` JWK lacks `x` or `y` | The IdP's JWK Set is malformed. |
 | `INVALID_EC_PARAMS_ENCODING` | An `EC` JWK's `x` or `y` is not valid Base64URL | The IdP's JWK Set is malformed. |
-| `MISSING_OCT_PARAM` | An `oct` JWK lacks `k` | The IdP's JWK Set is malformed. |
-| `INVALID_OCT_PARAM_ENCODING` | An `oct` JWK's `k` is not valid Base64URL | The IdP's JWK Set is malformed. |
 | `PEM_CONVERSION_FAILED` | The native crypto bridge rejected the key | An RSA exponent other than 65537, an RSA modulus over 16 KB, or an EC point that is not on the P-256 curve. RSA keys under 2048 bits are rejected later, at signature verification, and surface as `INVALID_SIGNATURE`. |
 | `INVALID_EXP_CLAIM` | `exp` is present but not an integer | The IdP issued a non-compliant token. |
 | `TOKEN_EXPIRED` | `exp` is earlier than now minus `clock_tolerance` | The token had already expired when it arrived. Check NTP on the router and the IdP. |
@@ -227,7 +225,6 @@ These indicate infrastructure-level failures unrelated to the OIDC flow.
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
-| `SYSTEM_INIT_FAILED` | Secret key subsystem failed during the first login attempt — covers key generation failures, write failures, and lock-wait timeouts | The secret key subsystem failed on first use. A `CRITICAL:` diagnostic line immediately precedes this code in the log, identifying the specific cause (e.g. `Failed to write secret key`, `CSPRNG failure`). |
 | `HTTPS_REQUIRED` | A back-channel request was attempted to a non-HTTPS URL | Appears in `Discovery fetch failed`, `JWKS fetch failed`, `Token exchange network error` and `UserInfo fetch network error` lines. Normally unreachable, because every endpoint is HTTPS-checked earlier. |
 | `HTTP_REQUEST_FAILED` | A back-channel HTTPS request did not complete | Appears in the same log lines as `HTTPS_REQUIRED`. Covers DNS, TCP and TLS failures, a timeout, or a response over 256 KB. Test with `curl` from the router. |
 | `SSL_INIT_FAILED` | TLS initialization failed | TLS context initialization failed. The system CA certificate store is missing or inaccessible. |

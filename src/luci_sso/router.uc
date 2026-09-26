@@ -161,7 +161,7 @@ function handle_logout(deps, config, request) {
 		return Result.ok(response(302, { "Location": "/" }));
 	}
 
-	// CSRF Protection: Verify that the 'stoken' parameter matches the session token
+	// CSRF Protection: Verify that the 'stoken' parameter matches the session's CSRF token
 	let provided_token = query.stoken || "";
 	let session_token = session_res.data.token || "";
 	if (!provided_token || !session_token || !crypto.constant_time_eq(provided_token, session_token)) {

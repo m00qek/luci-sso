@@ -2,7 +2,7 @@
 
 import { b64url_decode } from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
-import { INVALID_EC_PARAMS_ENCODING, INVALID_OCT_PARAM_ENCODING, INVALID_RSA_PARAMS_ENCODING, MISSING_EC_PARAMS, MISSING_KTY, MISSING_OCT_PARAM, MISSING_RSA_PARAMS, PEM_CONVERSION_FAILED, UNSUPPORTED_CURVE, UNSUPPORTED_KTY } from 'luci_sso.errors';
+import { INVALID_EC_PARAMS_ENCODING, INVALID_RSA_PARAMS_ENCODING, MISSING_EC_PARAMS, MISSING_KTY, MISSING_RSA_PARAMS, PEM_CONVERSION_FAILED, UNSUPPORTED_CURVE, UNSUPPORTED_KTY } from 'luci_sso.errors';
 
 function rsa_to_pem(native, jwk) {
 	if (!jwk.n || !jwk.e)
@@ -43,17 +43,6 @@ function ec_to_pem(native, jwk) {
 	return Result.ok(pem);
 };
 
-function oct_to_pem(native, jwk) {
-	if (!jwk.k)
-		return Result.err(MISSING_OCT_PARAM);
-
-	let result = b64url_decode(jwk.k);
-	if (!result.ok)
-		return Result.err(INVALID_OCT_PARAM_ENCODING);
-
-	return result;
-};
-
 /**
  * Logic for managing and converting JSON Web Keys (JWK).
  * Pure utility module for key transformations.
@@ -61,10 +50,11 @@ function oct_to_pem(native, jwk) {
 
 /**
  * Converts a JWK object to a PEM string.
- * Supports RSA, EC (P-256), and octet (symmetric) key types.
+ * Supports RSA and EC (P-256) keys. Symmetric (`oct`) keys are refused with
+ * UNSUPPORTED_KTY: ID tokens are verified with RS256 or ES256 only.
  * 
  * @param {module:luci_sso.native} native Compiled crypto extension; `native.jwk_rsa_to_pem()` or `native.jwk_ec_p256_to_pem()` performs the conversion.
- * @param {*} jwk JWK object; must have `kty` (`"RSA"`, `"EC"`, or `"oct"`) plus the corresponding key fields.
+ * @param {*} jwk JWK object; must have `kty` (`"RSA"` or `"EC"`) plus the corresponding key fields.
  * @returns {Result}
  */
 export function to_pem(native, jwk) {
@@ -76,8 +66,7 @@ export function to_pem(native, jwk) {
 
 	let conversion_table = {
 		"RSA": rsa_to_pem,
-		"EC": ec_to_pem,
-		"oct": oct_to_pem
+		"EC": ec_to_pem
 	};
 
 	let fn = conversion_table[jwk.kty];
