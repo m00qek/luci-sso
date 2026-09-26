@@ -38,7 +38,14 @@ curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
 
 - If it returns `{"enabled":false}`: SSO is disabled. Enable it in **Services > SSO Login** (toggle **Enable SSO** on and click **Save & Apply**), or via SSH: `uci set luci-sso.default.enabled='1' && uci commit luci-sso`.
 - If the request fails entirely: the CGI script is not running. Verify the package is installed: `opkg list-installed | grep luci-sso`.
-- If the log shows `CONFIG_ERROR`: a required option is missing or malformed. Run `uci show luci-sso` and check every option against the [UCI Configuration Reference](../../reference/uci-config.md).
+- If the log shows `CONFIG_ERROR`: a required option is missing or malformed. The line just before it says which one:
+
+    ```
+    luci-sso[1234]: Configuration rejected: clock_tolerance must be between 0 and 3600 seconds
+    luci-sso[1234]: [500] CONFIG_ERROR
+    ```
+
+    The message names the option, never its value. Fix that option in **Services > SSO Login** or with `uci set`, then check the rest against the [UCI Configuration Reference](../../reference/uci-config.md).
 
 ---
 

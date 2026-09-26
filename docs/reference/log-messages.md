@@ -35,7 +35,7 @@ These occur before any OIDC flow begins, during startup or on the first request.
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
 | `SSO_DISABLED` | `enabled` option is not `1` in UCI, or no valid configuration exists when a request arrives | The `enabled` option is not set to `1` in the UCI configuration, or no valid configuration exists. |
-| `CONFIG_ERROR` | `issuer_url`, `client_id`, `client_secret`, or `clock_tolerance` is missing or invalid | Required UCI option is absent or malformed. Check `uci show luci-sso`. |
+| `CONFIG_ERROR` | A required option is missing or invalid: the `default` section, `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url`, or no role has an email or group | A `Configuration rejected: <reason>` line immediately precedes this code and names the option, e.g. `Configuration rejected: issuer_url must use HTTPS`. It never includes the option's value. |
 | `UCI_ERROR` | UCI cursor could not be created | The UCI system itself is unavailable — indicates a deeper OpenWrt system problem. |
 
 ---

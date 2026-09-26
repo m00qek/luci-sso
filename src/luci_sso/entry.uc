@@ -57,6 +57,10 @@ export function run(deps, web_deps) {
 				emit(web_deps, router.handle(deps, null, req));
 				return;
 			}
+			// The detail names the UCI option that is wrong. It never carries
+			// the option's value, so it is safe to log; the page stays generic.
+			if (res_c.details)
+				deps.log("error", `Configuration rejected: ${res_c.details}`);
 			web.render_error(web_deps, res_c.error, 500);
 			return;
 		}

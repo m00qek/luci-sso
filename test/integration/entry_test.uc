@@ -80,6 +80,26 @@ describe('entry: run', () => {
 		assert.match(truthy(), index(wd.out(), "<p>Single sign-on is not enabled on this router.") >= 0, "renders the SSO_DISABLED page");
 	});
 
+	it('logs which option is wrong when the configuration is rejected', () => {
+		// clock_tolerance out of range: config.load fails with CONFIG_ERROR and a
+		// detail naming the option. The detail must reach deps.log (syslog), and
+		// neither the detail nor any UCI value may reach the page.
+		let bad = { ...ENABLED_UCI, default: { ...ENABLED_UCI.default, clock_tolerance: "99999" } };
+		let wd = web_deps({ PATH_INFO: "/" });
+		let logged = [];
+
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": bad } }, clock: { data: { now: NOW } } }, (deps) => {
+			deps.log = (l, m) => push(logged, [l, m]);
+			entry.run(deps, wd);
+		});
+
+		let line = null;
+		for (let l in logged) if (index(l[1], "Configuration rejected:") == 0) line = l;
+		assert.match(["error", "Configuration rejected: clock_tolerance must be between 0 and 3600 seconds"], line);
+		assert.match(-1, index(wd.out(), "clock_tolerance"), "the detail stays out of the page");
+		assert.match(-1, index(wd.out(), "99999"), "the value stays out of the page");
+	});
+
 	it('loads config and routes when SSO is enabled', () => {
 		// config.load succeeds → router.handle runs against the live config; the
 		// action=enabled short-circuit reflects the loaded (enabled) state.
