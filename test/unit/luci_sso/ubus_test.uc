@@ -318,6 +318,26 @@ describe('ubus: create_passwordless_session — non-admin', () => {
 	});
 });
 
+describe('ubus: create_passwordless_session — session set', () => {
+	it('destroys the session and returns UBUS_SESSION_FAILED when session set fails', () => {
+		let destroyed = null;
+		mock.inject_all({
+			ubus: { strict: true, data: {
+				"session:create":  { ubus_rpc_session: SID },
+				"session:grant":   {},
+				"session:set":     () => null,
+				"session:destroy": (args) => { destroyed = args.ubus_rpc_session; return {}; },
+			} },
+		}, (proxies) => {
+			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }),
+				ubus_mod.create_passwordless_session(
+					build_deps(proxies), 'guest', PERMS_USER, 'u@e.com', 'at', 'rt', 'it'
+				));
+			assert.match(SID, destroyed, 'the half-initialised session must be destroyed');
+		});
+	});
+});
+
 describe('ubus: create_passwordless_session — admin wildcard', () => {
 	it('detects wildcard in read and grants full access', () => {
 		mock.inject_all({

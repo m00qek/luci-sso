@@ -136,8 +136,9 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 	}
 	let csrf_token = csrf_res.data;
 
-	// 4. Set session variables
-	deps.ubus.call("session", "set", {
+	// 4. Set session variables. Without them the session has no CSRF token and
+	// no username, so a failure here must not hand back a usable session.
+	let res_set = deps.ubus.call("session", "set", {
 		ubus_rpc_session: sid,
 		values: {
 			username: username,
@@ -148,6 +149,11 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 			token: csrf_token
 		}
 	});
+	if (!res_set.ok) {
+		deps.log("error", `UBUS session set failed [sid: ${crypto.safe_id(deps.native, sid)}]`);
+		deps.ubus.call("session", "destroy", { ubus_rpc_session: sid });
+		return Result.err(UBUS_SESSION_FAILED);
+	}
 
 	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${username}`);
 
