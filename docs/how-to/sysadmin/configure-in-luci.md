@@ -60,8 +60,8 @@ Click **Add** and enter a name (alphanumeric and underscores). In the modal:
 
 - **Email Addresses** — one address per entry. Matched case-insensitively against the OIDC `email` claim.
 - **Groups** — one group name per entry. Matched case-sensitively against the OIDC `groups` claim. Some providers append a suffix (e.g. Pocket ID returns `GroupName@PocketID`).
-- **Read Access** — LuCI ACL group names this role may read. `*` reads every group, and nothing more.
-- **Write Access** — LuCI ACL group names this role may write. `*` makes the role a full admin. Leave empty for read-only access.
+- **Read Access** — LuCI access groups this role may read (keys in `/usr/share/rpcd/acl.d/*.json`, globs allowed). `*` reads every group, and nothing more.
+- **Write Access** — LuCI access groups this role may change. Include `luci-base`, which holds the save and apply calls. `*` makes the role a full admin. Leave empty for read-only access.
 
 Click **Save** to close the modal.
 

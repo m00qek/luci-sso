@@ -27,8 +27,8 @@ A user is assigned a role if ANY of its conditions match (OR logic). Multiple ro
 | :--- | :--- | :--- |
 | `email` | list (string) | Match by OIDC `email` claim. Case-insensitive. |
 | `group` | list (string) | Match by OIDC `groups` claim value. Case-sensitive. For Pocket ID, include the `@PocketID` suffix. |
-| `read` | list (string) | LuCI access groups granted read access. `*` means read on every LuCI access group, and nothing more. |
-| `write` | list (string) | LuCI access groups granted write access. `*` makes the role a full admin: read and write on every group, plus unrestricted `ubus`, `uci`, `file` and `cgi-io` access. Write implies read. |
+| `read` | list (string) | LuCI access groups (keys in `/usr/share/rpcd/acl.d/*.json`, e.g. `luci-mod-status-realtime`) granted read access. Globs and `!negations` work as in rpcd. `*` means read on every `luci-*` group, and nothing more. Each group is expanded into the permissions its ACL file lists, as rpcd does for a password login. |
+| `write` | list (string) | LuCI access groups granted write access; write implies read. Saving anything also needs `luci-base`, whose write section holds `uci set` and `uci apply`. `*` makes the role a full admin: read and write on every group, plus unrestricted `ubus`, `uci`, `file` and `cgi-io` access. |
 
 ---
 

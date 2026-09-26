@@ -95,11 +95,24 @@ run_e2e() {
   docker compose $COMPOSE_FLAGS exec openwrt \
     sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
   # Every browser request comes from one address, so the per-client rate limit
-  # (10 login initiations per 5 minutes) applies to the whole suite. One run
-  # stays inside it; back-to-back runs would not. Start each run with fresh
-  # budgets instead of loosening the production limit.
-  docker compose $COMPOSE_FLAGS exec openwrt rm -f /var/run/luci-sso/ratelimit.json
-  docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test $(translate_e2e_paths "$modules") $grep_flag
+  # (10 login initiations per 5 minutes) would apply to the whole suite, which
+  # makes more logins than that. Production limits stay as they are: each spec
+  # file runs as its own Playwright invocation, preceded by a reset of the
+  # rate-limit state, so every file starts with a full budget. The limiter
+  # itself is covered by the unit and integration tests.
+  local specs
+  if [ -n "$modules" ]; then
+    specs=$(translate_e2e_paths "$modules")
+  else
+    specs=$(cd "$BASE_DIR/test/e2e" && ls *.spec.js | sed 's|^|tests/|')
+  fi
+
+  local failed=0 spec
+  for spec in $specs; do
+    docker compose $COMPOSE_FLAGS exec openwrt rm -f /var/run/luci-sso/ratelimit.json
+    docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test "$spec" $grep_flag --pass-with-no-tests || failed=1
+  done
+  return $failed
 }
 
 # --- MAIN ---

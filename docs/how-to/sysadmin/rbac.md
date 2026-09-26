@@ -12,19 +12,33 @@ The default installation creates one role (`admin`) with full access. Everything
 
 ---
 
-## How the `*` wildcard works
+## What a role's lists mean
 
-`*` means "every LuCI access group", and its effect depends on which list it is in:
+`read` and `write` name LuCI **access groups**: the top-level keys of the JSON files in `/usr/share/rpcd/acl.d/`, such as `luci-base`, `luci-mod-status-realtime` or `luci-mod-network-config`. The file names are not group names: `luci-mod-network.json` defines `luci-mod-network-config`, `luci-mod-network-dhcp` and `luci-mod-network-diagnostics`. To list them on the router:
+
+```bash
+for f in /usr/share/rpcd/acl.d/*.json; do jsonfilter -i "$f" -e '@' | grep -o '"luci-[^"]*": {' | cut -d'"' -f2; done
+```
+
+A session gets exactly the rights rpcd would give a **password login** whose rpcd `login` entry had the same `read` and `write` lists: each granted group's `read` or `write` section is expanded into the concrete `ubus`, `uci`, `file` and `cgi-io` permissions it lists. The rules follow rpcd's:
+
+- Entries may be globs (`luci-mod-status-*`) and negations (`!luci-mod-status-logs`); negations win.
+- **Write implies read**: a group in `write` also gets its `read` section.
+- `luci-base`'s `write` section holds the calls that save and apply settings (`uci set`, `uci apply`). A role that should change anything needs `luci-base` in `write` as well as the groups for the pages it edits.
+- Every session also gets the small `unauthenticated` group that rpcd gives anonymous clients (`session access`, `luci.getFeatures`), which LuCI's pages rely on.
+
+A CI test logs in both ways against the real rpcd and fails if the two ever differ.
+
+### The `*` wildcard
+
+`*` matches every `luci-*` access group, and never other groups. Its effect depends on the list:
 
 | `read` | `write` | Result |
 | :--- | :--- | :--- |
-| any | `*` | **Full admin.** Read and write on every LuCI access group, plus unrestricted `ubus`, `uci`, `file` and `cgi-io` access. Write implies read. |
-| `*` | empty | **Read-only.** Read on every LuCI access group. No write, and no unrestricted access. |
-| `*` | specific groups | Read on every group; write only on the groups listed. |
+| any | `*` | **Full admin.** Unrestricted `ubus`, `uci`, `file` and `cgi-io` access, plus read and write on every LuCI access group. |
+| `*` | empty | **Read-only.** Every LuCI page can load its data; nothing can be saved. |
+| `*` | specific groups | Read everything; change only what the listed groups allow (include `luci-base`). |
 | specific groups | specific groups | Exactly the groups listed. |
-
-!!! warning "Known limitation: roles below full admin"
-    rpcd turns access-group grants into concrete `ubus` and `uci` rights only for password logins. An SSO session that holds read or write grants for specific groups, or read `*`, is therefore refused by rpcd when LuCI pages load their data. Such roles are safe (they cannot do more than granted), but currently see little. Full admin (`write '*'`) is unaffected.
 
 ---
 
@@ -65,7 +79,7 @@ config role 'admin'
 
 ## Read-only access
 
-Omit `write` (or leave it empty) and specify only the LuCI access groups the user may view. The available group names are the JSON keys matching `luci-*` in `/usr/share/rpcd/acl.d/`.
+Omit `write` (or leave it empty) and list the access groups the user may view. `read '*'` shows everything; to narrow it, name groups or globs.
 
 A common starting point for read-only users — access to status and network views but no configuration changes:
 
@@ -76,7 +90,7 @@ A common starting point for read-only users — access to status and network vie
     Click **Add**, enter `viewer` as the role name, then fill in the modal:
 
     - **Email Addresses**: `bob@example.com`
-    - **Read Access**: `luci-base`, `luci-mod-status`, `luci-mod-network`
+    - **Read Access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
     - Leave **Write Access** empty.
 
     Click **Save**, then **Save & Apply**.
@@ -87,8 +101,8 @@ A common starting point for read-only users — access to status and network vie
     uci set luci-sso.viewer=role
     uci add_list luci-sso.viewer.email='bob@example.com'
     uci add_list luci-sso.viewer.read='luci-base'
-    uci add_list luci-sso.viewer.read='luci-mod-status'
-    uci add_list luci-sso.viewer.read='luci-mod-network'
+    uci add_list luci-sso.viewer.read='luci-mod-status-*'
+    uci add_list luci-sso.viewer.read='luci-mod-network-*'
     uci commit luci-sso
     ```
 
@@ -134,7 +148,7 @@ Then configure roles by group:
     Click **Add** again, enter `sec_viewer`, then fill in the modal:
 
     - **Groups**: `security-team`
-    - **Read Access**: `luci-base`, `luci-mod-status`
+    - **Read Access**: `luci-base`, `luci-mod-status-*`
 
     Click **Save**, then **Save & Apply**.
 
@@ -152,7 +166,7 @@ Then configure roles by group:
     uci set luci-sso.sec_viewer=role
     uci add_list luci-sso.sec_viewer.group='security-team'
     uci add_list luci-sso.sec_viewer.read='luci-base'
-    uci add_list luci-sso.sec_viewer.read='luci-mod-status'
+    uci add_list luci-sso.sec_viewer.read='luci-mod-status-*'
     uci commit luci-sso
     ```
 
@@ -162,18 +176,19 @@ A user who is a member of both groups gets the combined permissions of both role
 
 ## Multiple roles with combined permissions
 
-Permissions from all matched roles are merged. A user who matches both a read-only role and a role with write access to `luci-mod-network` ends up with the union of both:
+Permissions from all matched roles are merged. A user who matches both a read-only role and a role that may edit network interfaces ends up with the union of both:
 
 ```
 config role 'viewer'
     list email 'charlie@example.com'
     list read 'luci-base'
-    list read 'luci-mod-status'
+    list read 'luci-mod-status-*'
 
 config role 'network_editor'
     list email 'charlie@example.com'
-    list read 'luci-mod-network'
-    list write 'luci-mod-network'
+    list read 'luci-mod-network-*'
+    list write 'luci-base'
+    list write 'luci-mod-network-config'
 ```
 
 Charlie can view status, view network settings, and edit network settings — but cannot reboot or touch system configuration.

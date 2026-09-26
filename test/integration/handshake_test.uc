@@ -476,6 +476,66 @@ describe('handshake: userinfo', () => {
 
 // ─── authenticate: split-horizon (internal vs public issuer) ───────────────────
 
+describe('handshake: restricted roles', () => {
+	it('a restricted role receives the expanded ACL grants, not just access-group names', () => {
+		// Full callback for a role that may only read luci-base and write
+		// luci-mod-system-config. The ACL files are the real format; the grants
+		// that reach session.grant must be the expanded scopes (rpcd's rules).
+		let acl = {
+			"/usr/share/rpcd/acl.d/luci-base.json": sprintf("%J", {
+				"luci-base": { read: { ubus: { luci: [ "getVersion" ] }, uci: [ "luci" ] }, write: { uci: [ "luci" ] } }
+			}),
+			"/usr/share/rpcd/acl.d/luci-mod-system.json": sprintf("%J", {
+				"luci-mod-system-config": { read: { uci: [ "system" ] }, write: { ubus: { rc: [ "init" ] }, uci: [ "system" ] } },
+				"luci-mod-system-reboot": { write: { ubus: { system: [ "reboot" ] } } }
+			}),
+		};
+		let config = {
+			...f.MOCK_CONFIG, internal_issuer_url: f.MOCK_CONFIG.issuer_url,
+			roles: [ { name: "operator", emails: [ "admin@example.com" ], groups: [], read: [ "luci-base" ], write: [ "luci-mod-system-config" ] } ]
+		};
+		let grants = null, result = null;
+
+		with_context({
+			fs: { data: acl },
+			ubus: { data: { "session:create": { "ubus_rpc_session": "s-op" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			http_client: {
+				data: {
+					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
+					[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+				},
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-operator";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let claims = { ...f.MOCK_CLAIMS, email: "admin@example.com", nonce: "test-nonce", at_hash };
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token: h.generate_id_token(claims, f.MOCK_PRIVKEY, "RS256") }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let hs = session.create_state(deps, 0).data;
+			let path = "/var/run/luci-sso/handshake_" + hs.token + ".json";
+			let raw = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw));
+			result = handshake.authenticate(deps, config, { query: { code: "c", state: raw.state }, cookies: { "__Host-luci_sso_state": hs.token } });
+			grants = [];
+			for (let c in filter(spy(deps.ubus).calls.call, (c) => c[1] == "grant"))
+				for (let o in c[2].objects) push(grants, `${c[2].scope} ${o[0]} ${o[1]}`);
+			grants = sort(grants);
+		});
+
+		assert.match(contains({ ok: true }), result, `${result.error} ${result.details}`);
+		assert.match(sort([
+			"access-group luci-base read", "ubus luci getVersion", "uci luci read",
+			"access-group luci-mod-system-config read", "uci system read",
+			"access-group luci-mod-system-config write", "ubus rc init", "uci system write",
+		]), grants);
+	});
+});
+
 describe('handshake: split-horizon', () => {
 	// Full callback with a pathful issuer behind split-horizon. The ID token
 	// carries no email, so UserInfo is fetched too. Every back-channel request

@@ -9,51 +9,158 @@ import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED, INVALID_TOKEN, SYS
  * Logic for interacting with UBUS sessions.
  */
 
+const ACL_DIR = "/usr/share/rpcd/acl.d";
+
 /**
- * Grants every LuCI access group to a session, in each of `modes`
- * ("read", "write"). Scans /usr/share/rpcd/acl.d/ for luci-* groups.
+ * Loads every access-group definition from rpcd's ACL directory.
+ *
+ * Returns `{ entries, groups }`. `entries` has one item per (file, group,
+ * permission) with a usable section: `{ group, perm, section }`, where perm is
+ * "read" or "write" and section maps scopes to objects. `groups` lists every
+ * group name defined with an object value, sections or not. A group may be defined in several
+ * files; each definition yields its own entries, as rpcd applies them all.
+ * Unparseable files, non-object roots, group values and sections, and keys
+ * other than "read" and "write" are skipped. Files are read in name order,
+ * like rpcd's glob.
  * @private
  */
-function _grant_all_luci_acls(deps, sid, modes) {
-	let acl_dir = "/usr/share/rpcd/acl.d";
-	let files = deps.fs.lsdir(acl_dir);
+function _load_acl_entries(deps) {
+	let files = deps.fs.lsdir(ACL_DIR);
 	if (!files) {
-		deps.log("error", `ACL scan failed: ${acl_dir} is missing or unreadable`);
+		deps.log("error", `ACL scan failed: ${ACL_DIR} is missing or unreadable`);
 		return Result.err("ACL_SCAN_FAILED");
 	}
 
-	let granted = 0;
-	for (let f in files) {
+	let entries = [], groups = {};
+	for (let f in sort(files)) {
 		if (!match(f, /\.json$/)) continue;
 
-		let content = deps.fs.readfile(`${acl_dir}/${f}`);
+		let content = deps.fs.readfile(`${ACL_DIR}/${f}`);
 		if (!content) continue;
 
 		let res = encoding.safe_json(content);
 		if (!res.ok || type(res.data) != "object") continue;
 
-		let groups = [];
-		for (let key, val in res.data) {
-			// Only grant LuCI access groups: the key must start with 'luci-'
-			// and its value must be an object, as the rpcd ACL schema requires.
-			if (match(key, /^luci-/) && type(val) == "object") {
-				push(groups, key);
+		for (let group, def in res.data) {
+			if (type(def) != "object") continue;
+			groups[group] = true;
+			for (let perm in [ "read", "write" ]) {
+				if (type(def[perm]) == "object")
+					push(entries, { group, perm, section: def[perm] });
 			}
-		}
-
-		if (length(groups) > 0) {
-			for (let mode in modes) {
-				deps.ubus.call("session", "grant", {
-					ubus_rpc_session: sid,
-					scope: "access-group",
-					objects: map(groups, (g) => [g, mode]),
-				});
-			}
-			granted += length(groups);
 		}
 	}
-	return Result.ok(granted);
+	return Result.ok({ entries, groups: sort(keys(groups)) });
 };
+
+// fnmatch(3) without flags, as rpcd matches role lists against group names:
+// `*` and `?` are wildcards and `[...]` is a character class ([!...] negates).
+function _glob_regexp(pattern) {
+	let out = "^";
+	for (let i = 0; i < length(pattern); i++) {
+		let ch = substr(pattern, i, 1);
+		if (ch == "*") out += ".*";
+		else if (ch == "?") out += ".";
+		else if (ch == "[") {
+			let j = index(substr(pattern, i + 1), "]");
+			if (j < 1) { out += "\\["; continue; }
+			let body = substr(pattern, i + 1, j);
+			if (substr(body, 0, 1) == "!") body = "^" + substr(body, 1);
+			out += "[" + replace(body, /\\/g, "\\\\") + "]";
+			i += j + 1;
+		}
+		else out += (index("\\.^$|+(){}]", ch) >= 0) ? "\\" + ch : ch;
+	}
+	return regexp(out + "$");
+}
+
+// A role list entry matches a group. Hardening beyond rpcd: a pattern with a
+// wildcard only ever matches "luci-*" groups, so `*` cannot reach groups such
+// as "unauthenticated" or a third-party package's own groups.
+function _entry_matches(pattern, group) {
+	if (match(pattern, /[*?\[]/) && !match(group, /^luci-/)) return false;
+	return match(group, _glob_regexp(pattern)) != null;
+}
+
+// rpc_login_test_permission: negations ("!pattern") are checked first and
+// deny; then any positive entry allows.
+function _list_permits(list, group) {
+	if (type(list) != "array") return false;
+	for (let p in list) {
+		if (type(p) != "string" || substr(p, 0, 1) != "!") continue;
+		// rpcd skips whitespace after '!' only, not trailing whitespace.
+		let neg = ltrim(substr(p, 1));
+		if (length(neg) && _entry_matches(neg, group)) return false;
+	}
+	for (let p in list) {
+		if (type(p) != "string" || !length(p) || substr(p, 0, 1) == "!") continue;
+		if (_entry_matches(p, group)) return true;
+	}
+	return false;
+}
+
+// Write implies read, exactly as in rpcd.
+function _role_permits(perms, perm, group) {
+	if (_list_permits(perms[perm], group)) return true;
+	return (perm == "read") ? _list_permits(perms.write, group) : false;
+}
+
+/**
+ * Expands a role into the grants rpcd gives a password login whose rpcd login
+ * entry has the same `read`/`write` lists (rpc_login_setup_acl_file).
+ * test/system/rpcd_parity_test.uc compares the result with a real rpcd
+ * password login on every CI run, so a change in rpcd's rules fails CI:
+ *   - for every permitted (group, perm) section, each scope is granted:
+ *       table notation  "<scope>": { "<object>": [ "<function>", ... ] }
+ *       array notation  "<scope>": [ "<object>", ... ]   (function = perm)
+ *   - plus "access-group" <group> <perm> once the section has any scope,
+ *     which LuCI's UI checks.
+ * Returns a de-duplicated list of [scope, object, function].
+ * @private
+ */
+function _expand_role(entries, perms) {
+	let seen = {}, grants = [];
+	let add = (scope, obj, fn) => {
+		let k = `${scope}\n${obj}\n${fn}`;
+		if (seen[k]) return;
+		seen[k] = true;
+		push(grants, [ scope, obj, fn ]);
+	};
+
+	for (let e in entries) {
+		if (!_role_permits(perms, e.perm, e.group)) continue;
+		for (let scope, spec in e.section) {
+			if (type(spec) == "object") {
+				for (let obj, fns in spec) {
+					if (type(fns) != "array") continue;
+					for (let fn in fns) {
+						if (type(fn) == "string") add(scope, obj, fn);
+					}
+				}
+			} else if (type(spec) == "array") {
+				for (let obj in spec) {
+					if (type(obj) == "string") add(scope, obj, e.perm);
+				}
+			}
+			add("access-group", e.group, e.perm);
+		}
+	}
+	return grants;
+}
+
+// Issues grants with one session.grant call per scope.
+function _grant_all(deps, sid, grants) {
+	let by_scope = {};
+	for (let g in grants) {
+		if (!by_scope[g[0]]) by_scope[g[0]] = [];
+		push(by_scope[g[0]], [ g[1], g[2] ]);
+	}
+	for (let scope, objects in by_scope) {
+		let res = deps.ubus.call("session", "grant", { ubus_rpc_session: sid, scope, objects });
+		if (!res.ok)
+			deps.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(deps.native, sid)}] [scope: ${scope}] [objects: ${length(objects)}]`);
+	}
+}
 
 /**
  * Idle timeout used when LuCI's own setting is unavailable. Matches the
@@ -114,42 +221,56 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 			deps.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(deps.native, sid)}] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
 		}
 	};
-	// Wildcards, per role list:
-	//   write '*'  full admin: raw ubus/uci/file/cgi-io grants plus read AND
-	//              write on every luci-* group (write implies read);
-	//   read '*'   read on every luci-* group, nothing else;
-	// otherwise each listed group is granted individually. The two combine:
-	// read '*' with specific write groups reads everything and writes only
-	// those groups.
-	let has_wildcard = (list) => {
-		for (let x in (list || [])) if (x === "*") return true;
-		return false;
-	};
-	let write_all = has_wildcard(perms.write);
-	let read_all  = write_all || has_wildcard(perms.read);
+	// write '*' is full admin: unrestricted ubus/uci/file/cgi-io plus read and
+	// write on every luci-* access group (LuCI's UI checks those).
+	//
+	// Every other role gets exactly what rpcd would grant a password login
+	// with the same read/write lists: each permitted access group's ACL
+	// sections are expanded into concrete scope grants (see _expand_role).
+	// Granting only the access-group names is not enough: rpcd checks ubus and
+	// uci calls against the concrete scopes, which it expands only at login.
+	let write_all = false;
+	for (let w in (perms.write || [])) if (w === "*") write_all = true;
+
+	let acl_res = _load_acl_entries(deps);
+	if (!acl_res.ok) {
+		deps.log("error", `Failed to load LuCI ACLs for role [sid: ${crypto.safe_id(deps.native, sid)}]`);
+		deps.ubus.call("session", "destroy", { ubus_rpc_session: sid });
+		return Result.err(UBUS_SESSION_FAILED);
+	}
+	let entries = acl_res.data.entries;
 
 	if (write_all) {
 		grant_perm("ubus", "*", "*");
 		grant_perm("uci", "*", "*");
 		grant_perm("file", "*", "*");
 		grant_perm("cgi-io", "*", "*");
-	}
 
-	if (read_all) {
-		let acl_res = _grant_all_luci_acls(deps, sid, write_all ? [ "read", "write" ] : [ "read" ]);
-		if (!acl_res.ok) {
-			deps.log("error", `Failed to grant LuCI ACLs for wildcard role [sid: ${crypto.safe_id(deps.native, sid)}]`);
-			deps.ubus.call("session", "destroy", { ubus_rpc_session: sid });
-			return Result.err(UBUS_SESSION_FAILED);
+		let all = filter(acl_res.data.groups, (g) => match(g, /^luci-/));
+		let admin = [];
+		for (let mode in [ "read", "write" ]) {
+			for (let g in all)
+				push(admin, [ "access-group", g, mode ]);
 		}
+		_grant_all(deps, sid, admin);
 	} else {
-		for (let r in perms.read)
-			grant_perm("access-group", r, "read");
-	}
+		// A named group that no ACL file defines grants nothing: say so.
+		let known = {};
+		for (let g in acl_res.data.groups) known[g] = true;
+		for (let list in [ perms.read, perms.write ]) {
+			for (let n in (list || [])) {
+				if (type(n) == "string" && !match(n, /^!|[*?\[]/) && !known[n])
+					deps.log("warn", `Role grants unknown access group '${n}'; no ACL file defines it`);
+			}
+		}
 
-	if (!write_all) {
-		for (let w in perms.write)
-			grant_perm("access-group", w, "write");
+		// Baseline: every session also reads the "unauthenticated" group, which
+		// is what rpcd grants an anonymous client (session access/login,
+		// luci.getFeatures). LuCI's views call those; a root password login gets
+		// them through its read '*' glob, but luci-sso's wildcards skip non-luci
+		// groups on purpose, so name the group explicitly.
+		let with_baseline = { read: [ ...(perms.read || []), "unauthenticated" ], write: perms.write };
+		_grant_all(deps, sid, _expand_role(entries, with_baseline));
 	}
 
 	// 3. Generate CSRF token
