@@ -183,6 +183,7 @@ These constraints apply to all rate-limited endpoints:
 <!-- LIMIT_WINDOW=60 -->
 <!-- LIMIT_INPUT_LEN=16384 -->
 <!-- LIMIT_PARAM_COUNT=100 -->
+<!-- LIMIT_PENDING_HANDSHAKES=500 -->
 
 | Limit | Value |
 | :--- | :--- |
@@ -191,6 +192,7 @@ These constraints apply to all rate-limited endpoints:
 | Maximum number of query parameters | 100 |
 | Maximum number of cookies | 100 |
 | Rate limit | 50 requests per 60-second window |
+| Logins in progress (handshakes) | 500 at once; expired ones are removed to make room, live ones never are. Beyond that, a new login gets `503` |
 
 The rate limit is global — it counts all requests across all source addresses. It does not apply to `?action=enabled`.
 

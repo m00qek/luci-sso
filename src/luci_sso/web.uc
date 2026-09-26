@@ -51,6 +51,7 @@ const ERROR_MAP = {
 	"TOKEN_ENDPOINT_NETWORK_ERROR": "The router could not reach the identity provider. Please try again later, or contact your administrator.",
 	"INSECURE_ENDPOINT": "Sign-in was stopped because the identity provider is not configured securely. Please contact your administrator.",
 	"INPUT_TOO_LARGE": "The request contained too much data. Clearing this site's cookies usually fixes this.",
+	"HANDSHAKE_CAPACITY_EXCEEDED": "Too many sign-ins are in progress right now. Please try again in a few minutes, or log in with a password.",
 	"TOO_MANY_REQUESTS": "There have been too many sign-in attempts. Please wait a minute and try again.",
 	"SSO_DISABLED": "Single sign-on is not enabled on this router. You can still log in with a password.",
 	"NOT_FOUND": "This page does not exist."

@@ -8,7 +8,7 @@ import * as discovery from 'luci_sso.discovery';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_mod from 'luci_sso.config';
-import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISMATCH, OIDC_DISCOVERY_FAILED, JWKS_FETCH_FAILED, ID_TOKEN_VERIFICATION_FAILED, IDENTITY_MISMATCH, TOKEN_REPLAYED, TOKEN_REGISTRY_ERROR, USER_NOT_AUTHORIZED, UBUS_LOGIN_FAILED, INVALID_SIGNATURE, KEY_NOT_FOUND } from 'luci_sso.errors';
+import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISMATCH, OIDC_DISCOVERY_FAILED, JWKS_FETCH_FAILED, ID_TOKEN_VERIFICATION_FAILED, IDENTITY_MISMATCH, TOKEN_REPLAYED, TOKEN_REGISTRY_ERROR, USER_NOT_AUTHORIZED, UBUS_LOGIN_FAILED, INVALID_SIGNATURE, KEY_NOT_FOUND, HANDSHAKE_CAPACITY_EXCEEDED } from 'luci_sso.errors';
 
 /**
  * Orchestration logic for the OIDC Login Handshake.
@@ -214,8 +214,13 @@ export function initiate(deps, config) {
 	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
 
-	let handshake_res = session.create_state(deps);
-	if (!handshake_res.ok) return handshake_res;
+	let handshake_res = session.create_state(deps, config.clock_tolerance);
+	if (!handshake_res.ok) {
+		// Capacity is a temporary condition, not a server fault.
+		if (handshake_res.error == HANDSHAKE_CAPACITY_EXCEEDED)
+			return Result.err(HANDSHAKE_CAPACITY_EXCEEDED, { http_status: 503 });
+		return handshake_res;
+	}
 	let handshake = handshake_res.data;
 
 	let url_res = oidc.get_auth_url(deps, config, disc_res.data, handshake);

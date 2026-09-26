@@ -16,8 +16,8 @@ describe('session.common: constants', () => {
 		assert.match(60, common.REAP_GRACE_PERIOD);
 	});
 
-	it('HANDSHAKE_MAX_COUNT', () => {
-		assert.match(100, common.HANDSHAKE_MAX_COUNT);
+	it('LIMIT_PENDING_HANDSHAKES', () => {
+		assert.match(500, common.LIMIT_PENDING_HANDSHAKES);
 	});
 });
 

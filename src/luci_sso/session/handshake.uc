@@ -11,27 +11,25 @@ import { CRYPTO_INIT_FAILED, STATE_SAVE_FAILED, MALFORMED_STATE_COOKIE, STATE_NO
  */
 
 /**
- * Performs an emergency reap of the oldest handshakes.
+ * Deletes handshake files whose age exceeds `max_age` seconds and returns how
+ * many were removed. Age is measured from the file's mtime, which is the
+ * handshake's `iat`: files are written once and never modified.
  * @private
  */
-function _emergency_reap(deps, files) {
-	let candidates = [];
+function _reap_older_than(deps, files, max_age) {
+	let now = deps.clock.time();
+	let reaped = 0;
 	for (let f in files) {
-		if (match(f, /^handshake_.*\.json$/)) {
-			let path = `${common.HANDSHAKE_DIR}/${f}`;
-			let st = deps.fs.stat(path);
-			push(candidates, { path: path, mtime: (st && st.mtime) || 0 });
+		if (!match(f, /^handshake_[A-Za-z0-9_-]+\.json$/)) continue;
+		let path = `${common.HANDSHAKE_DIR}/${f}`;
+		let st = deps.fs.stat(path);
+		if (st && st.mtime && (now - st.mtime) > max_age) {
+			try {
+				if (deps.fs.unlink(path)) reaped++;
+			} catch (e) {}
 		}
 	}
-
-	// Sort by oldest first
-	sort(candidates, (a, b) => a.mtime - b.mtime);
-
-	// Remove oldest 50%
-	let to_remove = int(length(candidates) / 2);
-	for (let i = 0; i < to_remove; i++) {
-		try { deps.fs.unlink(candidates[i].path); } catch (e) {}
-	}
+	return reaped;
 };
 
 /**
@@ -46,52 +44,42 @@ export function reap(deps, clock_tolerance) {
 	let files = deps.fs.lsdir(common.HANDSHAKE_DIR);
 	if (!files) return Result.ok(0);
 
-	let now = deps.clock.time();
-	let reaped = 0;
-	for (let f in files) {
-		if (match(f, /^handshake_[A-Za-z0-9_-]+\.json$/)) {
-			let path = `${common.HANDSHAKE_DIR}/${f}`;
-			let st = deps.fs.stat(path);
-			// Use a slightly larger grace period than duration + tolerance
-			if (st && st.mtime && (now - st.mtime) > (common.HANDSHAKE_DURATION + clock_tolerance + common.REAP_GRACE_PERIOD)) {
-				try {
-					deps.fs.unlink(path);
-					reaped++;
-				} catch (e) {}
-			}
-		}
-	}
-	return Result.ok(reaped);
+	// A slightly larger grace period than duration + tolerance.
+	return Result.ok(_reap_older_than(deps, files,
+		common.HANDSHAKE_DURATION + clock_tolerance + common.REAP_GRACE_PERIOD));
 };
 
 /**
  * Creates an opaque handshake state on the server.
  *
+ * At most LIMIT_PENDING_HANDSHAKES may exist. At the cap, handshakes that can
+ * no longer be completed (past `exp` + clock_tolerance, which verify would
+ * reject) are removed to make room. A handshake that could still be completed
+ * is never removed: when every slot is live, the new login is refused with
+ * HANDSHAKE_CAPACITY_EXCEEDED and the users already at the IdP are unaffected.
+ *
  * @param {*} deps Service dependencies: `deps.fs`, `deps.clock`, `deps.native`, `deps.log`.
+ * @param {int} clock_tolerance Clock skew tolerance in seconds, as passed to verify.
  * @returns {Result}
  */
-export function create(deps) {
+export function create(deps, clock_tolerance) {
+	if (type(clock_tolerance) !== "int") die("CONTRACT_VIOLATION: create expects mandatory integer clock_tolerance");
+
 	common.ensure_handshake_dir(deps);
 
-	// Cap the number of in-flight handshakes so tmpfs cannot be filled.
 	let files = deps.fs.lsdir(common.HANDSHAKE_DIR) || [];
 	let count = 0;
 	for (let f in files) {
 		if (match(f, /^handshake_.*\.json$/)) count++;
 	}
 
-	if (count >= common.HANDSHAKE_MAX_COUNT) {
-		deps.log("warn", `Handshake capacity reached (${count}); triggering emergency reap`);
-		_emergency_reap(deps, files);
-		let new_count = 0;
-		let refreshed = deps.fs.lsdir(common.HANDSHAKE_DIR) || [];
-		for (let f in refreshed) {
-			if (match(f, /^handshake_.*\.json$/)) new_count++;
-		}
-		if (new_count >= common.HANDSHAKE_MAX_COUNT) {
-			deps.log("error", `Handshake capacity still exceeded after emergency reap (${new_count}); rejecting`);
+	if (count >= common.LIMIT_PENDING_HANDSHAKES) {
+		let freed = _reap_older_than(deps, files, common.HANDSHAKE_DURATION + clock_tolerance);
+		if (count - freed >= common.LIMIT_PENDING_HANDSHAKES) {
+			deps.log("warn", `Handshake capacity reached (${count - freed} pending, limit ${common.LIMIT_PENDING_HANDSHAKES}); refusing new login`);
 			return Result.err(HANDSHAKE_CAPACITY_EXCEEDED);
 		}
+		deps.log("info", `Handshake capacity reached; removed ${freed} expired handshakes`);
 	}
 
 	let res_p = crypto.pkce_pair(deps.native);

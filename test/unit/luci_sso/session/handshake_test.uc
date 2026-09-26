@@ -112,7 +112,7 @@ describe('session.handshake: reap', () => {
 describe('session.handshake: create', () => {
 	it('returns ok with token, state, nonce, code_challenge', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
-			let res = handshake.create(make_deps(injected));
+			let res = handshake.create(make_deps(injected), 0);
 			assert.match(contains({ ok: true, data: contains({ token: regex(B64URL), state: regex(B64URL), nonce: regex(B64URL), code_challenge: regex(B64URL) }) }), res);
 		});
 	});
@@ -120,7 +120,7 @@ describe('session.handshake: create', () => {
 	it('stored JSON has iat == NOW and exp == NOW + HANDSHAKE_DURATION', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			let res = handshake.create(deps);
+			let res = handshake.create(deps, 0);
 			assert.match(contains({ ok: true }), res);
 			let stored = json(injected.fs.readfile(DIR + '/handshake_' + res.data.token + '.json'));
 			assert.match(NOW,                            stored.iat);
@@ -131,7 +131,7 @@ describe('session.handshake: create', () => {
 	it('stored JSON has state, nonce, code_verifier matching the returned values', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			let res = handshake.create(deps);
+			let res = handshake.create(deps, 0);
 			assert.match(contains({ ok: true }), res);
 			let stored = json(injected.fs.readfile(DIR + '/handshake_' + res.data.token + '.json'));
 			assert.match(res.data.state, stored.state);
@@ -140,29 +140,57 @@ describe('session.handshake: create', () => {
 		});
 	});
 
-	it('triggers emergency reap and still succeeds at HANDSHAKE_MAX_COUNT', () => {
-		// At exactly max count, emergency reap removes 50%, leaving 50 — create proceeds
-		let data = {};
-		for (let i = 0; i < common.HANDSHAKE_MAX_COUNT; i++)
-			data[DIR + '/handshake_' + sprintf('%04d', i) + '.json'] = '{}';
-		mock.inject_all({ fs: fs_mock(data), clock: { data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: true }), handshake.create(make_deps(injected)));
+	// At the cap: LIMIT_PENDING_HANDSHAKES files, `expired` of them old enough
+	// that verify would reject them (mtime = iat; exp = iat + HANDSHAKE_DURATION).
+	function full_dir(expired) {
+		let data = {}, mtimes = {};
+		for (let i = 0; i < common.LIMIT_PENDING_HANDSHAKES; i++) {
+			let p = DIR + '/handshake_' + sprintf('%04d', i) + '.json';
+			data[p] = '{}';
+			mtimes[p] = (i < expired) ? NOW - common.HANDSHAKE_DURATION - 61 : NOW - 10;
+		}
+		return { data, stat: (p) => (mtimes[p] != null) ? { mtime: mtimes[p] } : null };
+	}
+
+	it('at the cap, removes expired handshakes to make room and keeps the live ones', () => {
+		let d = full_dir(3);
+		mock.inject_all({ fs: fs_mock(d.data, { behavior: { stat: d.stat } }), clock: { data: { now: NOW } } }, (injected) => {
+			assert.match(contains({ ok: true }), handshake.create(make_deps(injected), 60));
+			let removed = map(spy(injected.fs).calls.unlink || [], (c) => c[0]);
+			assert.match(3, length(removed), 'exactly the expired ones');
+			for (let p in removed)
+				assert.match(true, index(p, '/handshake_000') >= 0, `only expired files are removed, not ${p}`);
 		});
 	});
 
-	it('returns HANDSHAKE_CAPACITY_EXCEEDED when emergency reap cannot free enough slots', () => {
-		// At 2× max, emergency reap removes 50% leaving exactly max → still full
-		let data = {};
-		for (let i = 0; i < 2 * common.HANDSHAKE_MAX_COUNT; i++)
-			data[DIR + '/handshake_' + sprintf('%04d', i) + '.json'] = '{}';
-		mock.inject_all({ fs: fs_mock(data), clock: { data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'HANDSHAKE_CAPACITY_EXCEEDED' }), handshake.create(make_deps(injected)));
+	it('when full of live handshakes, refuses the new login and touches none of them', () => {
+		let d = full_dir(0);
+		mock.inject_all({ fs: fs_mock(d.data, { behavior: { stat: d.stat } }), clock: { data: { now: NOW } } }, (injected) => {
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_CAPACITY_EXCEEDED' }), handshake.create(make_deps(injected), 60));
+			assert.match(0, length(spy(injected.fs).calls.unlink || []), 'no handshake deleted');
+			assert.match(0, length(spy(injected.fs).calls.writefile || []), 'no handshake written');
+		});
+	});
+
+	it('does not treat a handshake inside the clock tolerance as expired', () => {
+		// Past exp by 30 s but within a 60 s tolerance: verify would still accept it.
+		let d = full_dir(0);
+		d.stat = (p) => ({ mtime: NOW - common.HANDSHAKE_DURATION - 30 });
+		mock.inject_all({ fs: fs_mock(d.data, { behavior: { stat: d.stat } }), clock: { data: { now: NOW } } }, (injected) => {
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_CAPACITY_EXCEEDED' }), handshake.create(make_deps(injected), 60));
+			assert.match(0, length(spy(injected.fs).calls.unlink || []));
+		});
+	});
+
+	it('dies for a non-integer clock_tolerance', () => {
+		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
+			assert.throws(() => handshake.create(make_deps(injected)), /CONTRACT_VIOLATION/);
 		});
 	});
 
 	it('writes atomically: tmp file, chmod 0600, then rename to the final path', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
-			let res = handshake.create(make_deps(injected));
+			let res = handshake.create(make_deps(injected), 0);
 			assert.match(contains({ ok: true }), res);
 
 			let write_op  = (spy(injected.fs).calls.writefile || [])[0];
@@ -184,7 +212,7 @@ describe('session.handshake: create', () => {
 			clock:  { data: { now: NOW } },
 			native: { behavior: { random: () => null } },
 		}, (injected) => {
-			assert.match(contains({ ok: false, error: 'CRYPTO_INIT_FAILED' }), handshake.create(make_deps(injected)));
+			assert.match(contains({ ok: false, error: 'CRYPTO_INIT_FAILED' }), handshake.create(make_deps(injected), 0));
 		});
 	});
 });

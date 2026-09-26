@@ -132,7 +132,7 @@ describe('router: callback', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
@@ -184,7 +184,7 @@ describe('router: callback', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
@@ -227,7 +227,7 @@ describe('router: callback', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
@@ -275,7 +275,7 @@ describe('router: callback', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
@@ -301,7 +301,7 @@ describe('router: callback', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
@@ -326,7 +326,7 @@ describe('router: callback', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 			let req = mock_request("/callback", { code: "REPLAYED_CODE", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
@@ -349,7 +349,7 @@ describe('router: security', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 			let req = mock_request("/callback", { code: "VALID_CODE", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
@@ -371,7 +371,7 @@ describe('router: security', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
@@ -379,7 +379,7 @@ describe('router: security', () => {
 			assert.match(falsy(), res1.ok, "Should fail verification");
 			assert.match(401, res1.details.http_status);
 
-			let state_res2 = session.create_state(deps);
+			let state_res2 = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res2));
 			let handshake_data2 = state_res2.data;
 			let req2 = mock_request("/callback", { code: "c2", state: handshake_data2.state }, { "__Host-luci_sso_state": handshake_data2.token });

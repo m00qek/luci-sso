@@ -36,7 +36,7 @@ describe('session: façade delegation', () => {
 					nonce:          regex(B64URL),
 					code_challenge: regex(B64URL),
 				}) }),
-				session.create_state(make_deps(injected))
+				session.create_state(make_deps(injected), 0)
 			);
 		});
 	});
@@ -44,7 +44,7 @@ describe('session: façade delegation', () => {
 	it('verify_state → handshake.verify (round-trips a freshly created handle)', () => {
 		mock.inject_all(EMPTY_FS, (injected) => {
 			let deps = make_deps(injected);
-			let created = session.create_state(deps);
+			let created = session.create_state(deps, 0);
 			assert.match(contains({ ok: true }), created);
 			assert.match(contains({ ok: true }), session.verify_state(deps, created.data.token, created.data.state, 0));
 		});
@@ -53,7 +53,7 @@ describe('session: façade delegation', () => {
 	it('consume_state → handshake.consume (deletes the stored handshake)', () => {
 		mock.inject_all(EMPTY_FS, (injected) => {
 			let deps = make_deps(injected);
-			let created = session.create_state(deps);
+			let created = session.create_state(deps, 0);
 			let path = `${common.HANDSHAKE_DIR}/handshake_${created.data.token}.json`;
 			assert.match(not(equals(null)), injected.fs.readfile(path)); // exists before
 			session.consume_state(deps, created.data.token);

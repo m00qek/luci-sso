@@ -237,6 +237,13 @@ describe('web: render_error', () => {
 		assert.match(truthy(), index(d3.out(), "<p>This page does not exist.</p>") != -1, "NOT_FOUND message");
 	});
 
+	it('explains a full handshake table in plain language, with the 503 status', () => {
+		let d = web_deps({}); web.render_error(d, "HANDSHAKE_CAPACITY_EXCEEDED", 503);
+		assert.match(truthy(), index(d.out(), "Status: 503 Service Unavailable") >= 0);
+		assert.match(truthy(), index(d.out(), "<p>Too many sign-ins are in progress right now. Please try again in a few minutes, or log in with a password.</p>") >= 0);
+		assert.match(-1, index(d.out(), "HANDSHAKE_CAPACITY_EXCEEDED"));
+	});
+
 	it('falls back to a generic message for an unmapped code, without leaking it', () => {
 		let d = web_deps({}); web.render_error(d, "UBUS_LOGIN_FAILED", 500);
 		assert.match(truthy(), index(d.out(), "<p>Sign-in could not be completed. Please try again, or contact your administrator.</p>") != -1, "generic message");

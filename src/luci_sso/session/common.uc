@@ -7,7 +7,9 @@
 export const HANDSHAKE_DURATION = 300;
 export const HANDSHAKE_DIR = "/var/run/luci-sso";
 export const REAP_GRACE_PERIOD = 60;
-export const HANDSHAKE_MAX_COUNT = 100;
+// Most handshakes (logins in progress) that may exist at once. Documented in
+// docs/reference/http-api.md; check-request-limits.sh keeps the two in sync.
+export const LIMIT_PENDING_HANDSHAKES = 500;
 
 /**
  * Ensures the handshake directory exists.

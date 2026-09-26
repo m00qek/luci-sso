@@ -1,6 +1,7 @@
 import { describe, it, prop, gen, assert, truthy, falsy, contains, spy } from 'utest';
 import * as handshake from 'luci_sso.handshake';
 import * as session from 'luci_sso.session';
+import * as common from 'luci_sso.session.common';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
@@ -113,7 +114,7 @@ describe('handshake: authenticate — request validation', () => {
 		// /callback carries it. With a wrong state, the handshake must survive
 		// so the victim's real callback still works.
 		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
-			let hs = session.create_state(deps).data;
+			let hs = session.create_state(deps, 0).data;
 			let path = `/var/run/luci-sso/handshake_${hs.token}.json`;
 			let forged = { query: { code: 'attacker', state: 'WRONG-STATE' }, cookies: { '__Host-luci_sso_state': hs.token } };
 
@@ -127,7 +128,7 @@ describe('handshake: authenticate — request validation', () => {
 
 	it('returns STATE_PARAMETER_MISMATCH (403) when the query state does not match', () => {
 		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
-			let hs = session.create_state(deps).data;
+			let hs = session.create_state(deps, 0).data;
 			let request = { query: { code: 'authcode', state: 'WRONG-STATE' }, cookies: { '__Host-luci_sso_state': hs.token } };
 			let res = handshake.authenticate(deps, base_config(), request);
 			assert.match(contains({ ok: false, error: 'STATE_PARAMETER_MISMATCH' }), res);
@@ -159,7 +160,7 @@ describe('handshake: authenticate — OAuth flow failures', () => {
 			http_client: http_cfg,
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
-			let hs = session.create_state(deps).data;
+			let hs = session.create_state(deps, 0).data;
 			let request = { query: { code: 'authcode', state: hs.state }, cookies: { '__Host-luci_sso_state': hs.token } };
 			out = handshake.authenticate(deps, base_config(), request);
 		});
@@ -228,7 +229,7 @@ describe('handshake: authenticate — OAuth flow failures', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), state_res.ok);
 			let s_data = state_res.data;
 
@@ -293,7 +294,7 @@ describe('handshake: recovery', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), state_res.ok);
 			let s_data = state_res.data;
 
@@ -350,7 +351,7 @@ describe('handshake: userinfo', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let s_res = session.create_state(deps);
+			let s_res = session.create_state(deps, 0);
 			assert.match(truthy(), s_res.ok);
 			let s_data = s_res.data;
 			let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
@@ -396,7 +397,7 @@ describe('handshake: userinfo', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let s_res = session.create_state(deps);
+			let s_res = session.create_state(deps, 0);
 			assert.match(truthy(), s_res.ok);
 			let s_data = s_res.data;
 			let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
@@ -527,7 +528,7 @@ describe('handshake: split-horizon', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let s_res = session.create_state(deps);
+			let s_res = session.create_state(deps, 0);
 			assert.match(truthy(), s_res.ok, `create_state failed: ${s_res.error}`);
 			let s_data = s_res.data;
 			let handle = s_data.token;
@@ -593,7 +594,7 @@ describe('handshake: split-horizon', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let s_res = session.create_state(deps);
+			let s_res = session.create_state(deps, 0);
 			assert.match(truthy(), s_res.ok);
 			let s_data = s_res.data;
 			let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
@@ -639,7 +640,7 @@ describe('handshake: split-horizon', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let s_res = session.create_state(deps);
+			let s_res = session.create_state(deps, 0);
 			assert.match(truthy(), s_res.ok);
 			let s_data = s_res.data;
 			let path = "/var/run/luci-sso/handshake_" + s_data.token + ".json";
@@ -845,38 +846,30 @@ describe('handshake: security', () => {
 		assert.match(1, remove_calls, "Should attempt remove exactly once (inside verify_state)");
 	});
 
-	it('enforce hard capacity limit with emergency reap (DoS protection)', () => {
-		let mtime = 1000;
-
+	it('at the handshake cap, a new login gets 503 and pending logins survive', () => {
+		// Every slot holds a live handshake (created just now). A flood must not
+		// evict them: the new login is refused, and each pending one still verifies.
+		let config = base_config();
 		with_context({
-			fs: {
-				data: {},
-				behavior: {
-					stat: (path) => ({ mtime: mtime++ })
-				}
-			},
-			clock: { data: { now: 0 } }
+			// The mock's own stat reports mtime 0, which reap treats as unknown and
+			// skips. Report every handshake as created now, so an eviction bug
+			// (deleting live handshakes) would actually delete them.
+			fs: { data: {}, behavior: { stat: (p) => ({ mtime: 1516239022 }) } },
+			http_client: { data: { [config.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY } } },
+			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			for (let i = 0; i < 100; i++) {
-				let res = session.create_state(deps);
+			let first = null;
+			for (let i = 0; i < common.LIMIT_PENDING_HANDSHAKES; i++) {
+				let res = session.create_state(deps, config.clock_tolerance);
 				assert.match(truthy(), res.ok, `Failed to create handshake #${i}: ${res.error}`);
+				if (i == 0) first = res.data;
 			}
 
-			let files = deps.fs.lsdir("/var/run/luci-sso");
-			let files_before = 0;
-			for (let fn in files) if (match(fn, /^handshake_.*\.json$/)) files_before++;
-
-			assert.match(100, files_before, "Should have exactly 100 handshake files");
-
-			let res_101 = session.create_state(deps);
-			assert.match(truthy(), res_101.ok, "101st handshake should succeed after emergency reap");
-
-			files = deps.fs.lsdir("/var/run/luci-sso");
-			let files_after = 0;
-			for (let fn in files) if (match(fn, /^handshake_.*\.json$/)) files_after++;
-
-			// Expected: 100 (original) - 50 (reaped) + 1 (new) = 51
-			assert.match(51, files_after, "Emergency reap should have cleared 50% of oldest handshakes");
+			let res = handshake.initiate(deps, config);
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_CAPACITY_EXCEEDED' }), res);
+			assert.match(503, res.details.http_status);
+			assert.match(contains({ ok: true }), session.verify_state(deps, first.token, first.state, config.clock_tolerance),
+				'the oldest pending login is still usable');
 		});
 	});
 });
