@@ -42,6 +42,10 @@ import * as Result      from 'luci_sso.result';
  * Wraps a raw ubus connection into the `deps.ubus` channel: a single `call`
  * method that normalises the outcome into a Result.
  *
+ * A null reply is not a failure by itself. rpcd answers `session set`,
+ * `grant` and `destroy` with no data, which ucode returns as null; only
+ * `conn.error()` distinguishes that success from a failed call.
+ *
  * @param {*} conn - The object returned by `ubus.connect()` (may be null).
  * @returns {{call: (obj: string, method: string, args: *) => Result}}
  */
@@ -50,7 +54,10 @@ export function ubus_channel(conn) {
 		call: (obj, method, args) => {
 			if (!conn) return Result.err("UBUS_CONNECT_FAILED");
 			let res = conn.call(obj, method, args);
-			if (res === null) return Result.err("UBUS_ERROR");
+			if (res === null) {
+				let e = conn.error();
+				if (e) return Result.err("UBUS_ERROR", e);
+			}
 			return Result.ok(res);
 		}
 	};
