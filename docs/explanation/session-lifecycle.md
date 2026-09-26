@@ -5,13 +5,13 @@ After a successful login, `luci-sso` creates a LuCI session and hands the browse
 ```mermaid
 stateDiagram-v2
     [*] --> Active : successful OIDC login\n(UBUS session created)
-    Active --> Expired : 1-hour timeout
+    Active --> Expired : idle timeout\n(luci.sauth.sessiontime)
     Active --> Terminated : explicit logout\n(UBUS session destroyed)
     Expired --> [*]
     Terminated --> [*]
 ```
 
-**Textual summary:** A session begins when the OIDC flow completes and UBUS creates the session record. From that point it either expires after one hour (regardless of IdP token expiry) or is terminated immediately by an explicit logout. Mid-session IdP revocation has no effect — the session continues until one of these two endpoints is reached. Multiple independent sessions can be active simultaneously.
+**Textual summary:** A session begins when the OIDC flow completes and UBUS creates the session record. From that point it either expires after LuCI's idle timeout (one hour by default, regardless of IdP token expiry) or is terminated immediately by an explicit logout. Mid-session IdP revocation has no effect — the session continues until one of these two endpoints is reached. Multiple independent sessions can be active simultaneously.
 
 ---
 
@@ -23,13 +23,22 @@ The browser receives a `sysauth_https` cookie containing the UBUS session ID. Ev
 
 ---
 
-## Why the session lifetime is fixed at one hour
+## Why the session lifetime follows LuCI, not the IdP
 
-The session is created with a hard 1-hour (3600-second) timeout. This is not configurable.
+The session is created with LuCI's own session timeout, `luci.sauth.sessiontime` in `/etc/config/luci`: the same value LuCI passes to `rpcd` for a password login, so SSO and password sessions behave alike. OpenWrt ships it as `3600`; if the option is missing or not a positive integer, `luci-sso` uses 3600.
 
-The IdP's ID Token carries its own `exp` claim, which `luci-sso` validates at login time — an expired token is rejected before a session is created. But once the session exists, `luci-sso` does not re-read the token's `exp` on subsequent requests. A token with a 5-minute expiry does not shorten the session to 5 minutes; a token with a 24-hour expiry does not extend it beyond one hour.
+This is an **idle** timeout, not a hard cap. `rpcd` resets it every time the session is used, so an active user stays logged in and a session expires only after that many seconds without any LuCI request. To change it:
 
-The reason for decoupling session length from token expiry is the architectural constraint of the CGI model. `luci-sso` runs as a CGI script, not a daemon. There is no background process watching for token expiry and terminating sessions. The alternative — re-validating the ID Token on every LuCI page load — would require storing the raw token server-side and making a back-channel call to the IdP on every request, which is expensive for an embedded router and introduces a new failure mode if the IdP is temporarily unreachable. A fixed 1-hour cap balances session usability against the cost of re-authentication.
+```bash
+uci set luci.sauth.sessiontime='1800'
+uci commit luci
+```
+
+The new value applies to sessions created after the change.
+
+The IdP's ID Token carries its own `exp` claim, which `luci-sso` validates at login time — an expired token is rejected before a session is created. But once the session exists, `luci-sso` does not re-read the token's `exp` on subsequent requests. A token with a 5-minute expiry does not shorten the session to 5 minutes, and a token with a 24-hour expiry does not change it either.
+
+The reason for decoupling session length from token expiry is the architectural constraint of the CGI model. `luci-sso` runs as a CGI script, not a daemon. There is no background process watching for token expiry and terminating sessions. The alternative — re-validating the ID Token on every LuCI page load — would require storing the raw token server-side and making a back-channel call to the IdP on every request, which is expensive for an embedded router and introduces a new failure mode if the IdP is temporarily unreachable. Reusing LuCI's idle timeout keeps SSO sessions as long-lived as password sessions, without that cost.
 
 ---
 
@@ -37,7 +46,7 @@ The reason for decoupling session length from token expiry is the architectural 
 
 Nothing, immediately. `luci-sso` validates OIDC claims once, at login. If the IdP revokes a user's account or removes them from a group after they have logged in, the active LuCI session is not affected. The user retains their access until the session expires or they log out.
 
-This is a known, documented residual risk. The mitigation available to administrators is to log the user out explicitly, which destroys the UBUS session immediately (see below). The 1-hour session cap also bounds the exposure window.
+This is a known, documented residual risk. The mitigation available to administrators is to log the user out explicitly, which destroys the UBUS session immediately (see below). The idle timeout also bounds the exposure window, but only once the session stops being used: an attacker who keeps using a stolen session keeps it alive.
 
 ---
 
@@ -61,7 +70,7 @@ LuCI's own **Log out** link does not reach this endpoint. It goes through LuCI's
 
 UBUS sessions live entirely in `rpcd`'s memory. They are not written to disk and do not survive a reboot or a restart of `rpcd`. Upgrading `luci-sso` with `opkg upgrade` does not restart `rpcd`, so active sessions survive the upgrade — see [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md).
 
-Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and 1-hour timeout. There is no mechanism to enumerate or revoke all sessions for a given user short of restarting `rpcd`, which evicts all sessions including those of password-authenticated users.
+Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and idle timeout. There is no mechanism to enumerate or revoke all sessions for a given user short of restarting `rpcd`, which evicts all sessions including those of password-authenticated users.
 
 ---
 
@@ -70,7 +79,7 @@ Multiple simultaneous sessions are allowed. Each login creates a new independent
 | Property | Value |
 | :--- | :--- |
 | Session store | UBUS / `rpcd` (in-memory) |
-| Session lifetime | Fixed 1 hour from login |
+| Session lifetime | Idle timeout from `luci.sauth.sessiontime` (default 3600 s), reset on every request |
 | Token expiry effect | Validated at login only; does not shorten or extend session |
 | Mid-session IdP revocation | Session continues until expiry or explicit logout |
 | Logout scope | Destroys the router session; IdP session is separate |

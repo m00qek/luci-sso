@@ -59,9 +59,31 @@ function _grant_all_luci_acls(deps, sid) {
 };
 
 /**
+ * Idle timeout used when LuCI's own setting is unavailable. Matches the
+ * luci.sauth.sessiontime default that OpenWrt ships.
+ */
+const DEFAULT_SESSION_TIMEOUT = 3600;
+
+/**
+ * Returns the rpcd session timeout to use: LuCI's configured
+ * `luci.sauth.sessiontime`, the same value LuCI passes to `session login`
+ * for password logins, so SSO and password sessions behave alike. rpcd
+ * treats it as an idle timeout: each access resets it.
+ *
+ * Falls back to DEFAULT_SESSION_TIMEOUT when deps.uci is absent or the
+ * option is missing or not a positive integer.
+ * @private
+ */
+function _session_timeout(deps) {
+	if (!deps.uci) return DEFAULT_SESSION_TIMEOUT;
+	let t = int(deps.uci.get("luci", "sauth", "sessiontime"));
+	return (type(t) == "int" && t > 0) ? t : DEFAULT_SESSION_TIMEOUT;
+};
+
+/**
  * Creates a real LuCI system session via UBUS WITHOUT a password.
  *
- * @param {object} deps - { fs, ubus, log, clock }
+ * @param {object} deps - { fs, ubus, uci, log, clock }; uci is optional
  * @param {string} username - Target system username (e.g. root)
  * @param {object} perms - Permissions object { read: [], write: [] }
  * @param {string} oidc_email - The real user's email for tagging
@@ -76,7 +98,7 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 	}
 
 	// 1. Create a raw session
-	let res_create = deps.ubus.call("session", "create", { timeout: 3600 });
+	let res_create = deps.ubus.call("session", "create", { timeout: _session_timeout(deps) });
 	if (!res_create.ok || !res_create.data.ubus_rpc_session) {
 		deps.log("error", "UBUS session creation failed");
 		return Result.err(UBUS_SESSION_FAILED);

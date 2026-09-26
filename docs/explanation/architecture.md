@@ -100,4 +100,4 @@ The injection grants:
 - **Wildcard grants** for admin roles (dynamically discovers all `luci-*` access groups)
 - **A 256-bit CSRF token** that satisfies LuCI's write protection
 
-The session is created with a fixed 1-hour (3600-second) timeout via UBUS. The ID Token's `exp` claim is validated at login time — an already-expired token is rejected — but it does not dynamically set the session duration. A token with a short expiry does not shorten the session below one hour, and a token with a long expiry does not extend it beyond one hour.
+The session is created via UBUS with LuCI's own idle timeout, `luci.sauth.sessiontime` (3600 seconds by default), the same one a password login gets. The ID Token's `exp` claim is validated at login time — an already-expired token is rejected — but it does not set the session duration in either direction.

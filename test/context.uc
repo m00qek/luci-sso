@@ -60,6 +60,12 @@ function do_inject(cfg, remaining, proxies, cb) {
 		// utest seals fs.rmdir; session.key releases its lock directory with it.
 		let behavior = { rmdir: () => true, ...(state.behavior || {}) };
 		inject_state = { ...state, strict: true, data, behavior };
+	} else if (name === 'uci') {
+		// Every OpenWrt router ships /etc/config/luci; ubus.create_passwordless_session
+		// reads luci.sauth.sessiontime from it. Seed the stock value so strict uci
+		// mocks don't die on a package the test never meant to exercise.
+		let data = { luci: { sauth: { ".type": "internal", sessiontime: "3600" } }, ...(state.data || {}) };
+		inject_state = { ...state, strict: true, data };
 	} else if (name === 'native') {
 		if (state.behavior) {
 			// Behavior override requested (e.g. CSPRNG failure): go through the proxy.

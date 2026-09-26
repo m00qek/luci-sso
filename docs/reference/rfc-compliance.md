@@ -33,7 +33,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Token request: back-channel exchange | OIDC Core §3.1.3.1 | ✅ Implemented | HTTPS enforced. |
 | Token response: `id_token` required | OIDC Core §3.1.3.3 | ✅ Implemented | Missing `id_token` triggers `MISSING_ID_TOKEN`. |
 | Token error: `invalid_grant` handling | OIDC Core §3.1.3.4 | ✅ Implemented | Logged as `OIDC_INVALID_GRANT`. |
-| Refresh tokens | OIDC Core §12 | ❌ Not implemented | Sessions expire after one hour; re-authentication is required. By design — see [About the Session Lifecycle](../explanation/session-lifecycle.md). |
+| Refresh tokens | OIDC Core §12 | ❌ Not implemented | Sessions expire after LuCI's idle timeout (`luci.sauth.sessiontime`, one hour by default); re-authentication is required. By design — see [About the Session Lifecycle](../explanation/session-lifecycle.md). |
 | UserInfo endpoint (fallback) | OIDC Core §5.3 | ✅ Implemented | Fetched when `email` claim is absent from the ID Token. |
 | RP-Initiated Logout | [OIDC Session Management](https://openid.net/specs/openid-connect-session-1_0.html) | ✅ Implemented | Browser redirected to `end_session_endpoint` if advertised by the IdP. |
 
@@ -95,7 +95,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Deviation | Rationale |
 | :--- | :--- |
 | **Split-horizon issuer URL** — When `internal_issuer_url` is set, back-channel requests use a different origin than `issuer_url`. OIDC Discovery §4.3 requires the fetch URL to match the issuer identifier. | Self-hosted deployments commonly cannot route the router's back-channel traffic through the IdP's public DNS name. Requiring a match would break most home lab configurations. The `iss` claim is still validated against the public `issuer_url`, preserving the security property that matters. |
-| **Refresh tokens not supported** — OIDC Core §12 defines the Refresh Token flow. | The router has no persistent token store. Sessions are bounded to one hour; users re-authenticate on expiry. This avoids the need to store and protect long-lived refresh tokens on an embedded device. |
+| **Refresh tokens not supported** — OIDC Core §12 defines the Refresh Token flow. | The router has no persistent token store. Sessions expire after LuCI's idle timeout; users re-authenticate on expiry. This avoids the need to store and protect long-lived refresh tokens on an embedded device. |
 | **Implicit flow not supported** — RFC 6749 §4.2 defines the Implicit Grant. | The Implicit flow places tokens in redirect URLs, which are logged by browsers, proxies, and servers. It is deprecated by the OAuth 2.0 Security Best Current Practice (RFC 9700). |
 | **`plain` PKCE method rejected** — RFC 7636 §4.2 defines both `plain` and `S256`. | `plain` sends the verifier as the challenge, providing no protection against an attacker who can observe the authorization request. `S256` is strictly superior when available. |
 

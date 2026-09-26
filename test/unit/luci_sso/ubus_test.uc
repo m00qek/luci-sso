@@ -23,6 +23,7 @@ function build_deps(proxies) {
 	}
 	if (proxies.fs)     deps.fs     = proxies.fs;
 	if (proxies.clock)  deps.clock  = proxies.clock;
+	if (proxies.uci)    deps.uci    = proxies.uci.cursor();
 	deps.native = proxies.native ?? native;
 	return deps;
 }
@@ -263,6 +264,51 @@ describe('ubus: create_passwordless_session — session set', () => {
 				));
 			assert.match(SID, destroyed, 'the half-initialised session must be destroyed');
 		});
+	});
+});
+
+// Captures the timeout passed to `session create`; the rest of the flow succeeds.
+function created_timeout(uci_spec) {
+	let seen = null;
+	let spec = {
+		ubus: { strict: true, data: {
+			"session:create": (args) => { seen = args.timeout; return { ubus_rpc_session: SID }; },
+			"session:grant":  {},
+			"session:set":    {},
+		} },
+	};
+	if (uci_spec) spec.uci = uci_spec;
+	mock.inject_all(spec, (proxies) => {
+		let res = ubus_mod.create_passwordless_session(
+			build_deps(proxies), 'guest', PERMS_USER, 'u@e.com', 'at', 'rt', 'it');
+		assert.match(contains({ ok: true, data: SID }), res);
+	});
+	return seen;
+}
+
+function luci_uci(sessiontime) {
+	let sauth = { ".type": "internal" };
+	if (sessiontime != null) sauth.sessiontime = sessiontime;
+	return { strict: true, data: { luci: { sauth } } };
+}
+
+describe('ubus: create_passwordless_session — session timeout', () => {
+	it("uses LuCI's luci.sauth.sessiontime, as LuCI's own password login does", () => {
+		assert.match(7200, created_timeout(luci_uci("7200")));
+	});
+
+	it('falls back to 3600 when the option is missing', () => {
+		assert.match(3600, created_timeout(luci_uci(null)));
+	});
+
+	it('falls back to 3600 when the option is not a positive integer', () => {
+		assert.match(3600, created_timeout(luci_uci("0")));
+		assert.match(3600, created_timeout(luci_uci("-5")));
+		assert.match(3600, created_timeout(luci_uci("forever")));
+	});
+
+	it('falls back to 3600 when uci is not available', () => {
+		assert.match(3600, created_timeout(null));
 	});
 });
 
