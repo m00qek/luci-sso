@@ -150,7 +150,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	// Reject any alg outside the allow-list before touching keys (alg-confusion defence).
 	let alg_allowed = false;
 	for (let a in ALLOWED_ALGS) {
-		if (crypto.constant_time_eq(header.alg, a)) {
+		if (header.alg === a) {
 			alg_allowed = true;
 			break;
 		}
@@ -168,7 +168,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	// The discovery document must describe the issuer we are configured for.
 	let disc_iss_res = encoding.normalize_url(discovery.issuer);
 	let conf_iss_res = encoding.normalize_url(config.issuer_url);
-	if (!disc_iss_res.ok || !conf_iss_res.ok || !crypto.constant_time_eq(disc_iss_res.data, conf_iss_res.data)) {
+	if (!disc_iss_res.ok || !conf_iss_res.ok || disc_iss_res.data !== conf_iss_res.data) {
 		return Result.err(DISCOVERY_ISSUER_MISMATCH, `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}`);
 	}
 
@@ -220,7 +220,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	if (type(payload.aud) == "array" && length(payload.aud) > 1 && !payload.azp) {
 		return Result.err(MISSING_AZP_CLAIM);
 	}
-	if (payload.azp && !crypto.constant_time_eq(payload.azp, config.client_id)) {
+	if (payload.azp && payload.azp !== config.client_id) {
 		return Result.err(AZP_MISMATCH, `Expected ${config.client_id}, got ${payload.azp}`);
 	}
 

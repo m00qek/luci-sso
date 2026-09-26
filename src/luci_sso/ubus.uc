@@ -96,9 +96,9 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 		}
 	};
 	let is_admin = false;
-	for (let r in perms.read) { if (crypto.constant_time_eq(r, "*")) { is_admin = true; break; } }
+	for (let r in perms.read) { if (r === "*") { is_admin = true; break; } }
 	if (!is_admin) {
-		for (let w in perms.write) { if (crypto.constant_time_eq(w, "*")) { is_admin = true; break; } }
+		for (let w in perms.write) { if (w === "*") { is_admin = true; break; } }
 	}
 
 	// If wildcard is detected, we grant full internal access and skip granular access-groups

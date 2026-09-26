@@ -65,7 +65,7 @@ The `at_hash` claim prevents this. The ID Token contains a binding to the access
 
 Security-critical string comparisons — nonce verification, state verification, `at_hash` verification, logout CSRF token verification — all use a constant-time equality function. On an embedded device where cryptographic operations are measurable, a naive `==` comparison would leak information through timing: an attacker probing whether the first byte matches, then the second, could potentially reconstruct secret values by measuring response latency.
 
-Constant-time comparison eliminates this by ensuring the comparison always takes the same amount of time regardless of how many bytes match. The implementation is in the native C bridge rather than ucode, both for performance and because compiler optimizations can inadvertently reintroduce timing variance in higher-level languages.
+Constant-time comparison removes this signal by making the comparison's running time independent of how many bytes match. The implementation, `constant_time_eq()` in `crypto/base.uc`, is ucode, not C: it XOR-accumulates over the longer input without early exit. An interpreted runtime cannot guarantee exact constant time, so this is a best-effort mitigation, which the source documents.
 
 ---
 

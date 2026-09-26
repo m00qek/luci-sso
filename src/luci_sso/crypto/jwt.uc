@@ -2,7 +2,6 @@
 
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
-import * as base from 'luci_sso.crypto.base';
 
 const LIMIT_TOKEN_SIZE = 16384; // 16 KB
 
@@ -132,7 +131,7 @@ export function verify(native, token, pubkey, options) {
 
 	let p_iss = encoding.normalize_url(payload.iss);
 	let o_iss = encoding.normalize_url(options.iss);
-	if (!p_iss.ok || !o_iss.ok || !base.constant_time_eq(p_iss.data, o_iss.data))
+	if (!p_iss.ok || !o_iss.ok || p_iss.data !== o_iss.data)
 		return Result.err("ISSUER_MISMATCH");
 
 	let aud = payload.aud;
@@ -145,13 +144,13 @@ export function verify(native, token, pubkey, options) {
 			if (type(a) != "string")
 				return Result.err("MALFORMED_AUDIENCE");
 
-			if (base.constant_time_eq(a, options.aud)) {
+			if (a === options.aud) {
 				found = true;
 				break;
 			}
 		}
 	} else {
-		found = base.constant_time_eq(aud, options.aud);
+		found = (aud === options.aud);
 	}
 
 	if (!found) {

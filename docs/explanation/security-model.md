@@ -24,7 +24,7 @@ The allow-list is a constant in `oidc.uc`, not a UCI option or a function parame
 
 ## Why constant-time comparisons?
 
-All sensitive comparisons — signatures, states, nonces, tokens — use the `constant_time_eq()` function rather than normal string equality.
+Every comparison against a secret, or a value derived from one, uses the `constant_time_eq()` function rather than normal string equality: the `state`, the `nonce`, the `at_hash`, the logout CSRF token and the session HMAC. Public identifiers — algorithm names, key IDs, issuers, audiences, role emails and groups — are compared with `===`, because their timing reveals nothing an attacker does not already know.
 
 Standard equality operations return early when a mismatch is found, which means they take slightly less time for a near-correct guess than for a completely wrong one. Over thousands of requests, an attacker can measure these timing differences and gradually reconstruct a secret value. Constant-time comparison always takes the same amount of time regardless of where the mismatch occurs, eliminating the signal.
 

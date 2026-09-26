@@ -93,7 +93,7 @@ export function discover(deps, issuer, options) {
 	let cached = _read_cache(deps, cache_path, ttl);
 	if (cached && cached.issuer) {
 		let cached_issuer_res = encoding.normalize_url(cached.issuer);
-		if (cached_issuer_res.ok && crypto.constant_time_eq(cached_issuer_res.data, normalized_issuer)) {
+		if (cached_issuer_res.ok && cached_issuer_res.data === normalized_issuer) {
 			return Result.ok(cached);
 		}
 	}
@@ -113,7 +113,7 @@ export function discover(deps, issuer, options) {
 		let stale = _read_cache(deps, cache_path, ttl, true);
 		if (stale && stale.issuer) {
 			let stale_issuer_res = encoding.normalize_url(stale.issuer);
-			if (stale_issuer_res.ok && crypto.constant_time_eq(stale_issuer_res.data, normalized_issuer)) {
+			if (stale_issuer_res.ok && stale_issuer_res.data === normalized_issuer) {
 				deps.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
 				return Result.ok(stale);
 			}
@@ -144,7 +144,7 @@ export function discover(deps, issuer, options) {
 	}
 
 	let config_issuer_res = encoding.normalize_url(config.issuer);
-	if (!config_issuer_res.ok || !crypto.constant_time_eq(config_issuer_res.data, normalized_issuer)) {
+	if (!config_issuer_res.ok || config_issuer_res.data !== normalized_issuer) {
 		deps.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(deps.native, config_issuer_res.data) : "INVALID"}]`);
 		return Result.err(DISCOVERY_ISSUER_MISMATCH,
 			 `Expected issuer_id ${issuer_id}` );
@@ -248,7 +248,7 @@ export function find_jwk(keys, kid) {
 		return Result.err("NO_KEYS_AVAILABLE");
 	}
 	for (let i, key in keys) {
-		if (crypto.constant_time_eq(key.kid, kid)) return Result.ok(key);
+		if (key.kid === kid) return Result.ok(key);
 	}
 	return Result.err("KEY_NOT_FOUND", kid);
 };

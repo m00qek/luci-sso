@@ -151,7 +151,7 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 			let res_norm_ui = encoding.normalize_sub(ui_res.data.sub);
 			let res_norm_id = encoding.normalize_sub(user_data.sub);
 
-			if (!res_norm_ui.ok || !res_norm_id.ok || !crypto.constant_time_eq(res_norm_ui.data, res_norm_id.data)) {
+			if (!res_norm_ui.ok || !res_norm_id.ok || res_norm_ui.data !== res_norm_id.data) {
 				deps.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
 				return Result.err(IDENTITY_MISMATCH, { http_status: 403 });
 			}
