@@ -40,7 +40,7 @@ export function get(deps) {
 			let st = deps.fs.stat(lock_path);
 			if (st && st.mtime !== null && (deps.clock.time() - st.mtime) > 30) {
 				deps.log("warn", "Stale secret key lock detected; performing self-healing cleanup");
-				try { deps.fs.unlink(lock_path); } catch (e) {}
+				try { deps.fs.rmdir(lock_path); } catch (e) {}
 				try { acquired = deps.fs.mkdir(lock_path, 0700); } catch (e) {}
 			}
 		}
@@ -51,7 +51,7 @@ export function get(deps) {
 				let res = crypto.random(deps.native, 32);
 				if (!res.ok) {
 					deps.log("error", "CRITICAL: CSPRNG failure during secret key generation");
-					try { deps.fs.unlink(lock_path); } catch (e) {}
+					try { deps.fs.rmdir(lock_path); } catch (e) {}
 					return Result.err(CRYPTO_INIT_FAILED);
 				}
 
@@ -60,24 +60,24 @@ export function get(deps) {
 				// MANDATORY: Restricted permissions for secrets
 				if (!deps.fs.writefile(tmp_path, new_key)) {
 					deps.log("error", "CRITICAL: Failed to write secret key");
-					try { deps.fs.unlink(lock_path); } catch (e) {}
+					try { deps.fs.rmdir(lock_path); } catch (e) {}
 					return Result.err("SYSTEM_KEY_WRITE_FAILED");
 				}
 				deps.fs.chmod(tmp_path, 0600);
 				if (!deps.fs.rename(tmp_path, common.SECRET_KEY_PATH)) {
 					deps.log("error", "CRITICAL: Failed to atomically install secret key");
 					try { deps.fs.unlink(tmp_path); } catch (e) {}
-					try { deps.fs.unlink(lock_path); } catch (e) {}
+					try { deps.fs.rmdir(lock_path); } catch (e) {}
 					return Result.err("SYSTEM_KEY_WRITE_FAILED");
 				}
 				key = new_key;
 			} catch (e) {
 				deps.log("error", `Failed to generate or write secret key: ${e}`);
-				try { deps.fs.unlink(lock_path); } catch (ex) {}
+				try { deps.fs.rmdir(lock_path); } catch (ex) {}
 				return Result.err("SYSTEM_KEY_WRITE_FAILED");
 			}
 			// 3. ALWAYS release the lock
-			try { deps.fs.unlink(lock_path); } catch (e) {}
+			try { deps.fs.rmdir(lock_path); } catch (e) {}
 		} else {
 			// 4. BLOCKER FIX: Retry with backoff if lock is held (B2)
 			let retries = 0;

@@ -57,7 +57,9 @@ function do_inject(cfg, remaining, proxies, cb) {
 			"/usr/share/rpcd/acl.d/luci-base.json": "",
 			...(state.data || {})
 		};
-		inject_state = { ...state, strict: true, data };
+		// utest seals fs.rmdir; session.key releases its lock directory with it.
+		let behavior = { rmdir: () => true, ...(state.behavior || {}) };
+		inject_state = { ...state, strict: true, data, behavior };
 	} else if (name === 'native') {
 		if (state.behavior) {
 			// Behavior override requested (e.g. CSPRNG failure): go through the proxy.
