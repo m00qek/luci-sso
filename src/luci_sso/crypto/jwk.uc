@@ -1,3 +1,5 @@
+'use strict';
+
 import { b64url_decode } from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 

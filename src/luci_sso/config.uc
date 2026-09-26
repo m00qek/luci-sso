@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Logic for loading and validating UCI configuration.
  */

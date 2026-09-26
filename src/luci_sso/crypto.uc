@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Public crypto façade for luci-sso.
  * @module luci_sso_crypto

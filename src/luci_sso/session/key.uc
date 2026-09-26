@@ -1,3 +1,5 @@
+'use strict';
+
 import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
 import * as common from 'luci_sso.session.common';

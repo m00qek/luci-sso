@@ -1,3 +1,5 @@
+'use strict';
+
 import * as Result from 'luci_sso.result';
 
 /**
@@ -9,11 +11,11 @@ import * as Result from 'luci_sso.result';
  */
 export function sha256(native, str) {
 	if (type(str) != "string")
-		 return Result.err("INVALID_ARGUMENT", "hash_sha256 expects string input");
+		return Result.err("INVALID_ARGUMENT", "hash_sha256 expects string input");
 
 	let hash = native.sha256(str);
 	if (!hash)
-		 return Result.err("CRYPTO_ERROR");
+		return Result.err("CRYPTO_ERROR");
 
 	return Result.ok(hash);
 };
@@ -28,7 +30,7 @@ export function sha256(native, str) {
 export function sha256_hex(native, str) {
 	let res = sha256(native, str);
 	if (!res.ok)
-		 return res;
+		return res;
 
 	let hash_bin = res.data;
 	let hex = "";

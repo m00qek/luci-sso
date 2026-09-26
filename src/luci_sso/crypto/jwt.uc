@@ -1,3 +1,5 @@
+'use strict';
+
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as base from 'luci_sso.crypto.base';
@@ -106,27 +108,27 @@ export function verify(native, token, pubkey, options) {
 	// MANDATORY: exp (Expiry) and iat (Issued At) MUST be present
 	// Both exp and iat are required for strict OIDC compliance and age validation.
 	if (payload.exp == null) 
-    return Result.err("MISSING_EXP_CLAIM");
+		return Result.err("MISSING_EXP_CLAIM");
 	if (payload.iat == null)
-    return Result.err("MISSING_IAT_CLAIM");
+		return Result.err("MISSING_IAT_CLAIM");
 
 	if (type(payload.exp) != "int")
-    return Result.err("INVALID_EXP_CLAIM");
+		return Result.err("INVALID_EXP_CLAIM");
 	if (payload.exp < (now - clock_tolerance))
-    return Result.err("TOKEN_EXPIRED");
+		return Result.err("TOKEN_EXPIRED");
 
 	if (payload.nbf != null) {
 		if (type(payload.nbf) != "int")
-      return Result.err("INVALID_NBF_CLAIM");
+			return Result.err("INVALID_NBF_CLAIM");
 
 		if (payload.nbf > (now + clock_tolerance))
-      return Result.err("TOKEN_NOT_YET_VALID");
+			return Result.err("TOKEN_NOT_YET_VALID");
 	}
 
 	if (type(payload.iat) != "int")
-    return Result.err("INVALID_IAT_CLAIM");
+		return Result.err("INVALID_IAT_CLAIM");
 	if (payload.iat > (now + clock_tolerance))
-    return Result.err("TOKEN_ISSUED_IN_FUTURE");
+		return Result.err("TOKEN_ISSUED_IN_FUTURE");
 
 	let p_iss = encoding.normalize_url(payload.iss);
 	let o_iss = encoding.normalize_url(options.iss);

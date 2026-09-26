@@ -1,3 +1,5 @@
+'use strict';
+
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 import * as base from 'luci_sso.crypto.base';

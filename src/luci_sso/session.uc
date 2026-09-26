@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Public session façade for luci-sso.
  * @module luci_sso_session

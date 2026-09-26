@@ -1,3 +1,5 @@
+'use strict';
+
 import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';

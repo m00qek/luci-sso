@@ -1,3 +1,5 @@
+'use strict';
+
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
 
@@ -34,7 +36,7 @@ export function generate_verifier(native, len) {
 export function calculate_challenge(native, verifier) {
 	let res = hash.sha256(native, verifier);
 	if (!res.ok)
-    return res;
+		return res;
 
 	return encoding.b64url_encode(res.data);
 };

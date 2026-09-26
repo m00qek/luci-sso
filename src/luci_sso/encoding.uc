@@ -1,3 +1,5 @@
+'use strict';
+
 import * as Result from 'luci_sso.result';
 
 /**
@@ -51,11 +53,11 @@ function _strip_padding(str) {
  */
 function b64url_to_b64(str) {
 	if (length(str) == 0)
-    return "";
+		return "";
 	
 	// Validate Base64URL charset: [A-Za-z0-9_-]
 	if (!match(str, /^[A-Za-z0-9_-]+$/))
-    return null;
+		return null;
 	
 	return _add_padding(_map_from_url_safe(str));
 };
@@ -69,18 +71,18 @@ function b64url_to_b64(str) {
  */
 export function b64url_decode(str) {
 	if (type(str) != "string")
-    die("CONTRACT_VIOLATION: b64url_decode expects string");
+		die("CONTRACT_VIOLATION: b64url_decode expects string");
 	
 	if (length(str) > MAX_UTILS_SIZE)
-    return Result.err("TOKEN_TOO_LARGE");
+		return Result.err("TOKEN_TOO_LARGE");
 
 	let b64 = b64url_to_b64(str);
 	if (b64 == null)
-    return Result.err("INVALID_ENCODING");
+		return Result.err("INVALID_ENCODING");
 
 	let decoded = b64dec(b64);
 	if (decoded == null)
-    return Result.err("INVALID_ENCODING");
+		return Result.err("INVALID_ENCODING");
 
 	return Result.ok(decoded);
 };
@@ -93,11 +95,11 @@ export function b64url_decode(str) {
  */
 export function b64url_encode(str) {
 	if (type(str) != "string")
-    die("CONTRACT_VIOLATION: b64url_encode expects string");
+		die("CONTRACT_VIOLATION: b64url_encode expects string");
 	
 	let b64 = b64enc(str);
 	if (b64 == null)
-    return Result.err("BASE64URL_ENCODE_FAILED");
+		return Result.err("BASE64URL_ENCODE_FAILED");
 
 	return Result.ok(_strip_padding(_map_to_url_safe(b64)));
 };
@@ -112,13 +114,13 @@ export function b64url_encode(str) {
  */
 export function binary_truncate(data, len) {
 	if (type(data) != "string")
-    die("CONTRACT_VIOLATION: binary_truncate expects string data");
+		die("CONTRACT_VIOLATION: binary_truncate expects string data");
 
 	if (type(len) != "int")
-    die("CONTRACT_VIOLATION: binary_truncate expects integer length");
+		die("CONTRACT_VIOLATION: binary_truncate expects integer length");
 
 	if (len > length(data))
-    die("CONTRACT_VIOLATION: truncation length exceeds data length");
+		die("CONTRACT_VIOLATION: truncation length exceeds data length");
 
 	// substr() in ucode is byte-safe for binary strings
 	return Result.ok(substr(data, 0, len));
@@ -137,7 +139,7 @@ export function safe_json(data) {
 	// If it's a Result object (e.g. from b64url_decode), extract data
 	if (type(raw) == "object" && raw.ok != null) {
 		if (!raw.ok)
-      return raw;
+			return raw;
 
 		raw = raw.data;
 	}
@@ -147,7 +149,7 @@ export function safe_json(data) {
 	try {
 		let parsed = json(raw);
 		if (parsed == null)
-      return Result.err("PARSE_ERROR", "JSON decoded to null");
+			return Result.err("PARSE_ERROR", "JSON decoded to null");
 
 		return Result.ok(parsed);
 	} catch (e) {
@@ -165,12 +167,12 @@ export function safe_json(data) {
  */
 export function normalize_url(url) {
 	if (type(url) != "string")
-    return Result.err("INVALID_ARGUMENT", "normalize_url expects string");
+		return Result.err("INVALID_ARGUMENT", "normalize_url expects string");
 	
 	let res = url;
 	let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
 	if (!m)
-    return Result.err("MALFORMED_URL", url);
+		return Result.err("MALFORMED_URL", url);
 
 	let scheme = lc(m[1]);
 	let host = lc(m[2]);
@@ -199,7 +201,7 @@ export function normalize_url(url) {
  */
 export function normalize_sub(sub) {
 	if (type(sub) != "string")
-    return Result.err("INVALID_ARGUMENT", "normalize_sub expects string");
+		return Result.err("INVALID_ARGUMENT", "normalize_sub expects string");
 
 	return Result.ok(lc(sub));
 };
