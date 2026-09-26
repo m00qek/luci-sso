@@ -227,6 +227,16 @@ int native_jwk_ec_p256_to_pem(const unsigned char *x, size_t x_len,
 		return -1;
 	}
 
+	/* SECURITY: reject a point that is not on P-256. wc_ecc_import_x963 checks
+	 * this only when wolfSSL is built with ECC import validation: OpenWrt's
+	 * build is, Alpine's is not. Check explicitly, as the mbedtls
+	 * (mbedtls_ecp_check_pubkey) and OpenSSL (EVP_PKEY_public_check) backends
+	 * do, so the result does not depend on how the library was configured. */
+	if (wc_ecc_check_key(&key) != 0) {
+		wc_ecc_free(&key);
+		return -1;
+	}
+
 	unsigned char der[NATIVE_EC_PEM_MAX];
 	int der_len = wc_EccPublicKeyToDer(&key, der, sizeof(der), 1);
 	wc_ecc_free(&key);
