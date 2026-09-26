@@ -74,7 +74,7 @@ endif()
 
 Run the fuzzer to verify:
 ```bash
-make -sC devenv fuzzer-test CRYPTO_LIB=boringssl
+make fuzzer-test CRYPTO_LIB=boringssl
 ```
 
 ---

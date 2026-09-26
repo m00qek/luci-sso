@@ -17,7 +17,7 @@ make unit-test FILTER='session.key'     # regex filter on test titles
 make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'  # a single file/dir
 
 make up && make e2e-test                # full browser E2E (requires Docker)
-make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls  # C-level fuzzer (~60s)
+make fuzzer-test CRYPTO_LIB=mbedtls     # C-level fuzzer (~60s)
 ```
 
 ## Buckets

@@ -7,7 +7,6 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - 'README.md'
-      - 'STYLE_GUIDE.md'
       - 'LICENSE'
       - '.github/workflows/docs.yml'
   pull_request:
@@ -16,7 +15,6 @@ on:
       - 'docs/**'
       - 'mkdocs.yml'
       - 'README.md'
-      - 'STYLE_GUIDE.md'
       - 'LICENSE'
       - '.github/workflows/docs.yml'
   workflow_dispatch:

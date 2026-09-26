@@ -5,7 +5,7 @@ Three categories of interface are enforced by bidirectional lint checks: error c
 Run the checks locally before pushing:
 
 ```bash
-make -sC devenv lint
+make lint
 ```
 
 ---

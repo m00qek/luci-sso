@@ -73,7 +73,7 @@ Coverage-guided fuzzing (libFuzzer) hardens our native C components against malf
 
 ```bash
 # Run the fuzzer for the mbedtls backend
-make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls
+make fuzzer-test CRYPTO_LIB=mbedtls
 ```
 
 See [Fuzz Testing](fuzzing.md) for how to analyze crashes and interpret results.
