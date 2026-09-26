@@ -119,6 +119,13 @@ bool native_verify_es256(const unsigned char *msg, size_t msg_len,
 		return false;
 	}
 
+	/* SECURITY: ES256 means ECDSA on P-256 only, as in the OpenSSL backend.
+	 * wc_EccPublicKeyDecode accepts any supported curve. */
+	if (key.dp == NULL || key.dp->id != ECC_SECP256R1) {
+		wc_ecc_free(&key);
+		return false;
+	}
+
 	unsigned char der_sig[ECC_MAX_SIG_SIZE];
 	word32 der_sig_len = sizeof(der_sig);
 

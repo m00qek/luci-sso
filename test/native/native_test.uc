@@ -321,6 +321,13 @@ describe('native: verify_es256', () => {
 		assert.match(false, native.verify_es256(f0.EC_256.msg, hex_to_bin(f0.EC_256.sig_hex), f0.RSA_2048.pub));
 	});
 
+	it('rejects an EC key on a curve other than P-256', () => {
+		// A 64-byte R|S passes the length guard, so this reaches each backend's
+		// own key check. A valid P-384 signature can never be 64 bytes, so this
+		// pins the contract (P-256 only) rather than a reachable forgery.
+		assert.match(false, native.verify_es256(f0.EC_256.msg, hex_to_bin(f0.EC_256.sig_hex), f0.EC_384_PUB));
+	});
+
 	it('SECURITY: rejects any signature that is not exactly 64 bytes (R|S)', () => {
 		let sig = hex_to_bin(f0.EC_256.sig_hex);           // 64 bytes
 		assert.match(false, native.verify_es256(f0.EC_256.msg, substr(sig, 0, 63),  f0.EC_256.pub)); // 63

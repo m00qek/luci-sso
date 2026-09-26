@@ -84,6 +84,15 @@ bool native_verify_rs256(const unsigned char *msg, size_t msg_len,
 		return false;
 	}
 
+	/* SECURITY: RS256 requires an RSA key. Without this, pk_verify would run
+	 * whatever algorithm the parsed key implies. The bit-length floor below
+	 * happens to reject today's EC curves too, but the key type is the
+	 * contract, as in the OpenSSL backend. */
+	if (mbedtls_pk_get_type(&pk) != MBEDTLS_PK_RSA) {
+		mbedtls_pk_free(&pk);
+		return false;
+	}
+
 	/* SECURITY: Enforce minimum RSA key size (2048 bits) per NIST SP 800-57 */
 	if (mbedtls_pk_get_bitlen(&pk) < NATIVE_RSA_MIN_BITS) {
 		mbedtls_pk_free(&pk);
@@ -123,6 +132,15 @@ bool native_verify_es256(const unsigned char *msg, size_t msg_len,
 	// mbedtls_pk_parse_public_key expects a null-terminated string including the terminator in the length for PEM.
 	// We assume key_pem is null-terminated and key_len is the length WITHOUT the terminator (ucode standard).
 	if (mbedtls_pk_parse_public_key(&pk, (const unsigned char *)key_pem, key_len + 1) != 0) {
+		mbedtls_pk_free(&pk);
+		return false;
+	}
+
+	/* SECURITY: ES256 means ECDSA on P-256 only, as in the OpenSSL backend.
+	 * mbedtls_pk_ec() is NULL for a non-EC key; the group check rejects other
+	 * curves (P-384, secp256k1, brainpool) that pk_verify would otherwise use. */
+	const mbedtls_ecp_keypair *ec = mbedtls_pk_ec(pk);
+	if (ec == NULL || ec->MBEDTLS_PRIVATE(grp).id != MBEDTLS_ECP_DP_SECP256R1) {
 		mbedtls_pk_free(&pk);
 		return false;
 	}

@@ -107,6 +107,14 @@ export const EC_256 = {
 	sig_hex: "ca1ba5225e59a3b20946a192ce3de174b6f3a682d12dfb78dc310ea164d3011106f878e90bd9505bc8a1d57b7458691fe861068b2c67b3a51719f3add49d544e"
 };
 
+// A NIST P-384 public key. ES256 is ECDSA on P-256 only, so every backend
+// must refuse it whatever the signature.
+export const EC_384_PUB = "-----BEGIN PUBLIC KEY-----\n" +
+	"MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEy6alf/JSifyQ0EmBsCqm/6kW1CYy5UaB\n" +
+	"qIpxaayS58kWL88LnEE8M5SwmByiQxcR608Rv2yQwmvZFeVeK//d3ilZIRmzAGTW\n" +
+	"pAFHWmXpjJDCnDKgfHsY4436o5cyAfuc\n" +
+	"-----END PUBLIC KEY-----";
+
 export const EC_NULL_MSG = {
     msg: "null\0msg",
     pub: EC_256.pub,
