@@ -9,7 +9,6 @@ import * as f from 'fixtures.oidc';
 // post_logout_redirect_uri. Consolidates the tier3 router-logout block plus the
 // tier2 logout_* reproductions.
 
-const TEST_POLICY = { allowed_algs: ["RS256"] };
 
 // Local config/discovery for the RP-initiated scenarios (idp.com issuer).
 const MOCK_CONFIG = {
@@ -53,7 +52,7 @@ describe('logout: RP-initiated', () => {
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
 			let req = mock_request("/logout", { stoken: "csrf-123" }, { "sysauth": "session-12345" }, { HTTP_HOST: "router.lan" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
@@ -83,7 +82,7 @@ describe('logout: RP-initiated', () => {
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
 			let req = mock_request("/logout", { stoken: "csrf-456" }, { "sysauth": "session-12345" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
 			assert.match("/", res.data.headers["Location"]);
@@ -103,7 +102,7 @@ describe('logout: RP-initiated', () => {
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
 			let req = mock_request("/logout", {}, {}, { HTTP_HOST: "router.lan" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
@@ -338,7 +337,7 @@ describe('logout: invalid session and malformed redirect', () => {
 				query: { "stoken": "some-token" },
 				env: { HTTPS: "on" }
 			};
-			let res = router.handle(deps, test_config, request, {});
+			let res = router.handle(deps, test_config, request);
 			assert.match(truthy(), res.ok);
 			assert.match("/", res.data.headers["Location"], "Should redirect to root if session is invalid");
 		});
@@ -396,7 +395,7 @@ describe('logout: redirect derivation robustness', () => {
 		}, (deps) => {
 			let config = { issuer_url: "https://idp.com", redirect_uri: "https://router.lan/cgi-bin/luci-sso/callback" };
 			let req = { path: "/logout", query: { stoken: "csrf" }, cookies: { sysauth: "sid" } };
-			let res = router.handle(deps, config, req, TEST_POLICY);
+			let res = router.handle(deps, config, req);
 			assert.match(truthy(), res.ok);
 			assert.match(truthy(), index(res.data.headers["Location"], "post_logout_redirect_uri=https%3A%2F%2Frouter.lan%2F") != -1);
 		});
@@ -409,7 +408,7 @@ describe('logout: redirect derivation robustness', () => {
 		}, (deps) => {
 			let config = { issuer_url: "https://idp.com", redirect_uri: "ftp://router.lan/callback" };
 			let req = { path: "/logout", query: { stoken: "csrf" }, cookies: { sysauth: "sid" } };
-			let res = router.handle(deps, config, req, TEST_POLICY);
+			let res = router.handle(deps, config, req);
 			assert.match(truthy(), res.ok);
 			assert.match(-1, index(res.data.headers["Location"], "post_logout_redirect_uri="), "Should OMIT post_logout_redirect_uri for invalid redirect_uri scheme");
 		});

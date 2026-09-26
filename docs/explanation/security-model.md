@@ -18,7 +18,7 @@ Consequently, `luci-sso` implements the full set of protections defined by OIDC 
 
 The reason is the Algorithm Confusion attack. In HS256, the signature key is a shared secret known to both the IdP and the verifier. If an attacker can convince the verifier to treat an RS256 public key as an HS256 secret, they can forge tokens using the public key — which is, by definition, public. The fix is to only accept asymmetric algorithms, where the signing key is private to the IdP and can never be confused with anything the verifier holds.
 
-This is enforced in the policy layer (not UCI configuration) so that a misconfigured router cannot weaken it.
+The allow-list is a constant in `oidc.uc`, not a UCI option or a function parameter, so that a misconfigured router cannot weaken it.
 
 ---
 

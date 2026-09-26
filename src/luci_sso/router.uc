@@ -100,8 +100,8 @@ function handle_login(deps, config) {
  * Handles the OIDC callback path.
  * @private
  */
-function handle_callback(deps, config, request, policy) {
-	let res = handshake.authenticate(deps, config, request, policy);
+function handle_callback(deps, config, request) {
+	let res = handshake.authenticate(deps, config, request);
 	if (!res.ok) return res;
 
 	// SameSite=Lax, not Strict. This is hardening, NOT the fix for issue #11 --
@@ -215,7 +215,7 @@ function handle_logout(deps, config, request) {
  * Main entry point for the router.
  * @param {object} deps - { fs, http, ubus, uci, log, clock }
  */
-export function handle(deps, config, request, policy) {
+export function handle(deps, config, request) {
 	let path = request.path || "/";
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
@@ -242,7 +242,7 @@ export function handle(deps, config, request, policy) {
 	if (path == "/") {
 		return handle_login(deps, config);
 	} else if (path == "/callback") {
-		return handle_callback(deps, config, request, policy);
+		return handle_callback(deps, config, request);
 	} else if (path == "/logout") {
 		return handle_logout(deps, config, request);
 	}

@@ -8,6 +8,13 @@ import * as Result from 'luci_sso.result';
 import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, MISSING_AZP_CLAIM, AZP_MISMATCH, MISSING_ACCESS_TOKEN, MISSING_AT_HASH, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON } from 'luci_sso.errors';
 
 /**
+ * ID token signature algorithms this module accepts. Fixed in code rather than
+ * UCI so a configuration change can never weaken it: symmetric algorithms such
+ * as HS256 would allow the algorithm-confusion attack.
+ */
+const ALLOWED_ALGS = ["RS256", "ES256"];
+
+/**
  * Generates the authorization URL.
  */
 export function get_auth_url(deps, config, discovery_doc, params) {
@@ -129,14 +136,9 @@ export function exchange_code(deps, config, discovery, code, verifier, session_i
  * @param {object} handshake - Handshake state {nonce, ...}
  * @param {object} discovery - Discovery document
  * @param {number} now - Current timestamp
- * @param {object} [policy] - Security policy {allowed_algs}; defaults to RS256 and ES256
  */
-export function verify_id_token(deps, tokens, keys, config, handshake, discovery, now, policy) {
+export function verify_id_token(deps, tokens, keys, config, handshake, discovery, now) {
 	if (!tokens.id_token || type(tokens.id_token) != "string") return Result.err(MISSING_ID_TOKEN);
-
-	// 1. Algorithm policy. Fixed in code, not UCI, so config cannot weaken it.
-	const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
-	let p = policy || DEFAULT_POLICY;
 
 	let parts = split(tokens.id_token, ".");
 	let res_h = encoding.safe_json(encoding.b64url_decode(parts[0]));
@@ -147,7 +149,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 
 	// Reject any alg outside the allow-list before touching keys (alg-confusion defence).
 	let alg_allowed = false;
-	for (let a in p.allowed_algs) {
+	for (let a in ALLOWED_ALGS) {
 		if (crypto.constant_time_eq(header.alg, a)) {
 			alg_allowed = true;
 			break;

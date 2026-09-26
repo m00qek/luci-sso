@@ -70,7 +70,7 @@ On success, `result.data` contains:
 | `url` | string | Full redirect URL to the IdP's `authorization_endpoint`. |
 | `token` | string | State token. Set this as the value of the `__Host-luci_sso_state` cookie. |
 
-### `authenticate(io, config, request, policy?)` → `Result<{sid, email}>`
+### `authenticate(io, config, request)` → `Result<{sid, email}>`
 
 Processes the IdP callback. Verifies state and nonce, exchanges the code for tokens, validates the ID Token, maps claims to a role, and injects a UBUS session.
 
@@ -79,7 +79,6 @@ Processes the IdP callback. Verifies state and nonce, exchanges the code for tok
 | `io` | io provider | The I/O provider. |
 | `config` | object | Loaded UCI config. |
 | `request` | object | Parsed request from `luci_sso.web.request()`. Contains `params` and `cookies`. |
-| `policy` | object | Optional. Security policy overrides. Defaults to `{allowed_algs: ["RS256", "ES256"]}`. |
 
 On success, `result.data` contains:
 
@@ -189,9 +188,9 @@ Exchanges an authorization code for tokens via the IdP's token endpoint (back-ch
 | `verifier` | string | PKCE code verifier generated at flow initiation. |
 | `session_id` | string | Handshake session ID (for log correlation). |
 
-### `verify_id_token(io, tokens, keys, config, handshake, discovery, now, policy)` → `Result<claims>`
+### `verify_id_token(io, tokens, keys, config, handshake, discovery, now)` → `Result<claims>`
 
-Validates an ID Token against all OIDC Core §3.1.3.7 requirements: algorithm, signature, `iss`, `aud`, `exp`, `iat`, `nonce`, and `at_hash`.
+Validates an ID Token against all OIDC Core §3.1.3.7 requirements: algorithm (RS256 or ES256 only, fixed in code), signature, `iss`, `aud`, `exp`, `iat`, `nonce`, and `at_hash`.
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
@@ -202,7 +201,6 @@ Validates an ID Token against all OIDC Core §3.1.3.7 requirements: algorithm, s
 | `handshake` | object | Handshake state. Provides the expected `nonce`. |
 | `discovery` | object | Discovery document. Provides `jwks_uri` for refresh. |
 | `now` | int | Current Unix timestamp (from `io.time()`). |
-| `policy` | object | Security policy. `policy.allowed_algs` lists accepted algorithms. |
 
 On success, `result.data` is the decoded JWT claims object.
 

@@ -15,7 +15,6 @@ import * as h from 'lib.helpers';
 // verification runs for real — no verify stubs. Consolidates the tier2
 // handshake_* suites plus initiate / request-validation coverage.
 
-const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
 // Config whose discovery resolves to the mocked issuer origin (internal == public).
 function base_config(over) {
@@ -76,7 +75,7 @@ describe('handshake: authenticate — request validation', () => {
 	it('returns IDP_ERROR (400) when the IdP reports an error', () => {
 		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let request = { query: { error: 'access_denied' }, cookies: {} };
-			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
+			let res = handshake.authenticate(deps, base_config(), request);
 			assert.match(contains({ ok: false, error: 'IDP_ERROR' }), res);
 			assert.match(400, res.details.http_status);
 		});
@@ -85,7 +84,7 @@ describe('handshake: authenticate — request validation', () => {
 	it('returns MISSING_CODE (400) when the authorization code is absent', () => {
 		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let request = { query: {}, cookies: { '__Host-luci_sso_state': 'handle' } };
-			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
+			let res = handshake.authenticate(deps, base_config(), request);
 			assert.match(contains({ ok: false, error: 'MISSING_CODE' }), res);
 			assert.match(400, res.details.http_status);
 		});
@@ -94,7 +93,7 @@ describe('handshake: authenticate — request validation', () => {
 	it('returns MISSING_HANDSHAKE_COOKIE (401) when the state cookie is absent', () => {
 		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let request = { query: { code: 'authcode' }, cookies: {} };
-			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
+			let res = handshake.authenticate(deps, base_config(), request);
 			assert.match(contains({ ok: false, error: 'MISSING_HANDSHAKE_COOKIE' }), res);
 			assert.match(401, res.details.http_status);
 		});
@@ -103,7 +102,7 @@ describe('handshake: authenticate — request validation', () => {
 	it('returns STATE_NOT_FOUND (401) when the handshake handle does not exist', () => {
 		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let request = { query: { code: 'authcode', state: 'whatever' }, cookies: { '__Host-luci_sso_state': 'ghosthandle' } };
-			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
+			let res = handshake.authenticate(deps, base_config(), request);
 			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), res);
 			assert.match(401, res.details.http_status);
 		});
@@ -113,7 +112,7 @@ describe('handshake: authenticate — request validation', () => {
 		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let hs = session.create_state(deps).data;
 			let request = { query: { code: 'authcode', state: 'WRONG-STATE' }, cookies: { '__Host-luci_sso_state': hs.token } };
-			let res = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
+			let res = handshake.authenticate(deps, base_config(), request);
 			assert.match(contains({ ok: false, error: 'STATE_PARAMETER_MISMATCH' }), res);
 			assert.match(403, res.details.http_status);
 		});
@@ -125,7 +124,7 @@ describe('handshake: authenticate — request validation', () => {
 			ctx.classify('empty code', length(code) == 0);
 			with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 				let request = { query: { code: code, state: 'x' }, cookies: { '__Host-luci_sso_state': 'ghosthandle' } };
-				assert.match(contains({ ok: false }), handshake.authenticate(deps, base_config(), request, TEST_POLICY));
+				assert.match(contains({ ok: false }), handshake.authenticate(deps, base_config(), request));
 			});
 		}
 	);
@@ -145,7 +144,7 @@ describe('handshake: authenticate — OAuth flow failures', () => {
 		}, (deps) => {
 			let hs = session.create_state(deps).data;
 			let request = { query: { code: 'authcode', state: hs.state }, cookies: { '__Host-luci_sso_state': hs.token } };
-			out = handshake.authenticate(deps, base_config(), request, TEST_POLICY);
+			out = handshake.authenticate(deps, base_config(), request);
 		});
 		return out;
 	}
@@ -450,7 +449,7 @@ describe('handshake: userinfo', () => {
 				cookies: { "__Host-luci_sso_state": s_res.data.token }
 			};
 
-			let res = handshake.authenticate(deps, test_config, request, TEST_POLICY);
+			let res = handshake.authenticate(deps, test_config, request);
 			assert.match(truthy(), res.ok, "Should SUCCEED after sub normalization fix");
 			assert.match("user@example.com", res.data.email);
 		});
@@ -900,7 +899,7 @@ describe('handshake: token registration ordering', () => {
 				env: { HTTPS: "on" }
 			};
 
-			let auth_res = handshake.authenticate(deps, test_config, request, { allowed_algs: ["RS256"] });
+			let auth_res = handshake.authenticate(deps, test_config, request);
 			assert.match(falsy(), auth_res.ok, "Authentication should fail due to invalid ID token");
 
 			let mkdir_calls = spy(deps.fs).calls.mkdir;

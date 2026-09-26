@@ -42,16 +42,13 @@ The `log` function is mandatory in all `io` implementations. Logging is not opti
 
 ---
 
-### Two-Dimensional Configuration (Policy Pattern)
+### Security Invariants Live in Code, Not UCI
 
-Configuration has two dimensions: UCI (admin-controlled) and policy (logic-controlled). Security invariants — like the list of allowed JWT algorithms — live in policy, not UCI, so a misconfigured router cannot weaken the security model.
+Configuration has two dimensions: UCI (admin-controlled) and code (fixed at build time). Security invariants — like the list of allowed JWT algorithms — are constants in code, not UCI options and not function parameters, so neither a misconfigured router nor a careless caller can weaken the security model.
 
 ```javascript
-export function verify(tokens, config, policy) {
-    const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
-    let p = policy || DEFAULT_POLICY;
-    // p.allowed_algs is not user-editable
-};
+// oidc.uc
+const ALLOWED_ALGS = ["RS256", "ES256"];
 ```
 
 This prevents "Algorithm Confusion" and "Reflective Trust" attacks where an attacker manipulates configuration to bypass validation.

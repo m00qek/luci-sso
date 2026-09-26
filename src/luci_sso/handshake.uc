@@ -53,7 +53,7 @@ function _validate_callback_request(deps, config, request) {
  * Executes the full OIDC exchange and verification flow.
  * @private
  */
-function _complete_oauth_flow(deps, config, code, handshake, policy) {
+function _complete_oauth_flow(deps, config, code, handshake) {
 	let session_id = handshake.id;
 	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
@@ -108,7 +108,7 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 		return Result.err(JWKS_FETCH_FAILED, { http_status: 500 });
 	}
 
-	let verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time(), policy);
+	let verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time());
 
 	// Key Rotation Recovery
 	if (!verify_res.ok) {
@@ -127,7 +127,7 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 			deps.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
 			jwks_res = discovery.fetch_jwks(deps, discovery_doc.jwks_uri, { force: true });
 			if (jwks_res.ok) {
-				verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time(), policy);
+				verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time());
 			}
 		}
 	}
@@ -239,10 +239,9 @@ export function initiate(deps, config) {
  * @param {object} deps - { fs, http, ubus, log, clock }
  * @param {object} config - UCI configuration
  * @param {object} request - Parsed request context
- * @param {object} [policy] - Security policy
  * @returns {object} - Result Object {ok, data: {sid, email}}
  */
-export function authenticate(deps, config, request, policy) {
+export function authenticate(deps, config, request) {
 	deps.log("info", "OIDC callback received");
 
 	let val_res = _validate_callback_request(deps, config, request);
@@ -252,7 +251,7 @@ export function authenticate(deps, config, request, policy) {
 	let handshake = val_res.data.handshake;
 	let session_id = handshake.id;
 
-	let oauth_res = _complete_oauth_flow(deps, config, code, handshake, policy);
+	let oauth_res = _complete_oauth_flow(deps, config, code, handshake);
 	if (!oauth_res.ok) {
 		if (oauth_res.details) {
 			deps.log("error", `OAuth flow failed [session_id: ${session_id}]: ${oauth_res.error} (${oauth_res.details})`);
