@@ -66,7 +66,7 @@ COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_D
 SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
 
 # --- 3. PUBLIC INTERFACE ---
-.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint
+.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint fuzzer-test sanitizer-test
 .PHONY: local-up local-down local-ps local-shell local-run
 
 # Sentinel file tracks the last successful build for a specific arch/version/crypto combo
@@ -109,6 +109,9 @@ unit-test: .unit-test
 fuzzer-test: DOCKER_SUITE = ci
 fuzzer-test: .fuzzer-test
 
+sanitizer-test: DOCKER_SUITE = ci
+sanitizer-test: .sanitizer-test
+
 e2e-test: DOCKER_SUITE = ci
 e2e-test: .e2e-test
 
@@ -149,6 +152,8 @@ endef
 
 TIME ?= 60
 DETECT_LEAKS ?= 0
+# The sanitizer run is leak-clean, so LeakSanitizer is on by default there.
+SANITIZER_LEAKS ?= 1
 
 .fuzzer-test:
 	docker compose $(COMPOSE_FLAGS) pull fuzzer || true
@@ -157,6 +162,12 @@ DETECT_LEAKS ?= 0
 		cmake -DENABLE_FUZZING=ON ../../mod && \
 		make -j$$(nproc) && \
 		./fuzz_$(CRYPTO_LIB) -max_total_time=$(TIME) -rss_limit_mb=2048"
+
+.sanitizer-test:
+	docker compose $(COMPOSE_FLAGS) build fuzzer
+	docker compose $(COMPOSE_FLAGS) run --rm -T \
+		-e CRYPTO_LIB=$(CRYPTO_LIB) -e DETECT_LEAKS=$(SANITIZER_LEAKS) \
+		fuzzer bash devenv/scripts/sanitizer-test.sh
 
 .e2e-test:
 	$(VALIDATE_SUITE_RUNNING)

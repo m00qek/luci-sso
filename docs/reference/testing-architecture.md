@@ -100,6 +100,10 @@ The native module gets three kinds of coverage; this bucket is one of them:
 3. **transitive** — every crypto/orchestrator test hits the real module
    incidentally.
 
+`make sanitizer-test` additionally runs this bucket and `unit/luci_sso/crypto`
+against a module built with AddressSanitizer + UndefinedBehaviorSanitizer (see
+[How to Run Tests](../how-to/developer/testing.md#sanitizer-testing)).
+
 ### `unit/crypto/*` mocks `native`
 
 The crypto wrappers pass `native` as an explicit argument, so their unit tests

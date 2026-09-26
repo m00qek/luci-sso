@@ -77,3 +77,15 @@ make fuzzer-test CRYPTO_LIB=mbedtls
 ```
 
 See [Fuzz Testing](fuzzing.md) for how to analyze crashes and interpret results.
+
+## Sanitizer Testing
+
+The fuzzer drives the native module with random input. `sanitizer-test` complements it with the real test suites that exercise the module (`test/native` and `test/unit/luci_sso/crypto`), run against a copy built with AddressSanitizer and UndefinedBehaviorSanitizer, so every known-answer and boundary case also runs with memory checks.
+
+```bash
+make sanitizer-test CRYPTO_LIB=mbedtls
+```
+
+It runs in the fuzzer container, not the OpenWrt one. OpenWrt's ucode is built with gcc, and gcc's sanitizer runtime does not support musl. So the container builds ucode and utest from source with clang's, at the same versions the devenv ships. The target fails on a test failure, a crash, or any sanitizer report. That includes leaks, which LeakSanitizer reports only when a worker process exits, after utest has already recorded a pass. Set `SANITIZER_LEAKS=0` to skip leak detection.
+
+The unit and integration buckets beyond crypto need `uci`, `ubus` and `lucihttp`, which that container does not build, so they are not covered.

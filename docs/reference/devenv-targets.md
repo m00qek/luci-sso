@@ -43,6 +43,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | `test` | CI | Alias for `unit-test` followed by `e2e-test`. |
 | `watch-tests` | CI | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. Requires `inotify-tools` on the host. |
 | `fuzzer-test` | CI | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. |
+| `sanitizer-test` | CI | Run `test/native` and `test/unit/luci_sso/crypto` against the native module built with AddressSanitizer + UndefinedBehaviorSanitizer, in an interpreter built the same way. Fails on any sanitizer report, including leaks found at process exit. Needs no running stack. |
 | `lint` | — | Run the three documentation lint checks (error codes, request limits, cookies). No stack required. |
 
 ### Build
@@ -94,6 +95,7 @@ Common `SDK_ARCH` values:
 | :--- | :--- | :--- |
 | `TIME` | `60` | Fuzzer run duration in seconds. |
 | `DETECT_LEAKS` | `0` | Set to `1` to enable AddressSanitizer leak detection. Disabled by default to speed up initial coverage runs. |
+| `SANITIZER_LEAKS` | `1` | `sanitizer-test` only. Set to `0` to disable LeakSanitizer. |
 
 ### Container
 
@@ -125,6 +127,10 @@ make package SDK_ARCH=mipsel_24kc
 
 # Fuzz the mbedtls backend for 10 minutes with leak detection
 make fuzzer-test CRYPTO_LIB=mbedtls TIME=600 DETECT_LEAKS=1
+
+# Run the native and crypto buckets under ASan + UBSan (leak detection on by default)
+make sanitizer-test CRYPTO_LIB=wolfssl
+make sanitizer-test CRYPTO_LIB=wolfssl SANITIZER_LEAKS=0
 
 # Open a shell in the running openwrt container
 make shell
