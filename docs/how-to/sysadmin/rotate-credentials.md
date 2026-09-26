@@ -23,7 +23,7 @@ The most common case: the secret is expired or has been compromised. The client 
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**. Update **Client Secret** with the new secret, then click **Save & Apply**.
+    Navigate to **Services > Single Sign-On**. Update **Client Secret** with the new secret, then click **Save & Apply**.
 
 === "Terminal (SSH)"
 
@@ -65,7 +65,7 @@ If re-registering the client entirely (new application registration in the IdP):
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**. Update **Client ID** and **Client Secret**, then click **Save & Apply**.
+    Navigate to **Services > Single Sign-On**. Update **Client ID** and **Client Secret**, then click **Save & Apply**.
 
 === "Terminal (SSH)"
 
@@ -89,7 +89,7 @@ Changing `issuer_url` requires clearing the discovery cache in addition to updat
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**. Update **Issuer URL**, **Client ID**, and **Client Secret**, then click **Save & Apply**.
+    Navigate to **Services > Single Sign-On**. Update **Issuer URL**, **Client ID**, and **Client Secret**, then click **Save & Apply**.
 
 === "Terminal (SSH)"
 
@@ -110,7 +110,7 @@ rm -f /var/run/luci-sso/*.json
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section. Edit each role and update **Email Addresses** and **Groups** as needed, then click **Save & Apply**.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section. Edit each role and update **Email Addresses** and **Groups** as needed, then click **Save & Apply**.
 
 === "Terminal (SSH)"
 

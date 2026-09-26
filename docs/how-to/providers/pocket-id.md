@@ -1,4 +1,4 @@
-# How-to: Configure Pocket ID
+# How to Configure Pocket ID
 
 This guide describes how to connect `luci-sso` to a [Pocket ID](https://pocket-id.org/) instance.
 
@@ -27,7 +27,7 @@ If you want to restrict which Pocket ID groups are allowed to authenticate to th
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     Fill in the **Settings** section:
 
@@ -64,7 +64,7 @@ If you want to restrict which Pocket ID groups are allowed to authenticate to th
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
 
@@ -83,7 +83,7 @@ Pocket ID exposes groups via the `groups` scope. Group names appear in the `grou
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
 

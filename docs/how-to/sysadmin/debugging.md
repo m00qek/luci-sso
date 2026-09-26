@@ -36,7 +36,7 @@ Check that the service is enabled and responding:
 curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
 ```
 
-- If it returns `{"enabled":false}`: SSO is disabled. Enable it in **Services > SSO Login** (toggle **Enable SSO** on and click **Save & Apply**), or via SSH: `uci set luci-sso.default.enabled='1' && uci commit luci-sso`.
+- If it returns `{"enabled":false}`: SSO is disabled. Enable it in **Services > Single Sign-On** (toggle **Enable SSO** on and click **Save & Apply**), or via SSH: `uci set luci-sso.default.enabled='1' && uci commit luci-sso`.
 - If the request fails entirely: the CGI script is not running. Verify the package is installed: `opkg list-installed | grep luci-sso`.
 - If the log shows `CONFIG_ERROR`: a required option is missing or malformed. The line just before it says which one:
 
@@ -45,7 +45,7 @@ curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
     luci-sso[1234]: [500] CONFIG_ERROR
     ```
 
-    The message names the option, never its value. Fix that option in **Services > SSO Login** or with `uci set`, then check the rest against the [UCI Configuration Reference](../../reference/uci-config.md).
+    The message names the option, never its value. Fix that option in **Services > Single Sign-On** or with `uci set`, then check the rest against the [UCI Configuration Reference](../../reference/uci-config.md).
 
 ---
 
@@ -128,7 +128,7 @@ After synchronization, try logging in again. If clock drift is a recurring probl
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**. Set **Clock Tolerance** to `120`, then click **Save & Apply**.
+    Navigate to **Services > Single Sign-On**. Set **Clock Tolerance** to `120`, then click **Save & Apply**.
 
 === "Terminal (SSH)"
 

@@ -86,7 +86,7 @@ Attempt a login to confirm the IdP credentials are still valid. If the client se
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**. Update **Client Secret**, then click **Save & Apply**.
+    Navigate to **Services > Single Sign-On**. Update **Client Secret**, then click **Save & Apply**.
 
 === "Terminal (SSH)"
 

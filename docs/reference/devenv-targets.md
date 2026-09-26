@@ -1,4 +1,4 @@
-# Makefile Reference
+# Makefile Targets
 
 All development commands run through `Makefile`. Invoke them as `make <target> [VARIABLE=value ...]` from the project root.
 

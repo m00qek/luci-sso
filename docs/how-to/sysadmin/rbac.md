@@ -55,7 +55,7 @@ config role 'admin'
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Add**, enter `admin` as the role name, then fill in the modal:
 
@@ -85,7 +85,7 @@ A common starting point for read-only users — access to status and network vie
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Add**, enter `viewer` as the role name, then fill in the modal:
 
@@ -122,7 +122,7 @@ If your IdP returns a `groups` claim, you can match roles by group instead of (o
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**. In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
+    Navigate to **Services > Single Sign-On**. In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
 
 === "Terminal (SSH)"
 
@@ -135,7 +135,7 @@ Then configure roles by group:
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Add**, enter `ops_admin` as the role name, then fill in the modal:
 
@@ -223,5 +223,5 @@ If you see `USER_NOT_AUTHORIZED`, the user's email or group claims do not match 
 
 ## Reference
 
-- All UCI options are documented in the [UCI Configuration Reference](../../reference/uci-config.md#role-mapping).
+- All UCI options are documented in the [UCI Configuration Reference](../../reference/uci-config.md#role-mapping-config-role).
 - Error codes from role evaluation are described in [Log Messages](../../reference/log-messages.md#authorization-errors).

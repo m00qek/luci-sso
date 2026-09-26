@@ -1,4 +1,4 @@
-# How-to: Configure Keycloak
+# How to Configure Keycloak
 
 This guide describes how to connect `luci-sso` to a [Keycloak](https://www.keycloak.org/) instance.
 
@@ -54,7 +54,7 @@ curl -s https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>/.well-known/openid
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     Fill in the **Settings** section:
 
@@ -89,7 +89,7 @@ curl -s https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>/.well-known/openid
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
 
@@ -116,7 +116,7 @@ Then enable the `groups` scope on the router and map the group:
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
 

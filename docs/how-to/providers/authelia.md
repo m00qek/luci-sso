@@ -1,4 +1,4 @@
-# How-to: Configure Authelia
+# How to Configure Authelia
 
 This guide describes how to connect `luci-sso` to an [Authelia](https://www.authelia.com/) instance.
 
@@ -34,7 +34,7 @@ The **Client Secret** is the **plaintext** secret — Authelia stores the hash, 
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     Fill in the **Settings** section:
 
@@ -75,7 +75,7 @@ The **Client Secret** is the **plaintext** secret — Authelia stores the hash, 
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
 
@@ -94,7 +94,7 @@ Authelia returns LDAP/AD group memberships in the `groups` claim. The group name
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name in **Groups**, then click **Save**.
 

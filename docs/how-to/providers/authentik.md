@@ -1,4 +1,4 @@
-# How-to: Configure Authentik
+# How to Configure Authentik
 
 This guide describes how to connect `luci-sso` to an [Authentik](https://goauthentik.io/) instance.
 
@@ -65,7 +65,7 @@ curl -s 'https://authentik.example.com/application/o/luci-router/.well-known/ope
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     Fill in the **Settings** section:
 
@@ -100,7 +100,7 @@ curl -s 'https://authentik.example.com/application/o/luci-router/.well-known/ope
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
 
@@ -121,7 +121,7 @@ Authentik delivers group memberships through the `profile` scope, so no separate
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name in **Groups**, then click **Save**.
 

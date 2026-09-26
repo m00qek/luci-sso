@@ -1,4 +1,4 @@
-# How-to: Configure Google OIDC
+# How to Configure Google
 
 This guide describes how to connect `luci-sso` to Google Workspace or a personal Google Cloud project.
 
@@ -24,7 +24,7 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     Fill in the **Settings** section:
 
@@ -65,7 +65,7 @@ Google does not provide a `groups` claim for personal accounts. Map access by em
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
     Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter your Gmail address in **Email Addresses**, then click **Save**.
 

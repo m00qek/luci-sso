@@ -1,4 +1,4 @@
-# How-to: Development Workflow
+# How to Work on luci-sso Day to Day
 
 This guide covers the day-to-day development cycle for `luci-sso`.
 

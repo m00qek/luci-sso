@@ -1,6 +1,6 @@
 # How to Configure luci-sso in the LuCI Web Interface
 
-This guide walks through the **Services > SSO Login** settings page. Use it when you already have credentials from your identity provider and want to enter or update them directly in LuCI.
+This guide walks through the **Services > Single Sign-On** settings page. Use it when you already have credentials from your identity provider and want to enter or update them directly in LuCI.
 
 If you are connecting to a specific provider for the first time, use the [provider guides](../index.md#identity-providers) instead — they cover IdP registration and these router settings together in one flow.
 
@@ -8,11 +8,11 @@ If you are connecting to a specific provider for the first time, use the [provid
 
 ## 1. Open the settings page
 
-Log in to LuCI and navigate to **Services > SSO Login**.
+Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading reads **SSO Login**.
 
 The page has two sections: **Settings** (OIDC provider credentials) and **Users** (role-based access control).
 
-![LuCI Services › SSO Login page showing the Settings section with fields for Enable SSO, Issuer URL, Client ID, Client Secret, Redirect URI, Scopes, and Clock Tolerance, and a Users section below listing configured roles](../../assets/screenshots/luci-sso-settings.svg "LuCI Services › SSO Login — Settings and Users sections")
+![LuCI Services › Single Sign-On page showing the Settings section with fields for Enable SSO, Issuer URL, Client ID, Client Secret, Redirect URI, Scopes, and Clock Tolerance, and a Users section below listing configured roles](../../assets/screenshots/luci-sso-settings.svg "LuCI Services › Single Sign-On — Settings and Users sections")
 
 ---
 
@@ -46,7 +46,7 @@ Seconds of allowed clock skew during JWT validation. The default `60` is suffici
 
 Leave empty unless your router reaches the IdP at a different address than your browser does. When set, `luci-sso` uses this URL for back-channel requests (token exchange, JWKS fetch) while still validating the `iss` claim against the public Issuer URL. See [How to Configure Split-Horizon Networking](split-horizon.md).
 
-![LuCI Services › SSO Login — Settings section scrolled to show the Internal Issuer URL field, which is empty by default and marked as optional](../../assets/screenshots/luci-sso-settings-advanced.svg "LuCI SSO settings — Internal Issuer URL field")
+![LuCI Services › Single Sign-On — Settings section scrolled to show the Internal Issuer URL field, which is empty by default and marked as optional](../../assets/screenshots/luci-sso-settings-advanced.svg "LuCI SSO settings — Internal Issuer URL field")
 
 ---
 

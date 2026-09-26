@@ -18,7 +18,7 @@ Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, 
 8. [Documentation Standards](#documentation-standards)
 9. [Commit Messages](#commit-messages)
 10. [Code Review Checklist](#code-review-checklist)
-11. [Technical Debt & Known Exceptions](#technical-debt--known-exceptions)
+11. [Technical Debt & Known Exceptions](#technical-debt-known-exceptions)
 
 ---
 

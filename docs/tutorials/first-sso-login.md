@@ -61,7 +61,7 @@ Google will display the Client ID and Client Secret. Copy both.
 
 ## Step 2: Configure luci-sso
 
-Navigate to **Services > SSO Login**.
+Navigate to **Services > Single Sign-On**.
 
 Fill in the **Settings** section with the values from Step 1:
 
@@ -82,7 +82,7 @@ Scroll to the **Users** section, click **Edit** on the `admin` role, add our Gma
 Click **Save & Apply**.
 
 !!! note "Prefer the command line?"
-    The same configuration can be done over SSH. See [How to Connect luci-sso to Google](../how-to/providers/google.md) for the UCI equivalents.
+    The same configuration can be done over SSH. See [How to Configure Google](../how-to/providers/google.md) for the UCI equivalents.
 
 ---
 
@@ -100,7 +100,7 @@ Expected response:
 {"enabled": true}
 ```
 
-If we see `{"enabled": false}`, verify that **Enable SSO** is toggled on in **Services > SSO Login** and that we clicked **Save & Apply**.
+If we see `{"enabled": false}`, verify that **Enable SSO** is toggled on in **Services > Single Sign-On** and that we clicked **Save & Apply**.
 
 ---
 

@@ -3,6 +3,10 @@ site_description: Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.
 site_url: https://m00qek.github.io/luci-sso/
 site_dir: bin/site
 
+# docs/README.md describes the docs source tree for GitHub; it is not a page.
+exclude_docs: |
+  /README.md
+
 theme:
   name: material
   custom_dir: docs/overrides
@@ -56,13 +60,14 @@ nav:
       - Providers:
           - Generic OIDC Provider: how-to/providers/generic-oidc.md
           - Google: how-to/providers/google.md
-          - Github: how-to/providers/github.md
+          - GitHub (not supported): how-to/providers/github.md
           - Authelia: how-to/providers/authelia.md
           - Keycloak: how-to/providers/keycloak.md
           - Authentik: how-to/providers/authentik.md
           - Pocket ID: how-to/providers/pocket-id.md
       - Sysadmin:
           - Installation: how-to/sysadmin/installation.md
+          - Configuring in LuCI: how-to/sysadmin/configure-in-luci.md
           - Installing a Private CA Certificate: how-to/sysadmin/install-ca-certificate.md
           - Upgrading: how-to/sysadmin/upgrade.md
           - Rotating Credentials: how-to/sysadmin/rotate-credentials.md
@@ -87,7 +92,7 @@ nav:
       - Style Guide: reference/style-guide.md
       - Testing Architecture: reference/testing-architecture.md
       - RFC Compliance: reference/rfc-compliance.md
-      - devenv Targets: reference/devenv-targets.md
+      - Makefile Targets: reference/devenv-targets.md
   - Explanation:
       - Overview: explanation/index.md
       - About LuCI SSO: explanation/about.md
