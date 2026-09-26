@@ -202,7 +202,7 @@ describe('handshake: authenticate — OAuth flow failures', () => {
 							call_count++;
 							return { ok: true, data: { status: 200, body: sprintf("%J", jwks) } };
 						}
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					},
 					post: (url, opts) => {
 						return { ok: true, data: { status: 200, body: sprintf("%J", pending_tokens) } };
@@ -267,7 +267,7 @@ describe('handshake: recovery', () => {
 							let data = (call_count == 1) ? old_jwks : new_jwks;
 							return { ok: true, data: { status: 200, body: sprintf("%J", data) } };
 						}
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					},
 					post: (url, opts) => {
 						return { ok: true, data: { status: 200, body: sprintf("%J", pending_tokens) } };
@@ -958,7 +958,7 @@ describe('handshake: reproduction', () => {
 							let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
 						}
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},

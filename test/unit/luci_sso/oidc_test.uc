@@ -605,3 +605,31 @@ describe('oidc: fetch_userinfo', () => {
 		});
 	});
 });
+
+// ─── back-channel failure causes reach the log ────────────────────────────────
+
+describe('oidc: HTTP failure causes are logged', () => {
+	it('exchange_code logs the transport cause', () => {
+		let logs = [];
+		with_context({
+			http_client: { data: { [f.MOCK_DISCOVERY.token_endpoint]: { error: "CERT_NAME_MISMATCH" } } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			let res = oidc.exchange_code(deps, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "a-very-long-and-secure-verifier-that-is-at-least-43-chars-long");
+			assert.match(contains({ ok: false, error: 'TOKEN_ENDPOINT_NETWORK_ERROR' }), res);
+		});
+		assert.match(1, length(filter(logs, (m) => index(m, "Token exchange network error") == 0 && index(m, ": HTTP_REQUEST_FAILED (CERT_NAME_MISMATCH)") > 0)));
+	});
+
+	it('fetch_userinfo logs the transport cause', () => {
+		let logs = [];
+		let endpoint = "https://trusted.idp/userinfo";
+		with_context({
+			http_client: { data: { [endpoint]: { error: "CONNECTION_FAILED" } } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			assert.match(contains({ ok: false, error: 'USERINFO_NETWORK_ERROR' }), oidc.fetch_userinfo(deps, endpoint, "at"));
+		});
+		assert.match(1, length(filter(logs, (m) => m == "UserInfo fetch network error: HTTP_REQUEST_FAILED (CONNECTION_FAILED)")));
+	});
+});

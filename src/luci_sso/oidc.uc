@@ -100,7 +100,7 @@ export function exchange_code(deps, config, discovery, code, verifier, session_i
 	});
 
 	if (!res_http.ok) {
-		deps.log("warn", `Token exchange network error${sid_ctx}: ${res_http.error}`);
+		deps.log("warn", `Token exchange network error${sid_ctx}: ${Result.describe(res_http)}`);
 		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR);
 	}
 
@@ -276,7 +276,7 @@ export function fetch_userinfo(deps, endpoint, access_token) {
 	});
 
 	if (!res_http.ok) {
-		deps.log("warn", `UserInfo fetch network error: ${res_http.error}`);
+		deps.log("warn", `UserInfo fetch network error: ${Result.describe(res_http)}`);
 		return Result.err(USERINFO_NETWORK_ERROR);
 	}
 

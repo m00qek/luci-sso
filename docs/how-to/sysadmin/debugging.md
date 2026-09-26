@@ -54,9 +54,31 @@ curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
 The router sent the user to the IdP but the callback back to the router failed.
 
 - **Log shows `OIDC_DISCOVERY_FAILED`**: the router cannot reach `issuer_url`. Test connectivity from the router: `curl -s <issuer_url>/.well-known/openid-configuration`. Check DNS resolution and firewall rules. If the router must reach the IdP at a different internal address, see [How to Configure Split-Horizon Networking](split-horizon.md).
-- **Log shows `SSL_INIT_FAILED`**: the router does not trust the IdP's TLS certificate. Install the system CA bundle (`opkg install ca-bundle`) or add your private CA certificate to `/etc/ssl/certs/` and run `update-ca-certificates`.
 - **Log shows `STATE_PARAMETER_MISMATCH`**: the browser's handshake cookie was lost, or the user completed the flow in a second tab. This is normal; the user can retry.
 - **Log shows `HANDSHAKE_EXPIRED`**: the user took more than five minutes to complete the IdP login. The browser will restart the flow automatically on the next attempt.
+
+---
+
+## A back-channel request to the IdP failed
+
+When the router cannot complete a request to the IdP (discovery, JWKS, token exchange or UserInfo), the log names the cause in parentheses:
+
+```
+luci-sso[1234]: Discovery fetch failed for [id: 957cfa182d5cc6db]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)
+```
+
+The same form appears in `JWKS fetch failed`, `Token exchange network error` and `UserInfo fetch network error` lines.
+
+| Cause | What happened | What to do |
+| :--- | :--- | :--- |
+| `CONNECT_NOT_STARTED` | The connection could not even start: the host name did not resolve, or there is no route to it. | Check DNS on the router (`nslookup <idp-host>`) and its routes. If the router must reach the IdP at a different address, see [Split-Horizon Networking](split-horizon.md). |
+| `CONNECTION_FAILED` | The IdP host refused the connection. | Check that the IdP is running and listening on that port, and that no firewall rejects the router. |
+| `TIMED_OUT` | The IdP did not answer within 10 seconds. | Check firewall rules that silently drop traffic, and the IdP's load. |
+| `CERT_UNTRUSTED` | The IdP's certificate is not signed by a CA the router trusts. | Install `ca-bundle` for a public CA. For a private CA, follow [How to Install a Private CA Certificate](install-ca-certificate.md). |
+| `CERT_NAME_MISMATCH` | The certificate is valid but does not cover the host name the router connected to. | Make `issuer_url` (or `internal_issuer_url`) use a host name listed in the certificate, not an IP address or a different alias. |
+| `SSL_INIT_FAILED` | TLS could not be set up at all, before connecting. | The TLS library or CA store is missing: check that `ca-bundle` is installed (`opkg install ca-bundle`). |
+| `RESPONSE_TOO_LARGE` | The IdP's response exceeded 256 KB. | The URL probably points at the wrong resource. Check `issuer_url`. |
+| `UCLIENT_ERROR_<n>` | A transport failure `luci-sso` does not name. | Test the same URL with `curl -v` from the router. |
 
 ---
 

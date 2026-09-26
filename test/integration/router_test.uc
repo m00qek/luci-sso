@@ -116,7 +116,7 @@ describe('router: callback', () => {
 					post: (url, opts) => {
 						if (url == "https://idp.com/token")
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: at, refresh_token: "rt", id_token: pending_id_token }) } };
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
@@ -171,7 +171,7 @@ describe('router: callback', () => {
 					post: (url, opts) => {
 						if (url == "https://idp.com/token")
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: at, id_token: pending_id_token }) } };
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
@@ -221,7 +221,7 @@ describe('router: callback', () => {
 					post: (url, opts) => {
 						if (url == "https://idp.com/token")
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: at, id_token: pending_id_token }) } };
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
@@ -269,7 +269,7 @@ describe('router: callback', () => {
 					post: (url, opts) => {
 						if (url == "https://idp.com/token")
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: access_token, id_token: pending_id_token }) } };
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},

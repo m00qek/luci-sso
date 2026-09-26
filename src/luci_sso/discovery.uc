@@ -120,7 +120,7 @@ export function discover(deps, issuer, options) {
 		}
 
 		if (!res_http.ok) {
-			deps.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${res_http.error}`);
+			deps.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${Result.describe(res_http)}`);
 			return Result.err(DISCOVERY_NETWORK_ERROR);
 		}
 
@@ -214,7 +214,7 @@ export function fetch_jwks(deps, jwks_uri, options) {
 		}
 
 		if (!res_http.ok) {
-			deps.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${res_http.error}`);
+			deps.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${Result.describe(res_http)}`);
 			return Result.err(JWKS_NETWORK_ERROR);
 		}
 

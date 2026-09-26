@@ -36,6 +36,29 @@ function get_system_ca_files(fs) {
 	return keys(cas_map);
 }
 
+/**
+ * Readable names for the codes uclient passes to the error callback. The
+ * ucode binding exports no constants, so these were established by
+ * triggering each failure against a real uclient in the devenv, and match
+ * enum uclient_error_code in upstream uclient.h:
+ *   1 UCLIENT_ERROR_CONNECT           connection refused
+ *   2 UCLIENT_ERROR_TIMEDOUT          no answer within the timeout
+ *   3 UCLIENT_ERROR_SSL_INVALID_CERT  certificate chain not trusted
+ *   4 UCLIENT_ERROR_SSL_CN_MISMATCH   certificate does not cover the host
+ * Codes never observed (0 UNKNOWN, 5 MISSING_SSL_CONTEXT) keep their number.
+ * @private
+ */
+const UCLIENT_ERRORS = {
+	"1": "CONNECTION_FAILED",
+	"2": "TIMED_OUT",
+	"3": "CERT_UNTRUSTED",
+	"4": "CERT_NAME_MISMATCH"
+};
+
+function uclient_error_name(code) {
+	return UCLIENT_ERRORS["" + code] || `UCLIENT_ERROR_${code}`;
+}
+
 function do_request(uclient, uloop, fs, method, url, opts) {
 	uloop.init();
 
@@ -67,7 +90,7 @@ function do_request(uclient, uloop, fs, method, url, opts) {
 			}
 		},
 		data_eof:  function() { uloop.end(); },
-		error: function(u, code) { error = "UCLIENT_ERROR_" + code; uloop.end(); }
+		error: function(u, code) { error = uclient_error_name(code); uloop.end(); }
 	};
 
 	con = uclient.new(url, null, callbacks);
@@ -78,7 +101,9 @@ function do_request(uclient, uloop, fs, method, url, opts) {
 
 	if (opts.timeout) con.set_timeout(opts.timeout);
 
-	if (!con.connect()) return Result.err("TLS_CONNECT_FAILED");
+	// connect() fails synchronously, before any callback, when the host name
+	// does not resolve or there is no route to it (observed in the devenv).
+	if (!con.connect()) return Result.err("CONNECT_NOT_STARTED");
 
 	let req_opts = { headers: opts.headers || {} };
 	if (opts.post_data) req_opts.post_data = opts.post_data;

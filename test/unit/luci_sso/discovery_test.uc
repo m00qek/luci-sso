@@ -291,7 +291,7 @@ describe('discovery: discover — schema, cache & hardening', () => {
 							get_call_count++;
 							return { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } };
 						}
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
@@ -418,7 +418,7 @@ describe('discovery: fetch_jwks — cache', () => {
 							get_call_count++;
 							return { ok: true, data: { status: 200, body: sprintf("%J", mock_jwks) } };
 						}
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
@@ -449,5 +449,32 @@ describe('discovery: fetch_jwks — cache', () => {
 			assert.match(truthy(), res.ok, "Should fall back to network if cache is corrupted");
 			assert.match("k1", res.data[0].kid);
 		});
+	});
+});
+
+// ─── back-channel failure causes reach the log ────────────────────────────────
+
+describe('discovery: HTTP failure causes are logged', () => {
+	it('discover logs the transport cause', () => {
+		let logs = [];
+		with_context({
+			http_client: { data: { [ISSUER + "/.well-known/openid-configuration"]: { error: "CERT_UNTRUSTED" } } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			assert.match(contains({ ok: false, error: 'DISCOVERY_NETWORK_ERROR' }), discovery.discover(deps, ISSUER));
+		});
+		assert.match(1, length(filter(logs, (m) => index(m, "Discovery fetch failed") == 0 && index(m, ": HTTP_REQUEST_FAILED (CERT_UNTRUSTED)") > 0)));
+	});
+
+	it('fetch_jwks logs the transport cause', () => {
+		let logs = [];
+		let uri = ISSUER + "/jwks";
+		with_context({
+			http_client: { data: { [uri]: { error: "TIMED_OUT" } } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			assert.match(contains({ ok: false, error: 'JWKS_NETWORK_ERROR' }), discovery.fetch_jwks(deps, uri));
+		});
+		assert.match(1, length(filter(logs, (m) => index(m, "JWKS fetch failed") == 0 && index(m, ": HTTP_REQUEST_FAILED (TIMED_OUT)") > 0)));
 	});
 });

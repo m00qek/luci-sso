@@ -226,8 +226,8 @@ These indicate infrastructure-level failures unrelated to the OIDC flow.
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
 | `HTTPS_REQUIRED` | A back-channel request was attempted to a non-HTTPS URL | Appears in `Discovery fetch failed`, `JWKS fetch failed`, `Token exchange network error` and `UserInfo fetch network error` lines. Normally unreachable, because every endpoint is HTTPS-checked earlier. |
-| `HTTP_REQUEST_FAILED` | A back-channel HTTPS request did not complete | Appears in the same log lines as `HTTPS_REQUIRED`. Covers DNS, TCP and TLS failures, a timeout, or a response over 256 KB. Test with `curl` from the router. |
-| `SSL_INIT_FAILED` | TLS initialization failed | TLS context initialization failed. The system CA certificate store is missing or inaccessible. |
+| `HTTP_REQUEST_FAILED` | A back-channel HTTPS request did not complete | Appears in the same log lines as `HTTPS_REQUIRED`, followed by the cause in parentheses: `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE` or `UCLIENT_ERROR_<n>`. See [How to Debug luci-sso](../how-to/sysadmin/debugging.md#a-back-channel-request-to-the-idp-failed) for what each means. |
+| `SSL_INIT_FAILED` | TLS initialization failed | Logged as the cause of `HTTP_REQUEST_FAILED`: `HTTP_REQUEST_FAILED (SSL_INIT_FAILED)`. TLS could not be set up before connecting; the TLS library or the system CA store is missing. An untrusted IdP certificate is reported as `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` instead. |
 | `CRYPTO_ERROR` | A cryptographic operation returned an unexpected error | Internal error in the native C crypto bridge. |
 | `CRYPTO_INIT_FAILED` | The PSA Crypto subsystem failed to initialize | MbedTLS PSA layer unavailable. May indicate a missing `mbedtls` package. |
 | `TOO_MANY_REQUESTS` | More than 50 requests in a 60-second window across all sources (global counter) | Rate limit hit. Indicates automated scanning or a misconfigured client retrying rapidly. |

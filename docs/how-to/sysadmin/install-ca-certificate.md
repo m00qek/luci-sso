@@ -6,7 +6,7 @@ This guide describes how to make the router trust a private or self-signed CA ce
 
 ## When you need this
 
-If your IdP uses a certificate issued by a private CA (common in home labs and corporate self-hosted setups), the router will fail the back-channel TLS handshake and log `SSL_INIT_FAILED` or `TOKEN_ENDPOINT_NETWORK_ERROR`. Installing the CA certificate on the router resolves this.
+If your IdP uses a certificate issued by a private CA (common in home labs and corporate self-hosted setups), the router will fail the back-channel TLS handshake and log a line ending in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, followed by an error such as `OIDC_DISCOVERY_FAILED` or `TOKEN_ENDPOINT_NETWORK_ERROR`. Installing the CA certificate on the router resolves this.
 
 You do not need this guide if your IdP uses a Let's Encrypt or other publicly trusted certificate.
 
@@ -76,7 +76,7 @@ curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
 # Expected: {"enabled":true}
 ```
 
-Then attempt a login. If you previously saw `SSL_INIT_FAILED` in the log, it should no longer appear.
+Then attempt a login. If you previously saw `CERT_UNTRUSTED` in the log, it should no longer appear.
 
 === "Browser (LuCI)"
 
@@ -104,4 +104,4 @@ update-ca-certificates
 ## Related guides
 
 - [How to Configure Split-Horizon Networking](split-horizon.md) — if the router and browser reach the IdP at different addresses, you may need both this guide and split-horizon configuration.
-- [How to Debug luci-sso](debugging.md) — for diagnosing `SSL_INIT_FAILED` and other TLS errors.
+- [How to Debug luci-sso](debugging.md) — for diagnosing `CERT_UNTRUSTED` and other back-channel errors.

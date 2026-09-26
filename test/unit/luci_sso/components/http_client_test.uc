@@ -137,6 +137,52 @@ describe('components.http_client: error handling', () => {
 		});
 	});
 
+	// Codes observed from a real uclient in the devenv; they match upstream
+	// enum uclient_error_code. The real binding passes integers.
+	for (let c in [
+		[ 1, 'CONNECTION_FAILED' ],
+		[ 2, 'TIMED_OUT' ],
+		[ 3, 'CERT_UNTRUSTED' ],
+		[ 4, 'CERT_NAME_MISMATCH' ],
+	]) {
+		let code = c[0], name = c[1];
+		it(`names uclient error ${code} as ${name}`, () => {
+			with_http_suite({ net_error: code }, (client) => {
+				assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED', details: name }), client.get(URL, {}));
+				assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED', details: name }), client.post(URL, {}));
+			});
+		});
+	}
+
+	it('keeps the number for an unobserved uclient error code', () => {
+		with_http_suite({ net_error: 5 }, (client) => {
+			assert.match(contains({ ok: false, details: 'UCLIENT_ERROR_5' }), client.get(URL, {}));
+		});
+		with_http_suite({ net_error: 99 }, (client) => {
+			assert.match(contains({ ok: false, details: 'UCLIENT_ERROR_99' }), client.get(URL, {}));
+		});
+	});
+
+	it('accepts the code as a string too', () => {
+		with_http_suite({ net_error: '3' }, (client) => {
+			assert.match(contains({ ok: false, details: 'CERT_UNTRUSTED' }), client.get(URL, {}));
+		});
+	});
+
+	it('reports CONNECT_NOT_STARTED when connect() fails (DNS failure or no route)', () => {
+		with_http_suite({ connect: false }, (client) => {
+			assert.match(contains({ ok: false, error: 'HTTP_REQUEST_FAILED', details: 'CONNECT_NOT_STARTED' }), client.get(URL, {}));
+		});
+	});
+
+	it('reports RESPONSE_TOO_LARGE as the cause for an oversized body', () => {
+		let s = 'a';
+		while (length(s) < 262145) s += s;
+		with_http_suite({ body: substr(s, 0, 262145) }, (client) => {
+			assert.match(contains({ ok: false, details: 'RESPONSE_TOO_LARGE' }), client.get(URL, {}));
+		});
+	});
+
 	it('returns HTTP_REQUEST_FAILED when response body exceeds 256 KB', () => {
 		let s = 'a';
 		while (length(s) < 262145) s += s;

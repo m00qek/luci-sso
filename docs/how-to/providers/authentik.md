@@ -166,6 +166,6 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | `DISCOVERY_ISSUER_MISMATCH` | The `issuer_url` must end with a trailing slash and match the application slug exactly. Fetch the discovery document and copy the `issuer` field verbatim. |
 | `OIDC_DISCOVERY_FAILED` | The application slug in the URL is wrong, or the Application was not created (only the Provider). Verify both the Provider and Application exist in Authentik. |
 | `USER_NOT_AUTHORIZED` with "matched no roles" | The `groups` claim is empty. In the Authentik provider settings, confirm the **profile** scope is selected under **Advanced protocol settings > Scopes**, and that the user belongs to the mapped group. |
-| `SSL_INIT_FAILED` | The router does not trust Authentik's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
+| `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Authentik's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md).
