@@ -222,7 +222,8 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 		}
 	};
 	// write '*' is full admin: unrestricted ubus/uci/file/cgi-io plus read and
-	// write on every luci-* access group (LuCI's UI checks those).
+	// write on every luci-* access group (LuCI's UI checks those), plus read on
+	// the "unauthenticated" group, whose marker an rpcd '*' login also carries.
 	//
 	// Every other role gets exactly what rpcd would grant a password login
 	// with the same read/write lists: each permitted access group's ACL
@@ -252,6 +253,11 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 			for (let g in all)
 				push(admin, [ "access-group", g, mode ]);
 		}
+		// An rpcd '*' login also matches the non-luci "unauthenticated" group.
+		// Its calls are already covered by the raw ubus '*' above; the marker
+		// keeps admin sessions identical to rpcd's for anything that checks it.
+		if (index(acl_res.data.groups, "unauthenticated") != -1)
+			push(admin, [ "access-group", "unauthenticated", "read" ]);
 		_grant_all(deps, sid, admin);
 	} else {
 		// A named group that no ACL file defines grants nothing: say so.

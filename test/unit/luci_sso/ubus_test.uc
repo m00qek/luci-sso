@@ -452,6 +452,20 @@ describe('ubus: create_passwordless_session — full admin', () => {
 		assert.match(sort(expected), grants_for(PERMS_ADMIN));
 	});
 
+	it("write '*' also reads the unauthenticated group when an ACL file defines it, as an rpcd '*' login does", () => {
+		let files = { ...ACL_FILES, 'unauthenticated.json': sprintf('%J', {
+			'unauthenticated': { read: { ubus: { session: [ 'access', 'login' ] } } },
+		}) };
+		let fs = { strict: true, behavior: {
+			lsdir:    () => keys(files),
+			readfile: (p) => files[substr(p, length(ACL_DIR) + 1)],
+		} };
+		let all = [ 'luci-base', 'luci-mod-system-config', 'luci-mod-system-reboot' ];
+		let expected = [ ...RAW, 'access-group unauthenticated read' ];
+		for (let m in [ 'read', 'write' ]) for (let g in all) push(expected, `access-group ${g} ${m}`);
+		assert.match(sort(expected), grants_for(PERMS_ADMIN, fs));
+	});
+
 	it('returns UBUS_SESSION_FAILED and destroys the session when the ACL scan fails, for any role', () => {
 		for (let perms in [ PERMS_ADMIN, { read: ['*'], write: [] }, PERMS_USER ]) {
 			mock.inject_all({

@@ -120,11 +120,8 @@ describe('system: SSO roles match rpcd password logins', () => {
 			});
 			print(sprintf("\n    [parity] admin: %d rpcd entries, %d SSO entries; not covered by an SSO raw '*': %J\n",
 				length(keys(rpcd)), length(keys(sso)), uncovered));
-			// Known, reported difference: rpcd's "*" also matches the non-luci
-			// group "unauthenticated", whose access-group marker SSO admin does
-			// not get (its scopes are covered by the raw ubus "*"). Anything else
-			// uncovered is drift.
-			assert.match([ "access-group unauthenticated read" ], uncovered, `SSO admin lacks rights an rpcd '*' login has: ${join(", ", uncovered)}`);
+			// Nothing may be left uncovered: anything here is drift.
+			assert.match([], uncovered, `SSO admin lacks rights an rpcd '*' login has: ${join(", ", uncovered)}`);
 		});
 	});
 });

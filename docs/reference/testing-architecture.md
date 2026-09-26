@@ -91,8 +91,7 @@ role, globs with a negation) it creates a temporary rpcd password login with the
 same lists, creates an SSO session through the real code, and requires the two
 sessions' ACLs to be identical, printing every entry that differs. Full admin is
 checked for coverage instead: its raw `*` grants must cover everything an rpcd
-`*` login gets, with one known, pinned difference (the `unauthenticated` group's
-marker). CI runs it on every OpenWrt release in the matrix, so an rpcd that
+`*` login gets, with no exceptions. CI runs it on every OpenWrt release in the matrix, so an rpcd that
 changes its rules fails CI instead of breaking users' roles.
 
 Use this bucket only for invariants that need the real daemon; everything else
