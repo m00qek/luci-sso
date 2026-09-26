@@ -48,7 +48,7 @@ export function run(deps, web_deps) {
 
 		let req = res_req.data;
 
-		// W2: allow ?action=enabled even when config loading fails with SSO_DISABLED,
+		// Allow ?action=enabled even when config loading fails with SSO_DISABLED,
 		// so the login button can probe availability on an unconfigured router.
 		let res_c = config.load({ uci: deps.uci, log: deps.log });
 		if (!res_c.ok) {

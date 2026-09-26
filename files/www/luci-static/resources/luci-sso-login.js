@@ -48,7 +48,7 @@
 
         // 3. Create UI
         var container = primaryBtn.parentNode;
-        // Defensive Check (Blocker #1 in 1770661270)
+        // Bail out if the button has no element parent to attach to.
         if (!container || container.nodeType !== Node.ELEMENT_NODE) {
             return false;
         }
@@ -80,7 +80,8 @@
             ssoBtn.disabled = true;
             ssoBtn.textContent = 'Redirecting...';
             
-            // SECURITY: Always enforce HTTPS for the SSO initiation flow (ARCHITECTURE.md §3)
+            // Always start the SSO flow over HTTPS, even from an HTTP page: every
+            // cookie it sets is Secure.
             window.location.href = 'https://' + window.location.host + '/cgi-bin/luci-sso';
         };
 
@@ -97,7 +98,7 @@
         injectSsoButton();
 
         // Heavy-duty observer to handle LuCI.js dynamic rendering
-        // Nitpick in 1770661270: Debounce to reduce CPU load
+        // Debounce: LuCI re-renders often, so coalesce bursts of mutations.
         var debounceTimer;
         var observer = new MutationObserver(function() {
             clearTimeout(debounceTimer);

@@ -11,7 +11,7 @@ import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER,
  * Generates the authorization URL.
  */
 export function get_auth_url(deps, config, discovery_doc, params) {
-	// BLOCKER FIX: Enforce mandatory CSRF protection (B1)
+	// state and nonce are the CSRF and replay bindings; refuse to start without them.
 	if (!params.state || type(params.state) != "string" || length(params.state) < 16) {
 		return Result.err(MISSING_STATE_PARAMETER);
 	}
@@ -24,12 +24,12 @@ export function get_auth_url(deps, config, discovery_doc, params) {
 		return Result.err(MISSING_PKCE_CHALLENGE);
 	}
 
-	// BLOCKER FIX: Enforce HTTPS on authorization_endpoint (B3)
+	// The browser is sent here with state, nonce and challenge in the URL; never over plain HTTP.
 	if (!encoding.is_https(discovery_doc.authorization_endpoint)) {
 		return Result.err(INSECURE_AUTH_ENDPOINT);
 	}
 	
-	// W2: RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
+	// RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
 	if (index(discovery_doc.authorization_endpoint, '#') != -1) {
 		return Result.err(INVALID_AUTH_ENDPOINT, "authorization_endpoint MUST NOT contain a fragment");
 	}
@@ -61,7 +61,7 @@ export function get_auth_url(deps, config, discovery_doc, params) {
 export function exchange_code(deps, config, discovery, code, verifier, session_id) {
 	if (!encoding.is_https(discovery.token_endpoint)) return Result.err(INSECURE_TOKEN_ENDPOINT);
 
-	// Audit logging for PKCE usage (Blocker #2)
+	// Log PKCE-bound exchanges so they can be correlated with the handshake.
 	let sid_ctx = session_id ? ` [session_id: ${session_id}]` : "";
 	deps.log("info", `Initiating token exchange${sid_ctx}`);
 
@@ -129,12 +129,12 @@ export function exchange_code(deps, config, discovery, code, verifier, session_i
  * @param {object} handshake - Handshake state {nonce, ...}
  * @param {object} discovery - Discovery document
  * @param {number} now - Current timestamp
- * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
+ * @param {object} [policy] - Security policy {allowed_algs}; defaults to RS256 and ES256
  */
 export function verify_id_token(deps, tokens, keys, config, handshake, discovery, now, policy) {
 	if (!tokens.id_token || type(tokens.id_token) != "string") return Result.err(MISSING_ID_TOKEN);
 
-	// 1. Policy Enforcement (Second Dimension)
+	// 1. Algorithm policy. Fixed in code, not UCI, so config cannot weaken it.
 	const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
 	let p = policy || DEFAULT_POLICY;
 
@@ -145,7 +145,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	}
 	let header = res_h.data;
 
-	// BLOCKER: Enforce algorithm whitelist from policy
+	// Reject any alg outside the allow-list before touching keys (alg-confusion defence).
 	let alg_allowed = false;
 	for (let a in p.allowed_algs) {
 		if (crypto.constant_time_eq(header.alg, a)) {
@@ -163,7 +163,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	let pem_res = crypto.jwk_to_pem(deps.native, jwk_res.data);
 	if (!pem_res.ok) return pem_res;
 
-	// MANDATORY Claims Check
+	// The discovery document must describe the issuer we are configured for.
 	let disc_iss_res = encoding.normalize_url(discovery.issuer);
 	let conf_iss_res = encoding.normalize_url(config.issuer_url);
 	if (!disc_iss_res.ok || !conf_iss_res.ok || !crypto.constant_time_eq(disc_iss_res.data, conf_iss_res.data)) {
@@ -196,7 +196,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		return Result.err(MISSING_SUB_CLAIM);
 	}
 
-	// B1 & W2: Enforce mandatory exp and iat claims (OIDC Core 1.0 §2)
+	// exp and iat are REQUIRED by OIDC Core 1.0 §2.
 	// These claims MUST be present for full compliance and robust token age validation.
 	if (payload.exp == null) {
 		return Result.err(MISSING_EXP_CLAIM);
@@ -205,7 +205,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		return Result.err(MISSING_IAT_CLAIM);
 	}
 
-	// 3.1 Nonce Check (Blocker #3: Mandatory)
+	// 3.1 Nonce binds this ID token to our handshake and prevents replay.
 	if (!handshake.nonce || !payload.nonce) {
 		return Result.err(MISSING_NONCE);
 	}

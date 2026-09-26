@@ -141,13 +141,13 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 
 	let user_data = verify_res.data;
 
-	// FALLBACK: If email is missing from ID Token, try UserInfo endpoint (OIDC §5.3)
+	// If the ID token carries no email, try the UserInfo endpoint (OIDC Core §5.3).
 	if (!user_data.email && discovery_doc.userinfo_endpoint) {
 		let ui_res = oidc.fetch_userinfo(deps, discovery_doc.userinfo_endpoint, tokens.access_token);
 		if (ui_res.ok) {
-			// SECURITY: sub MUST match (OIDC Core §5.3.2)
-			// MANDATORY: Use constant-time comparison for identity binding
-			// W1 Hardening: Use normalization to handle case-inconsistent IdPs
+			// UserInfo sub MUST match the ID token sub (OIDC Core §5.3.2), or the
+			// claims could belong to a different user. Normalise case first, since
+			// some IdPs are inconsistent about it.
 			let res_norm_ui = encoding.normalize_sub(ui_res.data.sub);
 			let res_norm_id = encoding.normalize_sub(user_data.sub);
 
@@ -173,7 +173,7 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 
 	deps.log("info", `ID Token successfully validated for [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}]`);
 
-	// MANDATORY: Register token AFTER verification (DoS Prevention)
+	// Register the token only after verification, so forged tokens cannot fill the registry.
 	let access_token = tokens.access_token;
 	let reg_res = ubus.register_token(deps, access_token);
 	if (!reg_res.ok) {
@@ -185,7 +185,7 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 		return Result.err(TOKEN_REGISTRY_ERROR, { http_status: 500 });
 	}
 
-	// W2: Warn if access token lifetime exceeds the 24h replay protection window
+	// Warn if the access token outlives the 24h replay-registry window.
 	let a_parts = split(access_token, ".");
 	if (length(a_parts) == 3) {
 		let res_ap = encoding.safe_json(encoding.b64url_decode(a_parts[1]));

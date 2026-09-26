@@ -109,7 +109,7 @@ export function discover(deps, issuer, options) {
 	let issuer_id = crypto.safe_id(deps.native, normalized_issuer);
 
 	if (!res_http.ok || res_http.data.status != 200) {
-		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
+		// If the IdP is unreachable, serve a stale cached document rather than fail the login.
 		let stale = _read_cache(deps, cache_path, ttl, true);
 		if (stale && stale.issuer) {
 			let stale_issuer_res = encoding.normalize_url(stale.issuer);
@@ -206,7 +206,7 @@ export function fetch_jwks(deps, jwks_uri, options) {
 
 	let res_http = deps.http.get(jwks_uri, { verify: true });
 	if (!res_http.ok || res_http.data.status != 200) {
-		// RESILIENCE FALLBACK: Try stale cache
+		// If the IdP is unreachable, serve stale cached keys rather than fail the login.
 		let stale = _read_cache(deps, cache_path, ttl, true);
 		if (stale && type(stale.keys) == "array") {
 			deps.log("warn", `Using stale JWKS cache due to network failure [id: ${uri_id}]`);

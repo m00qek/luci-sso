@@ -105,7 +105,7 @@ export function verify(native, token, pubkey, options) {
 	let clock_tolerance = options.clock_tolerance;
 	let now = options.now;
 
-	// MANDATORY: exp (Expiry) and iat (Issued At) MUST be present
+	// exp (Expiry) and iat (Issued At) MUST be present
 	// Both exp and iat are required for strict OIDC compliance and age validation.
 	if (payload.exp == null) 
 		return Result.err("MISSING_EXP_CLAIM");

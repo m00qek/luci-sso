@@ -178,7 +178,7 @@ function handle_logout(deps, config, request) {
 	if (disc_res.ok && disc_res.data.end_session_endpoint) {
 		let end_session = disc_res.data.end_session_endpoint;
 
-		// BLOCKER FIX: Enforce HTTPS on end_session_endpoint (W2)
+		// The browser carries id_token_hint to this URL, so it must be HTTPS.
 		if (encoding.is_https(end_session)) {
 			let sep = (index(end_session, '?') == -1) ? '?' : '&';
 
@@ -220,7 +220,7 @@ export function handle(deps, config, request, policy) {
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
 
-	// SHORT-CIRCUIT: Action check (Does not require config or rate limit budget)
+	// ?action=enabled needs neither a valid config nor rate-limit budget.
 	if (path == "/") {
 		let query = request.query || {};
 		if (query.action == "enabled") {
@@ -230,12 +230,12 @@ export function handle(deps, config, request, policy) {
 		}
 	}
 
-	// MANDATORY: Rate limit (Protects handshake state generation and token exchange)
+	// Rate limit before anything that writes handshake state or calls the IdP.
 	if (!_check_rate_limit(deps)) {
 		return Result.err(TOO_MANY_REQUESTS, { http_status: 429 });
 	}
 
-	// MANDATORY: Config guard
+	// Every remaining path needs a loaded config.
 	if (!config) {
 		return Result.err(SSO_DISABLED, { http_status: 503 });
 	}

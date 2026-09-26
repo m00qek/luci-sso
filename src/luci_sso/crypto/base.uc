@@ -24,7 +24,7 @@ export function constant_time_eq(a, b) {
 	let len_a = length(a);
 	let len_b = length(b);
 
-	// MANDATORY: Length cap to prevent DoS via amplification
+	// Length cap: bounds the loop below so huge inputs cannot burn CPU.
 	// Any value longer than 16KB is considered excessive for tokens/hashes in 
 	// this system.
 	if (len_a > 16384 || len_b > 16384)

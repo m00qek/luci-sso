@@ -36,7 +36,7 @@ export function get(deps) {
 		}
 
 		if (!acquired) {
-			// W2: Self-healing for stale locks (Audit Warning #104)
+			// Self-heal a stale lock left by a process that crashed mid-generation.
 			// If a process crashed during generation, the lock persists.
 			// 30s is more than enough for a 32-byte CSPRNG write + rename.
 			let st = deps.fs.stat(lock_path);
@@ -59,7 +59,7 @@ export function get(deps) {
 
 				let new_key = res.data;
 				let tmp_path = common.SECRET_KEY_PATH + ".tmp";
-				// MANDATORY: Restricted permissions for secrets
+				// The key must be readable by root only.
 				if (!deps.fs.writefile(tmp_path, new_key)) {
 					deps.log("error", "CRITICAL: Failed to write secret key");
 					try { deps.fs.rmdir(lock_path); } catch (e) {}
@@ -81,7 +81,7 @@ export function get(deps) {
 			// 3. ALWAYS release the lock
 			try { deps.fs.rmdir(lock_path); } catch (e) {}
 		} else {
-			// 4. BLOCKER FIX: Retry with backoff if lock is held (B2)
+			// 4. Another process holds the lock: wait for it to publish the key.
 			let retries = 0;
 			const max_retries = 5;
 

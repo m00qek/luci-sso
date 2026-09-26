@@ -31,14 +31,6 @@ import * as clock_mod   from 'luci_sso.components.clock';
 import * as Result      from 'luci_sso.result';
 
 /**
- * Constructs the production `Deps` object.
- *
- * Opens a syslog channel, connects to ubus, and instantiates the HTTP client
- * and clock components. Called once at handler startup; never called in tests.
- *
- * @returns {Deps}
- */
-/**
  * Wraps a raw ubus connection into the `deps.ubus` channel: a single `call`
  * method that normalises the outcome into a Result.
  *
@@ -80,6 +72,14 @@ export function syslog_channel(log_mod) {
 	};
 };
 
+/**
+ * Constructs the production `Deps` object.
+ *
+ * Opens a syslog channel, connects to ubus, and instantiates the HTTP client
+ * and clock components. Called once at handler startup; never called in tests.
+ *
+ * @returns {Deps}
+ */
 export function create() {
 	return {
 		fs:     fs,

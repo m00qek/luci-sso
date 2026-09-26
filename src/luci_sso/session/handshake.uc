@@ -73,7 +73,7 @@ export function reap(deps, clock_tolerance) {
 export function create(deps) {
 	common.ensure_handshake_dir(deps);
 
-	// DOS PROTECTION: Check capacity before creating new state
+	// Cap the number of in-flight handshakes so tmpfs cannot be filled.
 	let files = deps.fs.lsdir(common.HANDSHAKE_DIR) || [];
 	let count = 0;
 	for (let f in files) {
@@ -202,7 +202,7 @@ export function verify(deps, handle, clock_tolerance) {
 	let session_id = crypto.safe_id(deps.native, handle);
 
 	try {
-		// MANDATORY: Atomic one-time use.
+		// Atomic one-time use.
 		// We RENAME the file to .consumed. Only one process can succeed in the rename.
 		if (!deps.fs.rename(path, consume_path)) {
 			deps.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
