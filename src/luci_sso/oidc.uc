@@ -1,29 +1,9 @@
-import * as uclient from 'uclient';
 import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
-import * as discovery from 'luci_sso.discovery';
+import { find_jwk } from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
 import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, MISSING_AZP_CLAIM, AZP_MISMATCH, MISSING_ACCESS_TOKEN, MISSING_AT_HASH, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON } from 'luci_sso.errors';
-
-// --- Internal Helpers ---
-
-// --- Public API ---
-
-/**
- * Fetches and caches OIDC discovery document.
- */
-export const discover = discovery.discover;
-
-/**
- * Fetches JWK Set from IdP with caching.
- */
-export const fetch_jwks = discovery.fetch_jwks;
-
-/**
- * Finds the correct JWK by key ID (kid).
- */
-export const find_jwk = discovery.find_jwk;
 
 /**
  * Generates the authorization URL.

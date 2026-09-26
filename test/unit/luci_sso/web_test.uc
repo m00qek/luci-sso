@@ -245,7 +245,7 @@ describe('web: request', () => {
 		let long_val = "";
 		for (let i = 0; i < 16385; i++) long_val += "a";
 
-		let d = web_deps({ "HTTP_HOST": long_val });
+		let d = web_deps({ "PATH_INFO": long_val });
 		let res = web.request(d);
 		assert.match(falsy(), res.ok, "Should fail on overflow");
 		assert.match("INPUT_TOO_LARGE", res.error);

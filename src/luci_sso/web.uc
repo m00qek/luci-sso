@@ -170,7 +170,7 @@ function _apply_security_headers(headers) {
  * Extracts and parses the request context from the CGI environment.
  *
  * @param {object} deps - { getenv }
- * @returns {object} - Result.ok({path, query, cookies, env}) or Result.err
+ * @returns {object} - Result.ok({path, query, cookies}) or Result.err
  */
 export function request(deps) {
 	let res_path = safe_getenv(deps.getenv, "PATH_INFO");
@@ -181,9 +181,6 @@ export function request(deps) {
 
 	let res_cookie = safe_getenv(deps.getenv, "HTTP_COOKIE");
 	if (!res_cookie.ok) return res_cookie;
-
-	let res_host = safe_getenv(deps.getenv, "HTTP_HOST");
-	if (!res_host.ok) return res_host;
 
 	let res_params = parse_params(res_qs.data);
 	if (!res_params.ok) return res_params;
@@ -197,10 +194,7 @@ export function request(deps) {
 	return Result.ok({
 		path: path,
 		query: res_params.data,
-		cookies: res_cookies.data,
-		env: {
-			HTTP_HOST: res_host.data
-		}
+		cookies: res_cookies.data
 	});
 };
 

@@ -217,3 +217,237 @@ describe('discovery: fetch_jwks', () => {
 		});
 	});
 });
+
+// ─── discover — schema, cache & hardening ─────────────────────────────────────
+
+describe('discovery: discover — schema, cache & hardening', () => {
+	it('successful fetch & schema', () => {
+		let issuer = "https://trusted.idp";
+		let url = issuer + "/.well-known/openid-configuration";
+
+		with_context({
+			http_client: { data: { [url]: { status: 200, body: f.MOCK_DISCOVERY } } }
+		}, (deps) => {
+			let res = discovery.discover(deps, issuer);
+			assert.match(truthy(), res.ok);
+			assert.match(f.MOCK_DISCOVERY.issuer, res.data.issuer);
+		});
+	});
+
+	it('handle non-JSON response', () => {
+		let issuer = "https://broken.idp";
+		let url = issuer + "/.well-known/openid-configuration";
+
+		with_context({
+			http_client: { data: { [url]: { status: 200, body: "<html>Error</html>" } } }
+		}, (deps) => {
+			let res = discovery.discover(deps, issuer);
+			assert.match(falsy(), res.ok);
+			assert.match("INVALID_DISCOVERY_DOC", res.error);
+		});
+	});
+
+	it('reject issuer mismatch', () => {
+		let issuer = "https://trusted.idp";
+		let url = issuer + "/.well-known/openid-configuration";
+		let evil_doc = { ...f.MOCK_DISCOVERY, issuer: "https://evil.idp" };
+
+		with_context({
+			http_client: { data: { [url]: { status: 200, body: evil_doc } } }
+		}, (deps) => {
+			let res = discovery.discover(deps, issuer);
+			assert.match(falsy(), res.ok);
+			assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
+		});
+	});
+
+	it('reject document missing issuer field', () => {
+		let issuer = "https://trusted.idp";
+		let url = issuer + "/.well-known/openid-configuration";
+		let bad_doc = { ...f.MOCK_DISCOVERY };
+		delete bad_doc.issuer;
+
+		with_context({
+			http_client: { data: { [url]: { status: 200, body: bad_doc } } }
+		}, (deps) => {
+			let res = discovery.discover(deps, issuer);
+			assert.match(falsy(), res.ok, "Should fail if issuer field is missing");
+			assert.match("DISCOVERY_MISSING_ISSUER", res.error);
+		});
+	});
+
+	it('cache robustness & TTL', () => {
+		let issuer = "https://trusted.idp";
+		let cache_path = "/var/run/luci-sso/oidc-cache-test.json";
+		let url = issuer + "/.well-known/openid-configuration";
+		let get_call_count = 0;
+
+		with_context({
+			fs: { data: {} },
+			http_client: {
+				behavior: {
+					get: (req_url, opts) => {
+						if (req_url == url) {
+							get_call_count++;
+							return { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } };
+						}
+						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			discovery.discover(deps, issuer, { cache_path, ttl: 100 });
+
+			let before = get_call_count;
+			let res = discovery.discover(deps, issuer, { cache_path, ttl: 100 });
+			assert.match(truthy(), res.ok, "Should hit cache");
+			assert.match(before, get_call_count, "Should not have made a network request");
+
+			before = get_call_count;
+			discovery.discover(deps, issuer, { cache_path, ttl: -1 });
+			assert.match(before + 1, get_call_count, "Should have attempted network refresh");
+		});
+	});
+
+	it('immutable cache (no pollution)', () => {
+		let issuer = "https://public.idp";
+		let url = issuer + "/.well-known/openid-configuration";
+		let mock_disc = {
+			issuer: issuer,
+			authorization_endpoint: issuer + "/auth",
+			token_endpoint: issuer + "/token",
+			jwks_uri: issuer + "/jwks"
+		};
+
+		with_context({
+			http_client: { data: { [url]: { status: 200, body: mock_disc } } }
+		}, (deps) => {
+			let res1 = discovery.discover(deps, issuer);
+			assert.match(truthy(), res1.ok);
+			res1.data.token_endpoint = "http://EVIL";
+
+			let res2 = discovery.discover(deps, issuer);
+			assert.match(issuer + "/token", res2.data.token_endpoint, "Cache must not be polluted");
+		});
+	});
+
+	it('handle insecure end_session_endpoint', () => {
+		let disc = {
+			issuer: "https://idp.com",
+			authorization_endpoint: "https://idp.com/auth",
+			token_endpoint: "https://idp.com/token",
+			jwks_uri: "https://idp.com/jwks",
+			end_session_endpoint: "http://insecure.com/logout"
+		};
+
+		with_context({
+			http_client: { data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: disc } } }
+		}, (deps) => {
+			let res = discovery.discover(deps, "https://idp.com");
+			assert.match(truthy(), res.ok);
+			assert.match(falsy(), res.data.end_session_endpoint, "Insecure end_session_endpoint MUST be removed");
+		});
+	});
+
+	it('reject insecure issuer URL', () => {
+		with_context({}, (deps) => {
+			let res = discovery.discover(deps, "http://insecure.idp");
+			assert.match(truthy(), Result.is(res));
+			assert.match(falsy(), res.ok);
+			assert.match("INSECURE_ISSUER_URL", res.error);
+		});
+	});
+
+	it('reject insecure internal issuer URL', () => {
+		with_context({}, (deps) => {
+			let res = discovery.discover(deps, "https://secure.idp", { internal_issuer_url: "http://insecure.local" });
+			assert.match(truthy(), Result.is(res));
+			assert.match(falsy(), res.ok);
+			assert.match("INSECURE_FETCH_URL", res.error);
+		});
+	});
+
+	it('reject discovery document with insecure endpoints', () => {
+		let evil_disc = { ...f.MOCK_DISCOVERY, jwks_uri: "http://insecure.idp/jwks" };
+		let issuer = "https://trusted.idp";
+		let url = issuer + "/.well-known/openid-configuration";
+
+		with_context({
+			http_client: { data: { [url]: { status: 200, body: evil_disc } } }
+		}, (deps) => {
+			let res = discovery.discover(deps, issuer);
+			assert.match(truthy(), Result.is(res));
+			assert.match(falsy(), res.ok);
+			assert.match("INSECURE_ENDPOINT", res.error);
+		});
+	});
+
+	it('reject massive discovery response (DoS protection)', () => {
+		let garbage = "1234567890";
+		for (let i = 0; i < 15; i++) garbage += garbage; // 10 * 2^15 = 327,680 chars (~320KB)
+		let massive_body = { ...f.MOCK_DISCOVERY, garbage };
+
+		with_context({
+			http_client: {
+				data: { "https://massive.idp/.well-known/openid-configuration": { status: 200, body: massive_body } }
+			}
+		}, (deps) => {
+			let res = discovery.discover(deps, "https://massive.idp");
+			assert.match(falsy(), res.ok, "Should reject massive discovery document");
+			assert.match("DISCOVERY_NETWORK_ERROR", res.error, "Should return network error (aborted read)");
+		});
+	});
+});
+
+// ─── fetch_jwks — cache ─────────────────────────────────────────────────────────
+
+describe('discovery: fetch_jwks — cache', () => {
+	it('successful fetch, cache & TTL', () => {
+		let jwks_uri = "https://trusted.idp/jwks";
+		let cache_path = "/var/run/luci-sso/jwks-cache-test.json";
+		let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
+		let get_call_count = 0;
+
+		with_context({
+			fs: { data: {} },
+			http_client: {
+				behavior: {
+					get: (url, opts) => {
+						if (url == jwks_uri) {
+							get_call_count++;
+							return { ok: true, data: { status: 200, body: sprintf("%J", mock_jwks) } };
+						}
+						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let res = discovery.fetch_jwks(deps, jwks_uri, { cache_path, ttl: 3600 });
+			assert.match(truthy(), res.ok);
+			assert.match("k1", res.data[0].kid);
+
+			let before = get_call_count;
+			let res2 = discovery.fetch_jwks(deps, jwks_uri, { cache_path, ttl: 3600 });
+			assert.match(truthy(), res2.ok, "Should hit cache");
+			assert.match(before, get_call_count, "Should not have made a network request");
+		});
+	});
+
+	it('handle corrupted cache', () => {
+		let jwks_uri = "https://trusted.idp/jwks";
+		let cache_path = "/var/run/luci-sso/jwks-corrupt.json";
+		let mock_jwks = { keys: [ { kid: "k1", kty: "oct", k: "secret" } ] };
+
+		with_context({
+			fs: { data: { [cache_path]: "{ invalid json !!! }" } },
+			http_client: { data: { [jwks_uri]: { status: 200, body: mock_jwks } } },
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let res = discovery.fetch_jwks(deps, jwks_uri, { cache_path });
+			assert.match(truthy(), res.ok, "Should fall back to network if cache is corrupted");
+			assert.match("k1", res.data[0].kid);
+		});
+	});
+});

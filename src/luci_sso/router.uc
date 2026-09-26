@@ -1,5 +1,4 @@
 import * as crypto from 'luci_sso.crypto';
-import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
 import * as lucihttp from 'lucihttp';

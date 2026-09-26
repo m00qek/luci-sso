@@ -182,33 +182,6 @@ export function get_session(deps, sid) {
 const TOKEN_REGISTRY_DIR = "/var/run/luci-sso/tokens";
 
 /**
- * Removes old token replay files.
- * @param {object} deps - { fs, clock }
- * @returns {object} - Result Object {ok, data: count/error}
- */
-export function reap_stale_tokens(deps) {
-	let files = deps.fs.lsdir(TOKEN_REGISTRY_DIR);
-	if (!files) return Result.ok(0);
-
-	let now = deps.clock.time();
-	let max_age = 86400; // 24 hours (Used tokens are re-playable after this)
-	let reaped = 0;
-
-	for (let f in files) {
-		let path = `${TOKEN_REGISTRY_DIR}/${f}`;
-		let st = deps.fs.stat(path);
-		// Note: we use directories for atomic locking
-		if (st && st.mtime && (now - st.mtime) > max_age) {
-			try {
-				deps.fs.unlink(path);
-				reaped++;
-			} catch (e) {}
-		}
-	}
-	return Result.ok(reaped);
-};
-
-/**
  * Atomically registers an access token to prevent replay.
  * Uses atomic filesystem directory creation as a lock.
  *

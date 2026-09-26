@@ -3,10 +3,8 @@ import * as ubus_mod from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
 import * as native from 'luci_sso.native';
 
-const NOW     = 1700000000;
 const SID     = 'aabbccdd11223344aabbccdd11223344';
 const ACL_DIR = '/usr/share/rpcd/acl.d';
-const TOK_DIR = '/var/run/luci-sso/tokens';
 
 // Wraps proxies into the deps shape expected by ubus.uc, mirroring context.uc.
 // deps.ubus.call() returns Result.ok(raw) or Result.err("UBUS_ERROR") when raw is null.
@@ -106,76 +104,6 @@ describe('ubus: destroy_session', () => {
 		mock.inject_all({ ubus: { strict: true, data: { "session:destroy": {} } } }, (proxies) => {
 			assert.match(contains({ ok: true }),
 				ubus_mod.destroy_session(build_deps(proxies), SID));
-		});
-	});
-});
-
-// ─── reap_stale_tokens ───────────────────────────────────────────────────────
-
-describe('ubus: reap_stale_tokens', () => {
-	it('returns ok(0) when the token directory does not exist', () => {
-		mock.inject_all({
-			fs:    { strict: true, behavior: { lsdir: () => null } },
-			clock: { strict: true, data: { now: NOW } },
-		}, (proxies) => {
-			assert.match(contains({ ok: true, data: 0 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
-		});
-	});
-
-	it('returns ok(0) when the token directory is empty', () => {
-		mock.inject_all({
-			fs:    { strict: true, behavior: { lsdir: () => [] } },
-			clock: { strict: true, data: { now: NOW } },
-		}, (proxies) => {
-			assert.match(contains({ ok: true, data: 0 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
-		});
-	});
-
-	it('does not reap files younger than 24 hours', () => {
-		mock.inject_all({
-			fs: {
-				strict: true,
-				behavior: {
-					lsdir:  () => ['tok1'],
-					stat:   () => ({ mtime: NOW - 86399 }),
-					unlink: () => null,
-				},
-			},
-			clock: { strict: true, data: { now: NOW } },
-		}, (proxies) => {
-			assert.match(contains({ ok: true, data: 0 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
-		});
-	});
-
-	it('reaps files older than 24 hours', () => {
-		mock.inject_all({
-			fs: {
-				strict: true,
-				behavior: {
-					lsdir:  () => ['tok1', 'tok2'],
-					stat:   () => ({ mtime: NOW - 86401 }),
-					unlink: () => null,
-				},
-			},
-			clock: { strict: true, data: { now: NOW } },
-		}, (proxies) => {
-			assert.match(contains({ ok: true, data: 2 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
-		});
-	});
-
-	it('reaps only files past the threshold when ages are mixed', () => {
-		mock.inject_all({
-			fs: {
-				strict: true,
-				behavior: {
-					lsdir:  () => ['old', 'new'],
-					stat:   (path) => ({ mtime: path === TOK_DIR + '/old' ? NOW - 86401 : NOW - 100 }),
-					unlink: () => null,
-				},
-			},
-			clock: { strict: true, data: { now: NOW } },
-		}, (proxies) => {
-			assert.match(contains({ ok: true, data: 1 }), ubus_mod.reap_stale_tokens(build_deps(proxies)));
 		});
 	});
 });
