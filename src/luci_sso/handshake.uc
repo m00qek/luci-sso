@@ -36,17 +36,15 @@ function _validate_callback_request(deps, config, request) {
 		return Result.err(MISSING_HANDSHAKE_COOKIE, { http_status: 401 });
 	}
 
-	let handshake_res = session.verify_state(deps, state_token, config.clock_tolerance);
+	// session.verify_state compares query.state BEFORE consuming the handshake,
+	// so a forged callback cannot destroy a login that is still in progress.
+	let handshake_res = session.verify_state(deps, state_token, query.state, config.clock_tolerance);
 	if (!handshake_res.ok) {
-		return Result.err(handshake_res.error, { http_status: 401 });
+		let status = (handshake_res.error == STATE_PARAMETER_MISMATCH) ? 403 : 401;
+		return Result.err(handshake_res.error, { http_status: status });
 	}
 
-	let handshake = handshake_res.data;
-	if (!crypto.constant_time_eq(query.state, handshake.state)) {
-		return Result.err(STATE_PARAMETER_MISMATCH, { http_status: 403 });
-	}
-
-	return Result.ok({ code: query.code, handshake: handshake, token: state_token });
+	return Result.ok({ code: query.code, handshake: handshake_res.data, token: state_token });
 };
 
 /**

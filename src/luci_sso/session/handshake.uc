@@ -4,7 +4,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as common from 'luci_sso.session.common';
-import { CRYPTO_INIT_FAILED, STATE_SAVE_FAILED, MALFORMED_STATE_COOKIE, STATE_NOT_FOUND, STATE_CORRUPTED, HANDSHAKE_EXPIRED, HANDSHAKE_NOT_YET_VALID, HANDSHAKE_CAPACITY_EXCEEDED } from 'luci_sso.errors';
+import { CRYPTO_INIT_FAILED, STATE_SAVE_FAILED, MALFORMED_STATE_COOKIE, STATE_NOT_FOUND, STATE_CORRUPTED, HANDSHAKE_EXPIRED, HANDSHAKE_NOT_YET_VALID, HANDSHAKE_CAPACITY_EXCEEDED, STATE_PARAMETER_MISMATCH } from 'luci_sso.errors';
 
 /**
  * Handshake lifecycle management (OIDC transient state).
@@ -180,14 +180,30 @@ export function consume(deps, handle) {
 };
 
 /**
- * Verifies and consumes a handshake state handle.
+ * Verifies a handshake against the callback's `state`, then consumes it.
+ *
+ * Handshake files are written once, by atomic rename, and never modified, so
+ * the file can be read and checked BEFORE it is claimed. Only a request that
+ * presents the right `state` for a live handshake consumes it. A cross-site
+ * request with the victim's cookie but a wrong `state` is rejected and leaves
+ * the pending login intact.
+ *
+ * Order: read → validate contents → compare state (constant time) → check the
+ * time window → claim with an atomic rename to `.consumed`. The rename is the
+ * single-winner step: of two callbacks racing with the right state, exactly
+ * one succeeds and the other gets STATE_NOT_FOUND.
+ *
+ * - wrong state: STATE_PARAMETER_MISMATCH, the file is kept.
+ * - corrupt, expired or not yet valid: the file is removed, and the matching
+ *   error is returned.
  *
  * @param {*} deps Service dependencies: `deps.fs`, `deps.clock`, `deps.native`, `deps.log`.
  * @param {string} handle Opaque base64url handle from the client cookie.
+ * @param {*} expected_state The `state` query parameter of the callback (untrusted).
  * @param {int} clock_tolerance Clock skew tolerance in seconds for `iat`/`exp` validation.
  * @returns {Result}
  */
-export function verify(deps, handle, clock_tolerance) {
+export function verify(deps, handle, expected_state, clock_tolerance) {
 	if (type(handle) !== "string") die("CONTRACT_VIOLATION: verify expects string handle");
 	if (type(clock_tolerance) !== "int") die("CONTRACT_VIOLATION: verify expects mandatory integer clock_tolerance");
 
@@ -197,76 +213,83 @@ export function verify(deps, handle, clock_tolerance) {
 	}
 
 	let path = `${common.HANDSHAKE_DIR}/handshake_${handle}.json`;
-	let consume_path = `${path}.consumed`;
-	let content = null;
 	let session_id = crypto.safe_id(deps.native, handle);
 
+	// A handshake that fails validation will never be usable: drop it.
+	let discard = () => { try { deps.fs.unlink(path); } catch (e) {} };
+
+	let content = null;
 	try {
-		// Atomic one-time use.
-		// We RENAME the file to .consumed. Only one process can succeed in the rename.
-		if (!deps.fs.rename(path, consume_path)) {
-			deps.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
-			return Result.err(STATE_NOT_FOUND);
-		}
-
-		content = deps.fs.readfile(consume_path);
+		content = deps.fs.readfile(path);
 	} catch (e) {
-		deps.log("error", `Handshake state consumption failed [session_id: ${session_id}]: ${e}`);
-		// Attempt to cleanup the consumed file if it exists but failed to read/process
-		try { deps.fs.unlink(consume_path); } catch (e) {}
-		return Result.err(STATE_NOT_FOUND);
+		content = null;
 	}
-
-	// Always remove the consumed file immediately
-	try { deps.fs.unlink(consume_path); } catch (e) {}
-
 	if (!content) {
-		deps.log("error", `Handshake state content missing [session_id: ${session_id}]`);
+		deps.log("error", `Handshake state not found or already consumed [session_id: ${session_id}]`);
 		return Result.err(STATE_NOT_FOUND);
 	}
 
 	let res = encoding.safe_json(content);
 	if (!res.ok) {
 		deps.log("error", `Handshake state corrupted [session_id: ${session_id}]: ${res.details}`);
+		discard();
 		return Result.err(STATE_CORRUPTED);
 	}
 	let data = res.data;
 
 	// Validate mandatory handshake fields on load
-	if (!data.code_verifier || type(data.code_verifier) !== "string" || length(data.code_verifier) < 43 || length(data.code_verifier) > 128) {
-		deps.log("error", `Handshake state missing or invalid PKCE verifier [session_id: ${session_id}]`);
-		return Result.err(STATE_CORRUPTED);
-	}
-	if (!data.state || type(data.state) !== "string") {
-		deps.log("error", `Handshake state missing state parameter [session_id: ${session_id}]`);
-		return Result.err(STATE_CORRUPTED);
-	}
-	if (!data.nonce || type(data.nonce) !== "string") {
-		deps.log("error", `Handshake state missing nonce [session_id: ${session_id}]`);
+	let corrupt = null;
+	if (!data.code_verifier || type(data.code_verifier) !== "string" || length(data.code_verifier) < 43 || length(data.code_verifier) > 128)
+		corrupt = "missing or invalid PKCE verifier";
+	else if (!data.state || type(data.state) !== "string")
+		corrupt = "missing state parameter";
+	else if (!data.nonce || type(data.nonce) !== "string")
+		corrupt = "missing nonce";
+	else if (data.exp === null || type(data.exp) !== "int")
+		corrupt = "missing or invalid 'exp'";
+	else if (data.iat === null || type(data.iat) !== "int")
+		corrupt = "missing or invalid 'iat'";
+
+	if (corrupt) {
+		deps.log("error", `Handshake state ${corrupt} [session_id: ${session_id}]`);
+		discard();
 		return Result.err(STATE_CORRUPTED);
 	}
 
-	// Enforce mandatory exp and iat claims
-	if (data.exp === null || type(data.exp) !== "int") {
-		deps.log("error", `Handshake state missing or invalid 'exp' [session_id: ${session_id}]`);
-		return Result.err(STATE_CORRUPTED);
-	}
-	if (data.iat === null || type(data.iat) !== "int") {
-		deps.log("error", `Handshake state missing or invalid 'iat' [session_id: ${session_id}]`);
-		return Result.err(STATE_CORRUPTED);
+	// Wrong state: this request did not start the flow. Keep the handshake so
+	// the real callback can still complete it.
+	if (type(expected_state) !== "string" || !crypto.constant_time_eq(data.state, expected_state)) {
+		deps.log("warn", `Callback state does not match the handshake; handshake kept [session_id: ${session_id}]`);
+		return Result.err(STATE_PARAMETER_MISMATCH);
 	}
 
 	let now = deps.clock.time();
 
 	if (data.exp < (now - clock_tolerance)) {
 		deps.log("warn", `Handshake state expired [session_id: ${session_id}]`);
+		discard();
 		return Result.err(HANDSHAKE_EXPIRED);
 	}
 
 	if (data.iat > (now + clock_tolerance)) {
 		deps.log("warn", `Handshake state not yet valid [session_id: ${session_id}]`);
+		discard();
 		return Result.err(HANDSHAKE_NOT_YET_VALID);
 	}
+
+	// Claim: only one process can win the rename.
+	let consume_path = `${path}.consumed`;
+	let claimed = false;
+	try {
+		claimed = deps.fs.rename(path, consume_path);
+	} catch (e) {
+		claimed = false;
+	}
+	if (!claimed) {
+		deps.log("error", `Handshake state already consumed [session_id: ${session_id}]`);
+		return Result.err(STATE_NOT_FOUND);
+	}
+	try { deps.fs.unlink(consume_path); } catch (e) {}
 
 	deps.log("info", `Handshake state successfully validated [session_id: ${session_id}]`);
 

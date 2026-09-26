@@ -46,7 +46,7 @@ describe('session: façade delegation', () => {
 			let deps = make_deps(injected);
 			let created = session.create_state(deps);
 			assert.match(contains({ ok: true }), created);
-			assert.match(contains({ ok: true }), session.verify_state(deps, created.data.token, 0));
+			assert.match(contains({ ok: true }), session.verify_state(deps, created.data.token, created.data.state, 0));
 		});
 	});
 

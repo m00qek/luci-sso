@@ -86,7 +86,7 @@ These occur when the browser returns from the IdP with an authorization code.
 | `IDP_ERROR` | IdP returned an `error` parameter in the callback URL | The IdP explicitly rejected the authorization request. The error value (e.g. `access_denied`) is logged alongside this code. |
 | `MISSING_CODE` | Callback URL contains no `code` parameter | IdP redirect did not include an authorization code. |
 | `MISSING_HANDSHAKE_COOKIE` | `__Host-luci_sso_state` cookie is absent from the request | Browser did not send the handshake state cookie. Usually means the browser blocked the cookie (check `SameSite`/`Secure` requirements) or the session timed out. |
-| `STATE_PARAMETER_MISMATCH` | `state` parameter does not match the stored handshake state | Possible CSRF attempt, or the user completed the flow in a different browser tab. |
+| `STATE_PARAMETER_MISMATCH` | `state` parameter does not match the stored handshake state | Possible CSRF attempt, or the user completed the flow in a different browser tab. The handshake is kept, so the matching callback can still complete. |
 | `STATE_NOT_FOUND` | Handshake state file does not exist on the router filesystem | State was already consumed (replay attempt) or expired and was cleaned up. |
 | `STATE_CORRUPTED` | Handshake state file exists but contains invalid data | Filesystem corruption or truncated write during state creation. |
 | `STATE_SAVE_FAILED` | Router could not write the handshake state file | Check disk space and write permissions on `/var/run/luci-sso/`. |

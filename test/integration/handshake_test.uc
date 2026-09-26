@@ -108,6 +108,23 @@ describe('handshake: authenticate — request validation', () => {
 		});
 	});
 
+	it('a forged callback (wrong state) keeps the pending login usable', () => {
+		// The state cookie is SameSite=Lax, so a cross-site top-level GET to
+		// /callback carries it. With a wrong state, the handshake must survive
+		// so the victim's real callback still works.
+		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
+			let hs = session.create_state(deps).data;
+			let path = `/var/run/luci-sso/handshake_${hs.token}.json`;
+			let forged = { query: { code: 'attacker', state: 'WRONG-STATE' }, cookies: { '__Host-luci_sso_state': hs.token } };
+
+			let res = handshake.authenticate(deps, base_config(), forged);
+			assert.match(contains({ ok: false, error: 'STATE_PARAMETER_MISMATCH' }), res);
+			assert.match(403, res.details.http_status);
+			assert.match(truthy(), deps.fs.readfile(path), 'the handshake file is still there');
+			assert.match(contains({ ok: true }), session.verify_state(deps, hs.token, hs.state, 300), 'the real state still verifies');
+		});
+	});
+
 	it('returns STATE_PARAMETER_MISMATCH (403) when the query state does not match', () => {
 		with_context({ fs: { data: {} }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			let hs = session.create_state(deps).data;

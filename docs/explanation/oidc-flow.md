@@ -30,7 +30,7 @@ sequenceDiagram
 
     Note over R: Phase 3 — Code exchange & token validation
     B->>R: GET /callback?code=…&state=…
-    R->>R: Verify state (constant-time), consume handshake file (atomic)
+    R->>R: Check state (constant-time) and expiry, then consume handshake file (atomic)
     R->>I: POST /token (code + PKCE verifier) — back-channel
     I-->>R: {id_token, access_token}
     R->>R: Validate id_token: algorithm, signature, iss, aud, exp, nonce, at_hash
@@ -87,7 +87,7 @@ This prevents an attacker from capturing a valid ID Token from one session and r
 
 ### The handshake file is atomically consumed
 
-The handshake state file at `/var/run/luci-sso/handshake_{handle}.json` is deleted by atomically renaming it before any processing occurs. POSIX `rename` is guaranteed to either succeed or fail — two concurrent requests cannot both succeed on the same file.
+The handshake state file at `/var/run/luci-sso/handshake_{handle}.json` is first read and checked: the returned `state` must match and the handshake must not have expired. Only then is it claimed by atomically renaming it, before the code is exchanged. POSIX `rename` is guaranteed to either succeed or fail — two concurrent requests cannot both succeed on the same file. A request with the wrong `state` is rejected without touching the file, so a forged callback cannot cancel a login in progress.
 
 This means each authorization code can only be processed once, even under concurrent requests. There is no time-of-check-time-of-use race condition.
 

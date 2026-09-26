@@ -664,9 +664,9 @@ All random values MUST be sourced from a CSPRNG (e.g. `crypto.random`). Predicta
 
 The system MUST validate all external inputs. Contract violations MUST trigger `die()`, while runtime data errors MUST return a Result Object.
 
-### 4. Fail-Safe Execution Order (Consumption First)
+### 4. Fail-Safe Execution Order (Check, Then Claim)
 
-State handles (handshake state) MUST be consumed BEFORE performing expensive verification operations. OIDC Access Tokens MUST be registered in the local session registry AFTER successful cryptographic verification of the ID Token.
+State handles (handshake state) MUST be checked against the request (state parameter, expiry) and then claimed with a single atomic operation BEFORE performing expensive verification operations. A request that fails the check MUST NOT consume the handle. OIDC Access Tokens MUST be registered in the local session registry AFTER successful cryptographic verification of the ID Token.
 
 See [Security Model](../explanation/security-model.md) and [Threat Model](../explanation/threat-model.md) for the reasoning behind this ordering.
 

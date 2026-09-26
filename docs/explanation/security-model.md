@@ -36,7 +36,9 @@ This is not a theoretical attack — timing side channels have been exploited in
 
 The OIDC handshake involves a `state` parameter that travels through the browser. When the browser returns from the IdP with an authorization code, the router must verify that the `state` matches one it generated — and then discard it, so it can never be used again.
 
-`luci-sso` stores each handshake state as a file, and deletes it by atomically renaming it to a consumed path before doing any further processing. If two requests arrive with the same state simultaneously, only one can win the rename; the other sees a missing file and fails.
+`luci-sso` stores each handshake state as a file, written once by atomic rename and never modified. At the callback it first reads the file and checks it: the contents must be valid, the returned `state` must match (constant-time comparison), and the handshake must be within its time window. Only then does it claim the file by atomically renaming it to a consumed path. If two requests arrive with the right state simultaneously, only one can win the rename; the other sees a missing file and fails.
+
+Checking before claiming matters because the handshake cookie is `SameSite=Lax`: a cross-site top-level link to `/callback` carries it. If the file were consumed first, such a link with a made-up `state` would destroy the victim's login in progress. With the check first, a wrong `state` is rejected with 403 and the handshake stays usable. A corrupt or expired handshake is removed, since it can never succeed.
 
 The alternative — checking existence and then deleting in two steps — has a TOCTOU (time-of-check-time-of-use) race condition. Atomic rename eliminates it at the OS level.
 
