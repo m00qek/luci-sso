@@ -54,4 +54,6 @@ This is a meaningful security property in the context of a router. Routers are f
 
 All OIDC interactions — both front-channel (browser redirects) and back-channel (router-to-IdP token exchange) — are required to use HTTPS. The `encoding.is_https()` utility is the single, centralized check for this; local `substr()` checks on URLs are explicitly prohibited because they're vulnerable to case-manipulation bypasses.
 
+This extends to the LuCI session itself. Every cookie the module issues carries `Secure`, so none of them are ever sent over plain HTTP. LuCI's dispatcher reads `sysauth_https` when `HTTPS` is on and `sysauth_http` when it is not; luci-sso sets the former and the legacy `sysauth`, and deliberately never sets `sysauth_http`. Serving LuCI over plain HTTP is therefore unsupported rather than merely discouraged — the session would not be readable even if one were issued.
+
 Certificate verification is always enabled. `ca-bundle` must be installed for the router to trust the IdP's certificate. Disabling certificate verification is not an option the configuration exposes.

@@ -114,6 +114,12 @@ function handle_callback(deps, config, request, policy) {
 	// reasoning already applied to __Host-luci_sso_state above.
 	return Result.ok(response(302, {
 		"Location": "/cgi-bin/luci/",
+		// LuCI's dispatcher reads sysauth_https when getenv('HTTPS')=='on' and
+		// sysauth_http otherwise. sysauth_http is deliberately NOT set: this
+		// module is HTTPS-only (see docs/explanation/security-model.md), every
+		// cookie here is Secure and so would never be sent over plain HTTP
+		// anyway, and config.load() rejects a non-HTTPS issuer or redirect_uri
+		// outright. `sysauth` is the legacy name older LuCI still reads.
 		"Set-Cookie": [
 			`sysauth_https=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
 			`sysauth=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
