@@ -38,20 +38,20 @@ make up
 ```
 
 ```bash
-# Run all unit and integration tests (Tiers 0–4)
+# Run the native, unit and integration tests
 make unit-test
 
 # Run with detailed output
 make unit-test VERBOSE=1
 
 # Run tests matching a pattern
-make unit-test FILTER='oidc.*discovery'
+make unit-test FILTER='discovery'
 
 # Auto-run tests on file change
 make watch-tests
 ```
 
-See [Running Tests](testing.md) for how to run individual tiers, and [Testing Architecture](../../reference/testing-architecture.md) for what each tier covers.
+See [Running Tests](testing.md) for how to run individual buckets and files, and [Testing Architecture](../../reference/testing-architecture.md) for what each bucket covers.
 
 ---
 

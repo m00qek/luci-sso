@@ -1,12 +1,12 @@
 # How to Run Tests
 
-`luci-sso` uses a multi-tiered testing strategy. See [Testing Architecture](../../reference/testing-architecture.md) for how the tiers are structured and how to write new tests.
+`luci-sso` sorts its tests into four buckets: **native**, **unit**, **integration** and **e2e**. See [Testing Architecture](../../reference/testing-architecture.md) for what each bucket covers and how to write new tests.
 
 ---
 
-## Unit & Integration Tests (Tiers 0–4)
+## Native, Unit & Integration Tests
 
-These tests run inside the `openwrt` container using the `ucode` interpreter. No real router or network access is required, but the CI stack must be running:
+`make unit-test` runs three buckets inside the `openwrt` container using the `ucode` interpreter: `test/native` (the compiled crypto module), `test/unit` (one module at a time) and `test/integration` (orchestrators and wiring). No real router or network access is required, but the CI stack must be running:
 
 ```bash
 make up
@@ -22,10 +22,11 @@ make unit-test
 make unit-test VERBOSE=1
 
 # Run tests matching a pattern (regex on test name)
-make unit-test FILTER='oidc.*discovery'
+make unit-test FILTER='discovery'
 
 # Run a specific test file or directory
-make unit-test MODULES='test/tier2/oidc_logic_test.uc'
+make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'
+make unit-test MODULES='test/integration'
 
 # Select the crypto backend to test (mbedtls, wolfssl, openssl)
 make unit-test CRYPTO_LIB=wolfssl
@@ -61,9 +62,11 @@ You can run tests automatically whenever a file is changed in the `files/`, `src
 # Watch and re-run both unit and E2E tests
 make watch-tests
 
-# Watch with filters
-make watch-tests FILTER='oidc' MODULES='test/tier2'
+# Watch with a filter (applied to both the unit and the E2E run)
+make watch-tests FILTER='login'
 ```
+
+`watch-tests` passes `MODULES` to both runners, so a path only makes sense for one of them. Filter by name instead.
 
 ---
 

@@ -2,7 +2,7 @@
 
 This document is the technical reference for coding standards in the luci-sso project. For the reasoning behind these standards, see [Design Philosophy](../explanation/design-philosophy.md).
 
-Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, and trailing semicolons on exported functions. For real-world implementations, see `src/` (production) and `test/tier*/` (tests).
+Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, and trailing semicolons on exported functions. For real-world implementations, see `src/luci_sso/` (production) and `test/` (tests).
 
 ---
 
@@ -573,34 +573,42 @@ if (substr(url, 0, 8) !== "https://") ...
 
 ```
 luci-sso/
-├── src/
-│   ├── crypto.uc      # High-level crypto API (wraps native)
-│   ├── oidc.uc        # OIDC protocol (exchange, verification)
-│   ├── discovery.uc   # OIDC metadata fetching and caching
-│   ├── handshake.uc   # OIDC state machine and session orchestration
-│   ├── session.uc     # OIDC handshake state
-│   ├── encoding.uc    # Pure data encoding and string logic
-│   ├── result.uc      # Standard Result object pattern for error handling
-│   ├── jwk.uc         # JSON Web Key management
-│   ├── config.uc      # UCI configuration loader
-│   ├── web.uc         # CGI and HTTP request/response logic
-│   ├── secure_http.uc # HTTPS client logic
-│   ├── ubus.uc        # UBUS session integration
-│   └── io.uc          # I/O abstraction (create_io helper)
-├── src/
-│   ├── native_mbedtls.c   # mbedtls backend
-│   └── native_wolfssl.c   # wolfssl backend
+├── src/luci_sso/          # ucode modules, installed as luci_sso.*
+│   ├── entry.uc           # CGI pipeline: request → config → router → response
+│   ├── deps.uc            # Production dependency graph (fs, ubus, uci, http, clock, log)
+│   ├── router.uc          # Endpoint dispatch, rate limiting, logout
+│   ├── handshake.uc       # OIDC login orchestration
+│   ├── oidc.uc            # Authorization URL, token exchange, ID-token checks, UserInfo
+│   ├── discovery.uc       # Discovery document and JWKS fetching/caching
+│   ├── config.uc          # UCI loading and role matching
+│   ├── ubus.uc            # rpcd session creation and token replay registry
+│   ├── web.uc             # CGI request parsing and response rendering
+│   ├── encoding.uc        # Base64URL, JSON, URL normalisation
+│   ├── result.uc          # Result object
+│   ├── errors.uc          # Public error codes (documented in log-messages.md)
+│   ├── crypto.uc          # Crypto façade over crypto/
+│   ├── crypto/            # base, hash, jwk, jwt, pkce wrappers over native
+│   ├── session.uc         # Façade over session/
+│   ├── session/           # Handshake state files
+│   └── components/        # http_client, clock
+├── mod/                   # Native crypto module (C)
+│   ├── native_ucode.c     # ucode binding
+│   ├── native_api.c       # Input guards
+│   ├── native.h           # Backend interface
+│   └── native_<lib>.c     # mbedtls, wolfssl, openssl backends
+├── files/                 # Installed as-is: CGI script, LuCI views, uci-defaults
+├── openwrt/luci-sso/      # OpenWrt package Makefile
 ├── test/
-│   ├── tier0/         # Native crypto compliance (MbedTLS/WolfSSL)
-│   ├── tier1/         # Encoding/crypto logic tests
-│   ├── tier2/         # Integration (handshake, session, config, ubus)
-│   ├── tier3/         # Router / IO tests
-│   ├── tier4/         # Mock system tests
-│   ├── e2e/           # Playwright browser tests
-│   ├── testing/       # Test framework
-│   ├── lib/           # Test helpers
-│   ├── mock.uc        # Mock I/O provider
-│   └── runner.uc      # Test harness
+│   ├── native/            # The compiled crypto module's contract
+│   ├── unit/luci_sso/     # One module at a time (mirrors src/)
+│   ├── integration/       # Orchestrators and wiring (handshake, router, logout, entry)
+│   ├── e2e/               # Playwright browser tests
+│   ├── fixtures/          # Shared keys, tokens, discovery documents
+│   ├── lib/               # Test helpers (signed JWTs)
+│   ├── proxies/           # utest proxies for luci_sso components
+│   ├── context.uc         # with_context(): full deps graph from proxies
+│   └── fuzz_test.c        # libFuzzer harness
+├── devenv/                # Docker services and scripts for tests and builds
 └── docs/              # Documentation (Diátaxis framework)
 ```
 

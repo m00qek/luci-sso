@@ -326,4 +326,4 @@ The test framework lives in `test/` and is not part of the installed package.
 | `test/mock.uc` | Mock I/O provider factory — `mock.create()` |
 | `test/lib/` | Shared fixtures (valid JWTs, JWKS, discovery docs) |
 
-See [Testing Architecture](testing-architecture.md) for the tier structure and [How to Run Tests](../how-to/developer/testing.md) for usage.
+See [Testing Architecture](testing-architecture.md) for the test buckets and [How to Run Tests](../how-to/developer/testing.md) for usage.

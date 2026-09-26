@@ -57,13 +57,15 @@ Let's verify everything is working correctly:
 make unit-test
 ```
 
-You should see a series of green checkmarks for Tiers 0 through 4, ending with a summary like:
+You should see a row of green dots for each bundle — the native crypto tests, the unit tests and the integration tests — ending with a summary like:
 
 ```
-All tests passed. (Tier 0: 12, Tier 1: 8, Tier 2: 24, Tier 3: 9, Tier 4: 3)
+Summary:
+
+  594 successes / 0 failures / 0 errors / 0 skipped / 0 ignored (3500 ms)
 ```
 
-If any tier fails, the output will identify the failing test and the module it belongs to.
+The exact count grows as tests are added. If a test fails, rerun with `make unit-test VERBOSE=1` to see each test's name and the failing assertion.
 
 ## Step 4: Try the login flow
 
@@ -84,7 +86,7 @@ Notice that the login redirects to the mock IdP, then back to LuCI — the same 
 * A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
 * A mock Identity Provider pre-configured with test credentials that accepts any username and password.
 * A CI stack (`make up`) for running the test suite, and a local stack (`make local-up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
-* A full test suite covering Tiers 0–4, runnable without a physical router or a real IdP.
+* A full test suite — native, unit, integration and browser end-to-end — runnable without a physical router or a real IdP.
 
 ---
 

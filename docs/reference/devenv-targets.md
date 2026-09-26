@@ -38,7 +38,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 
 | Target | Stack | Description |
 | :--- | :--- | :--- |
-| `unit-test` | CI | Run unit and integration tests (Tiers 0–4). Requires `up`. |
+| `unit-test` | CI | Run the native, unit and integration test buckets. Requires `up`. |
 | `e2e-test` | CI | Run browser-based end-to-end tests via Playwright. Requires `up`. |
 | `test` | CI | Alias for `unit-test` followed by `e2e-test`. |
 | `watch-tests` | CI | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. Requires `inotify-tools` on the host. |
@@ -85,8 +85,8 @@ Common `SDK_ARCH` values:
 
 | Variable | Applies to | Description |
 | :--- | :--- | :--- |
-| `FILTER` | `unit-test`, `e2e-test`, `watch-tests` | Regex matched against test names. Only matching tests run. Example: `FILTER='oidc.*discovery'` |
-| `MODULES` | `unit-test`, `e2e-test`, `watch-tests` | Path to a specific test file or directory. Example: `MODULES='test/tier2/oidc_logic_test.uc'` |
+| `FILTER` | `unit-test`, `e2e-test`, `watch-tests` | Regex matched against test names. Only matching tests run. Example: `FILTER='discovery'` |
+| `MODULES` | `unit-test`, `e2e-test`, `watch-tests` | Path to a specific test file or directory. Example: `MODULES='test/unit/luci_sso/oidc_test.uc'` |
 | `VERBOSE` | `unit-test`, `e2e-test` | Set to `1` for detailed per-test output. |
 
 ### Fuzzer
@@ -112,11 +112,11 @@ Common `SDK_ARCH` values:
 make up
 make unit-test
 
-# Run only OIDC discovery tests, with verbose output
-make unit-test FILTER='oidc.*discovery' VERBOSE=1
+# Run only discovery tests, with verbose output
+make unit-test FILTER='discovery' VERBOSE=1
 
 # Run a single test file
-make unit-test MODULES='test/tier2/oidc_logic_test.uc'
+make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'
 
 # Build and test with the wolfssl backend
 make compile CRYPTO_LIB=wolfssl
