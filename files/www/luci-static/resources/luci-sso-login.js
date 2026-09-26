@@ -57,22 +57,20 @@
         separator.id = SEP_ID;
         separator.style.textAlign = 'center';
         separator.style.margin = '2px 0';
-        separator.style.color = '#666';
+        // Dim the inherited text colour rather than fixing one, so the
+        // separator stays readable on light and dark themes alike.
+        separator.style.opacity = '0.7';
         separator.style.fontSize = '0.9em';
         separator.textContent = '— or —';
 
         var ssoBtn = document.createElement('button');
         ssoBtn.id = BTN_ID;
         ssoBtn.type = 'button';
-        ssoBtn.className = primaryBtn.className; 
+        // Copy the primary button's classes and set no colours of our own, so
+        // the button takes the active theme's look, dark themes included.
+        ssoBtn.className = primaryBtn.className;
         ssoBtn.style.width = '100%';
-        ssoBtn.style.marginTop = '5px'; 
-        
-        // High-Contrast Blue Professional Style
-        ssoBtn.style.setProperty('background', 'linear-gradient(#337ab7, #2e6da4)', 'important');
-        ssoBtn.style.setProperty('border-color', '#2e6da4', 'important');
-        ssoBtn.style.setProperty('color', '#ffffff', 'important');
-        ssoBtn.style.setProperty('text-shadow', 'none', 'important');
+        ssoBtn.style.marginTop = '5px';
         ssoBtn.textContent = 'Login with SSO';
 
         ssoBtn.onclick = function(e) {
