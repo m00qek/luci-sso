@@ -55,7 +55,7 @@ describe('entry: run', () => {
 		});
 
 		assert.match(truthy(), index(wd.out(), "431") >= 0, "should use the request-failure status (431)");
-		assert.match(truthy(), index(wd.out(), "Error:") >= 0, "should render the sanitised error body");
+		assert.match(truthy(), index(wd.out(), "<p>The request contained too much data.") >= 0, "should render the sanitised error body");
 	});
 
 	it('serves ?action=enabled even when SSO is disabled (W2 escape hatch)', () => {
@@ -77,7 +77,7 @@ describe('entry: run', () => {
 		});
 
 		assert.match(truthy(), index(wd.out(), "500") >= 0, "disabled non-probe path is a 500");
-		assert.match(truthy(), index(wd.out(), "Error:") >= 0);
+		assert.match(truthy(), index(wd.out(), "<p>Single sign-on is not enabled on this router.") >= 0, "renders the SSO_DISABLED page");
 	});
 
 	it('loads config and routes when SSO is enabled', () => {

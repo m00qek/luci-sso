@@ -200,7 +200,7 @@ describe('web: render_error', () => {
 		web.render_error(d, "STATE_CORRUPTED", 401);
 		let out = d.out();
 
-		assert.match(truthy(), index(out, "Authentication failed") >= 0, "Should return generic message");
+		assert.match(truthy(), index(out, "Sign-in failed because of a problem on this router") >= 0, "Should return the mapped message");
 		assert.match(-1, index(out, "STATE_CORRUPTED"), "Internal codes MUST NOT leak to body");
 
 		let found_log = false;
@@ -228,13 +228,50 @@ describe('web: render_error', () => {
 
 	it('renders user-facing messages for known error codes', () => {
 		let d1 = web_deps({}); web.render_error(d1, "TOO_MANY_REQUESTS", 429);
-		assert.match(truthy(), index(d1.out(), "Error: Too many requests. Please wait before trying again.") != -1, "TOO_MANY_REQUESTS message");
+		assert.match(truthy(), index(d1.out(), "<p>There have been too many sign-in attempts. Please wait a minute and try again.</p>") != -1, "TOO_MANY_REQUESTS message");
 
 		let d2 = web_deps({}); web.render_error(d2, "SSO_DISABLED", 503);
-		assert.match(truthy(), index(d2.out(), "Error: Single Sign-On is not enabled on this device.") != -1, "SSO_DISABLED message");
+		assert.match(truthy(), index(d2.out(), "<p>Single sign-on is not enabled on this router. You can still log in with a password.</p>") != -1, "SSO_DISABLED message");
 
 		let d3 = web_deps({}); web.render_error(d3, "NOT_FOUND", 404);
-		assert.match(truthy(), index(d3.out(), "Error: The requested path was not found.") != -1, "NOT_FOUND message");
+		assert.match(truthy(), index(d3.out(), "<p>This page does not exist.</p>") != -1, "NOT_FOUND message");
+	});
+
+	it('falls back to a generic message for an unmapped code, without leaking it', () => {
+		let d = web_deps({}); web.render_error(d, "UBUS_LOGIN_FAILED", 500);
+		assert.match(truthy(), index(d.out(), "<p>Sign-in could not be completed. Please try again, or contact your administrator.</p>") != -1, "generic message");
+		assert.match(-1, index(d.out(), "UBUS_LOGIN_FAILED"), "internal code must not reach the body");
+	});
+
+	it('serves an HTML page that links back to the LuCI login', () => {
+		let d = web_deps({}); web.render_error(d, "STATE_NOT_FOUND", 401);
+		let out = d.out();
+		assert.match(truthy(), index(out, "Content-Type: text/html; charset=utf-8\n") >= 0, "HTML content type");
+		assert.match(truthy(), index(out, '<a href="/cgi-bin/luci/">Back to the login page</a>') >= 0, "link back to the login page");
+		assert.match(truthy(), index(out, "<!DOCTYPE html>") >= 0, "a complete HTML document");
+	});
+
+	it('keeps the error page compatible with the response CSP (no inline style or script)', () => {
+		let d = web_deps({}); web.render_error(d, "STATE_NOT_FOUND", 401);
+		let out = d.out();
+		assert.match(truthy(), index(out, "Content-Security-Policy: default-src 'none';") >= 0, "CSP still applied");
+		assert.match(-1, index(out, "<script"), "no script element");
+		assert.match(-1, index(out, "<style"), "no style element");
+		assert.match(-1, index(out, " style="), "no inline style attribute");
+	});
+});
+
+// ─── error (crash handler) ────────────────────────────────────────────────────
+
+describe('web: error', () => {
+	it('renders the generic HTML page and keeps the exception out of the body', () => {
+		let d = web_deps({});
+		web.error(d, "secret-internal-detail at /usr/share/ucode/x.uc:42");
+		let out = d.out();
+		assert.match(truthy(), index(out, "Status: 500 Internal Server Error") >= 0, "500 status");
+		assert.match(truthy(), index(out, "<p>Sign-in could not be completed. Please try again, or contact your administrator.</p>") >= 0, "generic message");
+		assert.match(truthy(), index(out, '<a href="/cgi-bin/luci/">') >= 0, "link back to the login page");
+		assert.match(-1, index(out, "secret-internal-detail"), "exception text must not reach the body");
 	});
 });
 

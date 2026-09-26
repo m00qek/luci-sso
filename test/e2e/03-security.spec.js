@@ -105,8 +105,8 @@ test.describe('Security: OIDC Attacks', () => {
       const body = await replayRes.text();
       
       // We expect an error because the code is replayed.
-      // If uhttpd swallowed the 500 status and gave us 200, we check the body for 'Error:'
-      const isRejected = replayRes.status() >= 400 || body.includes('Error:');
+      // If uhttpd swallowed the 500 status and gave us 200, we check the body for the error page
+      const isRejected = replayRes.status() >= 400 || body.includes('Back to the login page');
       
       if (!isRejected) {
         vlog(`Replay step: UNEXPECTED SUCCESS BODY: ${body}`);
@@ -155,7 +155,7 @@ test.describe('Security: OIDC Attacks', () => {
       const body = await replayRes.text();
       
       // Verification: IdP (Mock) should reject verifierB for codeA (which is tied to challengeA)
-      const isRejected = replayRes.status() >= 400 || body.includes('Error:');
+      const isRejected = replayRes.status() >= 400 || body.includes('Back to the login page');
       expect(isRejected).toBeTruthy();
     });
 

@@ -141,14 +141,24 @@ These are set unconditionally in `web.uc:render()` and cannot be suppressed.
 
 ## Error responses
 
-When a request fails, the CGI returns a plain-text body with a user-facing message. Internal error codes are **not** included in the response body — they appear only in the system log (`logread -e luci-sso`).
+When a request fails, the CGI returns a small HTML page: a heading, one plain-language message and a link back to the LuCI login page at `/cgi-bin/luci/`. Internal error codes are **not** included in the response body — they appear only in the system log (`logread -e luci-sso`). The page has no inline style or script, so it is served under the same Content-Security-Policy as every other response.
 
 ```
-HTTP/1.1 400 Bad Request
-Content-Type: text/plain
+HTTP/1.1 401 Unauthorized
+Content-Type: text/html; charset=utf-8
 
-Error: Your session has expired or is invalid. You MUST try logging in again.
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Single sign-on</title></head>
+<body>
+<h1>Single sign-on</h1>
+<p>Your sign-in attempt expired or was already used. Please try signing in again.</p>
+<p><a href="/cgi-bin/luci/">Back to the login page</a></p>
+</body>
+</html>
 ```
+
+An unexpected crash returns the same page with status `500` and a generic message; the exception text is logged, never sent.
 
 | HTTP status | When it occurs |
 | :--- | :--- |
