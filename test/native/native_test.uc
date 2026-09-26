@@ -362,6 +362,13 @@ describe('native: jwk_rsa_to_pem', () => {
 		assert.match(regex(/^-----BEGIN PUBLIC KEY-----/), native.jwk_rsa_to_pem(JWK_RSA.n_bin, JWK_RSA.e_bin));
 	});
 
+	it('returns exactly one PEM block, with nothing after the END line', () => {
+		// The C layer turns a char buffer into a ucode string with strlen, so a
+		// backend that does not NUL-terminate leaks stack bytes after the footer.
+		assert.match(regex(/^-----BEGIN PUBLIC KEY-----\n[A-Za-z0-9+\/=\n]+-----END PUBLIC KEY-----\n?$/),
+			native.jwk_rsa_to_pem(JWK_RSA.n_bin, JWK_RSA.e_bin));
+	});
+
 	it('produced PEM validates the PLUMBING_RSA JWT signature (round-trip)', () => {
 		let pem = native.jwk_rsa_to_pem(JWK_RSA.n_bin, JWK_RSA.e_bin);
 		assert.match(not(equals(null)), pem);
@@ -406,6 +413,11 @@ describe('native: jwk_rsa_to_pem', () => {
 describe('native: jwk_ec_p256_to_pem', () => {
 	it('produces a PUBLIC KEY PEM header', () => {
 		assert.match(regex(/^-----BEGIN PUBLIC KEY-----/), native.jwk_ec_p256_to_pem(JWK_EC.x_bin, JWK_EC.y_bin));
+	});
+
+	it('returns exactly one PEM block, with nothing after the END line', () => {
+		assert.match(regex(/^-----BEGIN PUBLIC KEY-----\n[A-Za-z0-9+\/=\n]+-----END PUBLIC KEY-----\n?$/),
+			native.jwk_ec_p256_to_pem(JWK_EC.x_bin, JWK_EC.y_bin));
 	});
 
 	it('produced PEM validates a known EC_256 signature (round-trip)', () => {

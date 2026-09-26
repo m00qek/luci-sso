@@ -150,10 +150,14 @@ static uc_value_t *uc_native_jwk_rsa_to_pem(uc_vm_t *vm, size_t nargs) {
      * We only support the standard F4 exponent (0x010001) for safety and simplicity. */
     if (e_len != 3 || e[0] != 0x01 || e[1] != 0x00 || e[2] != 0x01) return NULL;
 
-    char pem[NATIVE_RSA_PEM_MAX];
+    /* Zeroed, and read back with a bounded length: a backend that forgets to
+     * NUL-terminate must not make us read past the buffer. */
+    char pem[NATIVE_RSA_PEM_MAX] = {0};
     if (native_jwk_rsa_to_pem(n, n_len, e, e_len, pem, sizeof(pem)) != 0) return NULL;
 
-    return ucv_string_new(pem);
+    size_t pem_len = strnlen(pem, sizeof(pem));
+    if (pem_len == sizeof(pem)) return NULL;
+    return ucv_string_new_length(pem, pem_len);
 }
 
 static uc_value_t *uc_native_jwk_ec_p256_to_pem(uc_vm_t *vm, size_t nargs) {
@@ -170,10 +174,13 @@ static uc_value_t *uc_native_jwk_ec_p256_to_pem(uc_vm_t *vm, size_t nargs) {
     /* Enforce P-256 coordinate lengths (32 bytes each) */
     if (x_len != NATIVE_EC_COORD_SIZE || y_len != NATIVE_EC_COORD_SIZE) return NULL;
 
-    char pem[NATIVE_EC_PEM_MAX];
+    /* See uc_native_jwk_rsa_to_pem: never trust the backend to terminate. */
+    char pem[NATIVE_EC_PEM_MAX] = {0};
     if (native_jwk_ec_p256_to_pem(x, x_len, y, y_len, pem, sizeof(pem)) != 0) return NULL;
 
-    return ucv_string_new(pem);
+    size_t pem_len = strnlen(pem, sizeof(pem));
+    if (pem_len == sizeof(pem)) return NULL;
+    return ucv_string_new_length(pem, pem_len);
 }
 
 static const uc_function_list_t native_fns[] = {

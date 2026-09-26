@@ -201,8 +201,12 @@ int native_jwk_rsa_to_pem(const unsigned char *n, size_t n_len,
 	wc_FreeRsaKey(&key);
 	if (der_len < 0) return -1;
 
+	/* wc_DerToPem does not NUL-terminate. Callers treat `out` as a C string,
+	 * so terminate it here and refuse output that leaves no room. */
 	int pem_len = wc_DerToPem(der, der_len, (unsigned char *)out, out_len, PUBLICKEY_TYPE);
-	return (pem_len < 0) ? -1 : 0;
+	if (pem_len < 0 || (size_t)pem_len >= out_len) return -1;
+	out[pem_len] = '\0';
+	return 0;
 }
 
 int native_jwk_ec_p256_to_pem(const unsigned char *x, size_t x_len,
@@ -228,6 +232,10 @@ int native_jwk_ec_p256_to_pem(const unsigned char *x, size_t x_len,
 	wc_ecc_free(&key);
 	if (der_len < 0) return -1;
 
+	/* wc_DerToPem does not NUL-terminate. Callers treat `out` as a C string,
+	 * so terminate it here and refuse output that leaves no room. */
 	int pem_len = wc_DerToPem(der, der_len, (unsigned char *)out, out_len, PUBLICKEY_TYPE);
-	return (pem_len < 0) ? -1 : 0;
+	if (pem_len < 0 || (size_t)pem_len >= out_len) return -1;
+	out[pem_len] = '\0';
+	return 0;
 }
