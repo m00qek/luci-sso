@@ -27,7 +27,7 @@ GitHub is not supported. See [Provider Compatibility](../reference/provider-comp
 *   [Removing luci-sso](sysadmin/uninstall.md) - How to completely uninstall the package and restore password login.
 
 ## Development
-*   [Development Workflow](developer/development-workflow.md) - The day-to-day loop: build, test, lint, and try changes in the local stack.
+*   [Development Workflow](developer/development-workflow.md) - The day-to-day loop: build, test, lint, and prepare a pull request.
 *   [Adding a New Crypto Backend](developer/adding-crypto-backend.md) - How to implement a new native C provider (e.g., for BoringSSL).
 *   [Running Tests](developer/testing.md) - How to run each test bucket, a single file, or a filtered subset.
 *   [Running the Fuzzer](developer/fuzzing.md) - How to run the coverage-guided fuzzer.

@@ -22,6 +22,6 @@ Reference documentation is technical description of the machinery. It is informa
 *   [Makefile Targets](devenv-targets.md) - All `make` targets and their variables.
 
 ## 📐 Standards
-*   [Style Guide](style-guide.md) - Code style, commit messages, and documentation conventions.
+*   [Style Guide](style-guide.md) - Coding, testing, security, documentation and commit message rules.
 *   [Testing Architecture](testing-architecture.md) - The five test buckets, where each module's tests go, and the mocking interface.
 

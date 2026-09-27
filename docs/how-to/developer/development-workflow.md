@@ -88,12 +88,30 @@ If a check fails, see [How to add error codes, limit constants, and cookies](add
 
 ---
 
-## Git Workflow
+## Prepare a pull request
 
 1. Create a branch: `git checkout -b feat/my-feature`
-2. Make changes, run `make unit-test` and `make lint` locally
-3. Commit following the [commit message format](../../reference/style-guide.md#commit-messages)
-4. Open a PR — CI runs the full test suite and lint checks automatically
+2. Make your changes. Route any new I/O through `deps`, and keep C code to crypto primitives.
+3. Add tests: every exported function you touched, every error path, and attack cases for security-critical code. See the [testing standards](../../reference/style-guide.md#testing-standards) for the minimum.
+4. Run the tests and the lint checks:
+
+    ```bash
+    make up
+    make unit-test
+    make e2e-test
+    make lint
+    ```
+
+    `make test` runs `unit-test` and `e2e-test` together. If you changed `mod/`, also run `make fuzzer-test` and `make sanitizer-test`; CI runs them when native code changes.
+
+5. Check the diff against the [style guide](../../reference/style-guide.md):
+    - no secrets in code or log lines;
+    - runtime failures return a `Result`, contract bugs `die()`;
+    - names are `snake_case`, and exported functions end with `};`;
+    - every `TODO` names an issue.
+6. If you changed behaviour or an interface, update the matching page in `docs/` in the same pull request.
+7. Commit following the [commit message format](../../reference/style-guide.md#commit-messages).
+8. Open the pull request. CI runs the lint checks on every pull request, and the test suites when code changes.
 
 ---
 
