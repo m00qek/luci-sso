@@ -176,7 +176,7 @@ If the login fails, check the system log:
 
 Common errors and their meaning are listed in the [Log Messages Reference](../../reference/log-messages.md). The most frequent issues with new providers are:
 
-- **`[500] OIDC_DISCOVERY_FAILED` after a `Discovery issuer mismatch` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. Copy the value from the discovery JSON directly.
+- **`[500] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_ISSUER_MISMATCH` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. The line shows both values; set `issuer_url` to the one the document declares.
 - **`[401] ID_TOKEN_VERIFICATION_FAILED`** — The `OAuth flow failed` line before it names the failed check. `UNSUPPORTED_ALGORITHM` means the IdP signs tokens with HS256 or another algorithm: configure the client to use RS256 or ES256. `MISSING_AT_HASH` means the IdP does not put `at_hash` in its ID Tokens; see the prerequisites above.
 - **`USER_NOT_AUTHORIZED`** — Authentication succeeded but no UCI role matched the user's email or groups (the log line before this code will say "matched no roles"). Add the user's email with `uci add_list luci-sso.admin.email='...'`.
 - **`OIDC_DISCOVERY_FAILED`** — The router cannot reach the IdP. Check DNS resolution and firewall rules from the router (not just from your laptop).

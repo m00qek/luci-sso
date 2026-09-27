@@ -45,11 +45,11 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
 | Discovery document fetch from `<issuer>/.well-known/openid-configuration` | Discovery §4 | ✅ Implemented | Cached in `/var/run/luci-sso/` (tmpfs) for 24 hours. |
-| `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must match `issuer_url` after normalization (host case, default port and trailing slashes ignored). A mismatch fails discovery (`DISCOVERY_ISSUER_MISMATCH`, logged as `Discovery issuer mismatch: …` and `[500] OIDC_DISCOVERY_FAILED`). |
-| `authorization_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`. |
-| `token_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`. |
-| `jwks_uri` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`. |
-| All endpoints must use HTTPS | Discovery §4.2 | ✅ Implemented | HTTP endpoints trigger `INSECURE_ENDPOINT`. |
+| `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must match `issuer_url` after normalization (host case, default port and trailing slashes ignored). A mismatch fails discovery: `DISCOVERY_ISSUER_MISMATCH: …`, naming both issuers, then `[500] OIDC_DISCOVERY_FAILED`. |
+| `authorization_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
+| `token_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
+| `jwks_uri` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
+| All endpoints must use HTTPS | Discovery §4.2 | ✅ Implemented | HTTP endpoints trigger `INSECURE_ENDPOINT`, logged with the field name and its (capped) URL. |
 | `issuer` in discovery must match fetch URL | Discovery §4.3 | ⚠️ Intentional deviation | When `internal_issuer_url` is set (split-horizon), the discovery document is fetched from the internal address but `issuer` is validated against the public `issuer_url`. See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md). |
 
 ---

@@ -58,16 +58,11 @@ If the probe returns `{"enabled": true}` but the button is still missing, clear 
 The router could not start the login, so the browser never reached the IdP.
 
 - **Log shows `[500] OIDC_DISCOVERY_FAILED`**: the router could not use the IdP's discovery document. The line before it names the cause:
-    - `Discovery issuer mismatch: Requested [id: …], got [id: …]`: `issuer_url` is not the issuer the IdP declares. Fetch the document from the router and compare its `issuer` with your setting; they must match apart from a trailing slash:
-
-        ```bash
-        uclient-fetch -q -O - '<issuer_url>/.well-known/openid-configuration' | jsonfilter -e '@.issuer'
-        uci get luci-sso.default.issuer_url
-        ```
+    - `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`: `issuer_url` is not the issuer the IdP declares. The line shows both values; set `issuer_url` to the declared one. They only have to match apart from a trailing slash, host letter case and `:443`.
 
     - `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)`: the router could not connect. See [A back-channel request to the IdP failed](#a-back-channel-request-to-the-idp-failed).
     - `Discovery fetch HTTP <status> from [id: …]`: the IdP answered with an error, usually `404` for a wrong path in `issuer_url`.
-    - `Discovery successful for [id: …]` directly before the error: the document lacks a required endpoint, or advertises one over plain HTTP. Check the document's `authorization_endpoint`, `token_endpoint` and `jwks_uri`.
+    - `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field>` or `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "…"`: the IdP's document lacks a required endpoint, or advertises it over plain HTTP. Fix the IdP's configuration; `luci-sso` will not use a plain-HTTP endpoint.
 - **Log shows `[429] TOO_MANY_REQUESTS`**: this client started more than 10 logins in 5 minutes, or sent more than 30 requests in a minute. Wait for the time in the `Retry-After` header, or a few minutes.
 - **Log shows `[503] HANDSHAKE_CAPACITY_EXCEEDED`**: 500 logins are already in progress. Pending logins expire after 5 minutes. Password login still works meanwhile.
 
@@ -83,7 +78,7 @@ The browser reached the IdP and came back, but the callback failed. Nothing retr
 - **Log shows `[403] STATE_PARAMETER_MISMATCH`**: the callback does not belong to the login this browser started, for example an old callback URL from the history, or a second login in another tab. The pending login is kept; start again from the login page.
 - **Log shows `[401] STATE_NOT_FOUND`**: the callback was already used (a double submit or a reload of the callback URL), or the handshake was cleaned up as stale.
 - **Log shows `[401] HANDSHAKE_EXPIRED` or `[401] HANDSHAKE_NOT_YET_VALID`**: the router's own clock jumped during the login. The handshake is written and checked with the router's clock only, so the browser's clock does not matter. See [The router's clock is wrong](#the-routers-clock-is-wrong).
-- **Log shows `[400] IDP_ERROR`**: the IdP refused the request. Its reason is not logged; it is in the `error` and `error_description` parameters of the callback URL in the browser's address bar.
+- **Log shows `[400] IDP_ERROR`**: the IdP refused the request. The line before it gives the IdP's reason: `IDP_ERROR: the IdP returned error=<error> (<error_description>)`. `access_denied` usually means the user cancelled or is not assigned to the client in the IdP.
 - **Log shows `[400] OIDC_INVALID_GRANT` or `TOKEN_EXCHANGE_FAILED`**: the IdP rejected the code exchange. Check the client secret, that the client is confidential, and that `redirect_uri` matches the IdP registration exactly.
 - **Log shows `[401] ID_TOKEN_VERIFICATION_FAILED`**: the `OAuth flow failed` line before it names the failed check, such as `TOKEN_EXPIRED` or `UNSUPPORTED_ALGORITHM`. See [ID Token Verification Detail Codes](../../reference/log-messages.md#id-token-verification-detail-codes).
 

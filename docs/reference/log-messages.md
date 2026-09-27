@@ -18,7 +18,7 @@ For steps to resolve common errors, see [How to Debug luci-sso](../how-to/sysadm
 
 ## How codes appear in the log
 
-An error code reaches the log in one of three ways. The **In the log** column of each table below says which applies to that code.
+An error code reaches the log in one of four ways. The **In the log** column of each table below says which applies to that code.
 
 **1. As the result of a request.** A request that fails ends with one line that holds the HTTP status sent to the browser and the code:
 
@@ -37,12 +37,16 @@ The examples below leave out the date and priority: `luci-sso[1289]: [500] OIDC_
 | `UserInfo fallback failed [session_id: …]: <CODE>` | Why the optional UserInfo request failed. |
 | `Access token registry write failed [session_id: …]: <CODE>` | Why the replay registry could not be written. |
 
-**3. Not at all.** Some codes are never written. The request ends with a broader code, and a descriptive line may precede it. For example, every discovery failure ends as `[500] OIDC_DISCOVERY_FAILED`; an issuer mismatch is logged only as:
+**3. Named in the line before a broader code.** Every discovery failure ends as `[500] OIDC_DISCOVERY_FAILED`. The line before it names the specific code where there is one:
 
 ```
-luci-sso[1289]: Discovery issuer mismatch: Requested [id: 8dbb9352769748c6], got [id: 3f1c0e2a9b7d4410]
+luci-sso[1289]: DISCOVERY_ISSUER_MISMATCH: issuer_url is "https://id.example.com" but the discovery document declares "https://id.example.com/application/o/luci/" [id: 8dbb9352769748c6]
 luci-sso[1289]: [500] OIDC_DISCOVERY_FAILED
 ```
+
+Values that come from the IdP or the browser, such as the declared issuer or the IdP's `error`, are sanitized before they are logged: every byte outside printable ASCII becomes `?`, and long values are cut to 200 characters (100 for endpoint URLs) followed by `...`.
+
+**4. Not at all.** A few codes are never written; the request ends with a broader code, and a descriptive line may precede it, as the tables below say.
 
 `[id: …]` values are the first 16 hex characters of the SHA-256 of the normalized URL: scheme and host in lower case, no `:443`, no trailing slash. To check which URL an id belongs to, hash the candidate on the router:
 
@@ -79,9 +83,9 @@ These occur when the router fetches the IdP's `/.well-known/openid-configuration
 | `DISCOVERY_NETWORK_ERROR` | The discovery request did not complete | Transport failure before any HTTP response. The cause is in parentheses. | Not logged by name: `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)` |
 | `INVALID_DISCOVERY_DOC` | The discovery response is not valid JSON | The IdP returned a malformed discovery document, or the URL serves something else. | Not logged by name: `Discovery JSON parse error: …` |
 | `DISCOVERY_MISSING_ISSUER` | The discovery document has no `issuer` field | The IdP's discovery document is not OIDC compliant. | Not logged by name: `Discovery document missing issuer field from [id: …]` |
-| `DISCOVERY_ISSUER_MISMATCH` | The document's `issuer` differs from the configured `issuer_url` after normalization | `issuer_url` is not the IdP's exact issuer identifier. Trailing slashes, letter case in the host and `:443` are ignored; path differences are not. | Not logged by name: `Discovery issuer mismatch: Requested [id: …], got [id: …]`. Can also appear as the detail of `ID_TOKEN_VERIFICATION_FAILED`. |
-| `DISCOVERY_MISSING_ENDPOINT` | The document lacks `authorization_endpoint`, `token_endpoint` or `jwks_uri` | The IdP's discovery document is incomplete. | Not logged. `Discovery successful for [id: …]` is followed directly by `[500] OIDC_DISCOVERY_FAILED`. |
-| `INSECURE_ENDPOINT` | One of those three endpoints is not HTTPS | The IdP advertises a plain-HTTP endpoint. `luci-sso` refuses to use it. | Not logged. `Discovery successful for [id: …]` is followed directly by `[500] OIDC_DISCOVERY_FAILED`. |
+| `DISCOVERY_ISSUER_MISMATCH` | The document's `issuer` differs from the configured `issuer_url` after normalization | `issuer_url` is not the IdP's exact issuer identifier. Trailing slashes, letter case in the host and `:443` are ignored; path differences are not. | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "<configured>" but the discovery document declares "<declared>" [id: …]`, then `[500] OIDC_DISCOVERY_FAILED`. Can also appear as the detail of `ID_TOKEN_VERIFICATION_FAILED`. |
+| `DISCOVERY_MISSING_ENDPOINT` | The document lacks `authorization_endpoint`, `token_endpoint` or `jwks_uri` | The IdP's discovery document is incomplete. | `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field> [id: …]`, then `[500] OIDC_DISCOVERY_FAILED` |
+| `INSECURE_ENDPOINT` | One of those three endpoints is not HTTPS | The IdP advertises a plain-HTTP endpoint. `luci-sso` refuses to use it. | `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "<url>" [id: …]`, then `[500] OIDC_DISCOVERY_FAILED` |
 | `JWKS_FETCH_FAILED` | Any JWK Set failure during the callback; also the JWKS endpoint returning a status other than 200 | The router could not get the IdP's signing keys. | `[500] JWKS_FETCH_FAILED`, preceded by a JWKS line naming the cause, such as `JWKS fetch HTTP <status> from [id: …]` |
 | `JWKS_NETWORK_ERROR` | The JWKS request did not complete | Transport failure before any HTTP response. | Not logged by name: `JWKS fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)` |
 | `INSECURE_JWKS_URI` | `jwks_uri` is not HTTPS | Discovery rejects a plain-HTTP `jwks_uri` first, as `INSECURE_ENDPOINT`. | Not logged |
@@ -109,7 +113,7 @@ These occur when the browser returns from the IdP. A failed callback is final: n
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `IDP_ERROR` | The callback URL has an `error` parameter | The IdP refused the authorization request. The IdP's `error` value is not logged; it is in the query string of the callback URL in the browser's address bar. | `[400] IDP_ERROR` |
+| `IDP_ERROR` | The callback URL has an `error` parameter | The IdP refused the authorization request, for example `access_denied` when the user cancelled or is not allowed to use the client. | `IDP_ERROR: the IdP returned error=<error> (<error_description>)`, then `[400] IDP_ERROR`. Both values are sanitized; the page shows only a fixed message. |
 | `MISSING_CODE` | The callback URL has no `code` parameter | The IdP redirect did not include an authorization code. | `[400] MISSING_CODE` |
 | `MISSING_HANDSHAKE_COOKIE` | The request has no `__Host-luci_sso_state` cookie | The browser did not send the handshake cookie. It expires 300 seconds after the login starts, so a slow login ends here. It is also host-only, so it is missing when the login started on a different host name than the one in `redirect_uri`. | `[401] MISSING_HANDSHAKE_COOKIE` |
 | `STATE_PARAMETER_MISMATCH` | The `state` parameter does not match the stored handshake | The callback did not come from the flow this browser started: possible CSRF, or a stale link. The handshake is kept, so the matching callback can still complete. | `[403] STATE_PARAMETER_MISMATCH`, preceded by `Callback state does not match the handshake; handshake kept` |
@@ -170,7 +174,7 @@ luci-sso[1234]: OAuth flow failed [session_id: 1a2b...]: ID_TOKEN_VERIFICATION_F
 luci-sso[1234]: [401] ID_TOKEN_VERIFICATION_FAILED
 ```
 
-Codes from the table above can also appear here, as can `DISCOVERY_ISSUER_MISMATCH` and `CRYPTO_ERROR`.
+Codes from the table above can also appear here, as can `DISCOVERY_ISSUER_MISMATCH` (when the cached discovery document's issuer no longer matches) and `CRYPTO_ERROR`.
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |

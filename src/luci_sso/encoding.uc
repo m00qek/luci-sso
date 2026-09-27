@@ -276,3 +276,25 @@ export function normalize_sub(sub) {
 export function is_https(url) {
 	return (type(url) == "string" && lc(substr(url, 0, 8)) == "https://");
 };
+
+const LOG_VALUE_MAX = 200;
+
+/**
+ * Makes an untrusted value safe to put in a log line.
+ *
+ * Every byte outside printable ASCII (CR, LF, tabs, escape sequences, and
+ * non-ASCII bytes) becomes "?", so a value cannot forge extra log lines or
+ * terminal control codes. The result is capped at `max` bytes (default 200)
+ * and ends in "..." when it was cut. A non-string yields "".
+ *
+ * @param {*} value - Value to sanitise, typically a request or IdP field
+ * @param {number} [max] - Maximum length kept before truncation
+ * @returns {string}
+ */
+export function log_safe(value, max) {
+	if (type(value) != "string") return "";
+	let limit = (type(max) == "int" && max > 0) ? max : LOG_VALUE_MAX;
+	let clean = replace(value, /[^ -~]/g, "?");
+	if (length(clean) > limit) clean = substr(clean, 0, limit) + "...";
+	return clean;
+};

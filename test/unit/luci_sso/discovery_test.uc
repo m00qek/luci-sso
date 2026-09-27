@@ -161,8 +161,12 @@ describe('discovery: discover — validation & security', () => {
 		});
 	});
 
-	it('does not log the raw (malicious) issuer on mismatch (W4)', () => {
-		let evil_issuer = "https://evil.com/path?malicious=true";
+	it('logs a malicious document issuer only sanitised and capped (W4)', () => {
+		// The mismatch line names both issuers so an admin can fix issuer_url.
+		// The document's value is IdP-controlled, so it must not be able to
+		// forge log lines (no CR/LF or other control bytes) or flood the log.
+		let evil_issuer = "https://evil.com/path?malicious=true\r\nluci-sso: forged entry";
+		for (let i = 0; i < 300; i++) evil_issuer += "A";
 		let evil_doc = { ...f.MOCK_DISCOVERY, issuer: evil_issuer };
 		with_context({
 			fs:          { data: {} },
@@ -172,12 +176,12 @@ describe('discovery: discover — validation & security', () => {
 			let log_entries = [];
 			deps.log = (l, m) => push(log_entries, [l, m]);
 			discovery.discover(deps, ISSUER);
-			let logged = false;
+			assert.match(truthy(), length(log_entries) > 0, "Mismatch error should have been logged");
 			for (let e in log_entries) {
-				logged = true;
-				assert.match(-1, index(e[1], evil_issuer), "Raw malicious issuer MUST NOT be logged");
+				assert.match(-1, index(e[1], evil_issuer), "The raw malicious issuer MUST NOT be logged");
+				assert.match(null, match(e[1], /[\r\n]/), "No log line may contain CR or LF");
+				assert.match(truthy(), length(e[1]) < 600, "The document issuer must be capped");
 			}
-			assert.match(truthy(), logged, "Mismatch error should have been logged");
 		});
 	});
 
@@ -512,3 +516,59 @@ describe('discovery: split-horizon fetch', () => {
 		});
 	});
 });
+
+// ─── log lines for validation failures ───────────────────────────────────────
+
+describe('discovery: discover — validation failures name themselves in the log', () => {
+	function discover_logging(doc) {
+		let logs = [];
+		let res;
+		with_context({
+			fs:          { data: {} },
+			http_client: { data: { [`${ISSUER}/.well-known/openid-configuration`]: { status: 200, body: doc } } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			res = discovery.discover(deps, ISSUER);
+		});
+		return { res, logs };
+	}
+
+	it('logs DISCOVERY_ISSUER_MISMATCH with both issuers, sanitised', () => {
+		let r = discover_logging({ ...f.MOCK_DISCOVERY, issuer: "https://evil.idp\r\nforged line" });
+		assert.match("DISCOVERY_ISSUER_MISMATCH", r.res.error);
+		let line = filter(r.logs, (m) => index(m, "DISCOVERY_ISSUER_MISMATCH: ") == 0);
+		assert.match(1, length(line));
+		assert.match(truthy(), index(line[0], `issuer_url is "${ISSUER}"`) > 0, line[0]);
+		assert.match(truthy(), index(line[0], 'declares "https://evil.idp??forged line"') > 0, line[0]);
+		assert.match(null, match(line[0], /[\r\n]/));
+	});
+
+	it('logs DISCOVERY_MISSING_ENDPOINT with the missing field and no success line', () => {
+		let doc = { ...f.MOCK_DISCOVERY };
+		delete doc.token_endpoint;
+		let r = discover_logging(doc);
+		assert.match("DISCOVERY_MISSING_ENDPOINT", r.res.error);
+		assert.match(1, length(filter(r.logs, (m) => index(m, "DISCOVERY_MISSING_ENDPOINT: the discovery document has no token_endpoint") == 0)));
+		assert.match(0, length(filter(r.logs, (m) => index(m, "Discovery successful") == 0)));
+	});
+
+	it('logs INSECURE_ENDPOINT with the field and a capped, sanitised value', () => {
+		let long = "http://insecure.idp/jwks?";
+		for (let i = 0; i < 300; i++) long += "a";
+		let r = discover_logging({ ...f.MOCK_DISCOVERY, jwks_uri: long + "\nX" });
+		assert.match("INSECURE_ENDPOINT", r.res.error);
+		let line = filter(r.logs, (m) => index(m, "INSECURE_ENDPOINT: jwks_uri in the discovery document is not HTTPS") == 0);
+		assert.match(1, length(line));
+		assert.match(truthy(), index(line[0], '"http://insecure.idp/jwks?') > 0);
+		assert.match(truthy(), index(line[0], '..."') > 0, 'value must be capped');
+		assert.match(null, match(line[0], /[\r\n]/));
+	});
+
+	it('logs "Discovery successful" only after the document passed validation', () => {
+		let r = discover_logging(f.MOCK_DISCOVERY);
+		assert.match(true, r.res.ok);
+		assert.match(1, length(filter(r.logs, (m) => index(m, "Discovery successful") == 0)));
+	});
+});
+

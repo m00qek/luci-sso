@@ -134,7 +134,7 @@ Open the LuCI login page at the host name used in the Redirect URI; the login fa
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `[500] OIDC_DISCOVERY_FAILED`, preceded by `Discovery issuer mismatch: Requested [id: …], got [id: …]` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path. It must use the host name Pocket ID is configured with, not an IP address or another alias. |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path. It must use the host name Pocket ID is configured with, not an IP address or another alias. |
 | `USER_NOT_AUTHORIZED` | Authentication succeeded but no UCI role matched. If using group mapping, verify the group name includes the `@PocketID` suffix. |
 | User is redirected back to the login page without an error | The user has no passkey registered in Pocket ID, or the Pocket ID client's **Allowed User Groups** excludes them. |
 

@@ -141,3 +141,26 @@ describe('entry: run', () => {
 		assert.match(truthy(), crashed, "catch-all logs the crash");
 	});
 });
+
+describe('entry: run — IdP error on the callback', () => {
+	it('logs the IdP error and description sanitised, and never renders them', () => {
+		let evil = "access_denied\r\n<script>alert(1)</script>";
+		let desc = "User\ncancelled <b>login</b>";
+		let qs = `error=${replace(evil, /[\r\n<>\/()]/g, (c) => sprintf("%%%02X", ord(c)))}&error_description=${replace(desc, /[\r\n<>\/ ]/g, (c) => sprintf("%%%02X", ord(c)))}`;
+		let wd = web_deps({ PATH_INFO: "/callback", QUERY_STRING: qs, REMOTE_ADDR: "192.0.2.10" });
+
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": ENABLED_UCI } }, clock: { data: { now: NOW } } }, (deps) => {
+			let logs = [];
+			deps.log = (l, m) => push(logs, m);
+			entry.run(deps, wd);
+			let line = filter(logs, (m) => index(m, "IDP_ERROR: the IdP returned error=") == 0);
+			assert.match(1, length(line), sprintf("%J", logs));
+			assert.match("IDP_ERROR: the IdP returned error=access_denied??<script>alert(1)</script> (User?cancelled <b>login</b>)", line[0]);
+		});
+
+		let out = wd.out();
+		assert.match(truthy(), index(out, "400") >= 0, "IDP_ERROR responds 400");
+		assert.match(-1, index(out, "alert(1)"), "the IdP's error value must never reach the page");
+		assert.match(-1, index(out, "cancelled"), "the IdP's error_description must never reach the page");
+	});
+});

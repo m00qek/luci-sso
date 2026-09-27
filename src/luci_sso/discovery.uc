@@ -155,22 +155,27 @@ export function discover(deps, issuer, options) {
 
 	let config_issuer_res = encoding.normalize_url(config.issuer);
 	if (!config_issuer_res.ok || config_issuer_res.data !== normalized_issuer) {
-		deps.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(deps.native, config_issuer_res.data) : "INVALID"}]`);
+		// The issuer is configuration, not a secret: log both values so the
+		// admin can see exactly what to copy into issuer_url.
+		let doc_issuer = (type(config.issuer) == "string") ? `"${encoding.log_safe(config.issuer)}"` : `(${type(config.issuer)})`;
+		deps.log("error", `DISCOVERY_ISSUER_MISMATCH: issuer_url is "${encoding.log_safe(issuer)}" but the discovery document declares ${doc_issuer} [id: ${issuer_id}]`);
 		return Result.err(DISCOVERY_ISSUER_MISMATCH,
 			 `Expected issuer_id ${issuer_id}` );
 	}
 
-	deps.log("info", `Discovery successful for [id: ${issuer_id}]`);
-
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {
 		if (type(config[field]) != "string" || length(config[field]) == 0) {
+			deps.log("error", `DISCOVERY_MISSING_ENDPOINT: the discovery document has no ${field} [id: ${issuer_id}]`);
 			return Result.err(DISCOVERY_MISSING_ENDPOINT, field);
 		}
 		if (!encoding.is_https(config[field])) {
+			deps.log("error", `INSECURE_ENDPOINT: ${field} in the discovery document is not HTTPS: "${encoding.log_safe(config[field], 100)}" [id: ${issuer_id}]`);
 			return Result.err(INSECURE_ENDPOINT, field);
 		}
 	}
+
+	deps.log("info", `Discovery successful for [id: ${issuer_id}]`);
 
 	// OPTIONAL: UserInfo endpoint (RFC 6749 / OIDC)
 	if (config.userinfo_endpoint && !encoding.is_https(config.userinfo_endpoint)) {

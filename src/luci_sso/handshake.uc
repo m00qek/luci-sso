@@ -23,7 +23,12 @@ function _validate_callback_request(deps, config, request) {
 	let query = request.query || {};
 	let cookies = request.cookies || {};
 
+	// The IdP's error and error_description arrive in the query string, so
+	// they are attacker-controlled: sanitise them for the log, and never echo
+	// them to the page (the page only shows IDP_ERROR's fixed message).
 	if (query.error) {
+		let desc = query.error_description ? ` (${encoding.log_safe(query.error_description)})` : "";
+		deps.log("warn", `IDP_ERROR: the IdP returned error=${encoding.log_safe(query.error)}${desc}`);
 		return Result.err(IDP_ERROR, { http_status: 400 });
 	}
 

@@ -111,8 +111,8 @@ Each phase has distinct failure modes visible in the [system log](../reference/l
 
 | Phase | Code on the request's last line | Detail on the lines before it |
 | :--- | :--- | :--- |
-| Discovery | `OIDC_DISCOVERY_FAILED`, `JWKS_FETCH_FAILED` | `Discovery issuer mismatch: …`, `Discovery fetch failed … HTTP_REQUEST_FAILED (<cause>)`, `JWKS fetch HTTP <status> …` |
-| Callback | `STATE_PARAMETER_MISMATCH`, `MISSING_HANDSHAKE_COOKIE`, `IDP_ERROR`, `STATE_NOT_FOUND` | `Callback state does not match the handshake; handshake kept`, `Handshake state not found or already consumed` |
+| Discovery | `OIDC_DISCOVERY_FAILED`, `JWKS_FETCH_FAILED` | `DISCOVERY_ISSUER_MISMATCH: …`, `DISCOVERY_MISSING_ENDPOINT: …`, `INSECURE_ENDPOINT: …`, `Discovery fetch failed … HTTP_REQUEST_FAILED (<cause>)`, `JWKS fetch HTTP <status> …` |
+| Callback | `STATE_PARAMETER_MISMATCH`, `MISSING_HANDSHAKE_COOKIE`, `IDP_ERROR`, `STATE_NOT_FOUND` | `IDP_ERROR: the IdP returned error=<error> (…)`, `Callback state does not match the handshake; handshake kept`, `Handshake state not found or already consumed` |
 | Token exchange | `TOKEN_EXCHANGE_FAILED`, `OIDC_INVALID_GRANT`, `TOKEN_ENDPOINT_NETWORK_ERROR` | `Token exchange HTTP <status>`, `Token exchange network error … (<cause>)` |
 | Token validation | `ID_TOKEN_VERIFICATION_FAILED` | `OAuth flow failed …` naming the check, such as `UNSUPPORTED_ALGORITHM`, `NONCE_MISMATCH` or `AT_HASH_MISMATCH` |
 | Authorization | `USER_NOT_AUTHORIZED` | `User [sub_id: …] matched no roles` |

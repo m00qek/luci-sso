@@ -390,3 +390,36 @@ describe('encoding: rebase_origin', () => {
 		assert.match(null, encoding.rebase_origin(null, ISSUER, INTERNAL));
 	});
 });
+
+// ─── log_safe ────────────────────────────────────────────────────────────────
+
+describe('encoding: log_safe', () => {
+	it('replaces CR, LF, tabs, escapes and non-ASCII bytes with "?"', () => {
+		assert.match('a??b?c?d??|ok', encoding.log_safe("a\r\nb\tc\x1bd\u00e9|ok"));
+	});
+
+	it('keeps printable ASCII unchanged', () => {
+		assert.match('https://idp.example.com/realms/home?x=1', encoding.log_safe('https://idp.example.com/realms/home?x=1'));
+	});
+
+	it('caps the value at 200 bytes by default and marks the cut', () => {
+		let long = '';
+		for (let i = 0; i < 250; i++) long += 'x';
+		let out = encoding.log_safe(long);
+		assert.match(203, length(out));
+		assert.match('...', substr(out, 200));
+	});
+
+	it('honours an explicit cap', () => {
+		assert.match('abc...', encoding.log_safe('abcdef', 3));
+	});
+
+	it('returns "" for non-strings', () => {
+		for (let v in [ null, 42, {}, [] ]) assert.match('', encoding.log_safe(v));
+	});
+
+	prop('never emits a byte outside printable ASCII', gen.string({ max_len: 300 }), (s) => {
+		return match(encoding.log_safe(s), /[^ -~]/) == null;
+	});
+});
+

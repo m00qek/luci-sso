@@ -163,7 +163,7 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `[500] OIDC_DISCOVERY_FAILED`, preceded by `Discovery issuer mismatch: Requested [id: …], got [id: …]` | The realm path in `issuer_url` does not match the issuer Keycloak declares; realm names are case-sensitive. Copy the `issuer` field from the realm's `/.well-known/openid-configuration` document. |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | The realm path in `issuer_url` does not match the issuer Keycloak declares; realm names are case-sensitive. Copy the `issuer` field from the realm's `/.well-known/openid-configuration` document. |
 | `TOKEN_EXCHANGE_FAILED` | **Client authentication** was left off when creating the client — the client is public, not confidential. Re-create the client with **Client authentication: On**. |
 | `USER_NOT_AUTHORIZED` with "matched no roles" | Group mapping is missing or the mapper has **Full group path** enabled, so the claim contains `/my-group` instead of `my-group`. Either disable Full group path in the mapper or update the role config to match the full path. |
 | `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Keycloak's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
