@@ -34,6 +34,9 @@ async function addRole(page, name, { emails = [], read = [], write = [] }) {
     await page.locator('.cbi-section-create-name').pressSequentially(name);
     await page.locator('.cbi-section-create .cbi-button-add').click();
     await expect(modal(page)).toBeVisible();
+    // The dialog's own Save does not write the permissions: the page says so.
+    await expect(modal(page).locator('.luci-sso-access-note'))
+        .toHaveText('Permission changes take effect when you click Save at the bottom of the page.');
     await fillList(page, 'email', emails);
     await fillList(page, 'read', read);
     await fillList(page, 'write', write);

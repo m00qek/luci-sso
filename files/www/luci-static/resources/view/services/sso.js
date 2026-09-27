@@ -373,6 +373,15 @@ return view.extend({
 			return o;
 		};
 
+		/* The dialog's own Save only keeps the edit on the page. */
+		o = s.option(form.DummyValue, '_access_note');
+		o.modalonly = true;
+		o.rawhtml = true;
+		o.cfgvalue = function() {
+			return '<em class="luci-sso-access-note">' +
+				_('Permission changes take effect when you click Save at the bottom of the page.') + '</em>';
+		};
+
 		accessOption('read', _('Read Access'),
 			_('LuCI access groups granted read access. <code>*</code> reads every group. ' +
 			  '<code>unauthenticated</code> is always included, since LuCI needs it on every page, and is not listed here. ' +
