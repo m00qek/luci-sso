@@ -20,14 +20,14 @@ Use **mbedTLS** unless you have a reason not to: it is lightweight and already p
 
 ## 2. Get the packages
 
-Build them as described in [Building from Source](../../tutorials/building.md). On OpenWrt 24.10 the build leaves `.ipk` files in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`, next to every other package the SDK built. You need two of them:
+Build them as described in [Building from Source](../../tutorials/building.md). The build leaves the `luci-sso` packages in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `luci-sso` and the three crypto backends. On OpenWrt 24.10 they are `.ipk` files, and you need two of them:
 
 ```text
 luci-sso_<version>_<arch>.ipk
 luci-sso-crypto-mbedtls_<version>_<arch>.ipk
 ```
 
-OpenWrt 25.12 uses `apk` packages instead, named `luci-sso-<version>.apk` and `luci-sso-crypto-mbedtls-<version>.apk`. The build does not copy them out yet; see [Building from Source](../../tutorials/building.md#step-3-find-the-packages).
+OpenWrt 25.12 uses `apk` packages instead, built with `SDK_VERSION=25.12.3` and named `luci-sso-<version>.apk` and `luci-sso-crypto-mbedtls-<version>.apk`.
 
 ---
 

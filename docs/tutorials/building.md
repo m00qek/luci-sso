@@ -39,15 +39,15 @@ The build runs inside a container based on the OpenWrt SDK image for that archit
 The build starts with this line, followed by a long compiler log:
 
 ```text
-📦 Building IPK package for aarch64_cortex-a53/24.10.5...
+📦 Building luci-sso packages for aarch64_cortex-a53/24.10.5...
 ```
 
 ## Step 3: Find the packages
 
-Once the build completes, the packages are in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`. That directory also holds every other package the SDK built, so we list only ours:
+Once the build completes, it ends with a line like `Copied 4 luci-sso package(s) to …`. The packages are in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`:
 
 ```bash
-ls bin/lib/aarch64_cortex-a53/24.10.5/packages/luci-sso*.ipk
+ls bin/lib/aarch64_cortex-a53/24.10.5/packages/
 ```
 
 We should see four files: `luci-sso` and the three crypto backends.
@@ -62,7 +62,9 @@ luci-sso-crypto-wolfssl_0.9.1-r1_aarch64_cortex-a53.ipk
 The router needs `luci-sso` plus exactly one backend.
 
 !!! note "OpenWrt 25.12"
-    `make package SDK_VERSION=25.12.3` builds `.apk` packages inside the SDK container, but the build script only copies `.ipk` files out, so `bin/lib/<SDK_ARCH>/25.12.3/packages/` stays empty.
+    OpenWrt 25.12 uses `apk` instead of `opkg`. Build for it with `make package SDK_ARCH=<arch> SDK_VERSION=25.12.3`. The same directory, under `25.12.3`, then holds `.apk` files named without the architecture: `luci-sso-0.9.1-r1.apk`, `luci-sso-crypto-mbedtls-0.9.1-r1.apk`, `luci-sso-crypto-openssl-0.9.1-r1.apk` and `luci-sso-crypto-wolfssl-0.9.1-r1.apk`.
+
+Each build replaces the `luci-sso` packages from an earlier build in that directory, so only the current version is there.
 
 ---
 

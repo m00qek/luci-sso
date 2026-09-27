@@ -50,7 +50,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | Target | Stack | Description |
 | :--- | :--- | :--- |
 | `compile` | CI | Compile native C components for the target architecture. Skipped if the sentinel file is current. |
-| `package` | CI | Build the `.ipk` package for the target architecture. |
+| `package` | CI | Build the `luci-sso` and `luci-sso-crypto-*` packages for `SDK_ARCH`/`SDK_VERSION` into `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `.ipk` for 24.10, `.apk` for 25.12. Replaces the previous build's `luci-sso` packages there. |
 
 ### Utilities
 
@@ -121,8 +121,11 @@ make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'
 make compile CRYPTO_LIB=wolfssl
 make unit-test CRYPTO_LIB=wolfssl
 
-# Build an IPK for a MIPS router
+# Build the packages for a MIPS router (24.10, .ipk)
 make package SDK_ARCH=mipsel_24kc
+
+# Build the packages for OpenWrt 25.12 (.apk)
+make package SDK_VERSION=25.12.3
 
 # Fuzz the mbedtls backend for 10 minutes with leak detection
 make fuzzer-test CRYPTO_LIB=mbedtls TIME=600 DETECT_LEAKS=1

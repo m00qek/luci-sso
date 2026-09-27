@@ -40,7 +40,10 @@ apk list --installed luci-sso
 Build or obtain the new `luci-sso` package (see [Building from Source](../../tutorials/building.md)), then copy it to the router:
 
 ```bash
+# OpenWrt 24.10
 scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso_<version>_<arch>.ipk root@192.168.1.1:/tmp/
+# OpenWrt 25.12
+scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso-<version>.apk root@192.168.1.1:/tmp/
 ```
 
 If the crypto backend has a new version too, copy that package as well.

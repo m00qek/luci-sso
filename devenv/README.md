@@ -31,7 +31,7 @@ make local-up          # Start local stack
 make local-shell       # SSH into the OpenWrt container
 make up && make unit-test  # Start the CI stack; run native, unit, integration and system tests
 make up && make e2e-test  # Start CI stack and run browser tests
-make package SDK_ARCH=x86-64  # Build IPK for x86-64
+make package SDK_ARCH=x86-64  # Build the luci-sso packages (.ipk on 24.10, .apk with SDK_VERSION=25.12.3)
 ```
 
 ## Architecture support
