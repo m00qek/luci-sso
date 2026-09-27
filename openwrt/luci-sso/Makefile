@@ -68,6 +68,7 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-luci-sso-ui $(1)/etc/uci-defaults/99-luci-sso-ui
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-cleanup $(1)/usr/sbin/luci-sso-cleanup
+	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-repatch $(1)/usr/sbin/luci-sso-repatch
 	$(INSTALL_DIR) $(1)/www/cgi-bin
 	$(INSTALL_BIN) ./files/www/cgi-bin/luci-sso $(1)/www/cgi-bin/luci-sso
 	$(INSTALL_DIR) $(1)/www/luci-static/resources
@@ -82,17 +83,15 @@ endef
 
 define Package/$(PKG_NAME)/prerm
 #!/bin/sh
+# Shell variables are written $$name: this block is expanded by make first.
+
 # Clean up cron job
 sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
 [ -x "/etc/init.d/cron" ] && /etc/init.d/cron restart
 
-# Revert UI patches
-sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/sysauth.ut 2>/dev/null
-# Glob, to mirror 99-luci-sso-ui: revert every theme that was patched, including
-# ones that did not exist when this was written.
-for f in /usr/share/ucode/luci/template/themes/*/sysauth.ut; do
-	[ -f "$f" ] && sed -i '/luci-sso-login.js/d' "$f" 2>/dev/null
-done
+# Remove the login button from every LuCI login template. An upgrade puts it
+# back: the new package's uci-defaults script runs luci-sso-repatch again.
+[ -x /usr/sbin/luci-sso-repatch ] && /usr/sbin/luci-sso-repatch --remove >/dev/null 2>&1
 
 # Remove the SSO ACL entry and reload rpcd so the permission is revoked
 # immediately. opkg removes the file after prerm exits, so we delete it here
@@ -102,7 +101,7 @@ rm -f /usr/share/rpcd/acl.d/luci-app-sso.json 2>/dev/null
 
 # Clear LuCI cache to reflect removal
 rm -rf /tmp/luci-modulecache/* 2>/dev/null
-rm -rf /tmp/luci-indexcache 2>/dev/null
+rm -rf /tmp/luci-indexcache* 2>/dev/null
 
 exit 0
 endef

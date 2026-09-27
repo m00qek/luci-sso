@@ -12,7 +12,7 @@ This guide covers completely removing `luci-sso` from your router and restoring 
 Removing the `luci-sso` package runs its removal script, which:
 
 - takes the cleanup job out of root's crontab,
-- removes the SSO button from LuCI's login templates,
+- removes the SSO button from LuCI's login templates, in every theme (`luci-sso-repatch --remove`),
 - deletes the `luci-app-sso` access group and restarts `rpcd`, which ends every LuCI session,
 - clears LuCI's cache.
 

@@ -72,7 +72,7 @@ OpenWrt 25.12 uses `apk` packages instead, built with `SDK_VERSION=25.12.3` and 
 
         `--allow-untrusted` is needed because packages you built yourself are not signed with a key the router trusts; without it `apk` stops with `UNTRUSTED signature`.
 
-Installing runs the package's setup scripts once: they create `/var/run/luci-sso/`, add a daily cleanup job to root's crontab, and add the SSO button to LuCI's login page templates.
+Installing runs the package's setup scripts once: they create `/var/run/luci-sso/`, add a daily cleanup job to root's crontab, and add the SSO button to LuCI's login page templates with `luci-sso-repatch`. Run that command again whenever a LuCI upgrade removes the button; see [How to Upgrade luci-sso](upgrade.md#restore-the-login-button-after-a-luci-upgrade).
 
 ### Switch to a different backend later
 

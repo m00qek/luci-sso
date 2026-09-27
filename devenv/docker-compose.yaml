@@ -124,6 +124,7 @@ services:
       - ../files/usr/share/luci/menu.d/luci-app-sso.json:/usr/share/luci/menu.d/luci-app-sso.json:ro
       - ../files/usr/share/rpcd/acl.d/luci-app-sso.json:/usr/share/rpcd/acl.d/luci-app-sso.json:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
+      - ../files/usr/sbin/luci-sso-repatch:/usr/sbin/luci-sso-repatch:ro
       - ../bin/lib/${SDK_ARCH}/${SDK_VERSION}:/luci_sso/backends:ro
       - ../test:/usr/share/luci-sso/test:ro
 

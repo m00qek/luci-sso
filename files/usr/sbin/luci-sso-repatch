@@ -1,0 +1,77 @@
+#!/bin/sh
+# luci-sso-repatch: add the "Login with SSO" button to LuCI's login page, or
+# remove it.
+#
+# The button is a <script> tag inserted into LuCI's login template, sysauth.ut.
+# Installing luci-sso adds it; upgrading LuCI replaces sysauth.ut and drops it.
+# Run this command after a LuCI upgrade to put the button back. It is safe to
+# run any number of times: each template ends up with exactly one tag.
+#
+#   luci-sso-repatch            patch every login template
+#   luci-sso-repatch --remove   remove the tag from every template
+#
+# Exit status: 0 on success; 1 if a template could not be patched or none was
+# found; 2 on a usage error.
+
+TEMPLATE_DIR="/usr/share/ucode/luci/template"
+SCRIPT="/luci-static/resources/luci-sso-login.js"
+MARK="luci-sso-login.js"
+
+usage() {
+	echo "Usage: luci-sso-repatch [--remove]"
+	echo "Add the SSO login button to LuCI's login templates, or remove it."
+}
+
+MODE=patch
+case "$1" in
+	"") ;;
+	--remove) MODE=remove ;;
+	-h|--help) usage; exit 0 ;;
+	*) usage >&2; exit 2 ;;
+esac
+
+# The generic template plus every theme that ships its own override. Themes
+# such as material and openwrt-2020 fall back to the generic one; bootstrap and
+# footstrap override it, and an override never sees the generic patch (issue
+# #10). Globbing covers themes installed now or later.
+templates() {
+	for f in "$TEMPLATE_DIR/sysauth.ut" "$TEMPLATE_DIR"/themes/*/sysauth.ut; do
+		[ -f "$f" ] && echo "$f"
+	done
+}
+
+# Earlier releases patched header.ut instead; always clean those up.
+for f in "$TEMPLATE_DIR/header.ut" "$TEMPLATE_DIR/themes/bootstrap/header.ut"; do
+	[ -f "$f" ] && sed -i "/$MARK/d" "$f"
+done
+
+found=0
+failed=0
+for f in $(templates); do
+	found=$((found + 1))
+	# Remove first, so patching twice never leaves two tags.
+	sed -i "/$MARK/d" "$f"
+	[ "$MODE" = remove ] && { echo "removed: $f"; continue; }
+
+	sed -i "/{% include('header'.* %}/a \\
+<script src=\"$SCRIPT\"></script>" "$f"
+
+	if [ "$(grep -c "$MARK" "$f")" = 1 ]; then
+		echo "patched: $f"
+	else
+		echo "not patched (no header include found): $f" >&2
+		failed=$((failed + 1))
+	fi
+done
+
+# LuCI caches compiled templates and its menu index.
+rm -rf /tmp/luci-modulecache/* /tmp/luci-indexcache* 2>/dev/null
+
+if [ "$found" = 0 ]; then
+	echo "no LuCI login template found under $TEMPLATE_DIR" >&2
+	[ "$MODE" = remove ] && exit 0
+	exit 1
+fi
+
+[ "$failed" = 0 ] || exit 1
+exit 0

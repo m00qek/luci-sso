@@ -75,7 +75,7 @@ If the crypto backend has a new version too, copy that package as well.
     apk add --allow-untrusted /tmp/luci-sso-<version>.apk
     ```
 
-The install script runs again during the upgrade: it recreates `/var/run/luci-sso/` if needed, keeps the cleanup cron job, re-applies the SSO button to LuCI's login templates and clears LuCI's cache. There is nothing to run by hand.
+The install script runs again during the upgrade: it recreates `/var/run/luci-sso/` if needed, keeps the cleanup cron job, re-applies the SSO button to LuCI's login templates (with `luci-sso-repatch`) and clears LuCI's cache. There is nothing to run by hand.
 
 If `/etc/config/luci-sso-opkg` (or `luci-sso.apk-new`) appeared, compare it with your configuration for new options, then delete it.
 
@@ -131,22 +131,15 @@ rm -rf /etc/luci-sso
 
 ## Restore the login button after a LuCI upgrade
 
-The SSO button is added to LuCI's login templates (`sysauth.ut`) when `luci-sso` is installed. Upgrading LuCI replaces those templates and removes the button. The script that adds it runs only while `luci-sso` is being installed, and is deleted afterwards, so there is no script to run by hand. Reinstall `luci-sso` instead, which runs it again. You need the package file of the version you have installed.
+The SSO button is added to LuCI's login templates (`sysauth.ut`) when `luci-sso` is installed. Upgrading LuCI replaces those templates and removes the button. Put it back with:
 
-=== "OpenWrt 24.10 (opkg)"
+```bash
+luci-sso-repatch
+```
 
-    ```bash
-    opkg install --force-reinstall /tmp/luci-sso_<version>_<arch>.ipk
-    ```
+It patches the generic template and every theme's own copy, and prints one `patched: <file>` line for each. It is safe to run any number of times; each template ends up with exactly one button. Nobody is logged out. Reload the login page to see the button.
 
-=== "OpenWrt 25.12 (apk)"
-
-    ```bash
-    apk del luci-sso
-    apk add --allow-untrusted /tmp/luci-sso-<version>.apk
-    ```
-
-Reinstalling restarts `rpcd` like an upgrade does, so every LuCI session ends. Your configuration is kept. Reload the login page to see the button.
+It exits with status 1 and prints `not patched (no header include found): <file>` if a template no longer has the line the button is added after, which would mean a LuCI release changed its login template. `luci-sso-repatch --remove` takes the button out again.
 
 ---
 
