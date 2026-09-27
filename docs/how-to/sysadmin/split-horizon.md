@@ -122,22 +122,11 @@ Set `internal_issuer_url` alongside the standard configuration:
 
 After committing, confirm the configuration is valid. On the router:
 
-```bash
-uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
-# Expected: {"enabled": true}
-```
+--8<-- "probe-enabled.md"
 
 Then attempt a login from your browser. If the browser redirects to the IdP correctly but the router fails to exchange the code, the problem is in the back-channel. Check the log:
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso | tail -30
-    ```
+--8<-- "check-log.md"
 
 Back-channel connection failures end as `[500] OIDC_DISCOVERY_FAILED`, `[500] TOKEN_ENDPOINT_NETWORK_ERROR` or `[500] JWKS_FETCH_FAILED`, with a line ending in `HTTP_REQUEST_FAILED (<cause>)` before them. Check:
 

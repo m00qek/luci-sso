@@ -199,23 +199,11 @@ Charlie can view status, view network settings, and edit network settings — bu
 
 After committing configuration, test on the router with:
 
-```bash
-# Confirm the service is enabled and config is valid
-uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
-# Expected: {"enabled": true}
-```
+--8<-- "probe-enabled.md"
 
 Then log in as the user in question and confirm the LuCI navigation matches what you expect. If a user is denied despite correct credentials, check the log for `USER_NOT_AUTHORIZED` (the line before it will say "matched no roles" if the issue is role mapping):
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso | tail -20
-    ```
+--8<-- "check-log.md"
 
 If you see `USER_NOT_AUTHORIZED`, the user's email or group claims do not match any configured role, or the matched role has no `read` or `write` entries. Verify the exact claim value the IdP is sending — email addresses are matched case-insensitively, but must otherwise be exact.
 

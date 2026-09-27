@@ -4,8 +4,10 @@ site_url: https://m00qek.github.io/luci-sso/
 site_dir: bin/site
 
 # docs/README.md describes the docs source tree for GitHub; it is not a page.
+# docs/_snippets/ holds blocks included into pages with pymdownx.snippets.
 exclude_docs: |
   /README.md
+  /_snippets/
 
 theme:
   name: material
@@ -44,6 +46,9 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.snippets:
+      base_path: docs/_snippets
+      check_paths: true
   - toc:
       permalink: true
 

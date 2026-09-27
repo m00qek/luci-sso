@@ -80,10 +80,7 @@ The package itself does not. The new firmware contains only the packages it was 
 
 **Step 3.** Verify the service is working. On the router:
 
-```bash
-uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
-# Expected: {"enabled": true}
-```
+--8<-- "probe-enabled.md"
 
 Attempt a login to confirm the IdP credentials are still valid. If the client secret has been rotated at the IdP since the backup was made, update it before testing:
 

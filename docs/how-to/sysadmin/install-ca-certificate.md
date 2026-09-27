@@ -60,15 +60,7 @@ If the command prints a JSON document, the certificate is trusted. If it prints 
 
 Attempt a login. The `CERT_UNTRUSTED` line should no longer appear in the log.
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso | tail -20
-    ```
+--8<-- "check-log.md"
 
 ---
 

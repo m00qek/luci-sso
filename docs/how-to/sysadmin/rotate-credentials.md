@@ -36,10 +36,7 @@ The most common case: the secret is expired or has been compromised. The client 
 
 **Step 3.** Verify the configuration is still valid. On the router:
 
-```bash
-uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
-# Expected: {"enabled": true}
-```
+--8<-- "probe-enabled.md"
 
 Then attempt a fresh login from a browser. If the token exchange succeeds, the new secret is working.
 
@@ -155,15 +152,7 @@ ID Token verified. Claims present: iss, sub, aud, exp, iat, nonce, at_hash, emai
 
 If `groups` (or `email`) is missing there, fix it at the IdP: allow the scope for the new client, or add the claim mapper. To see the line:
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso | tail -30
-    ```
+--8<-- "check-log.md"
 
 Also confirm the router still requests the scopes your role mappings rely on. `scope` is a router option, not part of the client registration:
 

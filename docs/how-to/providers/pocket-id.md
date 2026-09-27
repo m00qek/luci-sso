@@ -111,10 +111,7 @@ Pocket ID exposes groups via the `groups` scope. Group names appear in the `grou
 
 Check that the service is active. On the router:
 
-```bash
-uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
-# Expected: {"enabled": true}
-```
+--8<-- "probe-enabled.md"
 
 Open the LuCI login page at the host name used in the Redirect URI; the login fails with `MISSING_HANDSHAKE_COOKIE` if it starts at a different address. The **Login with SSO** button should appear. Clicking it redirects to your Pocket ID passkey authentication screen.
 
@@ -122,15 +119,7 @@ Open the LuCI login page at the host name used in the Redirect URI; the login fa
 
 ## Troubleshooting
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso
-    ```
+--8<-- "check-log.md"
 
 | Symptom | Likely cause |
 | :--- | :--- |

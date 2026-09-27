@@ -2,15 +2,7 @@
 
 All `luci-sso` events are written to the system log under the tag `luci-sso`.
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso
-    ```
+--8<-- "check-log.md"
 
 For steps to resolve common errors, see [How to Debug luci-sso](../how-to/sysadmin/debugging.md). For the HTTP endpoints that produce these codes, see the [HTTP API Reference](http-api.md).
 

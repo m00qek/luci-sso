@@ -99,22 +99,11 @@ If `/etc/config/luci-sso-opkg` (or `luci-sso.apk-new`) appeared, compare it with
 
 Confirm the service reports enabled. On the router:
 
-```bash
-uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
-# Expected: {"enabled": true}
-```
+--8<-- "probe-enabled.md"
 
 Then attempt a login from a browser. Check the log if anything goes wrong:
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso | tail -20
-    ```
+--8<-- "check-log.md"
 
 ---
 

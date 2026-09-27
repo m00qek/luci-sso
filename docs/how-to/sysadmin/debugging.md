@@ -8,15 +8,7 @@ This guide describes how to diagnose and resolve authentication failures in `luc
 
 All authentication events are written to syslog. Check this before anything else.
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso | tail -30
-    ```
+--8<-- "check-log.md"
 
 A failed request ends with one line holding the HTTP status and an error code:
 
