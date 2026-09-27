@@ -57,9 +57,7 @@ Set the following values:
 | **Scopes** | `openid profile email` — add `groups` if you want group-based role mapping |
 | **Post-logout redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/`, if the IdP supports RP-Initiated Logout and asks for one |
 
-After saving, copy the generated **Client ID** and **Client Secret**.
-
-![Generic IdP client registration form showing fields for Client Name, Application Type (Web Application), Redirect URI, and Scopes, with a panel on the right showing the generated Client ID and Client Secret fields](../../assets/screenshots/oidc-client-registration.svg "Create a new OAuth client in your IdP — copy the Client ID and Client Secret shown on the right")
+Give the client any name you will recognise, such as `LuCI Router`. After saving, the IdP shows the generated **Client ID** and **Client Secret**; copy both.
 
 ---
 
@@ -156,7 +154,7 @@ Check that the service is active. On the router:
 
 Then open the LuCI login page in a browser.
 
-![LuCI login page showing the standard username and password fields and the Log in button, with a "Login with SSO" button added below it](../../assets/screenshots/luci-login-sso-button.svg "LuCI login page with SSO button visible")
+![LuCI login page: an Authorization Required box with Username and Password fields and a green Log in button, followed by "— or —" and a green Login with SSO button](../../assets/screenshots/luci-login-sso-button.png "The LuCI login page with the Login with SSO button")
 
 The **Login with SSO** button should appear. Clicking it redirects to your IdP's login screen. After authenticating, you should be redirected back to the LuCI dashboard.
 

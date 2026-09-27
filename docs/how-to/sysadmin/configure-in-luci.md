@@ -10,7 +10,7 @@ If you are connecting to a provider for the first time, use the [provider guides
 
 Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading reads **SSO Login**. It has two sections: **Settings** and **Users**.
 
-![LuCI Services › Single Sign-On page showing the Settings section with fields for Enable SSO, Issuer URL, Client ID, Client Secret, Redirect URI, Scopes, and Clock Tolerance, and a Users section below listing configured roles](../../assets/screenshots/luci-sso-settings.svg "LuCI Services › Single Sign-On — Settings and Users sections")
+![The SSO Login page filled in with example values. Settings: Enable SSO ticked, Issuer URL https://auth.example.com, Client ID luci-router, Client Secret masked as dots, Redirect URI starting https://router.example.com/cgi-bin/, Scopes openid profile email groups, Clock Tolerance 60, and an empty Internal Issuer URL showing a placeholder. Users: a table with an admin role (admin@example.com, read and write *) and a viewer role (bob@example.com, group network-viewers, read luci-base, luci-mod-status-* and luci-mod-network-*, no write), each with Edit and Delete buttons, then a name field with an Add button and the Save & Apply, Save and Reset buttons.](../../assets/screenshots/luci-sso-settings.png "Services > Single Sign-On: the Settings and Users sections")
 
 ---
 
@@ -22,8 +22,6 @@ Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading r
 4.  If the router reaches the IdP at a different address than browsers do, set **Internal Issuer URL** to that origin (`https://host[:port]`, no path). Otherwise leave it empty. See [How to Configure Split-Horizon Networking](split-horizon.md).
 5.  Leave **Clock Tolerance** at `60` unless logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` while the clocks look right.
 6.  Tick **Enable SSO** when the settings and at least one role are ready.
-
-![LuCI Services › Single Sign-On — Settings section scrolled to show the Internal Issuer URL field, which is empty by default and marked as optional](../../assets/screenshots/luci-sso-settings-advanced.svg "LuCI SSO settings — Internal Issuer URL field")
 
 ---
 
@@ -37,6 +35,8 @@ To add a role:
 2.  In the role editor, add entries to **Email Addresses**, **Groups**, or both. A role with neither is ignored.
 3.  Add access groups to **Read Access** and **Write Access**. For a full administrator, put `*` in **Write Access**. For a role that may save settings, include `luci-base` in **Write Access**.
 4.  Click **Save** to close the editor.
+
+![The role editor for a role named viewer, titled "User Role: viewer". Email Addresses holds bob@example.com, Groups holds network-viewers, Read Access holds luci-base, luci-mod-status-* and luci-mod-network-*, and Write Access is empty. Each list has an empty field with a + button for another entry, and the editor has Dismiss and Save buttons.](../../assets/screenshots/luci-sso-role-editor.png "The role editor, opened with Edit on the viewer row")
 
 To change a role, click **Edit** in its row. To remove one, click **Delete**; a user who matched only that role gets `USER_NOT_AUTHORIZED` at their next login.
 

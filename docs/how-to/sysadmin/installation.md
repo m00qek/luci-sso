@@ -87,6 +87,8 @@ Adding the feed's signing key needs a shell: LuCI's **Software** page can edit t
         2.  In the **Filter** box, type `luci-sso-crypto`, and click **Install…** next to the backend you chose (for example `luci-sso-crypto-mbedtls`).
         3.  Filter for `luci-sso` and click **Install…** next to `luci-sso`.
 
+        ![LuCI System > Software page on OpenWrt 24.10 with luci-sso typed in the Filter box and the Available tab selected. The table lists luci-sso, luci-sso-crypto-mbedtls, luci-sso-crypto-openssl and luci-sso-crypto-wolfssl, version 0.9.1-r1, each with an Install… button. Above the tabs, the Actions row has the Update lists…, Upload Package… and Configure opkg buttons.](../../assets/screenshots/luci-software-install.png "System > Software, Available tab, filtered for luci-sso")
+
 ---
 
 ## 4. Install from a local package
@@ -105,10 +107,7 @@ OpenWrt 25.12 uses `apk` packages instead, built with `SDK_VERSION=25.12.3` and 
     These steps are for OpenWrt 24.10. On 25.12, use the terminal.
 
     1.  **Log in** to your router's LuCI web interface.
-    2.  Navigate to **System** -> **Software**.
-
-    ![LuCI interface showing the Software page with the 'Update lists...' and 'Upload Package...' buttons highlighted](../../assets/screenshots/luci-software-install.svg "LuCI Software installation page")
-
+    2.  Navigate to **System** -> **Software**. The **Update lists…** and **Upload Package…** buttons are in the **Actions** row at the top of the page.
     3.  Click **Update lists…** so the backend's crypto library can be installed from the OpenWrt feeds.
     4.  Click **Upload Package…**, select the backend file (for example `luci-sso-crypto-mbedtls_<version>_<arch>.ipk`) and confirm the installation.
     5.  Click **Upload Package…** again, select the `luci-sso_<version>_<arch>.ipk` file and confirm. The backend must already be installed: `luci-sso` cannot be installed without one.

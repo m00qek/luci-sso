@@ -37,6 +37,19 @@ To remove the generated `bin/site/` directory:
 make -C docs clean
 ```
 
+### 4. Update the Screenshots
+The LuCI screenshots in `docs/assets/screenshots/` are captured from the CI stack, not drawn. Retake them after a change to the LuCI pages they show:
+
+```bash
+make compile
+make up
+make screenshots
+```
+
+`make screenshots` runs `test/e2e/screenshots.capture.js` in the Playwright browser container, copies the PNGs into `docs/assets/screenshots/` and compresses them losslessly with `oxipng`. The script sets up the state each image needs, such as example SSO settings and a read-only role, and restores the router afterwards. It is not part of `make e2e-test`.
+
+Look at every image before committing it: the capture shows whatever the pages show, including dates and the uptime. If a page changes what an image shows, update the image's `alt` text and title too. To add or change a shot, edit the script; each shot is one function.
+
 ---
 
 ## Standards & Style

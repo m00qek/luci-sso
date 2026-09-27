@@ -107,13 +107,13 @@ A common starting point for read-only users — access to status and network vie
     uci commit luci-sso
     ```
 
-A user configured this way sees status pages and network overviews but cannot save changes. Buttons and forms requiring write access are hidden or disabled by LuCI.
+A user configured this way sees status pages and network overviews but cannot save changes. LuCI leaves out the menus the role has no access group for, and on the pages it does show, the **Save & Apply**, **Save** and **Reset** buttons are disabled. There is no separate read-only notice.
 
-![LuCI interface showing a read-only user session: the sidebar shows only Status menu items, System and Network menus are marked as restricted, and a banner states "You have read-only access"](../../assets/screenshots/luci-readonly-view.svg "LuCI when logged in as a read-only user — configuration menus are hidden")
+![LuCI Status > Overview page for a user with the viewer role above. The top bar shows only the Status and Network menus and Log out; the System table below shows the router's details as for any other user.](../../assets/screenshots/luci-readonly-view.png "Status > Overview for the read-only viewer role: only Status and Network in the menu")
 
-Compare with an admin session where the full menu is visible:
+Compare with an admin session, where the menu also has System and Services:
 
-![LuCI interface showing an admin user session: the sidebar shows Status, System, Network, and Services menus fully expanded with all options accessible, and a Reboot button visible in the content area](../../assets/screenshots/luci-admin-view.svg "LuCI when logged in as an admin — all configuration options are available")
+![LuCI Status > Overview page for a user with the admin role. The top bar shows the Status, System, Services and Network menus and Log out, above the same System table.](../../assets/screenshots/luci-admin-view.png "Status > Overview for the admin role: the full menu")
 
 ---
 

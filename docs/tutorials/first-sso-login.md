@@ -53,9 +53,7 @@ We need to tell Google that our router is allowed to request user logins.
    - **Authorized redirect URIs:** `https://router.example.com/cgi-bin/luci-sso/callback` — replace with your actual domain.
    - Click **Create**.
 
-Google will display the Client ID and Client Secret. Copy both.
-
-![Google Cloud Console OAuth credentials dialog showing a newly created OAuth client. The Client ID field contains a long string ending in .apps.googleusercontent.com, and the Client Secret field contains a shorter token beginning with GOCSPX-.](../assets/screenshots/google-cloud-oauth-credentials.svg "Google Cloud Console — OAuth client credentials dialog")
+Google will display the Client ID and Client Secret in an **OAuth client created** dialog. The Client ID is a long string ending in `.apps.googleusercontent.com`; the Client Secret is a shorter token beginning with `GOCSPX-`. Copy both.
 
 ---
 
@@ -118,7 +116,7 @@ Navigate to `https://router.example.com/cgi-bin/luci/`. The login page should sh
 !!! warning "Use the same host name as the Redirect URI"
     Open LuCI at `router.example.com`, the host in the Redirect URI, not at its IP address or another name. The login starts at whatever address the browser shows, and its cookie is only sent back to that exact host, so a login started at `192.168.1.1` fails when Google returns to `router.example.com`.
 
-![LuCI login page showing the standard username and password fields and the Log in button, with a "Login with SSO" button added below it](../assets/screenshots/luci-login-sso-button.svg "LuCI login page with the SSO button enabled")
+![LuCI login page: an Authorization Required box with Username and Password fields and a green Log in button, followed by "— or —" and a green Login with SSO button](../assets/screenshots/luci-login-sso-button.png "The LuCI login page with the Login with SSO button")
 
 If the button is not there, clear the browser cache and reload. If it still does not appear, check the system log:
 
@@ -132,7 +130,7 @@ Click **Login with SSO**. The browser redirects to Google's sign-in page. Sign i
 
 After authenticating, Google redirects back to the router. The router exchanges the authorization code for tokens, validates them, matches the email to the `admin` role, and issues a LuCI session.
 
-![LuCI dashboard showing the System Status page after a successful SSO login. The sidebar shows Status, System, Network, and Services menus all expanded. The top bar shows the logged-in email address and role.](../assets/screenshots/luci-admin-view.svg "LuCI dashboard — logged in via SSO with admin role")
+![LuCI Status > Overview page after an SSO login with the admin role. The top bar shows the router's hostname and the Status, System, Services and Network menus and Log out. The System table lists hostname, model, architecture, target platform, firmware and kernel versions, local time, uptime and load average.](../assets/screenshots/luci-admin-view.png "Status > Overview after an SSO login with the admin role")
 
 ---
 

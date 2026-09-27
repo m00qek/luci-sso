@@ -45,6 +45,12 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | `sanitizer-test` | CI | Run `test/native` and `test/unit/luci_sso/crypto` against the native module built with AddressSanitizer + UndefinedBehaviorSanitizer, in an interpreter built the same way. Fails on any sanitizer report, including leaks found at process exit. Needs no running stack. |
 | `lint` | — | Run the three documentation lint checks (error codes, request limits, cookies). No stack required. |
 
+### Documentation
+
+| Target | Stack | Description |
+| :--- | :--- | :--- |
+| `screenshots` | CI | Capture the LuCI screenshots in `docs/assets/screenshots/` by running `test/e2e/screenshots.capture.js` in the `browser` container, then compress them losslessly with `oxipng` in a throwaway `alpine` container. Overwrites the PNGs there; restores the router state it changes. Not part of `e2e-test`. Requires `compile` and `up`. |
+
 ### Build
 
 | Target | Stack | Description |
@@ -135,6 +141,9 @@ make fuzzer-test CRYPTO_LIB=mbedtls TIME=600 DETECT_LEAKS=1
 # Run the native and crypto buckets under ASan + UBSan (leak detection on by default)
 make sanitizer-test CRYPTO_LIB=wolfssl
 make sanitizer-test CRYPTO_LIB=wolfssl SANITIZER_LEAKS=0
+
+# Retake the documentation screenshots
+make screenshots
 
 # Open a shell in the running openwrt container
 make shell
