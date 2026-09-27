@@ -40,17 +40,17 @@ The lint check (`check-error-codes.sh`) enforces that every `export const` in `e
 const LIMIT_MY_THING = 42;
 ```
 
-The `LIMIT_` prefix is what the lint check uses to discover the constant. Any `.uc` file under `files/` is scanned.
+The `LIMIT_` prefix is what the lint check uses to discover the constant. Every `.uc` file under `src/` is scanned.
 
 **2. Add a metadata comment to the relevant doc:**
 
-Place `<!-- LIMIT_MY_THING=42 -->` in whichever document describes the limit. For client-facing limits, that is `docs/reference/http-api.md`; for back-channel limits, use the Back-channel limits section of the same file. The comment is invisible when rendered.
+Place `<!-- LIMIT_MY_THING=42 -->` in the reference page that describes the limit; only files under `docs/reference/` are scanned. For client-facing limits, that is `docs/reference/http-api.md`; for back-channel limits, use the Back-channel limits section of the same file. The comment is invisible when rendered.
 
 ```html
 <!-- LIMIT_MY_THING=42 -->
 ```
 
-The lint check (`check-request-limits.sh`) matches `LIMIT_NAME=VALUE` pairs across all `.uc` files against all `<!-- LIMIT_NAME=VALUE -->` comments in all `.md` files under `docs/`. Both the name and the value must match exactly.
+The lint check (`check-request-limits.sh`) matches `LIMIT_NAME=VALUE` pairs in the `.uc` files under `src/` against the `<!-- LIMIT_NAME=VALUE -->` comments in the `.md` files under `docs/reference/`. Both the name and the value must match exactly.
 
 If you change the value of an existing constant, update the metadata comment to match.
 
@@ -64,7 +64,7 @@ If you change the value of an existing constant, update the metadata comment to 
 "Set-Cookie": `__Host-my_cookie=${value}; HttpOnly; Secure; SameSite=Lax; Path=/`
 ```
 
-The lint check (`check-cookie-names.sh`) scans all `.uc` files under `files/` for `__Host-*` and `sysauth*` string patterns. If your cookie follows a different naming convention, add it to the grep pattern in `devenv/scripts/check-cookie-names.sh`.
+The lint check (`check-cookie-names.sh`) scans the `.uc` files under `src/` for `__Host-*` and `sysauth*` string patterns. If your cookie follows a different naming convention, add it to the grep pattern in `devenv/scripts/check-cookie-names.sh`.
 
 **2. Add a cookie heading inside a `## Cookies` section in a doc:**
 
@@ -83,4 +83,4 @@ Description of what the cookie carries and its security attributes.
 | `Path` | `/` |
 ```
 
-The doc does not have to be `http-api.md` — the lint check scans all `.md` files under `docs/` for `## Cookies` sections and collects the `### \`name\`` headings within them.
+The doc does not have to be `http-api.md`, but it must be under `docs/reference/`: the lint check scans those `.md` files for `## Cookies` sections and collects the `### \`name\`` headings within them, up to the next `---` line.

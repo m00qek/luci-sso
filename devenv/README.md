@@ -29,7 +29,7 @@ All TLS certificates are generated with `localhost` in the SAN. Import `devenv/.
 ```bash
 make local-up          # Start local stack
 make local-shell       # SSH into the OpenWrt container
-make unit-test         # Run unit tests (no stack needed)
+make up && make unit-test  # Start the CI stack; run native, unit, integration and system tests
 make up && make e2e-test  # Start CI stack and run browser tests
 make package SDK_ARCH=x86-64  # Build IPK for x86-64
 ```
@@ -41,7 +41,7 @@ make package SDK_ARCH=x86-64  # Build IPK for x86-64
 | `x86-64` | Proxmox VMs, Intel NUC, PC Engines APU |
 | `aarch64_generic` | Raspberry Pi 4/5, NanoPi R4S |
 
-`CRYPTO_LIB` selects the backend: `mbedtls` (default) or `wolfssl`.
+`CRYPTO_LIB` selects the backend: `mbedtls` (default), `wolfssl` or `openssl`.
 
 ## Troubleshooting
 

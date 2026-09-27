@@ -28,10 +28,10 @@ If you want to verify the final production output:
 make -C docs build
 ```
 
-The output will be generated in the `site/` directory in the project root.
+The output will be generated in the `bin/site/` directory in the project root.
 
 ### 3. Clean Up
-To remove the generated `site/` directory:
+To remove the generated `bin/site/` directory:
 
 ```bash
 make -C docs clean

@@ -28,7 +28,6 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | `run` | CI | Run a one-shot interactive shell (container is removed on exit). |
 | `local-up` | Local | Start the local stack with ports exposed at `localhost:8443`. |
 | `local-down` | Local | Stop and remove local stack containers. |
-| `local-ps` | Local | List running local containers. |
 | `local-shell` | Local | Open an interactive shell in the local `openwrt` container. |
 | `local-run` | Local | Run a one-shot interactive shell in the local stack. |
 | `build-images` | CI | Build Docker images from local Dockerfiles without pulling. |

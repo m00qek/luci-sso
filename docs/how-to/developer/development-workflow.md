@@ -25,7 +25,7 @@ make package SDK_ARCH=aarch64_generic
 make package SDK_ARCH=mipsel_24kc
 ```
 
-Native C compilation is guarded by a sentinel file in `bin/lib/.built`. If you modify files in `src/`, the sentinel is invalidated and the next `make compile` rebuilds the C components.
+Native C compilation is guarded by a sentinel file, `bin/lib/<SDK_ARCH>/<SDK_VERSION>/.built-<CRYPTO_LIB>`. When a file in `mod/` (`*.c`, `*.h` or `CMakeLists.txt`) is newer than the sentinel, the next `make compile` rebuilds the C components for that architecture, version and backend.
 
 ---
 
