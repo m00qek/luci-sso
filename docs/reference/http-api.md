@@ -77,8 +77,8 @@ Destroys the active LuCI session and redirects the browser. If the IdP advertise
 
 If no active session is found (cookie absent or session already expired), the endpoint returns `302 /` without error.
 
-!!! note "LuCI's own logout does not call this endpoint"
-    The **Log out** link in LuCI's menu goes to LuCI's dispatcher, not here. It ends the router session, but no RP-Initiated Logout happens and the user stays signed in at the IdP. `luci-sso` does not currently rewrite that link. To end the IdP session as well, send the browser to this endpoint with the session's `token` value as `stoken`.
+!!! note "LuCI's Log out entry uses this endpoint for SSO sessions"
+    `luci-sso` overrides the action of LuCI's `admin/logout` menu entry (`/usr/share/luci/menu.d/luci-sso-logout.json`, handled by `luci.controller.sso`). For a session that carries an `oidc_user` value it redirects to `/cgi-bin/luci-sso/logout?stoken=<session token>`; for any other session it runs LuCI's own logout unchanged.
 
 ---
 

@@ -77,6 +77,9 @@ define Package/$(PKG_NAME)/install
 	$(CP) ./files/www/luci-static/resources/view/services/sso.js $(1)/www/luci-static/resources/view/services/
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
 	$(CP) ./files/usr/share/luci/menu.d/luci-app-sso.json $(1)/usr/share/luci/menu.d/
+	$(CP) ./files/usr/share/luci/menu.d/luci-sso-logout.json $(1)/usr/share/luci/menu.d/
+	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/controller
+	$(CP) ./files/usr/share/ucode/luci/controller/sso.uc $(1)/usr/share/ucode/luci/controller/
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(CP) ./files/usr/share/rpcd/acl.d/luci-app-sso.json $(1)/usr/share/rpcd/acl.d/
 endef

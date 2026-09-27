@@ -54,6 +54,8 @@ This is a known, documented residual risk. The mitigation available to administr
 
 ## Logout mechanics
 
+LuCI's own **Log out** menu entry is the way users log out. For a session created through SSO it leads to `/cgi-bin/luci-sso/logout`; for any other session it does exactly what it always did. `luci-sso` does this by overriding the menu entry's action, not by patching LuCI (see [About the Architecture](architecture.md#session-integration)).
+
 When a browser is sent to `/cgi-bin/luci-sso/logout`:
 
 1. The CSRF token is verified — the request must include the `stoken` parameter matching the session's CSRF token.
@@ -64,7 +66,7 @@ Destroying the UBUS session is immediate and complete — the session ID in the 
 
 The `end_session_endpoint` redirect is best-effort: if the IdP does not support it, the user is logged out of the router but remains authenticated at the IdP. A subsequent "Login with SSO" click will complete immediately without prompting for credentials again.
 
-LuCI's own **Log out** link does not reach this endpoint. It goes through LuCI's dispatcher, which ends the router session but skips RP-Initiated Logout, so the user stays signed in at the IdP with the same effect as above. `luci-sso` does not currently rewrite that link.
+A password session never reaches this endpoint: its **Log out** runs LuCI's own logout, which destroys the session and returns to the login page.
 
 ---
 
@@ -86,7 +88,7 @@ Multiple simultaneous sessions are allowed. Each login creates a new independent
 | Session lifetime | Idle timeout from `luci.sauth.sessiontime` (default 3600 s), reset on every request |
 | Token expiry effect | Validated at login only; does not shorten or extend session |
 | Mid-session IdP revocation | Session continues until expiry, logout, or an administrator destroys it |
-| Logout scope | Destroys the router session; IdP session is separate |
+| Logout scope | Destroys the router session; for SSO sessions, also ends the IdP session if the IdP supports RP-Initiated Logout |
 | Persistence across reboots | No — UBUS sessions are in-memory |
 | Persistence across a `luci-sso` upgrade | Yes — only removal restarts `rpcd` |
 | Effect of an `rpcd` reload (e.g. installing a LuCI app) | SSO sessions stay but lose all rights; users must log in again |

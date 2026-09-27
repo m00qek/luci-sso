@@ -49,11 +49,23 @@ app.get('/.well-known/openid-configuration', (req, res) => {
         authorization_endpoint: `${ISSUER}/auth`,
         token_endpoint: `${ISSUER}/token`,
         jwks_uri: `${ISSUER}/jwks`,
+        end_session_endpoint: `${ISSUER}/logout`,
         response_types_supported: ['code'],
         subject_types_supported: ['public'],
         id_token_signing_alg_values_supported: ['RS256'],
         scopes_supported: ['openid', 'profile', 'email']
     });
+});
+
+// RP-Initiated Logout 1.0: end the (mock) IdP session and, if the RP sent a
+// post_logout_redirect_uri, send the browser back there.
+app.get('/logout', (req, res) => {
+    const { id_token_hint, post_logout_redirect_uri } = req.query;
+    log(`Logout request (id_token_hint: ${id_token_hint ? 'present' : 'absent'}, post_logout_redirect_uri: ${post_logout_redirect_uri || 'none'})`);
+    if (post_logout_redirect_uri) {
+        return res.redirect(post_logout_redirect_uri);
+    }
+    res.send('Logged out of the mock IdP.');
 });
 
 app.get('/jwks', (req, res) => {

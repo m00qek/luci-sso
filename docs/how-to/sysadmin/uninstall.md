@@ -13,6 +13,7 @@ Removing the `luci-sso` package runs its removal script, which:
 
 - takes the cleanup job out of root's crontab,
 - removes the SSO button from LuCI's login templates, in every theme (`luci-sso-repatch --remove`),
+- removes its override of LuCI's **Log out** entry, so LuCI's own logout is back,
 - deletes the `luci-app-sso` access group and restarts `rpcd`, which ends every LuCI session,
 - clears LuCI's cache.
 

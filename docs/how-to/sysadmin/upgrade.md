@@ -16,6 +16,7 @@ This guide walks through upgrading an existing `luci-sso` installation to a new 
 | `/var/run/luci-sso/` | ✅ Until reboot | This is a tmpfs directory. Its contents survive the upgrade but are cleared on the next reboot. |
 | Token registry entries | ✅ Until reboot | Expired entries are removed by the daily cleanup job, not by the upgrade. |
 | SSO button on the login page | ✅ Yes | The removal script takes it out of LuCI's templates, and the install script puts it back. |
+| SSO logout from LuCI's **Log out** entry | ✅ Yes | A menu override in the package (`/usr/share/luci/menu.d/luci-sso-logout.json`), not a patch, so it also survives a LuCI upgrade. |
 
 ---
 
