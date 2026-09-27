@@ -3,8 +3,9 @@
 /**
  * The rpcd login entries that hold the permissions of luci-sso's roles, and
  * rpcd's rules for them: one place for every rule that the login path
- * (ubus.uc), the `luci-sso` ubus object (files/usr/share/rpcd/ucode/luci-sso.uc)
- * and the upgrade script (files/etc/uci-defaults/20-luci-sso-rpcd) share.
+ * (ubus.uc), the `luci-sso` ubus object (files/usr/share/rpcd/ucode/luci-sso.uc),
+ * the upgrade script (files/etc/uci-defaults/20-luci-sso-rpcd) and the
+ * package's removal script (prerm in openwrt/luci-sso/Makefile) share.
  *
  * Each role `<role>` has exactly one entry in /etc/config/rpcd:
  *
@@ -250,7 +251,8 @@ export function is_placeholder(s) {
 
 /**
  * Moves role permissions from /etc/config/luci-sso to rpcd login entries: the
- * upgrade from releases that kept read/write lists on the luci-sso role.
+ * upgrade from releases that kept read/write lists on the luci-sso role, and
+ * the reinstall after demigrate() put them back there.
  *
  * Each luci-sso role, in config order:
  *
@@ -320,6 +322,61 @@ export function migrate(uci, warn) {
 		stage(uci, res.data);
 		changed.rpcd = true;
 		warn(`role '${name}' had no permissions to move: its rpcd login entry grants nothing but '${BASELINE_GROUP}'; set its permissions on the settings page`);
+	}
+
+	return changed;
+};
+
+/**
+ * The reverse of migrate(), for the package's removal: each role's
+ * permissions go back onto its luci-sso role, and every rpcd login entry
+ * luci-sso owns is deleted. A reinstall's migrate() then recreates each entry
+ * exactly (see below), so removing and installing the package again, which is
+ * also what opkg's --force-reinstall does, loses no permissions.
+ *
+ * For each rpcd section named luci_sso_<role>, in config order: if it is a
+ * login entry and /etc/config/luci-sso has a role `<role>`, its read and
+ * write lists replace the role's read and write options (an empty list
+ * removes the option). The lists are copied as stored, `unauthenticated`
+ * included: migrate() keeps a read list that grants it as it is, so the entry
+ * it creates from them is the one deleted here. Leaving the group out when
+ * set_role added it would turn an entry that grants only `unauthenticated` into
+ * a role without lists, which migrate() treats as having no permissions to
+ * move: an untouched admin role would get full access back. The section is then
+ * deleted, and so is any luci_sso_* section without a role, with a warning.
+ *
+ * Stages the changes on the cursor; the caller commits luci-sso before rpcd,
+ * so an interruption leaves each role's permissions in at least one place.
+ *
+ * @param {object} uci - A UCI cursor
+ * @param {function} warn - Called with a message for each entry deleted
+ *   without a role to keep its permissions
+ * @returns {object} - { rpcd, luci_sso }: whether each configuration changed
+ */
+export function demigrate(uci, warn) {
+	let changed = { rpcd: false, luci_sso: false };
+
+	let sections = [];
+	uci.foreach(CONFIG, null, (s) => {
+		if (index(s[".name"], SECTION_PREFIX) == 0) push(sections, s);
+	});
+
+	for (let s in sections) {
+		let name = substr(s[".name"], length(SECTION_PREFIX));
+		if (s[".type"] == "login" && length(name) && uci.get("luci-sso", name) == "role") {
+			for (let opt in [ "read", "write" ]) {
+				let list = old_list(s[opt]);
+				uci.delete("luci-sso", name, opt);
+				if (length(list))
+					uci.set("luci-sso", name, opt, list);
+			}
+			changed.luci_sso = true;
+		}
+		else {
+			warn(`rpcd section '${s[".name"]}' has no luci-sso role to keep its permissions; deleted`);
+		}
+		uci.delete(CONFIG, s[".name"]);
+		changed.rpcd = true;
 	}
 
 	return changed;

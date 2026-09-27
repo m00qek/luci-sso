@@ -4,7 +4,8 @@ import * as uci from 'uci';
 import * as rpcd_login from 'luci_sso.rpcd_login';
 
 // System bucket: the upgrade from releases that kept read/write lists on the
-// luci-sso role (rpcd_login.migrate, run by files/etc/uci-defaults/20-luci-sso-rpcd).
+// luci-sso role (rpcd_login.migrate, run by files/etc/uci-defaults/20-luci-sso-rpcd),
+// and its reverse on removal (rpcd_login.demigrate, run by the package's prerm).
 // It runs on REAL UCI files, in a scratch configuration directory, so the
 // container's own /etc/config is never touched.
 
@@ -82,6 +83,16 @@ function run() {
 	return { changed, warnings };
 }
 
+// Runs the reverse as the prerm does: stage, then commit luci-sso first.
+function run_demigrate() {
+	let cur = uci.cursor(DIR, `${DIR}/delta`);
+	let warnings = [];
+	let changed = rpcd_login.demigrate(cur, (m) => push(warnings, m));
+	if (changed.luci_sso) cur.commit("luci-sso");
+	if (changed.rpcd) cur.commit("rpcd");
+	return { changed, warnings };
+}
+
 function files() {
 	return { luci_sso: fs.readfile(`${DIR}/luci-sso`), rpcd: fs.readfile(`${DIR}/rpcd`) };
 }
@@ -94,6 +105,12 @@ function sections(config) {
 
 function section(config, name) {
 	return uci.cursor(DIR, `${DIR}/delta`).get_all(config, name);
+}
+
+// Both configurations as UCI reads them: the sections, their options and
+// their order, whatever the files' formatting.
+function state() {
+	return { luci_sso: sections("luci-sso"), rpcd: sections("rpcd") };
 }
 
 function with_dir(fn) {
@@ -278,6 +295,185 @@ describe('system: rpcd_login.migrate — the shipped admin role', () => {
 			assert.match(null, section("rpcd", "luci_sso_admin"));
 			assert.match(contains({ username: "sso:ops", read: [ "unauthenticated" ] }), section("rpcd", "luci_sso_ops"));
 			assert.match(1, length(res.warnings));
+		});
+	});
+});
+
+// ─── demigrate: the removal ───────────────────────────────────────────────────
+
+// The configuration an upgrade from OLD_LUCI_SSO leaves, then edited on the
+// settings page: every luci_sso_* entry comes after rpcd's own sections, in
+// role order, as migrate() and set_role append them.
+const ROUND_TRIP_LUCI_SSO = `
+config oidc 'default'
+	option enabled '1'
+	option issuer_url 'https://idp.example.com'
+
+config role 'admin'
+	list email 'admin@example.com'
+
+config role 'viewer'
+	list group 'viewers'
+	list read 'luci-base'
+	list read 'luci-mod-status-*'
+
+config role 'single'
+	list email 'single@example.com'
+	option read '*'
+	list write 'luci-mod-system-config'
+
+config role 'nolists'
+	list email 'nolists@example.com'
+
+config role 'readall'
+	list email 'readall@example.com'
+	list read 'unauthenticated'
+	list read '*'
+
+config role 'writeonly'
+	list email 'writeonly@example.com'
+	list write 'luci-mod-network-config'
+
+config role 'this_role_name_is_longer_than_32_chars'
+	list email 'long@example.com'
+	list read '*'
+
+config role 'denies'
+	list email 'denies@example.com'
+	list read '*'
+	list read '!unauthenticated'
+`;
+
+const ROUND_TRIP_RPCD = `
+config rpcd
+	option socket '/var/run/ubus/ubus.sock'
+	option timeout '30'
+
+config login
+	option username 'root'
+	option password '$p$root'
+	list read '*'
+	list write '*'
+
+config login 'guest'
+	option username 'guest'
+	option password '$p$guest'
+	list read 'luci-base'
+`;
+
+describe('system: rpcd_login.demigrate — the removal', () => {
+	it("puts each entry's lists back on its role, unauthenticated included, and deletes every luci_sso_* section", () => {
+		with_dir(() => {
+			setup(ROUND_TRIP_LUCI_SSO, ROUND_TRIP_RPCD);
+			run();
+			let res = run_demigrate();
+			assert.match({ changed: { rpcd: true, luci_sso: true }, warnings: [] }, res);
+			assert.match([], filter(sections("rpcd"), (s) => index(s[".name"], "luci_sso_") == 0));
+			assert.match(contains({ read: [ "*" ], write: [ "*" ] }), section("luci-sso", "admin"));
+			assert.match(contains({ read: [ "luci-base", "luci-mod-status-*", "unauthenticated" ] }), section("luci-sso", "viewer"));
+			assert.match(false, exists(section("luci-sso", "viewer"), "write"), "an empty list is no option");
+			assert.match(contains({ read: [ "*" ], write: [ "luci-mod-system-config" ] }), section("luci-sso", "single"));
+			assert.match(contains({ read: [ "unauthenticated" ] }), section("luci-sso", "nolists"));
+			assert.match(contains({ read: [ "unauthenticated" ], write: [ "luci-mod-network-config" ] }), section("luci-sso", "writeonly"));
+			assert.match(contains({ read: [ "*", "!unauthenticated" ] }), section("luci-sso", "denies"), "a role without entry is untouched");
+		});
+	});
+
+	it("never touches an rpcd section that is not luci_sso_*, nor another luci-sso section", () => {
+		with_dir(() => {
+			setup(ROUND_TRIP_LUCI_SSO, ROUND_TRIP_RPCD);
+			run();
+			let others = (list) => filter(list, (s) => index(s[".name"], "luci_sso_") != 0);
+			let before = others(sections("rpcd"));
+			let oidc = section("luci-sso", "default");
+			run_demigrate();
+			assert.match(before, others(sections("rpcd")));
+			assert.match(oidc, section("luci-sso", "default"));
+			assert.match([ "admin", "viewer", "single", "nolists", "readall", "writeonly", "this_role_name_is_longer_than_32_chars", "denies" ],
+				map(filter(sections("luci-sso"), (s) => s[".type"] == "role"), (s) => s[".name"]), "same roles, same order");
+		});
+	});
+
+	it("deletes an entry without a role, and one that is not a login, with a warning", () => {
+		with_dir(() => {
+			setup("config role 'kept'\n\tlist email 'k@example.com'\n",
+				`${ROUND_TRIP_RPCD}\nconfig login 'luci_sso_kept'\n\toption username 'sso:kept'\n\tlist read 'unauthenticated'\n` +
+				"\nconfig login 'luci_sso_gone'\n\toption username 'sso:gone'\n\tlist read '*'\n" +
+				"\nconfig other 'luci_sso_odd'\n\toption x 'y'\n");
+			let res = run_demigrate();
+			assert.match({ rpcd: true, luci_sso: true }, res.changed);
+			assert.match([ "rpcd section 'luci_sso_gone' has no luci-sso role to keep its permissions; deleted",
+				"rpcd section 'luci_sso_odd' has no luci-sso role to keep its permissions; deleted" ], res.warnings);
+			assert.match([], filter(sections("rpcd"), (s) => index(s[".name"], "luci_sso_") == 0));
+			assert.match(null, section("luci-sso", "gone"));
+		});
+	});
+
+	it('with no entries it changes nothing', () => {
+		with_dir(() => {
+			setup(ROUND_TRIP_LUCI_SSO, ROUND_TRIP_RPCD);
+			let before = files();
+			assert.match({ changed: { rpcd: false, luci_sso: false }, warnings: [] }, run_demigrate());
+			assert.match(before, files());
+		});
+	});
+
+	it('an interruption after the luci-sso commit loses nothing: the next removal finishes it', () => {
+		with_dir(() => {
+			setup(ROUND_TRIP_LUCI_SSO, ROUND_TRIP_RPCD);
+			run();
+			let cur = uci.cursor(DIR, `${DIR}/delta`);
+			rpcd_login.demigrate(cur, () => null);
+			cur.commit("luci-sso");
+			cur.revert("rpcd");
+			assert.match(contains({ read: [ "*" ] }), section("rpcd", "luci_sso_admin"), "the entries are still there");
+			assert.match(contains({ read: [ "*" ] }), section("luci-sso", "admin"), "and so are the lists");
+			run_demigrate();
+			let after = files();
+			setup(ROUND_TRIP_LUCI_SSO, ROUND_TRIP_RPCD);
+			run();
+			run_demigrate();
+			assert.match(after, files(), "same as an uninterrupted removal");
+		});
+	});
+});
+
+describe('system: rpcd_login — migrate, demigrate, migrate', () => {
+	it('is an identity on both configurations, byte for byte', () => {
+		with_dir(() => {
+			setup(ROUND_TRIP_LUCI_SSO, ROUND_TRIP_RPCD);
+			run();
+			let installed = files();
+			for (let i = 1; i <= 3; i++) {
+				run_demigrate();
+				let res = run();
+				assert.match(installed, files(), `round trip ${i}`);
+				assert.match(2, length(res.warnings), "only the roles the rules refuse warn");
+			}
+		});
+	});
+
+	it('an admin role that grants nothing stays so, however much it looks like the shipped one', () => {
+		with_dir(() => {
+			setup("config role 'admin'\n\tlist email 'admin@example.com'\n",
+				`${ROUND_TRIP_RPCD}\nconfig login 'luci_sso_admin'\n\toption username 'sso:admin'\n\tlist read 'unauthenticated'\n`);
+			let installed = state();
+			run_demigrate();
+			assert.match(contains({ read: [ "unauthenticated" ] }), section("luci-sso", "admin"), "the role keeps a list");
+			run();
+			assert.match(installed, state());
+		});
+	});
+
+	it('the shipped config: full access for admin, before and after', () => {
+		with_dir(() => {
+			setup("config role 'admin'\n\tlist email 'admin@example.com'\n", ROUND_TRIP_RPCD);
+			run();
+			let installed = state();
+			run_demigrate();
+			assert.match(contains({ read: [ "*" ], write: [ "*" ] }), section("luci-sso", "admin"));
+			run();
+			assert.match(installed, state());
 		});
 	});
 });
