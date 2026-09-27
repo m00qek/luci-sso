@@ -28,7 +28,7 @@ The browser authenticates against Pocket ID on your LAN. No traffic leaves your 
 We need:
 
 - `luci-sso` installed on the router. If not, follow [How to Install luci-sso](../how-to/sysadmin/installation.md) first.
-- Pocket ID running on a device on your LAN, with at least one user and passkey enrolled.
+- Pocket ID running on a device on your LAN, with at least one user and passkey enrolled. This tutorial was checked against Pocket ID 2.16.0.
 - **The router trusting Pocket ID's certificate.** The router connects to Pocket ID itself, over HTTPS. If Pocket ID's certificate comes from a private CA, install that CA on the router first: [How to Install a Private CA Certificate](../how-to/sysadmin/install-ca-certificate.md).
 - **LuCI accessible over HTTPS with a certificate the browser trusts.** If using a self-signed certificate, navigate to LuCI in the browser and click through the certificate warning to trust it before continuing — the SSO callback will fail otherwise.
 
@@ -39,16 +39,23 @@ We need:
 
 ## Step 1: Create an OIDC client in Pocket ID
 
-Log in to your Pocket ID admin interface and navigate to **OIDC Clients > Create**.
+Log in to Pocket ID as an administrator and open **Administration > OIDC Clients**. Click **Add OIDC Client**.
 
 | Field | Value |
 | :--- | :--- |
 | **Name** | `luci-router` |
-| **Callback URL** | `https://192.168.1.1/cgi-bin/luci-sso/callback` |
+| **Callback URLs** | Click **Add**, then enter `https://192.168.1.1/cgi-bin/luci-sso/callback` |
+| **Logout Callback URLs** | Click **Add**, then enter `https://192.168.1.1/` |
 
-Replace `192.168.1.1` with your router's actual LAN IP or hostname.
+Replace `192.168.1.1` with your router's actual LAN IP or hostname. Leave the switches below them off.
 
-Save the client. Copy the generated **Client ID** and **Client Secret**.
+![Pocket ID Create OIDC Client form. Name is luci-router. Callback URLs holds a callback URL ending in /cgi-bin/luci-sso/callback and Logout Callback URLs holds the router's address, each added with the Add button. The Public Client, PKCE, Requires Re-Authentication and Skip Consent Screen switches are off.](../assets/screenshots/idp/pocket-id-client-form.png "Create OIDC Client with both callback URLs added")
+
+Click **Save**. Pocket ID opens the client's page. Copy the **Client ID** shown at the top.
+
+Open the **Credentials** tab and click **Add client secret**. Copy the secret it shows; Pocket ID hides it once we leave the page.
+
+Open the **Allowed User Groups** tab and click **Unrestrict**, then confirm. A new client lets no one sign in until we do this. The router's `admin` role, set up in the next step, decides who gets in.
 
 ---
 
@@ -121,7 +128,7 @@ If the button is not there, clear the browser cache and reload. If it still does
 
 ## Step 5: Log in
 
-Click **Login with SSO**. The browser redirects to the Pocket ID login page. Authenticate with your passkey.
+Click **Login with SSO**. The browser opens Pocket ID's "Sign in to luci-router" page. Click **Sign in** and authenticate with your passkey. The first time, Pocket ID lists the information the router asks for (email and profile); click **Sign in** again to approve.
 
 After authenticating, Pocket ID redirects back to the router. The router exchanges the authorization code for tokens, validates them, matches the email to the `admin` role, and issues a LuCI session.
 
@@ -135,6 +142,7 @@ After authenticating, Pocket ID redirects back to the router. The router exchang
 - The entire login flow is contained within the LAN — no external services are involved.
 - The authorization code is short-lived and bound to a PKCE verifier — it cannot be replayed.
 - The email is matched to the `admin` role, granting full read and write access to LuCI.
+- LuCI's **Log out** also ends the Pocket ID session, so the next SSO login asks for the passkey again.
 - The standard username/password login still works at `/cgi-bin/luci/admin/` as a fallback.
 
 ---

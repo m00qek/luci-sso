@@ -4,23 +4,36 @@ This guide describes how to connect `luci-sso` to a [Pocket ID](https://pocket-i
 
 Pocket ID is a self-hosted OIDC provider built around passkeys — users authenticate with biometrics or hardware security keys instead of passwords. Users must have a passkey enrolled in Pocket ID before they can complete an SSO login on your router.
 
+The steps and screenshots were checked against Pocket ID 2.16.0. Labels can differ in other releases.
+
 ---
 
 ## 1. Create an OIDC client in Pocket ID
 
-Log in to your Pocket ID admin interface and navigate to **OIDC Clients > Create**.
-
-Fill in the following:
+Log in to Pocket ID as an administrator and open **Administration > OIDC Clients**. Click **Add OIDC Client** and fill in:
 
 | Field | Value |
 | :--- | :--- |
 | **Name** | `luci-router` (or any label you prefer) |
-| **Callback URL** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
-| **Logout Callback URL** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/` (where LuCI's **Log out** returns after ending the Pocket ID session) |
+| **Callback URLs** | Click **Add**, then enter `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+| **Logout Callback URLs** | Click **Add**, then enter `https://<YOUR_ROUTER_IP_OR_DOMAIN>/` (where LuCI's **Log out** returns after ending the Pocket ID session) |
 
-Save the client. Pocket ID will display the generated **Client ID** and **Client Secret** — copy both.
+Leave **Public Client** off: `luci-sso` is a confidential client and authenticates with a client secret. Turning on **PKCE** is optional; `luci-sso` always sends a PKCE challenge.
 
-If you want to restrict which Pocket ID groups are allowed to authenticate to this client, enable **Allowed User Groups** and select the relevant groups before saving.
+![Pocket ID Create OIDC Client form. Name is luci-router. Callback URLs holds https://router.example.com/cgi-bin/luci-sso/callback and Logout Callback URLs holds https://router.example.com/, each with a remove button and an Add another button below it. The Public Client, PKCE, Requires Re-Authentication and Skip Consent Screen switches are off.](../../assets/screenshots/idp/pocket-id-client-form.png "Create OIDC Client with both callback URLs added")
+
+Click **Save**. Pocket ID opens the client's page, which shows the **Client ID**. Copy it.
+
+Pocket ID does not create a client secret on its own. Open the **Credentials** tab and click **Add client secret**. Copy the secret now: Pocket ID shows it in full only until you leave the page.
+
+![Pocket ID client page, Credentials tab. The Client secrets card says This app has no client secrets yet, with an expiry list set to No expiration and an Add client secret button.](../../assets/screenshots/idp/pocket-id-credentials.png "The Credentials tab of a new client")
+
+Open the **Allowed User Groups** tab and choose who may sign in. A new client allows no group, so every login fails with "You are not allowed to access this service." until you do one of the following:
+
+- Tick the groups whose members may sign in, then click **Save**.
+- Click **Unrestrict** to let every Pocket ID user sign in, and control access with the router's role mapping (Step 3) instead.
+
+![Pocket ID client page, Allowed User Groups tab, with a warning icon on the tab. The table lists the group Router Admins, name router-admins, with an unticked checkbox, and an Unrestrict button sits below it.](../../assets/screenshots/idp/pocket-id-allowed-groups.png "Allowed User Groups on a new client: no group allowed")
 
 ---
 
@@ -61,26 +74,31 @@ If you want to restrict which Pocket ID groups are allowed to authenticate to th
 
 ## 3. Configure role mapping
 
+A role says which users it matches, by email or by group. What the role may do on the router is its `rpcd` login entry. On a fresh install, the shipped `admin` role grants full access. To give some users less, add a role with its own **Read Access** and **Write Access**, as described in [How to Configure Role-Based Access Control](../sysadmin/rbac.md). A user gets the first role that matches, from the top.
+
 ### Map by email
 
 === "Browser (LuCI)"
 
     Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
+    Click **Edit** in the `admin` row. In **Email Addresses**, replace the placeholder `admin@example.com` with the user's email address, then click **Save** in the editor.
 
     Click **Save & Apply**.
 
 === "Terminal (SSH)"
 
     ```bash
+    uci -q del_list luci-sso.admin.email='admin@example.com'
     uci add_list luci-sso.admin.email='user@example.com'
     uci commit luci-sso
     ```
 
 ### Map by group
 
-Pocket ID exposes groups via the `groups` scope. Group names appear in the `groups` claim as `GroupName@PocketID` — include the suffix when configuring the role.
+Pocket ID sends a user's groups in the `groups` claim of the ID Token when the `groups` scope is requested. Each value is the group's **Name**, exactly as set in **Administration > User Groups**, not its **Friendly Name**. When you type a Friendly Name such as `Router Admins`, Pocket ID fills in `router_admins` as the Name, so check the Name before you use it in a role.
+
+![Pocket ID Create User Group form. Friendly Name, described as the name displayed in the UI, is Router Admins. Name, described as the name that will be in the groups claim, is router-admins.](../../assets/screenshots/idp/pocket-id-add-group.png "A group's Name is what the groups claim carries")
 
 === "Browser (LuCI)"
 
@@ -88,7 +106,7 @@ Pocket ID exposes groups via the `groups` scope. Group names appear in the `grou
 
     In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
 
-    Scroll to **Users**, click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name (e.g. `router-admins@PocketID`) in **Groups**, then click **Save**.
+    Scroll to **Users** and click **Edit** in the `admin` row. In **Groups**, enter the group's Name (for example `router-admins`), then click **Save** in the editor.
 
     Click **Save & Apply**.
 
@@ -96,13 +114,7 @@ Pocket ID exposes groups via the `groups` scope. Group names appear in the `grou
 
     ```bash
     uci set luci-sso.default.scope='openid profile email groups'
-    uci commit luci-sso
-    ```
-
-    Then map the group to a LuCI role:
-
-    ```bash
-    uci add_list luci-sso.admin.group='router-admins@PocketID'
+    uci add_list luci-sso.admin.group='router-admins'
     uci commit luci-sso
     ```
 
@@ -114,7 +126,7 @@ Check that the service is active. On the router:
 
 --8<-- "probe-enabled.md"
 
-Open the LuCI login page at the host name used in the Redirect URI; the login fails with `MISSING_HANDSHAKE_COOKIE` if it starts at a different address. The **Login with SSO** button should appear. Clicking it redirects to your Pocket ID passkey authentication screen.
+Open the LuCI login page at the host name used in the Redirect URI; the login fails with `MISSING_HANDSHAKE_COOKIE` if it starts at a different address. The **Login with SSO** button should appear. Clicking it opens Pocket ID's "Sign in to luci-router" page. Click **Sign in** and use your passkey. The first time, Pocket ID asks the user to approve the information the router requests (email, profile and, for group mapping, groups). It remembers the answer. To skip this approval, turn on **Skip Consent Screen** on the client.
 
 ---
 
@@ -124,11 +136,15 @@ Open the LuCI login page at the host name used in the Redirect URI; the login fa
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path. It must use the host name Pocket ID is configured with, not an IP address or another alias. |
+| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path. It must use the host name Pocket ID is configured with, not an IP address or another alias. Pocket ID's issuer is its `APP_URL` setting. |
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with the `uci set luci-sso.default.redirect_uri=…` command from Step 2. |
 | `[401] MISSING_HANDSHAKE_COOKIE` | The login started at a different host name than the one in the Redirect URI. Open LuCI at the Redirect URI's host and try again. |
-| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | Authentication succeeded but no UCI role matched. If using group mapping, verify the group name includes the `@PocketID` suffix; group matching is case-sensitive. |
-| `[400] IDP_ERROR`, preceded by `IDP_ERROR: the IdP returned error=<error> (<description>)` | Pocket ID refused the login, for example because the client's **Allowed User Groups** excludes the user. The line gives Pocket ID's reason. |
-| The login stops at Pocket ID and never returns to the router | The user has no passkey registered in Pocket ID. The router logs no `OIDC callback received` line. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | Authentication succeeded but no role matched. If using group mapping, check that **Scopes** includes `groups` and that the role uses the group's **Name** exactly as Pocket ID shows it; group matching is case-sensitive. |
+| `[400] IDP_ERROR`, preceded by `IDP_ERROR: the IdP returned error=<error> (<description>)` | Pocket ID refused the authorization request and sent the reason back to the router. The line gives Pocket ID's reason. |
+| `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Pocket ID rejected the client secret. Check `client_secret`, or add a new secret on the client's **Credentials** tab if the old one expired or was deleted. |
+| `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Pocket ID's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
+| Pocket ID shows "You are not allowed to access this service." | The client's **Allowed User Groups** does not include any of the user's groups. A new client allows no group at all. Add the user's group, or click **Unrestrict**. The router logs no `OIDC callback received` line. |
+| Pocket ID shows "The redirect_uri '…' is not registered for this client." | The router's `redirect_uri` does not exactly match an entry in the client's **Callback URLs**. |
+| The login stops at Pocket ID with "The passkey prompt was canceled or timed out" | The user has no passkey registered in Pocket ID on this device. The router logs no `OIDC callback received` line. |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).
