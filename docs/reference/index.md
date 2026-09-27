@@ -12,6 +12,7 @@ Reference documentation is technical description of the machinery. It is informa
 
 ## ⚙️ Configuration
 *   [UCI Schema](uci-config.md) - Complete list of `/etc/config/luci-sso` options.
+*   [Provider Compatibility](provider-compatibility.md) - What `luci-sso` requires of an identity provider, and which providers meet it.
 
 ## 🔗 APIs & Compliance
 *   [Internal API](internal-api.md) - Documentation for the ucode and C modules.

@@ -11,7 +11,8 @@ How-to guides are recipes. They take the reader through the steps required to so
 *   [Keycloak](providers/keycloak.md)
 *   [Authentik](providers/authentik.md)
 *   [Pocket ID](providers/pocket-id.md)
-*   [GitHub](providers/github.md) - Not supported: why, and what to use instead.
+
+GitHub is not supported. See [Provider Compatibility](../reference/provider-compatibility.md) for what a provider must support, and for the alternative.
 
 ## System Administration
 *   [Installation](sysadmin/installation.md) - How to install the package and its dependencies.
