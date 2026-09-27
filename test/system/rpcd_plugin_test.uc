@@ -224,10 +224,9 @@ describe('system: luci-sso ubus object — validation', () => {
 		});
 	});
 
-	it('the other methods validate the name the same way', () => {
+	it('delete_role validates the name the same way', () => {
 		with_rpcd((conn) => {
 			assert.match(contains({ error: "INVALID_NAME" }), call(conn, "delete_role", { name: "a b" }));
-			assert.match(contains({ error: "INVALID_NAME" }), call(conn, "move_role", { name: "", index: 0 }));
 		});
 	});
 });
@@ -273,46 +272,9 @@ describe('system: luci-sso ubus object — delete_role', () => {
 	});
 });
 
-describe('system: luci-sso ubus object — move_role', () => {
-	// Three entries with a foreign section between the first two.
-	let setup = (conn) => {
-		write(conn, "set_role", { name: `${P}a`, read: [ "a" ], write: [] });
-		r.put_login("systest_between", { username: "systest", password: "$p$root" });
-		write(conn, "set_role", { name: `${P}b`, read: [ "b" ], write: [] });
-		write(conn, "set_role", { name: `${P}c`, read: [ "c" ], write: [] });
-	};
-	let all_names = (conn) => map(call(conn, "list_roles").roles, (x) => x.name);
-	// Section names, with every luci_sso_* entry (the devenv's too) as "sso".
-	let layout = () => map(r.rpcd_sections(), (s) => (index(s[".name"], r.ENTRY_PREFIX) == 0) ? "sso" : s[".name"]);
-
-	it('moves an entry to the given position among the luci_sso_* entries; other sections stay put', () => {
-		with_rpcd((conn) => {
-			setup(conn);
-			let before = layout();
-
-			let res = write(conn, "move_role", { name: `${P}c`, index: index(all_names(conn), `${P}a`) });
-			assert.match([ `${P}c`, `${P}a`, `${P}b` ], filter(map(res.roles, (x) => x.name), (n) => index(n, P) == 0),
-				"the reply lists the new order");
-			assert.match([ `${P}c`, `${P}a`, `${P}b` ], sso_names(conn));
-			assert.match(before, layout(), "every other section keeps its position");
-			assert.match(contains({ read: [ "c" ] }), entry(`${P}c`), "the entry moves with its options");
-
-			write(conn, "move_role", { name: `${P}c`, index: length(all_names(conn)) - 1 });
-			assert.match([ `${P}a`, `${P}b`, `${P}c` ], sso_names(conn));
-			assert.match(before, layout());
-		});
-	});
-
-	it('returns NOT_FOUND for a role without an entry and INVALID_INDEX outside the list', () => {
-		with_rpcd((conn) => {
-			setup(conn);
-			let before = r.rpcd_sections();
-			let total = length(call(conn, "list_roles").roles);
-			assert.match(contains({ error: "NOT_FOUND" }), call(conn, "move_role", { name: `${P}missing`, index: 0 }));
-			assert.match(contains({ error: "INVALID_INDEX" }), call(conn, "move_role", { name: `${P}a`, index: total }));
-			assert.match(contains({ error: "INVALID_INDEX" }), call(conn, "move_role", { name: `${P}a`, index: -1 }));
-			assert.match(contains({ error: "INVALID_INDEX" }), call(conn, "move_role", { name: `${P}a` }));
-			assert.match(before, r.rpcd_sections());
-		});
+describe('system: luci-sso ubus object — methods', () => {
+	it('offers list_roles, set_role and delete_role, and no way to reorder entries', () => {
+		let conn = r.connect();
+		assert.match([ "delete_role", "list_roles", "set_role" ], sort(keys(conn.list("luci-sso")[0])));
 	});
 });

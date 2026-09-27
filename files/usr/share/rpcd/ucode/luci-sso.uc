@@ -36,17 +36,13 @@
 //   set_role { name, read, write }           -> { role: { name, read, write } },
 //                                               the lists as stored
 //   delete_role { name }                     -> { result: true }
-//   move_role { name, index }                -> { roles: [ ... ] }
 //
-// Error codes: INVALID_NAME, INVALID_LIST, INVALID_INDEX, NOT_FOUND,
-// COMMIT_FAILED.
+// Error codes: INVALID_NAME, INVALID_LIST, NOT_FOUND, COMMIT_FAILED.
 //
-// Order: list_roles returns the entries in the order of /etc/config/rpcd.
-// move_role(name, index) moves an entry so that it becomes the index-th
-// (0-based) of the luci_sso_* entries; the other entries keep their relative
-// order, and sections that are not luci_sso_* keep their positions. The order
-// is informational: rpcd matches login entries by exact username, and
-// luci-sso picks a user's role in the order of /etc/config/luci-sso.
+// Order: list_roles returns the entries in the order of /etc/config/rpcd,
+// which means nothing: rpcd matches login entries by exact username, and
+// luci-sso picks a user's role in the order of /etc/config/luci-sso, which the
+// settings page edits through UCI.
 //
 // Reload: rpcd rebuilds each session's ACLs from the login entry matching its
 // username only when it reloads (SIGHUP: it saves its sessions, re-executes
@@ -101,8 +97,7 @@ function refused(res) {
 	return fail(res.error, res.details);
 }
 
-// The luci_sso_* login entries in config order, with their absolute section
-// positions.
+// The luci_sso_* login entries in config order.
 function sso_entries(uci) {
 	let out = [];
 	uci.foreach(CONFIG, null, (s) => {
@@ -111,11 +106,7 @@ function sso_entries(uci) {
 			return;
 		if (!rpcd_login.check_name(name).ok)
 			return;
-		push(out, {
-			section: s[".name"],
-			index: s[".index"],
-			role: { name, read: to_list(s.read), write: to_list(s.write) }
-		});
+		push(out, { name, read: to_list(s.read), write: to_list(s.write) });
 	});
 	return out;
 }
@@ -139,19 +130,11 @@ function commit(uci) {
 	return null;
 }
 
-// Moves `section` to absolute position `pos` and the section now at `pos` to
-// where `section` was, leaving every other section where it is. uci's reorder
-// shifts the sections in between, so the second move shifts them back.
-function swap(uci, section, from, other, pos) {
-	uci.reorder(CONFIG, section, pos);
-	uci.reorder(CONFIG, other, from);
-}
-
 const methods = {
 	list_roles: {
 		call: function() {
 			let uci = open_cursor();
-			return { roles: map(sso_entries(uci), (e) => e.role), reload_pending: reload_timer != null };
+			return { roles: sso_entries(uci), reload_pending: reload_timer != null };
 		}
 	},
 
@@ -187,44 +170,6 @@ const methods = {
 			let err = commit(uci);
 			if (err) return err;
 			return { result: true };
-		}
-	},
-
-	move_role: {
-		args: { name: "name", index: 0 },
-		call: function(req) {
-			let a = req.args;
-			let res = rpcd_login.check_name(a.name);
-			if (!res.ok) return refused(res);
-
-			let uci = open_cursor();
-			let entries = sso_entries(uci);
-			let names = map(entries, (e) => e.role.name);
-			let from = index(names, a.name);
-			if (from < 0)
-				return fail("NOT_FOUND", `no rpcd login entry for role '${a.name}'`);
-			if (type(a.index) != "int" || a.index < 0 || a.index >= length(names))
-				return fail("INVALID_INDEX", `index must be between 0 and ${length(names) - 1}`);
-
-			// The target order, placed into the slots the entries occupy now.
-			let order = filter(names, (n) => n != a.name);
-			splice(order, a.index, 0, a.name);
-			let slots = map(entries, (e) => e.index);
-
-			for (let i = 0; i < length(order); i++) {
-				let now = sso_entries(uci);
-				let at = {};
-				for (let e in now) at[e.role.name] = e;
-				let want = at[order[i]];
-				if (want.index == slots[i])
-					continue;
-				let occupant = filter(now, (e) => e.index == slots[i])[0];
-				swap(uci, want.section, want.index, occupant.section, slots[i]);
-			}
-
-			let err = commit(uci);
-			if (err) return err;
-			return { roles: map(sso_entries(uci), (e) => e.role) };
 		}
 	}
 };
