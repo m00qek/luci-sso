@@ -20,7 +20,7 @@ The page has two sections: **Settings** (OIDC provider credentials) and **Users*
 
 ### Enable SSO
 
-Turns the SSO login button on or off. When disabled, the button disappears from the LuCI login page and all SSO login attempts return `{"enabled": false}`. Password login is not affected.
+Turns the SSO login button on or off. When disabled, the button disappears from the LuCI login page, the `?action=enabled` probe returns `{"enabled": false}`, and any other request to `/cgi-bin/luci-sso` gets an error page saying single sign-on is not enabled (`SSO_DISABLED` in the log). Password login is not affected.
 
 ### Issuer URL
 
@@ -40,7 +40,7 @@ Space-separated OIDC scopes requested during login. The default `openid profile 
 
 ### Clock Tolerance
 
-Seconds of allowed clock skew during JWT validation. The default `60` is sufficient for most setups. Increase it if logins fail with `TOKEN_EXPIRED` despite clocks that appear synchronized.
+Seconds of allowed clock skew when checking the ID Token's timestamps and the login handshake's own. The default `60` is sufficient for most setups. Increase it if logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` despite clocks that appear synchronized.
 
 ### Internal Issuer URL
 

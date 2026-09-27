@@ -99,7 +99,7 @@ If an attacker substitutes a different access token in the token response — wh
 
 ### Token registry prevents access token replay
 
-After a successful login, the SHA256 hash of the access token is registered in `/var/run/luci-sso/tokens/`. This is an atomic `mkdir` operation: the first process to create the directory wins; subsequent attempts fail. Tokens are kept for 24 hours, matching the maximum OIDC session lifetime.
+After a successful login, the SHA256 hash of the access token is registered in `/var/run/luci-sso/tokens/`. This is an atomic `mkdir` operation: the first process to create the directory wins; subsequent attempts fail. A daily cleanup job removes entries older than 24 hours, and the router logs a warning when an access token lives longer than that window.
 
 This prevents an attacker who observes a valid access token from reusing it after the user has logged out.
 
@@ -107,15 +107,15 @@ This prevents an attacker who observes a valid access token from reusing it afte
 
 ## What can go wrong — and where
 
-Each phase has distinct failure modes visible in the [system log](../reference/log-messages.md):
+Each phase has distinct failure modes visible in the [system log](../reference/log-messages.md). A failed request ends with one `[<status>] <CODE>` line; the lines before it carry the detail:
 
-| Phase | Typical error codes |
-| :--- | :--- |
-| Discovery | `OIDC_DISCOVERY_FAILED`, `DISCOVERY_ISSUER_MISMATCH`, `JWKS_FETCH_FAILED` |
-| Callback | `STATE_PARAMETER_MISMATCH`, `MISSING_HANDSHAKE_COOKIE`, `IDP_ERROR`, `STATE_NOT_FOUND` |
-| Token exchange | `TOKEN_EXCHANGE_FAILED`, `OIDC_INVALID_GRANT`, `TOKEN_ENDPOINT_NETWORK_ERROR` |
-| Token validation | `UNSUPPORTED_ALGORITHM`, `NONCE_MISMATCH`, `AT_HASH_MISMATCH`, `ID_TOKEN_VERIFICATION_FAILED` |
-| Authorization | `USER_NOT_AUTHORIZED` |
-| Session injection | `UBUS_LOGIN_FAILED` |
+| Phase | Code on the request's last line | Detail on the lines before it |
+| :--- | :--- | :--- |
+| Discovery | `OIDC_DISCOVERY_FAILED`, `JWKS_FETCH_FAILED` | `Discovery issuer mismatch: …`, `Discovery fetch failed … HTTP_REQUEST_FAILED (<cause>)`, `JWKS fetch HTTP <status> …` |
+| Callback | `STATE_PARAMETER_MISMATCH`, `MISSING_HANDSHAKE_COOKIE`, `IDP_ERROR`, `STATE_NOT_FOUND` | `Callback state does not match the handshake; handshake kept`, `Handshake state not found or already consumed` |
+| Token exchange | `TOKEN_EXCHANGE_FAILED`, `OIDC_INVALID_GRANT`, `TOKEN_ENDPOINT_NETWORK_ERROR` | `Token exchange HTTP <status>`, `Token exchange network error … (<cause>)` |
+| Token validation | `ID_TOKEN_VERIFICATION_FAILED` | `OAuth flow failed …` naming the check, such as `UNSUPPORTED_ALGORITHM`, `NONCE_MISMATCH` or `AT_HASH_MISMATCH` |
+| Authorization | `USER_NOT_AUTHORIZED` | `User [sub_id: …] matched no roles` |
+| Session injection | `UBUS_LOGIN_FAILED` | `UBUS session creation failed` and similar |
 
 For step-by-step troubleshooting, see [How to Debug luci-sso](../how-to/sysadmin/debugging.md).

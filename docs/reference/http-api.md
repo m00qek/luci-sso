@@ -32,8 +32,9 @@ All paths below are relative to this base. Only HTTPS is accepted — the router
 | | |
 | :--- | :--- |
 | Rate-limited | No |
-| Requires configuration | No |
+| Requires configuration | No, unless SSO is enabled |
 | **Success response** | `200 application/json` — `{"enabled": true}` or `{"enabled": false}` |
+| **Error response** | `500` error page when `enabled` is `1` but the configuration is invalid (`CONFIG_ERROR`) |
 
 ---
 
@@ -44,7 +45,7 @@ Called automatically by the browser after the user authenticates at the IdP. The
 | Query parameter | Description |
 | :--- | :--- |
 | `code` | Authorization code issued by the IdP. Single-use, short-lived. |
-| `state` | Must match the value stored in the `__Host-luci_sso_state` cookie. |
+| `state` | Must match the `state` stored on the router in the handshake that the `__Host-luci_sso_state` cookie points to. |
 
 | | |
 | :--- | :--- |
@@ -85,7 +86,7 @@ If no active session is found (cookie absent or session already expired), the en
 
 ### `__Host-luci_sso_state`
 
-Carries the handshake state token during the OIDC flow. The `__Host-` prefix enforces that the cookie is only sent over HTTPS and is scoped to the root path.
+Carries an opaque handle to the handshake during the OIDC flow. The handshake itself (`state`, `nonce`, PKCE verifier and timestamps) is stored on the router in `/var/run/luci-sso/`. The `__Host-` prefix makes the browser send the cookie only over HTTPS, only to the exact host that set it, and only with `Path=/`.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -135,7 +136,7 @@ Every response — success, redirect, and error — includes these headers:
 | `Cache-Control` | `no-store` |
 | `Referrer-Policy` | `no-referrer` |
 
-These are set unconditionally in `web.uc:render()` and cannot be suppressed.
+`web.uc` adds these to every response it writes (`render`, `render_error` and the crash handler `error`); they cannot be suppressed.
 
 ---
 
@@ -160,18 +161,20 @@ Content-Type: text/html; charset=utf-8
 
 An unexpected crash returns the same page with status `500` and a generic message; the exception text is logged, never sent.
 
-| HTTP status | When it occurs |
-| :--- | :--- |
-| `400 Bad Request` | Malformed callback parameters |
-| `401 Unauthorized` | Authentication flow failed |
-| `403 Forbidden` | CSRF token missing or invalid on logout |
-| `404 Not Found` | Path does not match any endpoint |
-| `429 Too Many Requests` | Per-client rate limit exceeded; `Retry-After` says when to retry |
-| `431 Request Header Fields Too Large` | Input exceeded 16 KB |
-| `503 Service Unavailable` | SSO is not configured or not enabled, or 500 logins are already in progress |
-| `500 Internal Server Error` | Unexpected crash or system failure |
+| HTTP status | When it occurs | Error codes |
+| :--- | :--- | :--- |
+| `400 Bad Request` | The IdP returned an error or no code, or refused the code | `IDP_ERROR`, `MISSING_CODE`, `OIDC_INVALID_GRANT` |
+| `401 Unauthorized` | The handshake is missing, invalid or expired, or the ID Token failed validation | `MISSING_HANDSHAKE_COOKIE`, `MALFORMED_STATE_COOKIE`, `STATE_NOT_FOUND`, `STATE_CORRUPTED`, `HANDSHAKE_EXPIRED`, `HANDSHAKE_NOT_YET_VALID`, `ID_TOKEN_VERIFICATION_FAILED` |
+| `403 Forbidden` | The request is not allowed: wrong `state`, no matching role, UserInfo for another subject, a replayed access token, or a bad logout CSRF token | `STATE_PARAMETER_MISMATCH`, `USER_NOT_AUTHORIZED`, `IDENTITY_MISMATCH`, `TOKEN_REPLAYED`, `CSRF_CHECK_FAILED` |
+| `404 Not Found` | Path does not match any endpoint | `NOT_FOUND` |
+| `429 Too Many Requests` | Per-client rate limit exceeded; `Retry-After` says when to retry | `TOO_MANY_REQUESTS` |
+| `431 Request Header Fields Too Large` | Input exceeded a size or count limit | `INPUT_TOO_LARGE` |
+| `503 Service Unavailable` | 500 logins are already in progress | `HANDSHAKE_CAPACITY_EXCEEDED` |
+| `500 Internal Server Error` | SSO is disabled or misconfigured, the IdP could not be used, a system failure, or a crash | `SSO_DISABLED`, `CONFIG_ERROR`, `OIDC_DISCOVERY_FAILED`, `JWKS_FETCH_FAILED`, `UBUS_LOGIN_FAILED` and every other code |
 
-For the mapping from internal error codes to HTTP statuses, see [Log Messages](log-messages.md).
+`TOKEN_EXCHANGE_FAILED` passes on the status the IdP's token endpoint returned, when it is one of the statuses above; any other status is sent as `500`.
+
+For what each code means and how it is logged, see [Log Messages](log-messages.md).
 
 ---
 
@@ -219,4 +222,4 @@ These constraints apply to the router's outbound requests to the IdP (discovery,
 | Maximum IdP response body (discovery, JWKS, token, UserInfo) | 256 KB |
 | Maximum ID Token size | 16 KB |
 
-Responses that exceed the response size limit are rejected before being parsed — the router logs `OIDC_DISCOVERY_FAILED`, `JWKS_FETCH_FAILED`, `TOKEN_ENDPOINT_NETWORK_ERROR`, or `USERINFO_NETWORK_ERROR` depending on which back-channel call triggered it. ID Tokens that exceed the token size limit cause `ID_TOKEN_VERIFICATION_FAILED`.
+Responses that exceed the response size limit are rejected before being parsed, with the cause `HTTP_REQUEST_FAILED (RESPONSE_TOO_LARGE)`. The request then ends with `OIDC_DISCOVERY_FAILED`, `JWKS_FETCH_FAILED` or `TOKEN_ENDPOINT_NETWORK_ERROR`, depending on which back-channel call triggered it; a UserInfo response only logs `UserInfo fallback failed`. ID Tokens that exceed the token size limit cause `ID_TOKEN_VERIFICATION_FAILED`.

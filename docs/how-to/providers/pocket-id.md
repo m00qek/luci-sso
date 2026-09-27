@@ -134,7 +134,7 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `DISCOVERY_ISSUER_MISMATCH` | The issuer URL must be the bare base URL of your Pocket ID instance (`https://id.example.com`), with no trailing slash or path. |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `Discovery issuer mismatch: Requested [id: …], got [id: …]` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path. It must use the host name Pocket ID is configured with, not an IP address or another alias. |
 | `USER_NOT_AUTHORIZED` | Authentication succeeded but no UCI role matched. If using group mapping, verify the group name includes the `@PocketID` suffix. |
 | User is redirected back to the login page without an error | The user has no passkey registered in Pocket ID, or the Pocket ID client's **Allowed User Groups** excludes them. |
 

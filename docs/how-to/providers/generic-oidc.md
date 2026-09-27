@@ -1,6 +1,6 @@
 # How to Configure a Generic OIDC Provider
 
-This guide covers connecting `luci-sso` to any standards-compliant OIDC provider — Azure AD, Okta, Dex, Zitadel, or others. If your provider has a dedicated guide in the sidebar (Google, GitHub, Authelia, Keycloak, Authentik, Pocket ID), use that instead; it covers provider-specific setup steps and gotchas.
+This guide covers connecting `luci-sso` to any standards-compliant OIDC provider — Azure AD, Okta, Dex, Zitadel, or others. If your provider has a dedicated guide in the sidebar (Google, Authelia, Keycloak, Authentik, Pocket ID), use that instead; it covers provider-specific setup steps and gotchas.
 
 ---
 
@@ -11,6 +11,7 @@ Your identity provider must support:
 - **OIDC Core 1.0** — authorization code flow with `/.well-known/openid-configuration` discovery
 - **PKCE** (RFC 7636) — `S256` method. `luci-sso` requires PKCE; providers that only support the `plain` method or no PKCE at all will not work.
 - **RS256 or ES256** signatures for ID Tokens. HS256 is not accepted.
+- **An `at_hash` claim in every ID Token.** `luci-sso` requires it, although OIDC Core makes it optional in the authorization code flow. Without it every login fails with `MISSING_AT_HASH`. Check a decoded ID Token from your IdP for `at_hash` before you start.
 
 If your provider requires PKCE to be explicitly enabled on the client, enable it before proceeding.
 
@@ -175,7 +176,7 @@ If the login fails, check the system log:
 
 Common errors and their meaning are listed in the [Log Messages Reference](../../reference/log-messages.md). The most frequent issues with new providers are:
 
-- **`DISCOVERY_ISSUER_MISMATCH`** — The `issuer_url` you configured doesn't exactly match the `issuer` field in the discovery document. Copy the value from the discovery JSON directly.
-- **`UNSUPPORTED_ALGORITHM`** — The IdP is signing tokens with HS256. Configure the client to use RS256 or ES256.
+- **`[500] OIDC_DISCOVERY_FAILED` after a `Discovery issuer mismatch` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. Copy the value from the discovery JSON directly.
+- **`[401] ID_TOKEN_VERIFICATION_FAILED`** — The `OAuth flow failed` line before it names the failed check. `UNSUPPORTED_ALGORITHM` means the IdP signs tokens with HS256 or another algorithm: configure the client to use RS256 or ES256. `MISSING_AT_HASH` means the IdP does not put `at_hash` in its ID Tokens; see the prerequisites above.
 - **`USER_NOT_AUTHORIZED`** — Authentication succeeded but no UCI role matched the user's email or groups (the log line before this code will say "matched no roles"). Add the user's email with `uci add_list luci-sso.admin.email='...'`.
 - **`OIDC_DISCOVERY_FAILED`** — The router cannot reach the IdP. Check DNS resolution and firewall rules from the router (not just from your laptop).
