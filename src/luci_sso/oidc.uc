@@ -15,6 +15,14 @@ import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER,
 const ALLOWED_ALGS = ["RS256", "ES256"];
 
 /**
+ * Browser-facing status (details.http_status) for every failed back-channel
+ * call to the IdP: the router acted as a gateway and the upstream failed. The
+ * IdP's own status is logged here, never forwarded: a 401 from the token
+ * endpoint means the router's client credentials failed, not the browser's.
+ */
+const BAD_GATEWAY = 502;
+
+/**
  * Generates the authorization URL.
  */
 export function get_auth_url(deps, config, discovery_doc, params) {
@@ -101,24 +109,24 @@ export function exchange_code(deps, config, discovery, code, verifier, session_i
 
 	if (!res_http.ok) {
 		deps.log("warn", `Token exchange network error${sid_ctx}: ${Result.describe(res_http)}`);
-		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR);
+		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR, { http_status: BAD_GATEWAY });
 	}
 
 	let response = res_http.data;
 	if (response.status != 200) {
 		let res_err = encoding.safe_json(response.body);
 		if (res_err.ok && res_err.data.error == "invalid_grant") {
-			deps.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
-			return Result.err(OIDC_INVALID_GRANT, { http_status: 400 });
+			deps.log("error", `Token exchange failed (invalid_grant, HTTP ${response.status})${sid_ctx}`);
+			return Result.err(OIDC_INVALID_GRANT, { http_status: BAD_GATEWAY });
 		}
 		deps.log("warn", `Token exchange HTTP ${response.status}${sid_ctx}`);
-		return Result.err(TOKEN_EXCHANGE_FAILED, { http_status: response.status });
+		return Result.err(TOKEN_EXCHANGE_FAILED, { http_status: BAD_GATEWAY });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
 		deps.log("error", `Token exchange JSON parse error${sid_ctx}: ${res.details}`);
-		return Result.err(TOKEN_RESPONSE_INVALID_JSON);
+		return Result.err(TOKEN_RESPONSE_INVALID_JSON, { http_status: BAD_GATEWAY });
 	}
 	let tokens = res.data;
 
@@ -277,19 +285,19 @@ export function fetch_userinfo(deps, endpoint, access_token) {
 
 	if (!res_http.ok) {
 		deps.log("warn", `UserInfo fetch network error: ${Result.describe(res_http)}`);
-		return Result.err(USERINFO_NETWORK_ERROR);
+		return Result.err(USERINFO_NETWORK_ERROR, { http_status: BAD_GATEWAY });
 	}
 
 	let response = res_http.data;
 	if (response.status != 200) {
 		deps.log("warn", `UserInfo fetch HTTP ${response.status}`);
-		return Result.err(USERINFO_FETCH_FAILED, { http_status: response.status });
+		return Result.err(USERINFO_FETCH_FAILED, { http_status: BAD_GATEWAY });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
 		deps.log("error", `UserInfo JSON parse error: ${res.details}`);
-		return Result.err(USERINFO_INVALID_JSON);
+		return Result.err(USERINFO_INVALID_JSON, { http_status: BAD_GATEWAY });
 	}
 
 	let payload = res.data;

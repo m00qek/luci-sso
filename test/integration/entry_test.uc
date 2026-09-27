@@ -1,5 +1,6 @@
 import { describe, it, assert, truthy } from 'utest';
 import * as entry from 'luci_sso.entry';
+import * as session from 'luci_sso.session';
 import { with_context } from 'context';
 
 // Integration bucket — enter at entry.run(deps, web_deps), the CGI composition
@@ -197,3 +198,92 @@ describe('entry: run — shipped config without redirect_uri', () => {
 	});
 });
 
+
+describe('entry: run — IdP back-channel failures render 502 Bad Gateway', () => {
+	const DISC_URL = "https://idp.com/.well-known/openid-configuration";
+	const DISC_DOC = {
+		issuer: "https://idp.com",
+		authorization_endpoint: "https://idp.com/auth",
+		token_endpoint: "https://idp.com/token",
+		jwks_uri: "https://idp.com/jwks"
+	};
+
+	// Drives one CGI request through entry.run. For the callback, a real
+	// handshake is seeded first so the request passes the browser-side checks
+	// and fails only at the IdP. Returns { out, logs }, logs from both deps.log
+	// (the module that called the IdP) and web_deps.log (the `[status]` line).
+	function run_request(path, http) {
+		let logs = [];
+		let out;
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": ENABLED_UCI } },
+		               http_client: { data: http }, clock: { data: { now: NOW } } }, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			let env = { PATH_INFO: path, REMOTE_ADDR: "192.0.2.20" };
+			if (path == "/callback") {
+				let hs = session.create_state(deps, 0).data;
+				env.QUERY_STRING = `code=authcode&state=${hs.state}`;
+				env.HTTP_COOKIE = `__Host-luci_sso_state=${hs.token}`;
+			}
+			let wd = web_deps(env);
+			wd.log = (l, m) => push(logs, m);
+			entry.run(deps, wd);
+			out = wd.out();
+		});
+		return { out, logs };
+	}
+
+	function assert_502(r, code, upstream_line) {
+		assert.match(truthy(), index(r.out, "Status: 502 Bad Gateway\n") >= 0, r.out);
+		assert.match(1, length(filter(r.logs, (m) => m == `[502] ${code}`)), sprintf("%J", r.logs));
+		if (upstream_line)
+			assert.match(1, length(filter(r.logs, (m) => index(m, upstream_line) == 0)), sprintf("%J", r.logs));
+	}
+
+	it('a rejected client secret (token endpoint 401) renders 502 and logs the 401', () => {
+		let r = run_request("/callback", {
+			[DISC_URL]: { status: 200, body: DISC_DOC },
+			"https://idp.com/token": { status: 401, body: { error: "invalid_client" } }
+		});
+		assert_502(r, "TOKEN_EXCHANGE_FAILED", "Token exchange HTTP 401 [session_id: ");
+		assert.match(-1, index(r.out, "401"), "the IdP status never reaches the browser");
+	});
+
+	it('an IdP 502 at the token endpoint renders 502, not 500', () => {
+		let r = run_request("/callback", {
+			[DISC_URL]: { status: 200, body: DISC_DOC },
+			"https://idp.com/token": { status: 502, body: "" }
+		});
+		assert_502(r, "TOKEN_EXCHANGE_FAILED", "Token exchange HTTP 502 [session_id: ");
+	});
+
+	it('invalid_grant renders 502 and logs the upstream status', () => {
+		let r = run_request("/callback", {
+			[DISC_URL]: { status: 200, body: DISC_DOC },
+			"https://idp.com/token": { status: 400, body: { error: "invalid_grant" } }
+		});
+		assert_502(r, "OIDC_INVALID_GRANT", "Token exchange failed (invalid_grant, HTTP 400) [session_id: ");
+		assert.match(truthy(), index(r.out, "<p>This sign-in attempt expired or was already used. Please try signing in again.") >= 0);
+	});
+
+	it('an unreachable token endpoint renders 502 and logs the cause', () => {
+		let r = run_request("/callback", {
+			[DISC_URL]: { status: 200, body: DISC_DOC },
+			"https://idp.com/token": { error: "CONNECTION_FAILED" }
+		});
+		assert_502(r, "TOKEN_ENDPOINT_NETWORK_ERROR", "Token exchange network error [session_id: ");
+	});
+
+	it('a JWK Set endpoint 503 renders 502 and logs the 503', () => {
+		let r = run_request("/callback", {
+			[DISC_URL]: { status: 200, body: DISC_DOC },
+			"https://idp.com/token": { status: 200, body: { id_token: "a.b.c", access_token: "at" } },
+			"https://idp.com/jwks": { status: 503, body: {} }
+		});
+		assert_502(r, "JWKS_FETCH_FAILED", "JWKS fetch HTTP 503 from [id: ");
+	});
+
+	it('a discovery 404 at login renders 502 and logs the 404', () => {
+		let r = run_request("/", { [DISC_URL]: { status: 404, body: {} } });
+		assert_502(r, "OIDC_DISCOVERY_FAILED", "Discovery fetch HTTP 404 from [id: ");
+	});
+});

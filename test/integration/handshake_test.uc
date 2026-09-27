@@ -44,7 +44,7 @@ describe('handshake: initiate', () => {
 		});
 	});
 
-	it('returns OIDC_DISCOVERY_FAILED (500) when discovery fails', () => {
+	it('returns OIDC_DISCOVERY_FAILED (502) when discovery fails', () => {
 		with_context({
 			fs:          { data: {} },
 			http_client: { data: { [DISCOVERY_URL]: { status: 500, body: {} } } },
@@ -52,7 +52,7 @@ describe('handshake: initiate', () => {
 		}, (deps) => {
 			let res = handshake.initiate(deps, base_config());
 			assert.match(contains({ ok: false, error: 'OIDC_DISCOVERY_FAILED' }), res);
-			assert.match(500, res.details.http_status);
+			assert.match(502, res.details.http_status);
 		});
 	});
 
@@ -167,37 +167,47 @@ describe('handshake: authenticate — OAuth flow failures', () => {
 		return out;
 	}
 
-	it('returns OIDC_DISCOVERY_FAILED (500) when discovery fails in the callback', () => {
+	it('returns OIDC_DISCOVERY_FAILED (502) when discovery fails in the callback', () => {
 		let res = run({ data: { [DISCOVERY_URL]: { status: 503, body: {} } } });
 		assert.match(contains({ ok: false, error: 'OIDC_DISCOVERY_FAILED' }), res);
-		assert.match(500, res.details.http_status);
+		assert.match(502, res.details.http_status);
 	});
 
-	it('propagates TOKEN_EXCHANGE_FAILED when the token endpoint errors', () => {
+	it('returns TOKEN_EXCHANGE_FAILED (502), not the IdP status, when the token endpoint errors', () => {
 		let res = run({ data: {
 			[DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY },
-			[f.MOCK_DISCOVERY.token_endpoint]: { status: 500, body: {} }
+			[f.MOCK_DISCOVERY.token_endpoint]: { status: 401, body: { error: 'invalid_client' } }
 		} });
 		assert.match(contains({ ok: false, error: 'TOKEN_EXCHANGE_FAILED' }), res);
+		assert.match(502, res.details.http_status);
 	});
 
-	it('propagates OIDC_INVALID_GRANT (400) on an invalid_grant token response', () => {
+	it('returns TOKEN_ENDPOINT_NETWORK_ERROR (502) when the token endpoint is unreachable', () => {
+		let res = run({ data: {
+			[DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY },
+			[f.MOCK_DISCOVERY.token_endpoint]: { error: 'CONNECTION_FAILED' }
+		} });
+		assert.match(contains({ ok: false, error: 'TOKEN_ENDPOINT_NETWORK_ERROR' }), res);
+		assert.match(502, res.details.http_status);
+	});
+
+	it('returns OIDC_INVALID_GRANT (502) on an invalid_grant token response', () => {
 		let res = run({ data: {
 			[DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY },
 			[f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: 'invalid_grant' } }
 		} });
 		assert.match(contains({ ok: false, error: 'OIDC_INVALID_GRANT' }), res);
-		assert.match(400, res.details.http_status);
+		assert.match(502, res.details.http_status);
 	});
 
-	it('returns JWKS_FETCH_FAILED (500) when the JWKS endpoint errors', () => {
+	it('returns JWKS_FETCH_FAILED (502) when the JWKS endpoint errors', () => {
 		let res = run({ data: {
 			[DISCOVERY_URL]: { status: 200, body: f.MOCK_DISCOVERY },
 			[f.MOCK_DISCOVERY.token_endpoint]: { status: 200, body: { id_token: 'a.b.c', access_token: 'at' } },
 			[f.MOCK_DISCOVERY.jwks_uri]: { status: 500, body: {} }
 		} });
 		assert.match(contains({ ok: false, error: 'JWKS_FETCH_FAILED' }), res);
-		assert.match(500, res.details.http_status);
+		assert.match(502, res.details.http_status);
 	});
 
 	it('DO NOT retry JWKS refresh if kid is missing', () => {

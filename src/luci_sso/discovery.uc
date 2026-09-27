@@ -135,7 +135,7 @@ export function discover(deps, issuer, options) {
 		}
 
 		deps.log("warn", `Discovery fetch HTTP ${res_http.data.status} from [id: ${issuer_id}]`);
-		return Result.err(DISCOVERY_FAILED, { http_status: res_http.data.status });
+		return Result.err(DISCOVERY_FAILED, { http_status: 502 });
 	}
 
 	let response = res_http.data;
@@ -234,7 +234,7 @@ export function fetch_jwks(deps, jwks_uri, options) {
 		}
 
 		deps.log("warn", `JWKS fetch HTTP ${res_http.data.status} from [id: ${uri_id}]`);
-		return Result.err(JWKS_FETCH_FAILED, { http_status: res_http.data.status });
+		return Result.err(JWKS_FETCH_FAILED, { http_status: 502 });
 	}
 
 	let response = res_http.data;

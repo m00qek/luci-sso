@@ -77,7 +77,7 @@ The internal address must:
 scp -O ca.crt root@192.168.1.1:/etc/ssl/certs/my-homelab-ca.crt
 ```
 
-If the router cannot verify the IdP's certificate, discovery already fails when the user clicks the button: the log shows `[500] OIDC_DISCOVERY_FAILED`, and the line before it ends in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, or `(CERT_NAME_MISMATCH)` if the certificate does not cover the internal host name. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
+If the router cannot verify the IdP's certificate, discovery already fails when the user clicks the button: the log shows `[502] OIDC_DISCOVERY_FAILED`, and the line before it ends in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, or `(CERT_NAME_MISMATCH)` if the certificate does not cover the internal host name. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
 
 ---
 
@@ -130,7 +130,7 @@ Then attempt a login from your browser. If the browser redirects to the IdP corr
 
 --8<-- "check-log.md"
 
-Back-channel connection failures end as `[500] OIDC_DISCOVERY_FAILED`, `[500] TOKEN_ENDPOINT_NETWORK_ERROR` or `[500] JWKS_FETCH_FAILED`, with a line ending in `HTTP_REQUEST_FAILED (<cause>)` before them. Check:
+Back-channel connection failures end as `[502] OIDC_DISCOVERY_FAILED`, `[502] TOKEN_ENDPOINT_NETWORK_ERROR` or `[502] JWKS_FETCH_FAILED`, with a line ending in `HTTP_REQUEST_FAILED (<cause>)` before them. Check:
 
 1. The router can reach the internal address and trusts its certificate. Fetch the discovery document through it from the router, adding the issuer's path if it has one:
 

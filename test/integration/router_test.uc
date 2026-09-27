@@ -54,7 +54,7 @@ describe('router: login', () => {
 		}, (deps) => {
 			let res = router.handle(deps, MOCK_CONFIG, mock_request("/"));
 			assert.match(falsy(), res.ok, "Should fail on discovery failure");
-			assert.match(500, res.details.http_status, "Should return 500 status in details");
+			assert.match(502, res.details.http_status, "An IdP back-channel failure is a 502");
 		});
 	});
 
@@ -333,6 +333,7 @@ describe('router: callback', () => {
 			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(falsy(), res.ok);
 			assert.match("OIDC_INVALID_GRANT", res.error);
+			assert.match(502, res.details.http_status);
 		});
 	});
 });
@@ -356,6 +357,7 @@ describe('router: security', () => {
 			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(falsy(), res.ok);
 			assert.match("OIDC_INVALID_GRANT", res.error);
+			assert.match(502, res.details.http_status);
 		});
 	});
 

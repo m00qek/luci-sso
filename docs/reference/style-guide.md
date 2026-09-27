@@ -114,9 +114,9 @@ export function fetch_userinfo(deps, endpoint, access_token) {
 	let res_http = deps.http.get(endpoint, {
 		headers: { "Authorization": `Bearer ${access_token}` }
 	});
-	if (!res_http.ok) return Result.err(USERINFO_NETWORK_ERROR);
+	if (!res_http.ok) return Result.err(USERINFO_NETWORK_ERROR, { http_status: 502 });
 	if (res_http.data.status != 200)
-		return Result.err(USERINFO_FETCH_FAILED, { http_status: res_http.data.status });
+		return Result.err(USERINFO_FETCH_FAILED, { http_status: 502 });
 
 	return encoding.safe_json(res_http.data.body);
 };
@@ -191,7 +191,7 @@ let keys = res.data;  // null if the fetch failed
 ```javascript
 let res = discovery.fetch_jwks(deps, jwks_uri);
 if (!res.ok) {
-	return Result.err(JWKS_FETCH_FAILED, { http_status: 500 });
+	return Result.err(JWKS_FETCH_FAILED, { http_status: 502 });
 }
 let keys = res.data;
 ```

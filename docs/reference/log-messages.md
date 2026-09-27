@@ -15,10 +15,10 @@ An error code reaches the log in one of four ways. The **In the log** column of 
 **1. As the result of a request.** A request that fails ends with one line that holds the HTTP status sent to the browser and the code:
 
 ```
-Sat Sep 26 23:15:06 2026 user.err luci-sso[1289]: [500] OIDC_DISCOVERY_FAILED
+Sat Sep 26 23:15:06 2026 user.err luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED
 ```
 
-The examples below leave out the date and priority: `luci-sso[1289]: [500] OIDC_DISCOVERY_FAILED`. Only one code is ever written this way per request. The lines logged just before it, with the same process ID, usually say what went wrong.
+The examples below leave out the date and priority: `luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED`. Only one code is ever written this way per request. The lines logged just before it, with the same process ID, usually say what went wrong.
 
 **2. Inside another line.** Many codes describe a lower-level failure. They never get a `[<status>]` line of their own; they appear in the text of another line:
 
@@ -31,11 +31,13 @@ The examples below leave out the date and priority: `luci-sso[1289]: [500] OIDC_
 
 At the callback, most failures after the handshake check (discovery, token exchange, JWK Set, UserInfo identity and the replay registry) also log `OAuth flow failed [session_id: …]: <CODE> ({ "http_status": <status> })` just before the `[<status>]` line. It repeats that line's code and status; only for `ID_TOKEN_VERIFICATION_FAILED` does it add the detail code.
 
-**3. Named in the line before a broader code.** Every discovery failure ends as `[500] OIDC_DISCOVERY_FAILED`. The line before it names the specific code where there is one:
+A failed back-channel request to the IdP (discovery, token exchange, JWK Set) always ends as `[502]`, whatever the IdP answered. The IdP's own HTTP status is logged once, in the line that names the request, such as `Token exchange HTTP 401 [session_id: …]`; a transport failure logs its cause there instead.
+
+**3. Named in the line before a broader code.** Every discovery failure ends as `[502] OIDC_DISCOVERY_FAILED`. The line before it names the specific code where there is one:
 
 ```
 luci-sso[1289]: DISCOVERY_ISSUER_MISMATCH: issuer_url is "https://id.example.com" but the discovery document declares "https://id.example.com/application/o/luci/" [id: 8dbb9352769748c6]
-luci-sso[1289]: [500] OIDC_DISCOVERY_FAILED
+luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED
 ```
 
 Values that come from the IdP or the browser, such as the declared issuer or the IdP's `error`, are sanitized before they are logged: every byte outside printable ASCII becomes `?`, and long values are cut to 200 characters (100 for endpoint URLs) followed by `...`.
@@ -70,17 +72,17 @@ These occur when the router fetches the IdP's `/.well-known/openid-configuration
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `OIDC_DISCOVERY_FAILED` | Any discovery failure during login or callback | The request-level code for every discovery problem below. | `[500] OIDC_DISCOVERY_FAILED`, preceded by a line naming the cause |
+| `OIDC_DISCOVERY_FAILED` | Any discovery failure during login or callback | The request-level code for every discovery problem below. | `[502] OIDC_DISCOVERY_FAILED`, preceded by a line naming the cause |
 | `INSECURE_ISSUER_URL` | `issuer_url` does not begin with `https://` | The configuration check rejects this first, as `CONFIG_ERROR`. | Not logged |
 | `INSECURE_FETCH_URL` | The split-horizon fetch URL is not HTTPS | The configuration check rejects a non-HTTPS `internal_issuer_url` first, as `CONFIG_ERROR`. | Not logged |
 | `DISCOVERY_FAILED` | The discovery endpoint returned a status other than 200 | The IdP is reachable but refused the request. Check the issuer path and the IdP logs. | Not logged by name: `Discovery fetch HTTP <status> from [id: …]` |
 | `DISCOVERY_NETWORK_ERROR` | The discovery request did not complete | Transport failure before any HTTP response. The cause is in parentheses. | Not logged by name: `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)` |
 | `INVALID_DISCOVERY_DOC` | The discovery response is not valid JSON | The IdP returned a malformed discovery document, or the URL serves something else. | Not logged by name: `Discovery JSON parse error: …` |
 | `DISCOVERY_MISSING_ISSUER` | The discovery document has no `issuer` field | The IdP's discovery document is not OIDC compliant. | Not logged by name: `Discovery document missing issuer field from [id: …]` |
-| `DISCOVERY_ISSUER_MISMATCH` | The document's `issuer` differs from the configured `issuer_url` after normalization | `issuer_url` is not the IdP's exact issuer identifier. Trailing slashes, letter case in the host and `:443` are ignored; path differences are not. | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "<configured>" but the discovery document declares "<declared>" [id: …]`, then `[500] OIDC_DISCOVERY_FAILED`. Can also appear as the detail of `ID_TOKEN_VERIFICATION_FAILED`. |
-| `DISCOVERY_MISSING_ENDPOINT` | The document lacks `authorization_endpoint`, `token_endpoint` or `jwks_uri` | The IdP's discovery document is incomplete. | `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field> [id: …]`, then `[500] OIDC_DISCOVERY_FAILED` |
-| `INSECURE_ENDPOINT` | One of those three endpoints is not HTTPS | The IdP advertises a plain-HTTP endpoint. `luci-sso` refuses to use it. | `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "<url>" [id: …]`, then `[500] OIDC_DISCOVERY_FAILED` |
-| `JWKS_FETCH_FAILED` | Any JWK Set failure during the callback; also the JWKS endpoint returning a status other than 200 | The router could not get the IdP's signing keys. | `[500] JWKS_FETCH_FAILED`, preceded by a JWKS line naming the cause, such as `JWKS fetch HTTP <status> from [id: …]` |
+| `DISCOVERY_ISSUER_MISMATCH` | The document's `issuer` differs from the configured `issuer_url` after normalization | `issuer_url` is not the IdP's exact issuer identifier. Trailing slashes, letter case in the host and `:443` are ignored; path differences are not. | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "<configured>" but the discovery document declares "<declared>" [id: …]`, then `[502] OIDC_DISCOVERY_FAILED`. Can also appear as the detail of `ID_TOKEN_VERIFICATION_FAILED`. |
+| `DISCOVERY_MISSING_ENDPOINT` | The document lacks `authorization_endpoint`, `token_endpoint` or `jwks_uri` | The IdP's discovery document is incomplete. | `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field> [id: …]`, then `[502] OIDC_DISCOVERY_FAILED` |
+| `INSECURE_ENDPOINT` | One of those three endpoints is not HTTPS | The IdP advertises a plain-HTTP endpoint. `luci-sso` refuses to use it. | `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "<url>" [id: …]`, then `[502] OIDC_DISCOVERY_FAILED` |
+| `JWKS_FETCH_FAILED` | Any JWK Set failure during the callback; also the JWKS endpoint returning a status other than 200 | The router could not get the IdP's signing keys. | `[502] JWKS_FETCH_FAILED`, preceded by a JWKS line naming the cause, such as `JWKS fetch HTTP <status> from [id: …]` |
 | `JWKS_NETWORK_ERROR` | The JWKS request did not complete | Transport failure before any HTTP response. | Not logged by name: `JWKS fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)` |
 | `INSECURE_JWKS_URI` | `jwks_uri` is not HTTPS | Discovery rejects a plain-HTTP `jwks_uri` first, as `INSECURE_ENDPOINT`. | Not logged |
 | `INVALID_JWKS_FORMAT` | The JWKS response is not valid JSON or has no `keys` array | The IdP returned a malformed JWK Set. | Not logged by name: `JWKS JSON parse error: …` |
@@ -129,10 +131,10 @@ These occur during the back-channel request from the router to the IdP's token e
 | :--- | :--- | :--- | :--- |
 | `INSECURE_TOKEN_ENDPOINT` | The token endpoint URL is not HTTPS | Discovery normally rejects this first, as `INSECURE_ENDPOINT`. | `[500] INSECURE_TOKEN_ENDPOINT` |
 | `INVALID_PKCE_VERIFIER` | The stored PKCE verifier is not 43–128 characters | Internal error. File a bug. | `[500] INVALID_PKCE_VERIFIER`, preceded by `Rejected token exchange …` |
-| `TOKEN_ENDPOINT_NETWORK_ERROR` | The token request did not complete | Transport failure on the router-to-IdP back channel. The cause is in parentheses. | `[500] TOKEN_ENDPOINT_NETWORK_ERROR`, preceded by `Token exchange network error [session_id: …]: HTTP_REQUEST_FAILED (<cause>)` |
-| `OIDC_INVALID_GRANT` | The token endpoint answered `invalid_grant` | The authorization code was already used or expired, the PKCE verifier is wrong, or `redirect_uri` does not match the one registered. | `[400] OIDC_INVALID_GRANT`, preceded by `Token exchange failed (invalid_grant)` |
-| `TOKEN_EXCHANGE_FAILED` | The token endpoint returned any other status than 200 | The IdP rejected the request, often because of a wrong client secret or a public client. Check the IdP logs. | `[<status>] TOKEN_EXCHANGE_FAILED` with the token endpoint's status, preceded by `Token exchange HTTP <status>` |
-| `TOKEN_RESPONSE_INVALID_JSON` | The token response is not valid JSON | The IdP returned a malformed token response. | `[500] TOKEN_RESPONSE_INVALID_JSON`, preceded by `Token exchange JSON parse error …` |
+| `TOKEN_ENDPOINT_NETWORK_ERROR` | The token request did not complete | Transport failure on the router-to-IdP back channel. The cause is in parentheses. | `[502] TOKEN_ENDPOINT_NETWORK_ERROR`, preceded by `Token exchange network error [session_id: …]: HTTP_REQUEST_FAILED (<cause>)` |
+| `OIDC_INVALID_GRANT` | The token endpoint answered `invalid_grant` | The authorization code was already used or expired, the PKCE verifier is wrong, or `redirect_uri` does not match the one registered. The page asks the user to sign in again. | `[502] OIDC_INVALID_GRANT`, preceded by `Token exchange failed (invalid_grant, HTTP <status>)` |
+| `TOKEN_EXCHANGE_FAILED` | The token endpoint returned any other status than 200 | The IdP rejected the request, often because of a wrong client secret or a public client. Check the IdP logs. | `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP <status>` with the token endpoint's status |
+| `TOKEN_RESPONSE_INVALID_JSON` | The token response is not valid JSON | The IdP returned a malformed token response. | `[502] TOKEN_RESPONSE_INVALID_JSON`, preceded by `Token exchange JSON parse error …` |
 
 ---
 

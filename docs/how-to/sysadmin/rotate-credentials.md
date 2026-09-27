@@ -40,12 +40,12 @@ The most common case: the secret is expired or has been compromised. The client 
 
 Then attempt a fresh login from a browser. If the token exchange succeeds, the new secret is working.
 
-If the IdP rejects the new secret, the login fails and the log shows lines like these, with the status the IdP returned (usually `401`):
+If the IdP rejects the new secret, the login fails with `502 Bad Gateway` and the log shows lines like these. The first one has the status the IdP returned (usually `401`):
 
 ```
 Token exchange HTTP 401 [session_id: …]
-OAuth flow failed [session_id: …]: TOKEN_EXCHANGE_FAILED ({ "http_status": 401 })
-[401] TOKEN_EXCHANGE_FAILED
+OAuth flow failed [session_id: …]: TOKEN_EXCHANGE_FAILED ({ "http_status": 502 })
+[502] TOKEN_EXCHANGE_FAILED
 ```
 
 The IdP's own error code (typically `invalid_client`) is not logged. Double-check the secret was copied correctly — it is case-sensitive and may contain special characters that need quoting:

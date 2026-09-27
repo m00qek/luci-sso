@@ -226,6 +226,12 @@ describe('web: render_error', () => {
 		assert.match(truthy(), index(d2.out(), "Status: 503 Service Unavailable") != -1, "Status 503 should map to correct message");
 	});
 
+	it('maps 502 to Bad Gateway, and logs the same status it sends', () => {
+		let d = web_deps({}); web.render_error(d, "TOKEN_EXCHANGE_FAILED", 502);
+		assert.match(truthy(), index(d.out(), "Status: 502 Bad Gateway\n") >= 0, d.out());
+		assert.match(1, length(filter(d.logs(), (e) => e[1] == "[502] TOKEN_EXCHANGE_FAILED")));
+	});
+
 	it('renders user-facing messages for known error codes', () => {
 		let d1 = web_deps({}); web.render_error(d1, "TOO_MANY_REQUESTS", 429);
 		assert.match(truthy(), index(d1.out(), "<p>There have been too many sign-in attempts. Please wait a minute and try again.</p>") != -1, "TOO_MANY_REQUESTS message");

@@ -6,11 +6,11 @@ This guide describes how to make the router trust a private or self-signed CA ce
 
 ## When you need this
 
-If your IdP uses a certificate issued by a private CA (common in home labs and corporate self-hosted setups), the router fails the back-channel TLS handshake. The log shows a line ending in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, followed by the request's error, usually `[500] OIDC_DISCOVERY_FAILED`:
+If your IdP uses a certificate issued by a private CA (common in home labs and corporate self-hosted setups), the router fails the back-channel TLS handshake. The log shows a line ending in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, followed by the request's error, usually `[502] OIDC_DISCOVERY_FAILED`:
 
 ```
 luci-sso[1234]: Discovery fetch failed for [id: 957cfa182d5cc6db]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)
-luci-sso[1234]: [500] OIDC_DISCOVERY_FAILED
+luci-sso[1234]: [502] OIDC_DISCOVERY_FAILED
 ```
 
 Installing the CA certificate on the router resolves this.

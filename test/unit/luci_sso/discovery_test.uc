@@ -483,6 +483,39 @@ describe('discovery: HTTP failure causes are logged', () => {
 	});
 });
 
+// ─── upstream HTTP status: logged, never forwarded ────────────────────────────
+
+describe('discovery: an upstream non-200 is a 502, and its status is logged', () => {
+	it('discover returns DISCOVERY_FAILED with 502 for an upstream 404', () => {
+		let logs = [];
+		let res;
+		with_context({
+			http_client: { data: { [ISSUER + "/.well-known/openid-configuration"]: { status: 404, body: {} } } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			res = discovery.discover(deps, ISSUER);
+		});
+		assert.match(contains({ ok: false, error: 'DISCOVERY_FAILED' }), res);
+		assert.match({ http_status: 502 }, res.details);
+		assert.match(1, length(filter(logs, (m) => index(m, "Discovery fetch HTTP 404 from [id: ") == 0)), sprintf("%J", logs));
+	});
+
+	it('fetch_jwks returns JWKS_FETCH_FAILED with 502 for an upstream 401', () => {
+		let logs = [];
+		let uri = ISSUER + "/jwks";
+		let res;
+		with_context({
+			http_client: { data: { [uri]: { status: 401, body: {} } } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			res = discovery.fetch_jwks(deps, uri);
+		});
+		assert.match(contains({ ok: false, error: 'JWKS_FETCH_FAILED' }), res);
+		assert.match({ http_status: 502 }, res.details);
+		assert.match(1, length(filter(logs, (m) => index(m, "JWKS fetch HTTP 401 from [id: ") == 0)), sprintf("%J", logs));
+	});
+});
+
 // ─── split-horizon fetch URL ──────────────────────────────────────────────────
 
 describe('discovery: split-horizon fetch', () => {

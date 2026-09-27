@@ -29,6 +29,7 @@ const HTTP_STATUS_MESSAGES = {
 	"429": "429 Too Many Requests",
 	"431": "431 Request Header Fields Too Large",
 	"500": "500 Internal Server Error",
+	"502": "502 Bad Gateway",
 	"503": "503 Service Unavailable"
 };
 

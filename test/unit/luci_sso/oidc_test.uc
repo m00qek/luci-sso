@@ -148,6 +148,71 @@ describe('oidc: exchange_code', () => {
 	});
 });
 
+// ─── IdP back-channel failures: 502 to the browser, upstream status to the log ─
+
+describe('oidc: back-channel failures map to 502 Bad Gateway', () => {
+	const V = "a-very-long-and-secure-verifier-that-is-at-least-43-chars-long";
+
+	// Runs exchange_code against one token-endpoint reply; returns { res, logs }.
+	function exchange(reply) {
+		let out = { res: null, logs: [] };
+		with_context({ http_client: { data: { [f.MOCK_DISCOVERY.token_endpoint]: reply } } }, (deps) => {
+			deps.log = (l, m) => push(out.logs, m);
+			out.res = oidc.exchange_code(deps, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", V, "sess1");
+		});
+		return out;
+	}
+
+	for (let upstream in [ 400, 401, 403, 500, 502, 503 ]) {
+		it(`TOKEN_EXCHANGE_FAILED is 502 for an upstream ${upstream}, which is logged once`, () => {
+			let r = exchange({ status: upstream, body: { error: "invalid_client" } });
+			assert.match(contains({ ok: false, error: 'TOKEN_EXCHANGE_FAILED' }), r.res);
+			assert.match({ http_status: 502 }, r.res.details);
+			assert.match([ `Token exchange HTTP ${upstream} [session_id: sess1]` ],
+				filter(r.logs, (m) => index(m, `${upstream}`) >= 0));
+		});
+	}
+
+	it('OIDC_INVALID_GRANT is 502, and the upstream status is logged', () => {
+		let r = exchange({ status: 400, body: { error: "invalid_grant" } });
+		assert.match(contains({ ok: false, error: 'OIDC_INVALID_GRANT' }), r.res);
+		assert.match({ http_status: 502 }, r.res.details);
+		assert.match(1, length(filter(r.logs, (m) => m == "Token exchange failed (invalid_grant, HTTP 400) [session_id: sess1]")), sprintf("%J", r.logs));
+	});
+
+	it('TOKEN_ENDPOINT_NETWORK_ERROR is 502', () => {
+		let r = exchange({ error: "CONNECTION_FAILED" });
+		assert.match(contains({ ok: false, error: 'TOKEN_ENDPOINT_NETWORK_ERROR' }), r.res);
+		assert.match({ http_status: 502 }, r.res.details);
+	});
+
+	it('TOKEN_RESPONSE_INVALID_JSON is 502', () => {
+		let r = exchange({ status: 200, body: "not json" });
+		assert.match(contains({ ok: false, error: 'TOKEN_RESPONSE_INVALID_JSON' }), r.res);
+		assert.match({ http_status: 502 }, r.res.details);
+	});
+
+	it('USERINFO_FETCH_FAILED is 502, and the upstream status is logged', () => {
+		let endpoint = "https://trusted.idp/userinfo";
+		let res, logs = [];
+		with_context({ http_client: { data: { [endpoint]: { status: 401, body: {} } } } }, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			res = oidc.fetch_userinfo(deps, endpoint, "at");
+		});
+		assert.match(contains({ ok: false, error: 'USERINFO_FETCH_FAILED' }), res);
+		assert.match({ http_status: 502 }, res.details);
+		assert.match(1, length(filter(logs, (m) => m == "UserInfo fetch HTTP 401")), sprintf("%J", logs));
+	});
+
+	it('a local fault before the call carries no gateway status', () => {
+		with_context({ http_client: { data: {} } }, (deps) => {
+			let r = oidc.exchange_code(deps, f.MOCK_CONFIG, f.MOCK_DISCOVERY, "c", "short");
+			assert.match(contains({ ok: false, error: 'INVALID_PKCE_VERIFIER' }), r);
+			assert.match(null, r.details);
+		});
+	});
+});
+
 // ─── verify_id_token ─────────────────────────────────────────────────────────
 
 describe('oidc: verify_id_token', () => {

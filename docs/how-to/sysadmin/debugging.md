@@ -49,7 +49,7 @@ If the probe returns `{"enabled": true}` but the button is still missing, clear 
 
 The router could not start the login, so the browser never reached the IdP.
 
-- **Log shows `[500] OIDC_DISCOVERY_FAILED`**: the router could not use the IdP's discovery document. The line before it names the cause:
+- **Log shows `[502] OIDC_DISCOVERY_FAILED`**: the router could not use the IdP's discovery document. The line before it names the cause:
     - `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`: `issuer_url` is not the issuer the IdP declares. The line shows both values; set `issuer_url` to the declared one. They only have to match apart from a trailing slash, host letter case and `:443`.
 
     - `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)`: the router could not connect. See [A back-channel request to the IdP failed](#a-back-channel-request-to-the-idp-failed).
@@ -71,14 +71,14 @@ The browser reached the IdP and came back, but the callback failed. Nothing retr
 - **Log shows `[401] STATE_NOT_FOUND`**: the callback was already used (a double submit or a reload of the callback URL), or the handshake was cleaned up as stale.
 - **Log shows `[401] HANDSHAKE_EXPIRED` or `[401] HANDSHAKE_NOT_YET_VALID`**: the router's own clock jumped during the login. The handshake is written and checked with the router's clock only, so the browser's clock does not matter. See [The router's clock is wrong](#the-routers-clock-is-wrong).
 - **Log shows `[400] IDP_ERROR`**: the IdP refused the request. The line before it gives the IdP's reason: `IDP_ERROR: the IdP returned error=<error> (<error_description>)`. `access_denied` usually means the user cancelled or is not assigned to the client in the IdP.
-- **Log shows `[400] OIDC_INVALID_GRANT` or `[<status>] TOKEN_EXCHANGE_FAILED`**: the IdP rejected the code exchange. `TOKEN_EXCHANGE_FAILED` carries the IdP's own HTTP status, often `401` for a wrong client secret. Check the client secret, that the client is confidential, and that `redirect_uri` matches the IdP registration exactly.
+- **Log shows `[502] OIDC_INVALID_GRANT` or `[502] TOKEN_EXCHANGE_FAILED`**: the IdP rejected the code exchange. The browser always gets `502`; the IdP's own HTTP status is in the line before, `Token exchange failed (invalid_grant, HTTP <status>)` or `Token exchange HTTP <status>`, often `401` for a wrong client secret. Check the client secret, that the client is confidential, and that `redirect_uri` matches the IdP registration exactly. `OIDC_INVALID_GRANT` alone, on one login, can also be a code that expired before the router redeemed it: the page asks the user to sign in again.
 - **Log shows `[401] ID_TOKEN_VERIFICATION_FAILED`**: the `OAuth flow failed` line before it names the failed check, such as `TOKEN_EXPIRED` or `UNSUPPORTED_ALGORITHM`. See [ID Token Verification Detail Codes](../../reference/log-messages.md#id-token-verification-detail-codes).
 
 ---
 
 ## A back-channel request to the IdP failed
 
-When the router cannot complete a request to the IdP (discovery, JWKS, token exchange or UserInfo), the log names the cause in parentheses:
+When the router cannot complete a request to the IdP (discovery, JWKS, token exchange or UserInfo), the log names the cause in parentheses. The browser gets `502 Bad Gateway` for any failed request to the IdP except UserInfo, which does not stop the login:
 
 ```
 luci-sso[1234]: Discovery fetch failed for [id: 957cfa182d5cc6db]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)

@@ -121,7 +121,7 @@ Runs discovery, creates the handshake state and builds the authorization URL. `d
 | `url` | string | Redirect URL to the IdP's `authorization_endpoint`. |
 | `token` | string | Opaque handshake handle. Set it as the `__Host-luci_sso_state` cookie. |
 
-Fails with `OIDC_DISCOVERY_FAILED` (`500`), `HANDSHAKE_CAPACITY_EXCEEDED` (`503`), or an error from `session.create_state()` or `oidc.get_auth_url()`.
+Fails with `OIDC_DISCOVERY_FAILED` (`502`), `HANDSHAKE_CAPACITY_EXCEEDED` (`503`), or an error from `session.create_state()` or `oidc.get_auth_url()`.
 
 ### `authenticate(deps, config, request)` → `Result<{sid, email}>`
 
@@ -146,7 +146,7 @@ Builds the authorization URL with `response_type=code`, `client_id`, `redirect_u
 
 ### `exchange_code(deps, config, discovery, code, verifier, session_id)` → `Result<object>`
 
-POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the client credentials to `discovery.token_endpoint`. Returns the parsed token response. `session_id` only correlates log lines. Fails with `INSECURE_TOKEN_ENDPOINT`, `INVALID_PKCE_VERIFIER`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `OIDC_INVALID_GRANT`, `TOKEN_EXCHANGE_FAILED` or `TOKEN_RESPONSE_INVALID_JSON`.
+POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the client credentials to `discovery.token_endpoint`. Returns the parsed token response. `session_id` only correlates log lines. Fails with `INSECURE_TOKEN_ENDPOINT`, `INVALID_PKCE_VERIFIER`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `OIDC_INVALID_GRANT`, `TOKEN_EXCHANGE_FAILED` or `TOKEN_RESPONSE_INVALID_JSON`. The last four are failures of the IdP and carry `details.http_status` `502`; the token endpoint's own status is only logged.
 
 ### `verify_id_token(deps, tokens, keys, config, handshake, discovery, now)` → `Result<{sub, email, name, groups}>`
 

@@ -13,6 +13,10 @@ import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISM
 /**
  * Orchestration logic for the OIDC Login Handshake.
  * deps = { fs, http, ubus, log, clock }
+ *
+ * A failed back-channel call to the IdP (discovery, token exchange, JWK Set)
+ * renders 502 Bad Gateway. The IdP's own HTTP status or transport cause is
+ * logged once, by the module that made the call, and never forwarded.
  */
 
 /**
@@ -60,7 +64,7 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 	let session_id = handshake.id;
 	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
-		return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
+		return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 502 });
 	}
 	// Create a shallow copy to avoid mutating the cached object
 	let discovery_doc = { ...disc_res.data };
@@ -77,6 +81,7 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 		}
 	}
 
+	// Token-endpoint failures carry their own 502 from oidc.exchange_code.
 	let exchange_res = oidc.exchange_code(deps, config, discovery_doc, code, handshake.code_verifier, session_id);
 	if (!exchange_res.ok) {
 		return exchange_res;
@@ -85,7 +90,7 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 
 	let jwks_res = discovery.fetch_jwks(deps, discovery_doc.jwks_uri);
 	if (!jwks_res.ok) {
-		return Result.err(JWKS_FETCH_FAILED, { http_status: 500 });
+		return Result.err(JWKS_FETCH_FAILED, { http_status: 502 });
 	}
 
 	let verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time());
@@ -194,7 +199,7 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 export function initiate(deps, config) {
 	deps.log("info", "Initiating OIDC login flow");
 	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
-	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
+	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 502 });
 
 	let handshake_res = session.create_state(deps, config.clock_tolerance);
 	if (!handshake_res.ok) {

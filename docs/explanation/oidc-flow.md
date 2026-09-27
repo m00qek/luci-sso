@@ -120,4 +120,6 @@ Each phase has distinct failure modes visible in the [system log](../reference/l
 | Authorization | `USER_NOT_AUTHORIZED` | `User [sub_id: …] matched no roles` |
 | Session injection | `UBUS_LOGIN_FAILED` | `UBUS session creation failed` and similar |
 
+Discovery, JWK Set and token exchange failures happen on the router's own requests to the IdP, not in anything the browser sent, so they all end as `[502]` (Bad Gateway). The IdP's HTTP status appears only in the detail line, such as `Token exchange HTTP 401`.
+
 For step-by-step troubleshooting, see [How to Debug luci-sso](../how-to/sysadmin/debugging.md).

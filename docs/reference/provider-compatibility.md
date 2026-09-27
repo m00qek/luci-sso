@@ -11,9 +11,9 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | Requirement | Check | Failure |
 | :--- | :--- | :--- |
 | HTTPS issuer | `issuer_url` starts with `https://` | `CONFIG_ERROR` |
-| Discovery document | `<issuer_url>/.well-known/openid-configuration` returns HTTP 200 with a JSON object | `[500] OIDC_DISCOVERY_FAILED` |
-| Matching issuer | The document's `issuer` equals `issuer_url`. Scheme and host case, the default port and trailing slashes are ignored. | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`, then `[500] OIDC_DISCOVERY_FAILED` |
-| Endpoints | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS | A `DISCOVERY_MISSING_ENDPOINT` or `INSECURE_ENDPOINT` line naming the field, then `[500] OIDC_DISCOVERY_FAILED` |
+| Discovery document | `<issuer_url>/.well-known/openid-configuration` returns HTTP 200 with a JSON object | `[502] OIDC_DISCOVERY_FAILED` |
+| Matching issuer | The document's `issuer` equals `issuer_url`. Scheme and host case, the default port and trailing slashes are ignored. | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`, then `[502] OIDC_DISCOVERY_FAILED` |
+| Endpoints | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS | A `DISCOVERY_MISSING_ENDPOINT` or `INSECURE_ENDPOINT` line naming the field, then `[502] OIDC_DISCOVERY_FAILED` |
 | Authorization endpoint | Contains no `#` fragment (RFC 6749 §3.1) | `[500] INVALID_AUTH_ENDPOINT` |
 | Optional endpoints | `userinfo_endpoint` and `end_session_endpoint` are used only when HTTPS. A plain-HTTP value is ignored with a warning. | None |
 
@@ -89,7 +89,7 @@ GitHub OAuth Apps and GitHub Apps do not issue ID Tokens. The token response Git
 
 | `issuer_url` | Result (checked September 2026) |
 | :--- | :--- |
-| `https://github.com` | The discovery request returns 404: `[500] OIDC_DISCOVERY_FAILED`. |
+| `https://github.com` | The discovery request returns 404: `[502] OIDC_DISCOVERY_FAILED`. |
 | `https://github.com/login/oauth` | A discovery document is served. Its `claims_supported` lists neither `email` nor `groups`, and it has no `userinfo_endpoint`. The token response still has no `id_token`. |
 
 **Alternative:** [Dex](https://dexidp.io/docs/connectors/github/) signs users in through GitHub and issues its own OIDC tokens. When the `groups` scope is requested, Dex returns GitHub teams as `groups` values of the form `org:team`. Connect `luci-sso` to Dex with [How to Configure a Generic OIDC Provider](../how-to/providers/generic-oidc.md), and check that Dex's ID Tokens include `at_hash`.

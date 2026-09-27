@@ -165,16 +165,17 @@ An unexpected crash returns the same page with status `500` and a generic messag
 
 | HTTP status | When it occurs | Error codes |
 | :--- | :--- | :--- |
-| `400 Bad Request` | The IdP returned an error or no code, or refused the code | `IDP_ERROR`, `MISSING_CODE`, `OIDC_INVALID_GRANT` |
+| `400 Bad Request` | The IdP sent the browser back with an error or without a code | `IDP_ERROR`, `MISSING_CODE` |
 | `401 Unauthorized` | The handshake is missing, invalid or expired, or the ID Token failed validation | `MISSING_HANDSHAKE_COOKIE`, `MALFORMED_STATE_COOKIE`, `STATE_NOT_FOUND`, `STATE_CORRUPTED`, `HANDSHAKE_EXPIRED`, `HANDSHAKE_NOT_YET_VALID`, `ID_TOKEN_VERIFICATION_FAILED` |
 | `403 Forbidden` | The request is not allowed: wrong `state`, no matching role, UserInfo for another subject, a replayed access token, or a bad logout CSRF token | `STATE_PARAMETER_MISMATCH`, `USER_NOT_AUTHORIZED`, `IDENTITY_MISMATCH`, `TOKEN_REPLAYED`, `CSRF_CHECK_FAILED` |
 | `404 Not Found` | Path does not match any endpoint | `NOT_FOUND` |
 | `429 Too Many Requests` | Per-client rate limit exceeded; `Retry-After` says when to retry | `TOO_MANY_REQUESTS` |
 | `431 Request Header Fields Too Large` | Input exceeded a size or count limit | `INPUT_TOO_LARGE` |
+| `502 Bad Gateway` | A back-channel request from the router to the IdP failed: no response, a status other than 200, an unusable body, or a refused authorization code | `OIDC_DISCOVERY_FAILED`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `TOKEN_EXCHANGE_FAILED`, `OIDC_INVALID_GRANT`, `TOKEN_RESPONSE_INVALID_JSON`, `JWKS_FETCH_FAILED` |
 | `503 Service Unavailable` | 500 logins are already in progress | `HANDSHAKE_CAPACITY_EXCEEDED` |
-| `500 Internal Server Error` | SSO is disabled or misconfigured, the IdP could not be used, a system failure, or a crash | `SSO_DISABLED`, `CONFIG_ERROR`, `OIDC_DISCOVERY_FAILED`, `JWKS_FETCH_FAILED`, `UBUS_LOGIN_FAILED` and every other code |
+| `500 Internal Server Error` | SSO is disabled or misconfigured, a system failure, or a crash | `SSO_DISABLED`, `CONFIG_ERROR`, `UBUS_LOGIN_FAILED` and every other code |
 
-`TOKEN_EXCHANGE_FAILED` passes on the status the IdP's token endpoint returned, when it is one of the statuses above; any other status is sent as `500`.
+The IdP's own HTTP status is never passed on to the browser. A token endpoint that answers `401` to a wrong client secret still produces `502`: the router's credentials were refused, not the browser's. The IdP's status, or the transport cause, is in the log line before the `[502]` line; see [Log Messages](log-messages.md#how-codes-appear-in-the-log).
 
 For what each code means and how it is logged, see [Log Messages](log-messages.md).
 
