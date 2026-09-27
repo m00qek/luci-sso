@@ -79,6 +79,9 @@ local-up: .up
 local-down: DOCKER_SUITE = local
 local-down: .down
 
+local-ps: DOCKER_SUITE = local
+local-ps: .ps
+
 local-run: DOCKER_SUITE = local
 local-run: .run
 
