@@ -1,12 +1,22 @@
 # RFC Compliance Matrix
 
+This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2 standards. Each table lists the requirements of one part of the protocol, where the standard defines them, and whether `luci-sso` meets them. Security auditors can verify these claims by inspecting the modules listed in the [Audit trail](#audit-trail) section.
+
 All project documents use RFC 2119 key words ("MUST", "SHOULD", "MAY", etc.) as defined in [RFC 2119](https://tools.ietf.org/html/rfc2119).
 
-This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2 standards. Security auditors can verify these claims by inspecting the modules listed in the [Audit trail](#audit-trail) section.
+The **Status** column uses these values:
+
+| Status | Meaning |
+| :--- | :--- |
+| ✅ Implemented / ✅ Accepted | `luci-sso` does what the standard specifies. |
+| ❌ Not implemented / ❌ Not used / ❌ Rejected | `luci-sso` deliberately does not support it. |
+| ⚠️ Intentional deviation / ⚠️ Stricter than required | `luci-sso` departs from the standard on purpose. See [Intentional deviations](#intentional-deviations). |
 
 ---
 
 ## Standards covered
+
+The specifications this matrix refers to. The **Reference** columns below cite their sections.
 
 | Standard | Title |
 | :--- | :--- |
@@ -23,6 +33,8 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 
 ## Authorization Code Flow (OIDC Core §3.1 / RFC 6749 §4.1)
 
+The grant types, the parameters of the authorization and token requests, and the optional flow features.
+
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
 | Authorization Code Grant | RFC 6749 §4.1 | ✅ Implemented | Only supported grant type. |
@@ -34,27 +46,42 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Token request: back-channel exchange | OIDC Core §3.1.3.1 | ✅ Implemented | HTTPS enforced. |
 | Token response: `id_token` required | OIDC Core §3.1.3.3 | ✅ Implemented | Missing `id_token` triggers `MISSING_ID_TOKEN`. |
 | Token error: `invalid_grant` handling | OIDC Core §3.1.3.4 | ✅ Implemented | Logged as `OIDC_INVALID_GRANT`. |
-| Refresh tokens | OIDC Core §12 | ❌ Not implemented | A refresh token the IdP returns is stored in the `rpcd` session but never used. Sessions expire after LuCI's idle timeout (`luci.sauth.sessiontime`, one hour by default); re-authentication is required. By design — see [About the Session Lifecycle](../explanation/session-lifecycle.md). |
+| Refresh tokens | OIDC Core §12 | ❌ Not implemented | Stored but never used. See [notes](#authorization-code-flow-notes). |
 | UserInfo endpoint (fallback) | OIDC Core §5.3 | ✅ Implemented | Fetched when `email` claim is absent from the ID Token. |
-| RP-Initiated Logout | [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) §2 | ✅ Implemented | `/cgi-bin/luci-sso/logout` redirects the browser to `end_session_endpoint`, if advertised over HTTPS, with `id_token_hint` and `post_logout_redirect_uri` (the origin of `redirect_uri`). LuCI's **Log out** entry sends SSO sessions there. |
+| RP-Initiated Logout | [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) §2 | ✅ Implemented | See [notes](#authorization-code-flow-notes). |
+
+### Authorization Code Flow notes
+
+- **Refresh tokens.** A refresh token the IdP returns is stored in the `rpcd` session but never used. Sessions expire after LuCI's idle timeout (`luci.sauth.sessiontime`, one hour by default); re-authentication is required. By design — see [About the Session Lifecycle](../explanation/session-lifecycle.md).
+- **RP-Initiated Logout.** `/cgi-bin/luci-sso/logout` redirects the browser to `end_session_endpoint`, if advertised over HTTPS, with `id_token_hint` and `post_logout_redirect_uri` (the origin of `redirect_uri`). LuCI's **Log out** entry sends SSO sessions there.
 
 ---
 
 ## OIDC Discovery (OIDC Discovery 1.0 §4)
 
+How the router fetches and checks the IdP's discovery document. IdP (identity provider) is the OIDC service that signs users in and issues tokens.
+
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
 | Discovery document fetch from `<issuer>/.well-known/openid-configuration` | Discovery §4 | ✅ Implemented | Cached in `/var/run/luci-sso/` (tmpfs) for 24 hours. |
-| `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must match `issuer_url` after normalization (host case, default port and trailing slashes ignored). A mismatch fails discovery: `DISCOVERY_ISSUER_MISMATCH: …`, naming both issuers, then `[502] OIDC_DISCOVERY_FAILED`. |
+| `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must match `issuer_url` after normalization (host case, default port and trailing slashes ignored). See [notes](#oidc-discovery-notes). |
 | `authorization_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
 | `token_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
 | `jwks_uri` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
-| All endpoints must use HTTPS | Discovery §4.2 | ✅ Implemented | A non-HTTPS `authorization_endpoint`, `token_endpoint` or `jwks_uri` triggers `INSECURE_ENDPOINT`, logged with the field name and its (capped) URL. A non-HTTPS `userinfo_endpoint` or `end_session_endpoint` is dropped with a warning. |
-| `issuer` in discovery must match fetch URL | Discovery §4.3 | ⚠️ Intentional deviation | When `internal_issuer_url` is set (split-horizon), the discovery document is fetched from the internal address but `issuer` is validated against the public `issuer_url`. See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md). |
+| All endpoints must use HTTPS | Discovery §4.2 | ✅ Implemented | See [notes](#oidc-discovery-notes). |
+| `issuer` in discovery must match fetch URL | Discovery §4.3 | ⚠️ Intentional deviation | See [notes](#oidc-discovery-notes). |
+
+### OIDC Discovery notes
+
+- **`issuer` field validation.** A mismatch fails discovery: `DISCOVERY_ISSUER_MISMATCH: …`, naming both issuers, then `[502] OIDC_DISCOVERY_FAILED`.
+- **HTTPS endpoints.** A non-HTTPS `authorization_endpoint`, `token_endpoint` or `jwks_uri` triggers `INSECURE_ENDPOINT`, logged with the field name and its (capped) URL. A non-HTTPS `userinfo_endpoint` or `end_session_endpoint` is dropped with a warning.
+- **`issuer` and the fetch URL.** When `internal_issuer_url` is set (split-horizon), the discovery document is fetched from the internal address but `issuer` is validated against the public `issuer_url`. See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md).
 
 ---
 
 ## ID Token Validation (OIDC Core §3.1.3.7 / RFC 7519)
+
+The claims checked in every ID Token before a session is created. The error code for each failed check is in [Log Messages](log-messages.md#token-validation-errors).
 
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
@@ -71,6 +98,8 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 
 ## PKCE (RFC 7636)
 
+Proof Key for Code Exchange binds the token request to the authorization request that started the login.
+
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
 | Code verifier generation | RFC 7636 §4.1 | ✅ Implemented | 43 bytes from the CSPRNG, Base64URL-encoded to 58 characters. A stored verifier outside 43–128 characters is refused before the token request. |
@@ -83,6 +112,8 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 
 ## Algorithms (RFC 7518 / RFC 7519)
 
+The ID Token signature algorithms and whether they are accepted.
+
 | Algorithm | Status | Notes |
 | :--- | :--- | :--- |
 | RS256 (RSA + SHA-256) | ✅ Accepted | Minimum 2048-bit keys enforced in the native C bridge. |
@@ -94,19 +125,29 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 
 ## Intentional deviations
 
-| Deviation | Rationale |
-| :--- | :--- |
-| **Split-horizon issuer URL** — When `internal_issuer_url` is set, back-channel requests use a different origin than `issuer_url`. OIDC Discovery §4.3 requires the fetch URL to match the issuer identifier. | Self-hosted deployments commonly cannot route the router's back-channel traffic through the IdP's public DNS name. Requiring a match would break most home lab configurations. The `iss` claim is still validated against the public `issuer_url`, preserving the security property that matters. |
-| **Refresh tokens not supported** — OIDC Core §12 defines the Refresh Token flow. | Sessions expire after LuCI's idle timeout and users re-authenticate on expiry, so the router never has to keep using long-lived credentials. The refresh token the IdP returns is stored in the in-memory `rpcd` session with the other tokens, but nothing reads it. |
-| **`at_hash` required** — OIDC Core §3.1.3.6 makes `at_hash` optional in the authorization code flow. | `luci-sso` requires it so the access token it registers against replay is bound to the verified ID Token. IdPs that omit `at_hash` cannot be used. |
-| **Implicit flow not supported** — RFC 6749 §4.2 defines the Implicit Grant. | The Implicit flow places tokens in redirect URLs, which are logged by browsers, proxies, and servers. It is deprecated by the OAuth 2.0 Security Best Current Practice (RFC 9700). |
-| **`plain` PKCE method not used** — RFC 7636 §4.2 defines both `plain` and `S256`. | `plain` sends the verifier as the challenge, providing no protection against an attacker who can observe the authorization request. `S256` is strictly superior when available. |
+Where `luci-sso` departs from a standard on purpose, what it does instead, and why.
+
+| Deviation | Standard | What `luci-sso` does |
+| :--- | :--- | :--- |
+| Split-horizon issuer URL | OIDC Discovery §4.3 requires the fetch URL to match the issuer identifier. | When `internal_issuer_url` is set, back-channel requests use a different origin than `issuer_url`. |
+| Refresh tokens not supported | OIDC Core §12 defines the Refresh Token flow. | Users re-authenticate when the session expires. |
+| `at_hash` required | OIDC Core §3.1.3.6 makes `at_hash` optional in the authorization code flow. | Rejects an ID Token without `at_hash`. IdPs that omit `at_hash` cannot be used. |
+| Implicit flow not supported | RFC 6749 §4.2 defines the Implicit Grant. | Supports only the authorization code flow. |
+| `plain` PKCE method not used | RFC 7636 §4.2 defines both `plain` and `S256`. | Always uses `S256`. |
+
+### Rationale
+
+- **Split-horizon issuer URL.** Self-hosted deployments commonly cannot route the router's back-channel traffic through the IdP's public DNS name. Requiring a match would break most home lab configurations. The `iss` claim is still validated against the public `issuer_url`, preserving the security property that matters.
+- **Refresh tokens not supported.** Sessions expire after LuCI's idle timeout and users re-authenticate on expiry, so the router never has to keep using long-lived credentials. The refresh token the IdP returns is stored in the in-memory `rpcd` session with the other tokens, but nothing reads it.
+- **`at_hash` required.** `luci-sso` requires it so the access token it registers against replay is bound to the verified ID Token.
+- **Implicit flow not supported.** The Implicit flow places tokens in redirect URLs, which are logged by browsers, proxies, and servers. It is deprecated by the OAuth 2.0 Security Best Current Practice (RFC 9700).
+- **`plain` PKCE method not used.** `plain` sends the verifier as the challenge, providing no protection against an attacker who can observe the authorization request. `S256` is strictly superior when available.
 
 ---
 
 ## Audit trail
 
-Verify the claims in this document by inspecting these source files:
+The source files that implement each area above. Verify the claims in this document by inspecting them:
 
 | Area | Source |
 | :--- | :--- |
