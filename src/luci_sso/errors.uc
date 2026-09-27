@@ -72,7 +72,6 @@ export const NONCE_MISMATCH            = "NONCE_MISMATCH";
 export const MISSING_AZP_CLAIM         = "MISSING_AZP_CLAIM";
 export const AZP_MISMATCH              = "AZP_MISMATCH";
 export const MISSING_ACCESS_TOKEN      = "MISSING_ACCESS_TOKEN";
-export const MISSING_AT_HASH           = "MISSING_AT_HASH";
 export const AT_HASH_MISMATCH          = "AT_HASH_MISMATCH";
 
 // ID token verification detail (logged inside ID_TOKEN_VERIFICATION_FAILED)

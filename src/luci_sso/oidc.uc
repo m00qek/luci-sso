@@ -5,7 +5,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import { find_jwk } from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
-import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, MISSING_AZP_CLAIM, AZP_MISMATCH, MISSING_ACCESS_TOKEN, MISSING_AT_HASH, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON, INVALID_JWT_HEADER } from 'luci_sso.errors';
+import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, MISSING_AZP_CLAIM, AZP_MISMATCH, MISSING_ACCESS_TOKEN, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON, INVALID_JWT_HEADER } from 'luci_sso.errors';
 
 /**
  * ID token signature algorithms this module accepts. Fixed in code rather than
@@ -232,27 +232,25 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		return Result.err(AZP_MISMATCH, `Expected ${config.client_id}, got ${payload.azp}`);
 	}
 
-	// 3.3 Access Token Hash Check
+	// 3.3 Access Token Hash Check (OIDC Core 1.0 §3.1.3.8). In the code flow
+	// at_hash is OPTIONAL (§3.1.3.6), and some IdPs never send it: an ID token
+	// without it is accepted. One that has it must match the access token.
 	if (!tokens.access_token) {
 		return Result.err(MISSING_ACCESS_TOKEN);
 	}
-	if (!payload.at_hash) {
-		deps.log("error", "ID Token missing mandatory at_hash claim (Token Binding violation)");
-		return Result.err(MISSING_AT_HASH);
-	}
+	if (payload.at_hash != null) {
+		let hash_res = crypto.hash_sha256(deps.native, tokens.access_token);
+		if (!hash_res.ok) return hash_res;
 
-	let hash_res = crypto.hash_sha256(deps.native, tokens.access_token);
-	if (!hash_res.ok) return hash_res;
-	let full_hash = hash_res.data;
+		let left_half_res = encoding.binary_truncate(hash_res.data, 16);
+		if (!left_half_res.ok) return Result.err(CRYPTO_ERROR);
 
-	let left_half_res = encoding.binary_truncate(full_hash, 16);
-	if (!left_half_res.ok) return Result.err(CRYPTO_ERROR);
+		let expected_hash_res = encoding.b64url_encode(left_half_res.data);
+		if (!expected_hash_res.ok) return Result.err(CRYPTO_ERROR);
 
-	let expected_hash_res = encoding.b64url_encode(left_half_res.data);
-	if (!expected_hash_res.ok) return Result.err(CRYPTO_ERROR);
-
-	if (!crypto.constant_time_eq(expected_hash_res.data, payload.at_hash)) {
-		return Result.err(AT_HASH_MISMATCH);
+		if (!crypto.constant_time_eq(expected_hash_res.data, payload.at_hash)) {
+			return Result.err(AT_HASH_MISMATCH);
+		}
 	}
 
 	let user_data = {

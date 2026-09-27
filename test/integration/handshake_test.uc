@@ -550,6 +550,71 @@ describe('handshake: restricted roles', () => {
 	});
 });
 
+// ─── authenticate: at_hash (OIDC Core §3.1.3.6 / §3.1.3.8) ────────────────────
+
+describe('handshake: authenticate — at_hash', () => {
+	// Runs a full callback whose ID token carries `at_hash` as given (null:
+	// no claim at all). Returns the result and whether a session was created.
+	function login(at_hash_of) {
+		let out = { result: null, created: false };
+		with_context({
+			fs:   { data: {} },
+			uci:  { data: rpcd_logins({ admin: { read: [ "*" ], write: [ "*" ] } }) },
+			ubus: { data: {
+				"session:create": () => { out.created = true; return { ubus_rpc_session: "s-at-hash" }; },
+				"session:grant":  UBUS_NO_DATA,
+				"session:set":    UBUS_NO_DATA,
+			} },
+			http_client: {
+				data: {
+					[DISCOVERY_URL]:             { status: 200, body: f.MOCK_DISCOVERY },
+					[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+				},
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-binding";
+						let payload = { ...f.MOCK_CLAIMS, email: "admin@example.com", nonce: "test-nonce" };
+						let at_hash = at_hash_of(access_token);
+						if (at_hash != null) payload.at_hash = at_hash;
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token: h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256") }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let hs = session.create_state(deps, 0).data;
+			let path = "/var/run/luci-sso/handshake_" + hs.token + ".json";
+			let raw = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw));
+			let config = base_config({ roles: [ { name: "admin", emails: [ "admin@example.com" ], groups: [] } ] });
+			out.result = handshake.authenticate(deps, config,
+				{ query: { code: "c", state: raw.state }, cookies: { "__Host-luci_sso_state": hs.token } });
+		});
+		return out;
+	}
+
+	let hash_of = (token) => encoding.b64url_encode(substr(crypto.hash_sha256(native, token).data, 0, 16)).data;
+
+	it('an ID token without at_hash logs the user in', () => {
+		let r = login((at) => null);
+		assert.match(contains({ ok: true }), r.result, `${r.result.error} ${r.result.details?.details}`);
+		assert.match(true, r.created);
+	});
+
+	it('an ID token whose at_hash matches the access token logs the user in', () => {
+		let r = login((at) => hash_of(at));
+		assert.match(contains({ ok: true }), r.result, `${r.result.error} ${r.result.details?.details}`);
+		assert.match(true, r.created);
+	});
+
+	it('an ID token whose at_hash does not match is refused with AT_HASH_MISMATCH, and no session is created', () => {
+		let r = login((at) => hash_of("a-substituted-access-token"));
+		assert.match(contains({ ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", details: contains({ details: "AT_HASH_MISMATCH", http_status: 401 }) }), r.result);
+		assert.match(false, r.created);
+	});
+});
+
 // ─── authenticate: role selection and the role's rpcd login entry ─────────────
 
 describe('handshake: role selection', () => {

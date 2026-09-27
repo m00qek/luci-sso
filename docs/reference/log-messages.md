@@ -232,7 +232,6 @@ These occur while validating the ID Token returned by the IdP. Only `ID_TOKEN_VE
 | `MISSING_AZP_CLAIM` | The ID Token has several `aud` values but no `azp` | OIDC Core requires `azp` in that case. An IdP configuration issue. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `AZP_MISMATCH` | `azp` does not equal the configured `client_id` | The token was issued for a different client. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_ACCESS_TOKEN` | The token response has no `access_token` | `luci-sso` needs the access token to check `at_hash`. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
-| `MISSING_AT_HASH` | The ID Token has no `at_hash` claim | `luci-sso` requires `at_hash`, although OIDC Core makes it optional in the code flow. The IdP must include it. | Detail of `ID_TOKEN_VERIFICATION_FAILED`, preceded by `ID Token missing mandatory at_hash claim (Token Binding violation)` |
 | `AT_HASH_MISMATCH` | `at_hash` does not match the access token | The access token was substituted. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 
 Notes:

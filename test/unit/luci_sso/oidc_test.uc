@@ -442,7 +442,7 @@ describe('oidc: verify_id_token — claims', () => {
 			assert.match("AT_HASH_MISMATCH", !res3.ok && res3.error);
 
 			let res4 = oidc.verify_id_token(deps, { id_token: h.generate_id_token(p2, PRIVKEY, "RS256"), access_token }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, time);
-			assert.match("MISSING_AT_HASH", !res4.ok && res4.error);
+			assert.match(truthy(), res4.ok, "Should accept an ID token without at_hash (optional in the code flow)");
 
 			let res5 = oidc.verify_id_token(deps, { id_token: h.generate_id_token(p1, PRIVKEY, "RS256") }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, time);
 			assert.match("MISSING_ACCESS_TOKEN", !res5.ok && res5.error);
@@ -544,27 +544,56 @@ describe('oidc: verify_id_token — claims', () => {
 		});
 	});
 
-	it('reject missing mandatory at_hash claim and log the violation (W2)', () => {
+	it('accepts an ID token without at_hash: OPTIONAL in the code flow (OIDC Core §3.1.3.6)', () => {
 		let keys = JWKS.keys;
-		let payload = { ...f.MOCK_CLAIMS, at_hash: null, nonce: "n1", sub: "u1" };
+		let payload = { ...f.MOCK_CLAIMS, nonce: "n1", sub: "u1" };
 		let tokens = { id_token: h.generate_id_token(payload, PRIVKEY, "RS256"), access_token: "at123" };
 		let log_calls = [];
 
 		with_context({}, (deps) => {
 			deps.log = (level, msg) => push(log_calls, [level, msg]);
 			let res = oidc.verify_id_token(deps, tokens, keys, f.MOCK_CONFIG, { nonce: "n1" }, f.MOCK_DISCOVERY, 1500);
-			assert.match(truthy(), Result.is(res));
-			assert.match(falsy(), res.ok, "Should reject ID token missing 'at_hash' claim");
-			assert.match("MISSING_AT_HASH", res.error);
+			assert.match(contains({ ok: true, data: contains({ sub: "u1" }) }), res);
 		});
+		assert.match([], filter(log_calls, (e) => e[0] == "error" || e[0] == "warn"), "nothing to warn about");
+	});
 
-		let found = false;
-		for (let e in log_calls) {
-			if (e[0] == "error" && match(e[1], /ID Token missing mandatory at_hash claim/)) {
-				found = true; break;
+	it('still checks everything else when at_hash is absent', () => {
+		let keys = JWKS.keys;
+		let token = (claims) => h.generate_id_token({ ...f.MOCK_CLAIMS, ...claims }, PRIVKEY, "RS256");
+
+		with_context({}, (deps) => {
+			let verify = (id_token, handshake, access_token) =>
+				oidc.verify_id_token(deps, { id_token, access_token: access_token ?? "at123" }, keys, f.MOCK_CONFIG, handshake, f.MOCK_DISCOVERY, 1500);
+			assert.match("NONCE_MISMATCH", verify(token({ nonce: "other" }), { nonce: "n" }).error);
+			assert.match("MISSING_NONCE", verify(token({ nonce: null }), { nonce: "n" }).error);
+			assert.match("AZP_MISMATCH", verify(token({ azp: "evil" }), { nonce: "n" }).error);
+			assert.match("ISSUER_MISMATCH", verify(token({ iss: "https://evil.idp" }), { nonce: "n" }).error);
+			assert.match("AUDIENCE_MISMATCH", verify(token({ aud: "other-client" }), { nonce: "n" }).error);
+			assert.match("MISSING_ACCESS_TOKEN", oidc.verify_id_token(deps, { id_token: token({}) }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1500).error);
+			let tampered = split(token({}), ".");
+			tampered[1] = encoding.b64url_encode(sprintf("%J", { ...f.MOCK_CLAIMS, sub: "someone-else" })).data;
+			assert.match("INVALID_SIGNATURE", verify(join(".", tampered), { nonce: "n" }).error);
+		});
+	});
+
+	it('returns AT_HASH_MISMATCH for any present at_hash that does not match the access token', () => {
+		let keys = JWKS.keys;
+		let at = "at123";
+		let right = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		let other = encoding.b64url_encode(substr(crypto.hash_sha256(native, "another-token").data, 0, 16)).data;
+		let flipped = ((substr(right, 0, 1) == "A") ? "B" : "A") + substr(right, 1);
+		let full = encoding.b64url_encode(crypto.hash_sha256(native, at).data).data;
+
+		with_context({}, (deps) => {
+			for (let bad in [ other, flipped, full, substr(right, 0, 21), "", 0, false, [ right ], { v: right } ]) {
+				let tokens = { id_token: h.generate_id_token({ ...f.MOCK_CLAIMS, at_hash: bad }, PRIVKEY, "RS256"), access_token: at };
+				let res = oidc.verify_id_token(deps, tokens, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1500);
+				assert.match(contains({ ok: false, error: "AT_HASH_MISMATCH" }), res, sprintf("at_hash %J", bad));
 			}
-		}
-		assert.match(truthy(), found, "Should log security violation");
+			let tokens = { id_token: h.generate_id_token({ ...f.MOCK_CLAIMS, at_hash: right }, PRIVKEY, "RS256"), access_token: at };
+			assert.match(truthy(), oidc.verify_id_token(deps, tokens, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1500).ok, "the right one passes");
+		});
 	});
 
 	it('preserves the groups claim in user_data', () => {

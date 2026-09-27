@@ -36,5 +36,41 @@ test.describe('Authentication', () => {
         expect(sessionCookie).toBeDefined();
       });
     });
+
+    // OIDC Core 3.1.3.6 makes at_hash OPTIONAL in the code flow, and some IdPs
+    // (Authentik) never send it. The mock IdP leaves it out when the
+    // authorization request carries its test-only omit_at_hash=1. The test
+    // adds it to the redirect luci-sso answers the login button with (a
+    // redirect's target is not routed, so the redirect itself is rewritten).
+    test('User logs in when the ID token has no at_hash', async ({ page }) => {
+      let rewritten = false;
+      await page.route(/\/cgi-bin\/luci-sso$/, async (route) => {
+        const response = await route.fetch({ maxRedirects: 0 });
+        const headers = response.headers();
+        const target = new URL(headers['location']);
+        if (target.host === process.env.FQDN_IDP) {
+          target.searchParams.set('omit_at_hash', '1');
+          headers['location'] = target.toString();
+          rewritten = true;
+        }
+        await route.fulfill({ response, headers });
+      });
+
+      await test.step('Given the IdP issues ID tokens without at_hash', async () => {
+        await page.goto('/');
+        await expect(page.locator('#luci-sso-login-btn')).toBeVisible();
+      });
+
+      await test.step('When the user logs in through SSO', async () => {
+        await page.locator('#luci-sso-login-btn').click();
+      });
+
+      await test.step('Then they see the authenticated dashboard', async () => {
+        await expect(page.locator('a[href*="/logout"]')).toBeVisible();
+        expect(rewritten).toBe(true);
+        const cookies = await page.context().cookies();
+        expect(cookies.find(c => c.name.startsWith('sysauth'))).toBeDefined();
+      });
+    });
   });
 });
