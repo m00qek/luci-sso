@@ -57,7 +57,11 @@ Once the ID Token has been verified, the SHA256 hash of the access token is regi
 
 The token exchange is a back-channel request from the router to the IdP's token endpoint. An attacker with man-in-the-middle capability on that back-channel could, in theory, let the ID Token through unchanged while substituting a different access token.
 
-The `at_hash` claim prevents this. The ID Token contains a binding to the access token: it includes the base64url-encoded first half of the SHA256 of the access token. The router recomputes this value from the actual access token it received and compares it using constant-time equality. If the access token has been substituted, the `at_hash` check fails and the login is rejected.
+Two things stand in the way. First, the back channel is HTTPS, and the router checks the IdP's certificate, so an attacker needs the IdP's certificate or a CA the router trusts before they can change the response at all.
+
+Second, the `at_hash` claim binds the two tokens. When the IdP puts it in the ID Token, it holds the base64url-encoded first half of the SHA-256 of the access token. The router recomputes this value from the access token it received and compares the two with constant-time equality. If the access token has been substituted, the check fails and the login is rejected.
+
+OIDC Core makes `at_hash` optional in the authorization code flow, and some IdPs, such as Authentik, never send it. For those IdPs the binding is missing, and the router accepts the ID Token without it. The gap is small. The ID Token and the access token arrive together, in one response to a request the router made itself, over the same verified TLS connection. The router never uses the access token to decide who the user is. It registers the token against replay, stores it in the session, and sends it with the one UserInfo request that fills in a missing email. That request is bound too: the `sub` UserInfo returns must equal the ID Token's `sub`, or the login fails with `IDENTITY_MISMATCH`. So a substituted access token cannot change who the router thinks the user is.
 
 ---
 

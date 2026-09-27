@@ -53,7 +53,7 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | `sub` | Present | `MISSING_SUB_CLAIM` |
 | `nonce` | Present and equal to the nonce sent in the authorization request | `MISSING_NONCE`, `NONCE_MISMATCH` |
 | `azp` | Required when `aud` has more than one value. When present, equals `client_id`. | `MISSING_AZP_CLAIM`, `AZP_MISMATCH` |
-| `at_hash` | Present and equal to the Base64URL-encoded left half of the access token's SHA-256. OIDC Core makes it optional in the code flow; `luci-sso` requires it. | `MISSING_AT_HASH`, `AT_HASH_MISMATCH` |
+| `at_hash` | Optional. When present, equal to the Base64URL-encoded left half of the access token's SHA-256. | `AT_HASH_MISMATCH` |
 
 ### Identity for role mapping
 
@@ -76,11 +76,11 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | Provider | Status | Guide | Notes |
 | :--- | :--- | :--- | :--- |
 | Google | Supported | [How to Configure Google](../how-to/providers/google.md) | Google accepts only a redirect URI whose host is a public domain name. Its discovery document has no `end_session_endpoint`, so **Log out** does not end the Google session. |
-| Authelia | Supported | [How to Configure Authelia](../how-to/providers/authelia.md) | The client sets `userinfo_signed_response_alg: none`, so UserInfo returns plain JSON, and `token_endpoint_auth_method: client_secret_post`. |
+| Authelia | Supported | [How to Configure Authelia](../how-to/providers/authelia.md) | The client sets `token_endpoint_auth_method: client_secret_post` (Authelia defaults to `client_secret_basic`). By default `email` and `groups` come only from UserInfo, which must be plain JSON (`userinfo_signed_response_alg: none`, the default); a `claims_policy` can put them in the ID Token. There is no `end_session_endpoint`, so **Log out** does not end the Authelia session. |
 | Keycloak | Supported | [How to Configure Keycloak](../how-to/providers/keycloak.md) | **Client authentication** must be on, which makes the client confidential. |
-| Authentik | Supported | [How to Configure Authentik](../how-to/providers/authentik.md) | A **Signing Key** must be selected. Without one, Authentik signs ID Tokens with `HS256` and the client secret ([Authentik docs](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)), which fails with `UNSUPPORTED_ALGORITHM`. |
-| Pocket ID | Supported | [How to Configure Pocket ID](../how-to/providers/pocket-id.md) | Group names carry the `@PocketID` suffix. |
-| Other OIDC providers | Depends on the provider | [How to Configure a Generic OIDC Provider](../how-to/providers/generic-oidc.md) | Must meet every requirement above. Check a decoded ID Token for `at_hash`. |
+| Authentik | Supported | [How to Configure Authentik](../how-to/providers/authentik.md) | A **Signing Key** must be selected; new providers have one preselected. Without one, Authentik signs ID Tokens with `HS256` and the client secret ([Authentik docs](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)), which fails with `UNSUPPORTED_ALGORITHM`. Its ID Tokens have no `at_hash` in the authorization code flow, which `luci-sso` accepts. |
+| Pocket ID | Supported | [How to Configure Pocket ID](../how-to/providers/pocket-id.md) | A new client allows no user until **Allowed User Groups** is set or unrestricted. Pocket ID creates no client secret until one is added on the **Credentials** tab. The `groups` claim holds each group's name as it is. |
+| Other OIDC providers | Depends on the provider | [How to Configure a Generic OIDC Provider](../how-to/providers/generic-oidc.md) | Must meet every requirement above. |
 | GitHub | **Not supported** | None | See [GitHub](#github). |
 
 ### GitHub
@@ -92,4 +92,4 @@ GitHub OAuth Apps and GitHub Apps do not issue ID Tokens. The token response Git
 | `https://github.com` | The discovery request returns 404: `[502] OIDC_DISCOVERY_FAILED`. |
 | `https://github.com/login/oauth` | A discovery document is served. Its `claims_supported` lists neither `email` nor `groups`, and it has no `userinfo_endpoint`. The token response still has no `id_token`. |
 
-**Alternative:** [Dex](https://dexidp.io/docs/connectors/github/) signs users in through GitHub and issues its own OIDC tokens. When the `groups` scope is requested, Dex returns GitHub teams as `groups` values of the form `org:team`. Connect `luci-sso` to Dex with [How to Configure a Generic OIDC Provider](../how-to/providers/generic-oidc.md), and check that Dex's ID Tokens include `at_hash`.
+**Alternative:** [Dex](https://dexidp.io/docs/connectors/github/) signs users in through GitHub and issues its own OIDC tokens. When the `groups` scope is requested, Dex returns GitHub teams as `groups` values of the form `org:team`. Connect `luci-sso` to Dex with [How to Configure a Generic OIDC Provider](../how-to/providers/generic-oidc.md).

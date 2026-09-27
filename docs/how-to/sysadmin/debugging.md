@@ -109,7 +109,7 @@ luci-sso[1234]: User [sub_id: c775e7b757ede630] matched no roles [session_id: 8e
 
 The same line covers two cases:
 
-- The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching is case-insensitive; group matching is case-sensitive. For Pocket ID, the `@PocketID` suffix is required.
+- The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching is case-insensitive; group matching is case-sensitive.
 - A role matches, but no matching role has any `read` or `write` entry. Add at least one permission to the role.
 
 Claim values are never logged. To see which claims the IdP sent, look for the debug line logged during the callback:

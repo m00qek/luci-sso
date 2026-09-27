@@ -42,7 +42,7 @@ Each `config role` section grants LuCI rights to the users it matches. A user is
 | Option | Type | Description |
 | :--- | :--- | :--- |
 | `email` | list (string) | Match by OIDC `email` claim. Case-insensitive. |
-| `group` | list (string) | Match by a value of the OIDC `groups` claim, which must be a JSON array. Case-sensitive. For Pocket ID, include the `@PocketID` suffix. |
+| `group` | list (string) | Match by a value of the OIDC `groups` claim, which must be a JSON array. Case-sensitive. |
 | `read` | list (string) | Access groups granted read access. `*` means read on every `luci-*` group, and nothing more. |
 | `write` | list (string) | Access groups granted write access; write implies read. `*` makes the role a full admin (see [notes](#role-mapping-notes)). |
 

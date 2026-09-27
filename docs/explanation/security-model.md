@@ -8,7 +8,9 @@
 
 The starting assumption is that everything outside the router is potentially hostile: the IdP could be compromised, the network could be intercepted, the browser environment could be manipulated. This is not a theoretical concern — OIDC has a well-documented history of implementation vulnerabilities that come from trusting too much.
 
-Consequently, `luci-sso` implements the full set of protections defined by OIDC Core 1.0 and the associated RFCs, with no optional requirements treated as optional. PKCE is mandatory. Nonce validation is mandatory. `at_hash` binding is mandatory. The `iss`, `aud`, `exp`, and `iat` claims are always verified. This isn't excessive — each of these protections addresses a specific, documented attack. See the [Threat Model](threat-model.md) for the attack-by-attack breakdown.
+Consequently, `luci-sso` turns on every protection OIDC Core 1.0 and the associated RFCs offer to a client like it. PKCE is mandatory. Nonce validation is mandatory. The `iss`, `aud`, `exp`, and `iat` claims are always verified. `at_hash` is verified whenever the IdP sends it. This isn't excessive: each of these protections addresses a specific, documented attack. See the [Threat Model](threat-model.md) for the attack-by-attack breakdown.
+
+The one place where the standard leaves the choice to the IdP is `at_hash`. In the authorization code flow, OIDC Core makes it optional, and some IdPs never send it. `luci-sso` accepts an ID Token without it, and refuses one whose `at_hash` does not match the access token. Refusing IdPs that follow the standard would lock their users out without closing a real gap, for the reasons given in [Access token substitution](threat-model.md#access-token-substitution).
 
 ---
 

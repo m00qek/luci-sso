@@ -186,7 +186,7 @@ POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the 
 
 ### `verify_id_token(deps, tokens, keys, config, handshake, discovery, now)` → `Result<{sub, email, name, groups}>`
 
-Validates `tokens.id_token`: algorithm (`RS256` or `ES256` only, fixed in code), key lookup by `kid`, signature, `iss`, `aud`, `exp`, `nbf`, `iat` (through `crypto.jwt_verify`), then `sub`, `exp` and `iat` presence, `nonce`, `azp` and `at_hash`.
+Validates `tokens.id_token`: algorithm (`RS256` or `ES256` only, fixed in code), key lookup by `kid`, signature, `iss`, `aud`, `exp`, `nbf`, `iat` (through `crypto.jwt_verify`), then `sub`, `exp` and `iat` presence, `nonce`, `azp`, the access token's presence, and `at_hash` when the token has one (an ID Token without it is accepted).
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |

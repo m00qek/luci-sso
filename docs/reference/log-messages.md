@@ -231,8 +231,8 @@ These occur while validating the ID Token returned by the IdP. Only `ID_TOKEN_VE
 | `NONCE_MISMATCH` | The `nonce` claim does not match the handshake | The token was not issued for this login. Possible replay or token substitution. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_AZP_CLAIM` | The ID Token has several `aud` values but no `azp` | OIDC Core requires `azp` in that case. An IdP configuration issue. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `AZP_MISMATCH` | `azp` does not equal the configured `client_id` | The token was issued for a different client. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
-| `MISSING_ACCESS_TOKEN` | The token response has no `access_token` | `luci-sso` needs the access token to check `at_hash`. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
-| `AT_HASH_MISMATCH` | `at_hash` does not match the access token | The access token was substituted. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
+| `MISSING_ACCESS_TOKEN` | The token response has no `access_token` | `luci-sso` needs the access token to check `at_hash` when present and to register the login against replay. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
+| `AT_HASH_MISMATCH` | The ID Token has an `at_hash` that does not match the access token, or is empty or not a string | The access token was substituted, or the IdP computed `at_hash` wrongly. An ID Token without `at_hash` is accepted. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 
 Notes:
 
@@ -304,7 +304,7 @@ The token's `exp`, `nbf` or `iat` is malformed, or out of range once `clock_tole
 
 ### Issuer, audience and access token
 
-The token was issued by or for someone else, or the access token needed for `at_hash` is unusable.
+The token was issued by or for someone else, or the access token needed to check `at_hash` is unusable.
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
@@ -312,7 +312,7 @@ The token was issued by or for someone else, or the access token needed for `at_
 | `INVALID_AUDIENCE` | `aud` is an empty array | The IdP issued a non-compliant token. |
 | `MALFORMED_AUDIENCE` | An element of the `aud` array is not a string | The IdP issued a non-compliant token. |
 | `AUDIENCE_MISMATCH` | No `aud` value equals the configured `client_id` | The token was issued for a different client. Check `client_id`. |
-| `INVALID_ARGUMENT` | The access token in the token response is not a string, so `at_hash` cannot be computed | The IdP returned a malformed token response. |
+| `INVALID_ARGUMENT` | The ID Token has `at_hash`, and the access token in the token response is not a string, so the hash cannot be computed | The IdP returned a malformed token response. |
 
 ---
 

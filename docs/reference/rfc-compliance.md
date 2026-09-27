@@ -92,7 +92,7 @@ The claims checked in every ID Token before a session is created. The error code
 | `iat` claim validation | OIDC Core §3.1.3.7 (10) | ✅ Implemented | Required. Rejected only if it is in the future by more than `clock_tolerance`; there is no maximum age. |
 | `sub` claim required | OIDC Core §2 | ✅ Implemented | Missing `sub` triggers `MISSING_SUB_CLAIM`. |
 | `nonce` claim validation | OIDC Core §3.1.3.7 (11) | ✅ Implemented | Constant-time comparison against stored nonce. |
-| `at_hash` validation | OIDC Core §3.1.3.8 | ⚠️ Stricter than required | Always checked, and a missing `at_hash` is rejected (`MISSING_AT_HASH`), although §3.1.3.6 makes it optional in the code flow. See [Intentional deviations](#intentional-deviations). |
+| `at_hash` validation | OIDC Core §3.1.3.6, §3.1.3.8 | ✅ Implemented | Optional in the code flow (§3.1.3.6): an ID Token without `at_hash` is accepted. When present, it must equal the Base64URL-encoded left half of the access token's SHA-256, compared in constant time (`AT_HASH_MISMATCH`). |
 
 ---
 
@@ -131,7 +131,6 @@ Where `luci-sso` departs from a standard on purpose, what it does instead, and w
 | :--- | :--- | :--- |
 | Split-horizon issuer URL | OIDC Discovery §4.3 requires the fetch URL to match the issuer identifier. | When `internal_issuer_url` is set, back-channel requests use a different origin than `issuer_url`. |
 | Refresh tokens not supported | OIDC Core §12 defines the Refresh Token flow. | Users re-authenticate when the session expires. |
-| `at_hash` required | OIDC Core §3.1.3.6 makes `at_hash` optional in the authorization code flow. | Rejects an ID Token without `at_hash`. IdPs that omit `at_hash` cannot be used. |
 | Implicit flow not supported | RFC 6749 §4.2 defines the Implicit Grant. | Supports only the authorization code flow. |
 | `plain` PKCE method not used | RFC 7636 §4.2 defines both `plain` and `S256`. | Always uses `S256`. |
 
@@ -139,7 +138,6 @@ Where `luci-sso` departs from a standard on purpose, what it does instead, and w
 
 - **Split-horizon issuer URL.** Self-hosted deployments commonly cannot route the router's back-channel traffic through the IdP's public DNS name. Requiring a match would break most home lab configurations. The `iss` claim is still validated against the public `issuer_url`, preserving the security property that matters.
 - **Refresh tokens not supported.** Sessions expire after LuCI's idle timeout and users re-authenticate on expiry, so the router never has to keep using long-lived credentials. The refresh token the IdP returns is stored in the in-memory `rpcd` session with the other tokens, but nothing reads it.
-- **`at_hash` required.** `luci-sso` requires it so the access token it registers against replay is bound to the verified ID Token.
 - **Implicit flow not supported.** The Implicit flow places tokens in redirect URLs, which are logged by browsers, proxies, and servers. It is deprecated by the OAuth 2.0 Security Best Current Practice (RFC 9700).
 - **`plain` PKCE method not used.** `plain` sends the verifier as the challenge, providing no protection against an attacker who can observe the authorization request. `S256` is strictly superior when available.
 

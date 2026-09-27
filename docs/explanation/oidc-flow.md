@@ -35,7 +35,7 @@ sequenceDiagram
     R->>I: POST /token (code + PKCE verifier) — back-channel
     I-->>R: {id_token, access_token}
     R->>I: GET jwks_uri (cached 24 h) — back-channel
-    R->>R: Validate id_token: algorithm, signature, iss, aud, exp, nonce, at_hash
+    R->>R: Validate id_token: algorithm, signature, iss, aud, exp, nonce, at_hash (if present)
     opt Email claim missing from ID token
         R->>I: GET /userinfo — back-channel
         I-->>R: {email, groups, …}
@@ -95,9 +95,11 @@ This means each authorization code can only be processed once, even under concur
 
 ### at_hash binds the access token to the ID token
 
-The ID Token contains an `at_hash` claim: the base64url-encoded first 16 bytes of SHA256 of the access token. The router recomputes this and compares it using constant-time equality.
+The ID Token can carry an `at_hash` claim: the base64url-encoded first 16 bytes of the SHA-256 of the access token. When it is there, the router recomputes it and compares the two using constant-time equality.
 
-If an attacker substitutes a different access token in the token response — while somehow preserving a valid ID token — the `at_hash` check fails. The identity from the ID token cannot be decoupled from the access token actually received.
+If an attacker substitutes a different access token in the token response, while somehow preserving a valid ID token, the `at_hash` check fails. The identity from the ID token cannot be decoupled from the access token actually received.
+
+In the authorization code flow, OIDC Core makes `at_hash` optional, and some IdPs never send it. The router then accepts the ID Token without the check. [About the Threat Model](threat-model.md#access-token-substitution) explains why that leaves no practical gap.
 
 ### Token registry prevents access token replay
 
