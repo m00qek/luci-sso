@@ -26,6 +26,8 @@ const SHAPES = [
 	{ name: "mixed: read '*', write one",  read: [ "*" ],                                            write: [ "luci-mod-network-config" ] },
 	{ name: 'globs and negation',          read: [ "luci-mod-status-*", "!luci-mod-status-logs" ],   write: [] },
 	{ name: "full admin: read '*', write '*'", read: [ "*" ],                                        write: [ "*" ] },
+	{ name: 'a read negation beats the write list', read: [ "!luci-base" ],                           write: [ "luci-base" ] },
+	{ name: 'single options instead of lists (rpcd ignores them)', read: "*", write: "luci-base", grants_nothing: true },
 ];
 
 function minus(a, b) { return sort(filter(keys(a), (k) => !b[k])); }
@@ -71,7 +73,10 @@ describe('system: SSO sessions match rpcd password logins with the same lists', 
 		with_both_sessions(shape, (conn, rpcd, sso, sso_sid) => {
 			let only_rpcd = minus(rpcd, sso), only_sso = minus(sso, rpcd);
 			print(sprintf("\n    [parity] %s: %d rpcd entries, %d SSO entries\n", shape.name, length(keys(rpcd)), length(keys(sso))));
-			assert.match(true, length(keys(rpcd)) > 0, "the rpcd login received grants");
+			if (shape.grants_nothing)
+				assert.match(0, length(keys(rpcd)), "the rpcd login received no grants");
+			else
+				assert.match(true, length(keys(rpcd)) > 0, "the rpcd login received grants");
 			assert.match([], only_rpcd, `${shape.name}: granted by rpcd but not by luci-sso: ${join(", ", only_rpcd)}`);
 			assert.match([], only_sso,  `${shape.name}: granted by luci-sso but not by rpcd: ${join(", ", only_sso)}`);
 

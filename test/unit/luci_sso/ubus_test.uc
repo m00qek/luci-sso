@@ -321,10 +321,10 @@ describe('ubus: create_passwordless_session — the role\'s rpcd login entry', (
 		assert.match('sso:guest', set[2].values.username);
 	});
 
-	it('reads single-value options as one-entry lists and missing ones as empty', () => {
-		let a = attempt('guest', { luci_sso_guest: { '.type': 'login', username: 'sso:guest', read: 'luci-base' } });
+	it('ignores single-value options, as rpcd reads only list options', () => {
+		let a = attempt('guest', { luci_sso_guest: { '.type': 'login', username: 'sso:guest', read: 'luci-base', write: '*' } });
 		assert.match(contains({ ok: true }), a.res);
-		assert.match(true, length(filter(a.calls, (c) => c[1] === 'grant')) > 0);
+		assert.match(0, length(filter(a.calls, (c) => c[1] === 'grant')), 'nothing is granted');
 	});
 
 	it('returns UBUS_SESSION_FAILED, and creates no session, when the ACL scan fails', () => {
@@ -482,6 +482,12 @@ describe('ubus: create_passwordless_session — access-group expansion (rpcd rul
 		// part of the pattern, so it matches nothing and denies nothing.
 		assert.match(sort([ ...BASE_READ, ...OTHER_READ ]), grants_for({ read: ['*', '!  luci-mod-*'], write: [] }));
 		assert.match(sort([ ...BASE_READ, ...SYS_READ, ...OTHER_READ ]), grants_for({ read: ['*', '!luci-mod-* '], write: [] }));
+	});
+
+	it('a negation in the read list denies read, even when the write list grants the group', () => {
+		assert.match(sort(SYS_WRITE), grants_for({ read: ['!luci-mod-system-config'], write: ['luci-mod-system-config'] }));
+		assert.match(sort(BASE_WRITE), grants_for({ read: ['!luci-base'], write: ['luci-base'] }));
+		assert.match(sort([ ...BASE_READ, ...BASE_WRITE ]), grants_for({ read: [], write: ['luci-base'] }), 'without it, write implies read');
 	});
 
 	it('a non-luci group is matched by name and by wildcard alike', () => {

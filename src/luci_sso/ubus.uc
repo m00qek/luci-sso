@@ -3,6 +3,7 @@
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
+import * as rpcd_login from 'luci_sso.rpcd_login';
 import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED, INVALID_TOKEN, SYSTEM_ERROR, TOKEN_REPLAYED, MISSING_RPCD_LOGIN, INSECURE_RPCD_LOGIN } from 'luci_sso.errors';
 
 /**
@@ -53,56 +54,6 @@ function _load_acl_entries(deps) {
 	return Result.ok({ entries, groups: sort(keys(groups)) });
 }
 
-// fnmatch(3) without flags, as rpcd matches role lists against group names:
-// `*` and `?` are wildcards and `[...]` is a character class ([!...] negates).
-function _glob_regexp(pattern) {
-	let out = "^";
-	for (let i = 0; i < length(pattern); i++) {
-		let ch = substr(pattern, i, 1);
-		if (ch == "*") out += ".*";
-		else if (ch == "?") out += ".";
-		else if (ch == "[") {
-			let j = index(substr(pattern, i + 1), "]");
-			if (j < 1) { out += "\\["; continue; }
-			let body = substr(pattern, i + 1, j);
-			if (substr(body, 0, 1) == "!") body = "^" + substr(body, 1);
-			out += "[" + replace(body, /\\/g, "\\\\") + "]";
-			i += j + 1;
-		}
-		else out += (index("\\.^$|+(){}]", ch) >= 0) ? "\\" + ch : ch;
-	}
-	return regexp(out + "$");
-}
-
-// A login list entry matches a group exactly as in rpcd: fnmatch(3), so `*`
-// matches every group, LuCI's or not.
-function _entry_matches(pattern, group) {
-	return match(group, _glob_regexp(pattern)) != null;
-}
-
-// rpc_login_test_permission: negations ("!pattern") are checked first and
-// deny; then any positive entry allows.
-function _list_permits(list, group) {
-	if (type(list) != "array") return false;
-	for (let p in list) {
-		if (type(p) != "string" || substr(p, 0, 1) != "!") continue;
-		// rpcd skips whitespace after '!' only, not trailing whitespace.
-		let neg = ltrim(substr(p, 1));
-		if (length(neg) && _entry_matches(neg, group)) return false;
-	}
-	for (let p in list) {
-		if (type(p) != "string" || !length(p) || substr(p, 0, 1) == "!") continue;
-		if (_entry_matches(p, group)) return true;
-	}
-	return false;
-}
-
-// Write implies read, exactly as in rpcd.
-function _role_permits(perms, perm, group) {
-	if (_list_permits(perms[perm], group)) return true;
-	return (perm == "read") ? _list_permits(perms.write, group) : false;
-}
-
 /**
  * Expands a login entry's `read`/`write` lists into the grants rpcd gives a
  * password login with that entry (rpc_login_setup_acl_file).
@@ -126,7 +77,7 @@ function _expand_role(entries, perms) {
 	};
 
 	for (let e in entries) {
-		if (!_role_permits(perms, e.perm, e.group)) continue;
+		if (!rpcd_login.permits(perms, e.perm, e.group)) continue;
 		for (let scope, spec in e.section) {
 			if (type(spec) == "object") {
 				for (let obj, fns in spec) {
@@ -160,17 +111,9 @@ function _grant_all(deps, sid, grants) {
 	}
 }
 
-/**
- * rpcd login entries that hold the permissions of luci-sso's roles: section
- * `luci_sso_<role>`, username `sso:<role>`, written by the `luci-sso` ubus
- * object (files/usr/share/rpcd/ucode/luci-sso.uc) and never with a password.
- */
-const LOGIN_SECTION_PREFIX = "luci_sso_";
-const LOGIN_USERNAME_PREFIX = "sso:";
-
+// rpcd reads only list options: a single `option read` grants nothing.
 function _as_list(v) {
-	if (type(v) == "array") return v;
-	return (v != null) ? [ v ] : [];
+	return (type(v) == "array") ? v : [];
 }
 
 /**
@@ -185,9 +128,9 @@ function _as_list(v) {
  * @private
  */
 function _load_login(deps, role) {
-	let section = LOGIN_SECTION_PREFIX + role;
-	let username = LOGIN_USERNAME_PREFIX + role;
-	let s = deps.uci.get_all("rpcd", section);
+	let section = rpcd_login.section_name(role);
+	let username = rpcd_login.username(role);
+	let s = deps.uci.get_all(rpcd_login.CONFIG, section);
 
 	if (type(s) != "object" || s[".type"] != "login" || s.username !== username) {
 		deps.log("error", `${MISSING_RPCD_LOGIN}: role '${role}' has no rpcd login entry '${section}' with username '${username}'`);
@@ -316,7 +259,7 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 	let res_set = deps.ubus.call("session", "set", {
 		ubus_rpc_session: sid,
 		values: {
-			username: LOGIN_USERNAME_PREFIX + role,
+			username: rpcd_login.username(role),
 			oidc_user: oidc_email,
 			oidc_access_token: access_token,
 			oidc_refresh_token: refresh_token,
@@ -329,7 +272,7 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 		return _abort_session(deps, sid, UBUS_SESSION_FAILED);
 	}
 
-	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${LOGIN_USERNAME_PREFIX}${role}`);
+	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${rpcd_login.username(role)}`);
 
 	return Result.ok(sid);
 };
