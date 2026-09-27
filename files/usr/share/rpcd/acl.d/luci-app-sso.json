@@ -2,9 +2,15 @@
 	"luci-app-sso": {
 		"description": "Grant access to SSO configuration",
 		"read": {
+			"ubus": {
+				"luci-sso": [ "list_roles" ]
+			},
 			"uci": [ "luci-sso" ]
 		},
 		"write": {
+			"ubus": {
+				"luci-sso": [ "set_role", "delete_role", "move_role" ]
+			},
 			"uci": [ "luci-sso" ]
 		}
 	}

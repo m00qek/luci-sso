@@ -9,7 +9,7 @@ PKG_LICENSE:=MIT
 
 PKG_INSTALL:=1
 PKG_BUILD_DEPENDS:=libucode/host
-PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode
+PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode +rpcd-mod-ucode
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
@@ -82,6 +82,8 @@ define Package/$(PKG_NAME)/install
 	$(CP) ./files/usr/share/ucode/luci/controller/sso.uc $(1)/usr/share/ucode/luci/controller/
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(CP) ./files/usr/share/rpcd/acl.d/luci-app-sso.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/ucode
+	$(CP) ./files/usr/share/rpcd/ucode/luci-sso.uc $(1)/usr/share/rpcd/ucode/
 endef
 
 define Package/$(PKG_NAME)/prerm
