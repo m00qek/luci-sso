@@ -166,3 +166,25 @@ describe('rpcd_login: stage', () => {
 		assert.match(true, length(filter(calls["delete"], (c) => c[2] == "password")) == 1);
 	});
 });
+
+describe('rpcd_login: is_placeholder — the shipped admin role', () => {
+	it('is the admin role matching admin@example.com and nothing else', () => {
+		assert.match(true, rpcd_login.is_placeholder({ ".name": "admin", email: [ "admin@example.com" ] }));
+		assert.match(true, rpcd_login.is_placeholder({ ".name": "admin", email: "admin@example.com" }), "a single option");
+		assert.match(true, rpcd_login.is_placeholder({ ".name": "admin", email: [ "admin@example.com" ], group: [] }));
+	});
+
+	it('is not a role that says who its users are', () => {
+		for (let s in [
+			{ ".name": "ops", email: [ "admin@example.com" ] },
+			{ ".name": "admin", email: [ "alice@corp.example" ] },
+			{ ".name": "admin", email: [ "admin@example.com", "alice@corp.example" ] },
+			{ ".name": "admin", email: [ "admin@example.com" ], group: [ "admins" ] },
+			{ ".name": "admin", email: [ "admin@example.com" ], group: "admins" },
+			{ ".name": "admin", email: [ "Admin@example.com" ] },
+			{ ".name": "admin", group: [ "admins" ] },
+			{ ".name": "admin" },
+		])
+			assert.match(false, rpcd_login.is_placeholder(s), sprintf("%J", s));
+	});
+});

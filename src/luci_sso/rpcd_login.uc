@@ -226,24 +226,49 @@ function old_list(v) {
 	return (v != null) ? [ v ] : [];
 }
 
-/** The role the package ships, whose entry the upgrade creates if missing. */
+/** The role the package ships in /etc/config/luci-sso. */
 export const DEFAULT_ROLE = "admin";
+
+/** The one matching rule the shipped role has: a placeholder email. */
+export const PLACEHOLDER_EMAIL = "admin@example.com";
+
+/**
+ * Whether a luci-sso role section is the role the package ships, untouched:
+ * named DEFAULT_ROLE, matching the email PLACEHOLDER_EMAIL and nothing else
+ * (no other email, no group). Only that role may get full access without
+ * lists to take it from: a role an administrator has edited says who its users
+ * are, and nothing says they should have every right.
+ *
+ * @param {object} s - A luci-sso role section, as uci.foreach() passes it
+ * @returns {boolean}
+ */
+export function is_placeholder(s) {
+	let emails = old_list(s.email);
+	return s[".name"] == DEFAULT_ROLE && length(emails) == 1 && emails[0] == PLACEHOLDER_EMAIL &&
+		!length(old_list(s.group));
+};
 
 /**
  * Moves role permissions from /etc/config/luci-sso to rpcd login entries: the
  * upgrade from releases that kept read/write lists on the luci-sso role.
  *
- * For each luci-sso role that still has a read or write option, in config
- * order, the role's entry is created or replaced from those lists, by the same
- * rules as the luci-sso ubus object (entry() and stage(): the
- * `unauthenticated` group added, rpcd's meaning of every pattern, no
- * password), and the options are removed from the role. A role whose name or
- * lists the rules refuse keeps its options, and a warning names it: its users
- * cannot log in until its permissions are saved on the settings page.
+ * Each luci-sso role, in config order:
  *
- * Then, if the role the package ships (`admin`) exists and has no entry, its
- * entry is created with read '*' and write '*', the permissions it ships
- * with. That covers a fresh install, where the shipped role has no lists.
+ * - A role with a read or write option gets its entry created or replaced
+ *   from those lists, by the same rules as the luci-sso ubus object (entry()
+ *   and stage(): the `unauthenticated` group added, rpcd's meaning of every
+ *   pattern, no password), and the options are removed from the role. A role
+ *   whose name or lists the rules refuse keeps its options, and a warning
+ *   names it: its users cannot log in until its permissions are saved on the
+ *   settings page.
+ * - A role without lists that has an entry is left alone.
+ * - The shipped role, untouched (is_placeholder()), without lists and without
+ *   an entry, gets read '*' and write '*', the permissions it ships with. That
+ *   covers a fresh install.
+ * - Any other role without lists and without an entry gets an entry that
+ *   grants nothing but `unauthenticated`, and a warning names it, so its
+ *   permissions can be set on the settings page. An edited `admin` role that
+ *   lost its lists is one: nothing says its users should have every right.
  *
  * Touches no rpcd section but luci_sso_<role> ones, never the order of the
  * luci-sso roles, and nothing at all when there is nothing to do, so running
@@ -252,33 +277,49 @@ export const DEFAULT_ROLE = "admin";
  * only the first is completed by the next run.
  *
  * @param {object} uci - A UCI cursor
- * @param {function} warn - Called with a message for each role left alone
+ * @param {function} warn - Called with a message for each role that needs an
+ *   administrator
  * @returns {object} - { rpcd, luci_sso }: whether each configuration changed
  */
 export function migrate(uci, warn) {
 	let changed = { rpcd: false, luci_sso: false };
 
 	let roles = [];
-	uci.foreach("luci-sso", "role", (s) => {
-		if (s.read != null || s.write != null) push(roles, s);
-	});
+	uci.foreach("luci-sso", "role", (s) => push(roles, s));
 
 	for (let s in roles) {
 		let name = s[".name"];
-		let res = entry(name, old_list(s.read), old_list(s.write));
+
+		if (s.read != null || s.write != null) {
+			let res = entry(name, old_list(s.read), old_list(s.write));
+			if (!res.ok) {
+				warn(`role '${name}' keeps its read/write lists and has no rpcd login entry: ${res.details}; save its permissions on the settings page`);
+				continue;
+			}
+			stage(uci, res.data);
+			uci.delete("luci-sso", name, "read");
+			uci.delete("luci-sso", name, "write");
+			changed.rpcd = changed.luci_sso = true;
+			continue;
+		}
+
+		if (uci.get(CONFIG, section_name(name)) != null)
+			continue;
+
+		if (is_placeholder(s)) {
+			stage(uci, entry(name, [ "*" ], [ "*" ]).data);
+			changed.rpcd = true;
+			continue;
+		}
+
+		let res = entry(name, [], []);
 		if (!res.ok) {
-			warn(`role '${name}' keeps its read/write lists and has no rpcd login entry: ${res.details}; save its permissions on the settings page`);
+			warn(`role '${name}' has no rpcd login entry: ${res.details}; its users cannot log in`);
 			continue;
 		}
 		stage(uci, res.data);
-		uci.delete("luci-sso", name, "read");
-		uci.delete("luci-sso", name, "write");
-		changed.rpcd = changed.luci_sso = true;
-	}
-
-	if (uci.get("luci-sso", DEFAULT_ROLE) == "role" && uci.get(CONFIG, section_name(DEFAULT_ROLE)) == null) {
-		stage(uci, entry(DEFAULT_ROLE, [ "*" ], [ "*" ]).data);
 		changed.rpcd = true;
+		warn(`role '${name}' had no permissions to move: its rpcd login entry grants nothing but '${BASELINE_GROUP}'; set its permissions on the settings page`);
 	}
 
 	return changed;

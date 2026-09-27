@@ -12,6 +12,7 @@ config oidc 'default'
 
 # A role's permissions are its rpcd login entry, luci_sso_<role> in
 # /etc/config/rpcd, which the settings page edits. On install, this role gets
-# read '*' and write '*': full access, like root.
+# read '*' and write '*' (full access, like root) if it still matches only
+# admin@example.com; edited first, it gets an entry that grants nothing.
 config role 'admin'
 	list email 'admin@example.com'

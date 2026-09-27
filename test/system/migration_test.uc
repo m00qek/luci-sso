@@ -143,13 +143,24 @@ describe('system: rpcd_login.migrate — an old-style configuration', () => {
 		with_dir(() => {
 			setup(OLD_LUCI_SSO, RPCD);
 			let res = run();
-			assert.match(2, length(res.warnings));
-			assert.match(true, index(res.warnings[0], "role 'this_role_name_is_longer_than_32_chars' keeps its read/write lists") == 0, res.warnings[0]);
-			assert.match(true, index(res.warnings[1], "role 'denies' keeps its read/write lists") == 0, res.warnings[1]);
+			assert.match(3, length(res.warnings));
+			assert.match(true, index(res.warnings[1], "role 'this_role_name_is_longer_than_32_chars' keeps its read/write lists") == 0, res.warnings[1]);
+			assert.match(true, index(res.warnings[2], "role 'denies' keeps its read/write lists") == 0, res.warnings[2]);
 			assert.match(contains({ read: [ "*" ] }), section("luci-sso", "this_role_name_is_longer_than_32_chars"));
 			assert.match(contains({ read: [ "*", "!unauthenticated" ] }), section("luci-sso", "denies"));
 			assert.match(null, section("rpcd", "luci_sso_denies"));
-			assert.match(null, section("rpcd", "luci_sso_nolists"), "a role without lists gets no entry");
+		});
+	});
+
+	it("gives a role without lists an entry that grants nothing, with a warning naming it", () => {
+		with_dir(() => {
+			setup(OLD_LUCI_SSO, RPCD);
+			let res = run();
+			let e = section("rpcd", "luci_sso_nolists");
+			assert.match(contains({ ".type": "login", username: "sso:nolists", read: [ "unauthenticated" ] }), e);
+			assert.match(false, exists(e, "write") || exists(e, "password"));
+			assert.match("role 'nolists' had no permissions to move: its rpcd login entry grants nothing but 'unauthenticated'; set its permissions on the settings page",
+				res.warnings[0]);
 		});
 	});
 
@@ -165,7 +176,7 @@ describe('system: rpcd_login.migrate — an old-style configuration', () => {
 		});
 	});
 
-	it('a second run changes nothing: no commit, same files', () => {
+	it('a second run changes nothing: no commit, same files, and only the refused roles warn again', () => {
 		with_dir(() => {
 			setup(OLD_LUCI_SSO, RPCD);
 			run();
@@ -173,6 +184,7 @@ describe('system: rpcd_login.migrate — an old-style configuration', () => {
 			let res = run();
 			assert.match({ rpcd: false, luci_sso: false }, res.changed);
 			assert.match(after_first, files());
+			assert.match(2, length(res.warnings));
 		});
 	});
 
@@ -197,10 +209,22 @@ describe('system: rpcd_login.migrate — an old-style configuration', () => {
 describe('system: rpcd_login.migrate — the shipped admin role', () => {
 	const FRESH = "config oidc 'default'\n\toption enabled '0'\n\nconfig role 'admin'\n\tlist email 'admin@example.com'\n";
 
+	// FRESH's admin role is the one files/etc/config/luci-sso ships.
+	it('is_placeholder matches the role the package ships', () => {
+		with_dir(() => {
+			setup(FRESH, RPCD);
+			assert.match(true, rpcd_login.is_placeholder(section("luci-sso", "admin")));
+		});
+		assert.match(false, rpcd_login.is_placeholder({ ".name": "ops", email: [ "admin@example.com" ] }), "another name");
+		assert.match(true, rpcd_login.is_placeholder({ ".name": "admin", email: "admin@example.com" }), "a single option too");
+	});
+
 	it('a fresh install gives the admin role read and write on everything', () => {
 		with_dir(() => {
 			setup(FRESH, RPCD);
-			assert.match({ rpcd: true, luci_sso: false }, run().changed);
+			let res = run();
+			assert.match({ rpcd: true, luci_sso: false }, res.changed);
+			assert.match([], res.warnings);
 			assert.match(contains({ username: "sso:admin", read: [ "*" ], write: [ "*" ] }), section("rpcd", "luci_sso_admin"));
 			let after = files();
 			assert.match({ rpcd: false, luci_sso: false }, run().changed, "then nothing more");
@@ -208,20 +232,52 @@ describe('system: rpcd_login.migrate — the shipped admin role', () => {
 		});
 	});
 
+	// An old config whose admin role names real users but has no lists: its
+	// users were refused before, and must not become full administrators.
+	const EDITED = {
+		"real emails":            "\tlist email 'alice@corp.example'\n\tlist email 'bob@corp.example'\n",
+		"a group":                "\tlist group 'admins'\n",
+		"the placeholder and a group": "\tlist email 'admin@example.com'\n\tlist group 'admins'\n",
+		"the placeholder and another email": "\tlist email 'admin@example.com'\n\tlist email 'alice@corp.example'\n",
+		"another case":           "\tlist email 'Admin@Example.com'\n",
+		"no rule at all":         "",
+	};
+	for (let what, rules in EDITED) {
+		it(`an admin role with ${what} and no lists gets an entry that grants nothing, and a warning`, () => {
+			with_dir(() => {
+				setup(`config role 'admin'\n${rules}`, RPCD);
+				let res = run();
+				assert.match({ rpcd: true, luci_sso: false }, res.changed);
+				let e = section("rpcd", "luci_sso_admin");
+				assert.match(contains({ username: "sso:admin", read: [ "unauthenticated" ] }), e);
+				assert.match(false, exists(e, "write") || exists(e, "password"));
+				assert.match([ "role 'admin' had no permissions to move: its rpcd login entry grants nothing but 'unauthenticated'; set its permissions on the settings page" ],
+					res.warnings);
+				let after = files();
+				res = run();
+				assert.match({ changed: { rpcd: false, luci_sso: false }, warnings: [] }, res, "then nothing more");
+				assert.match(after, files());
+			});
+		});
+	}
+
 	it("an admin entry that exists is kept as it is, however restricted", () => {
 		with_dir(() => {
 			setup(FRESH, `${RPCD}\nconfig login 'luci_sso_admin'\n\toption username 'sso:admin'\n\tlist read 'unauthenticated'\n`);
 			let before = files();
-			assert.match({ rpcd: false, luci_sso: false }, run().changed);
+			assert.match({ changed: { rpcd: false, luci_sso: false }, warnings: [] }, run());
 			assert.match(before, files());
 		});
 	});
 
-	it('no admin role, no entry', () => {
+	it('no admin role, no admin entry; another role without lists gets one that grants nothing', () => {
 		with_dir(() => {
 			setup("config role 'ops'\n\tlist email 'ops@example.com'\n", RPCD);
-			assert.match({ rpcd: false, luci_sso: false }, run().changed);
+			let res = run();
+			assert.match({ rpcd: true, luci_sso: false }, res.changed);
 			assert.match(null, section("rpcd", "luci_sso_admin"));
+			assert.match(contains({ username: "sso:ops", read: [ "unauthenticated" ] }), section("rpcd", "luci_sso_ops"));
+			assert.match(1, length(res.warnings));
 		});
 	});
 });

@@ -3,10 +3,11 @@
 # LuCI SSO - role permissions in rpcd, and rpcd picking up the luci-sso object.
 #
 # 1. Upgrade: each luci-sso role still carrying read/write lists gets its rpcd
-#    login entry (luci_sso_<role>) from them, and loses the lists. If the
-#    shipped `admin` role has no entry, it gets read '*' and write '*'.
-#    luci_sso.rpcd_login.migrate() holds the rules; running it again changes
-#    nothing. Changes go through a private UCI delta directory, so no one
+#    login entry (luci_sso_<role>) from them, and loses the lists. If the shipped `admin`
+#    role, untouched, has no entry, it gets read '*' and write '*'. Any other
+#    role without lists or entry gets an entry that grants nothing, and a
+#    warning. luci_sso.rpcd_login.migrate() holds the rules; running it again
+#    changes nothing. Changes go through a private UCI delta directory, so no one
 #    else's staged change to rpcd or luci-sso is committed with them.
 #
 # 2. rpcd loads its plugins (/usr/share/rpcd/ucode/luci-sso.uc) only when it
