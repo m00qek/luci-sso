@@ -9,6 +9,7 @@ Explanation is "understanding-oriented". It deepens the reader's understanding o
 *   [Design Philosophy](design-philosophy.md) - Core tenets and why they exist.
 *   [Architecture](architecture.md) - The "Functional Core / Imperative Shell" design.
 *   [About Crypto Backends](crypto-backends.md) - Understanding the trade-offs between mbedTLS, WolfSSL, and OpenSSL.
+*   [About the Test Architecture](test-architecture.md) - Why tests are divided by entry point, and why the native module has its own bucket.
 
 ## 🔐 Authentication
 *   [About the OIDC Login Flow](oidc-flow.md) - What happens when a user clicks "Login with SSO".

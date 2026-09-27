@@ -149,12 +149,12 @@ use(result.session);
 
 ### Test Requirements
 
-### Test Requirements
-
-1. **Mandatory Coverage:** Every exported function MUST have unit tests.
+1. **Mandatory Coverage:** Every exported function MUST be tested, in the bucket the [placement rule](testing-architecture.md#placement-rule) assigns to its module.
 2. **Failure Verification:** Every error path MUST be verified by a corresponding test case.
-3. **Attack Simulation:** Security-critical code MUST have specialized attack tests.
+3. **Attack Simulation:** Security-critical code MUST have specialized attack tests (tampering, injection, replay, algorithm confusion, bypass attempts).
 4. **Offline Purity:** All tests MUST be runnable offline without external network dependencies.
+5. **Native Isolation:** Tests in `test/native/` MUST import only `luci_sso.native` and pure helpers. Tests of the `crypto/*` wrappers MUST fake `native`.
+6. **Proxies Over Stubs:** The system boundary MUST be faked with `mock.inject_all`, `mock.inject` or `with_context`. A hand-written stub object MUST NOT be used where a proxy exists. Proxies SHOULD use `strict: true` and SHOULD prefer `data:` over `behavior:`.
 
 ### Test Structure
 
@@ -216,11 +216,11 @@ test('Security: Reject alg=none attack', () => { /* ... */ });
 
 ### Test Coverage Requirements
 
-**Minimum coverage per function:**
+**Minimum coverage per exported function:**
 - ✅ 1 success case (happy path)
-- ✅ 1 error case per error type
-- ✅ Edge cases (empty input, null, boundary values)
-- ✅ Security cases (tampering, injection, bypass attempts)
+- ✅ 1 error case per error type or branch
+- ✅ Edge cases (empty input, `null`, boundary values)
+- ✅ Security cases where relevant (tampering, injection, replay, algorithm confusion, bypass attempts)
 
 **Example for `jwt_verify()`:**
 
