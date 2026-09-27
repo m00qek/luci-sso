@@ -108,7 +108,8 @@ sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
 # no rights at all. An upgrade or downgrade keeps all of this, so it skips it:
 # opkg exports PKG_UPGRADE=1 then, and apk does not run this script on upgrade
 # at all. opkg --force-reinstall looks like a removal (PKG_UPGRADE=0), so it
-# deletes the entries too: each role's permissions must then be saved again.
+# deletes the entries too; the new package's uci-defaults script then recreates
+# only the admin role's, and every other role's permissions must be saved again.
 if [ "$${PKG_UPGRADE:-0}" != "1" ]; then
 	# A private delta directory, so the commit writes only these deletions,
 	# never rpcd changes someone else staged in /tmp/.uci.

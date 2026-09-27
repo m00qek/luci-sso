@@ -1,15 +1,42 @@
 #!/bin/sh
 
-# LuCI SSO - make rpcd pick up the luci-sso ubus object.
+# LuCI SSO - role permissions in rpcd, and rpcd picking up the luci-sso object.
 #
-# rpcd loads its plugins (/usr/share/rpcd/ucode/luci-sso.uc) only when it
-# starts or reloads, so after an install or upgrade the settings page could
-# not reach the new object until the next reboot. A reload (SIGHUP) re-executes
-# rpcd and keeps every session: each one's rights are rebuilt from its login
-# entry in /etc/config/rpcd, and SSO sessions have theirs (luci_sso_<role>).
+# 1. Upgrade: each luci-sso role still carrying read/write lists gets its rpcd
+#    login entry (luci_sso_<role>) from them, and loses the lists. If the
+#    shipped `admin` role has no entry, it gets read '*' and write '*'.
+#    luci_sso.rpcd_login.migrate() holds the rules; running it again changes
+#    nothing. Changes go through a private UCI delta directory, so no one
+#    else's staged change to rpcd or luci-sso is committed with them.
+#
+# 2. rpcd loads its plugins (/usr/share/rpcd/ucode/luci-sso.uc) only when it
+#    starts or reloads, so after an install or upgrade the settings page could
+#    not reach the new object until the next reboot. A reload (SIGHUP)
+#    re-executes rpcd and keeps every session: each one's rights are rebuilt
+#    from its login entry in /etc/config/rpcd, which step 1 has written.
 #
 # Runs after an install or upgrade (the package's postinst runs uci-defaults)
 # and at first boot, when rpcd is not running yet and the reload does nothing.
+
+ucode -e '
+import { cursor } from "uci";
+import { mkdir } from "fs";
+import { migrate } from "luci_sso.rpcd_login";
+
+let delta = "/var/run/luci-sso/uci-defaults";
+mkdir("/var/run/luci-sso", 0700);
+mkdir(delta, 0700);
+let uci = cursor("/etc/config", delta);
+uci.revert("rpcd");
+uci.revert("luci-sso");
+
+let changed = migrate(uci, (msg) => print(msg, "\n"));
+if (changed.rpcd) uci.commit("rpcd");
+if (changed.luci_sso) uci.commit("luci-sso");
+' 2>&1 | while read -r line; do
+	logger -t luci-sso -p user.warn "$line"
+	echo "luci-sso: $line" >&2
+done
 
 [ -x /etc/init.d/rpcd ] && /etc/init.d/rpcd reload >/dev/null 2>&1
 

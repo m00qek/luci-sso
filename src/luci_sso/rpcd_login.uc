@@ -3,8 +3,8 @@
 /**
  * The rpcd login entries that hold the permissions of luci-sso's roles, and
  * rpcd's rules for them: one place for every rule that the login path
- * (ubus.uc) and the `luci-sso` ubus object (files/usr/share/rpcd/ucode/luci-sso.uc)
- * share.
+ * (ubus.uc), the `luci-sso` ubus object (files/usr/share/rpcd/ucode/luci-sso.uc)
+ * and the upgrade script (files/etc/uci-defaults/20-luci-sso-rpcd) share.
  *
  * Each role `<role>` has exactly one entry in /etc/config/rpcd:
  *
@@ -217,4 +217,69 @@ export function stage(uci, e) {
 		if (length(e[opt]))
 			uci.set(CONFIG, e.section, opt, e[opt]);
 	}
+};
+
+// A role's read/write option as a list. Before role permissions moved to rpcd,
+// luci-sso read a single option as a one-entry list, so the upgrade does too.
+function old_list(v) {
+	if (type(v) == "array") return v;
+	return (v != null) ? [ v ] : [];
+}
+
+/** The role the package ships, whose entry the upgrade creates if missing. */
+export const DEFAULT_ROLE = "admin";
+
+/**
+ * Moves role permissions from /etc/config/luci-sso to rpcd login entries: the
+ * upgrade from releases that kept read/write lists on the luci-sso role.
+ *
+ * For each luci-sso role that still has a read or write option, in config
+ * order, the role's entry is created or replaced from those lists, by the same
+ * rules as the luci-sso ubus object (entry() and stage(): the
+ * `unauthenticated` group added, rpcd's meaning of every pattern, no
+ * password), and the options are removed from the role. A role whose name or
+ * lists the rules refuse keeps its options, and a warning names it: its users
+ * cannot log in until its permissions are saved on the settings page.
+ *
+ * Then, if the role the package ships (`admin`) exists and has no entry, its
+ * entry is created with read '*' and write '*', the permissions it ships
+ * with. That covers a fresh install, where the shipped role has no lists.
+ *
+ * Touches no rpcd section but luci_sso_<role> ones, never the order of the
+ * luci-sso roles, and nothing at all when there is nothing to do, so running
+ * it again changes nothing. Stages the changes on the cursor; the caller
+ * commits rpcd before luci-sso, so an interrupted upgrade that committed
+ * only the first is completed by the next run.
+ *
+ * @param {object} uci - A UCI cursor
+ * @param {function} warn - Called with a message for each role left alone
+ * @returns {object} - { rpcd, luci_sso }: whether each configuration changed
+ */
+export function migrate(uci, warn) {
+	let changed = { rpcd: false, luci_sso: false };
+
+	let roles = [];
+	uci.foreach("luci-sso", "role", (s) => {
+		if (s.read != null || s.write != null) push(roles, s);
+	});
+
+	for (let s in roles) {
+		let name = s[".name"];
+		let res = entry(name, old_list(s.read), old_list(s.write));
+		if (!res.ok) {
+			warn(`role '${name}' keeps its read/write lists and has no rpcd login entry: ${res.details}; save its permissions on the settings page`);
+			continue;
+		}
+		stage(uci, res.data);
+		uci.delete("luci-sso", name, "read");
+		uci.delete("luci-sso", name, "write");
+		changed.rpcd = changed.luci_sso = true;
+	}
+
+	if (uci.get("luci-sso", DEFAULT_ROLE) == "role" && uci.get(CONFIG, section_name(DEFAULT_ROLE)) == null) {
+		stage(uci, entry(DEFAULT_ROLE, [ "*" ], [ "*" ]).data);
+		changed.rpcd = true;
+	}
+
+	return changed;
 };

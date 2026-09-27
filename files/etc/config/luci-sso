@@ -10,7 +10,8 @@ config oidc 'default'
 	option scope 'openid profile email'
 	option clock_tolerance '60'
 
+# A role's permissions are its rpcd login entry, luci_sso_<role> in
+# /etc/config/rpcd, which the settings page edits. On install, this role gets
+# read '*' and write '*': full access, like root.
 config role 'admin'
 	list email 'admin@example.com'
-	list read '*'
-	list write '*'
