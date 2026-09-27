@@ -222,7 +222,7 @@ describe('web: render_error', () => {
 		let d1 = web_deps({}); web.render_error(d1, "TOO_MANY_REQUESTS", 429);
 		assert.match(truthy(), index(d1.out(), "Status: 429 Too Many Requests") != -1, "Status 429 should map to correct message");
 
-		let d2 = web_deps({}); web.render_error(d2, "SSO_DISABLED", 503);
+		let d2 = web_deps({}); web.render_error(d2, "HANDSHAKE_CAPACITY_EXCEEDED", 503);
 		assert.match(truthy(), index(d2.out(), "Status: 503 Service Unavailable") != -1, "Status 503 should map to correct message");
 	});
 
@@ -236,7 +236,7 @@ describe('web: render_error', () => {
 		let d1 = web_deps({}); web.render_error(d1, "TOO_MANY_REQUESTS", 429);
 		assert.match(truthy(), index(d1.out(), "<p>There have been too many sign-in attempts. Please wait a minute and try again.</p>") != -1, "TOO_MANY_REQUESTS message");
 
-		let d2 = web_deps({}); web.render_error(d2, "SSO_DISABLED", 503);
+		let d2 = web_deps({}); web.render_error(d2, "SSO_DISABLED", 500);
 		assert.match(truthy(), index(d2.out(), "<p>Single sign-on is not enabled on this router. You can still log in with a password.</p>") != -1, "SSO_DISABLED message");
 
 		let d3 = web_deps({}); web.render_error(d3, "NOT_FOUND", 404);

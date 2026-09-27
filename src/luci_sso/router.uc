@@ -190,9 +190,13 @@ export function handle(deps, config, request) {
 		return Result.err(TOO_MANY_REQUESTS, { http_status: 429, retry_after: rl.retry_after });
 	}
 
-	// Every remaining path needs a loaded config.
+	// Every remaining path needs a loaded config. Unreachable today: entry.uc
+	// passes a null config only for ?action=enabled, answered above. The guard
+	// stays as defence in depth against a future caller, and returns what
+	// entry.uc renders for disabled SSO (500): 503 is reserved for
+	// HANDSHAKE_CAPACITY_EXCEEDED.
 	if (!config) {
-		return Result.err(SSO_DISABLED, { http_status: 503 });
+		return Result.err(SSO_DISABLED, { http_status: 500 });
 	}
 	if (path == "/") {
 		return handle_login(deps, config);

@@ -104,7 +104,7 @@ Dispatches one request. `config` is the result of `config.load()`, or `null` whe
 | `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. |
 | anything else | `NOT_FOUND` (`404`). |
 
-Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`). With a `null` config, every path except the probe fails with `SSO_DISABLED` (`503`); `entry.run()` never calls it that way.
+Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`). With a `null` config, every path except the probe fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way.
 
 ---
 

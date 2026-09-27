@@ -454,7 +454,7 @@ describe('router: null config guard (reproduction)', () => {
 			let res = router.handle(deps, null, req);
 			assert.match(falsy(), res.ok, "Should fail when config is null");
 			assert.match("SSO_DISABLED", res.error);
-			assert.match(503, res.details.http_status);
+			assert.match(500, res.details.http_status, "the same status entry.uc renders for disabled SSO");
 		});
 	});
 });
