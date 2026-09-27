@@ -5,16 +5,16 @@ on:
     branches: [main, master, ci]
     paths-ignore:
       - 'docs/**'
+      - '**/*.md'
       - 'mkdocs.yml'
-      - 'README.md'
       - 'LICENSE'
       - '.github/workflows/docs.yml'
   pull_request:
     branches: [main, master, ci]
     paths-ignore:
       - 'docs/**'
+      - '**/*.md'
       - 'mkdocs.yml'
-      - 'README.md'
       - 'LICENSE'
       - '.github/workflows/docs.yml'
   workflow_dispatch:

@@ -129,7 +129,7 @@ GitHub's blame view reads the file without any setup. When you land a commit tha
     - every `TODO` names an issue.
 6. If you changed behaviour or an interface, update the matching page in `docs/` in the same pull request.
 7. Commit following the [commit message format](../../reference/style-guide.md#commit-messages).
-8. Open the pull request. CI runs the lint checks on every pull request. It runs the test suites only when the pull request changes `src/`, `mod/`, `files/`, `test/`, `openwrt/`, `Makefile`, or the `openwrt`, `idp`, `browser` or `pki` service under `devenv/services/`, and builds the docs site whenever `docs/` or `mkdocs.yml` changes. The CI docs build is not strict, so run `make -C docs build` locally to catch broken links.
+8. Open the pull request. CI runs the lint checks on every pull request. A pull request that changes only documentation (files under `docs/`, any `*.md` file, `mkdocs.yml` or `LICENSE`) skips the test workflow entirely. Otherwise the test suites run when the pull request changes `src/`, `mod/`, `files/`, `test/`, `openwrt/`, `Makefile`, or the `openwrt`, `idp`, `browser` or `pki` service under `devenv/services/`. CI builds the docs site with `--strict` whenever `docs/` or `mkdocs.yml` changes, the same as `make -C docs build`.
 
 ---
 
