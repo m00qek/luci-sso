@@ -221,6 +221,31 @@ If you see `USER_NOT_AUTHORIZED`, the user's email or group claims do not match 
 
 ---
 
+## End a user's sessions now
+
+Changing a role affects the next login only: a user who is already logged in keeps the session they have until it times out. To remove access immediately, first take the user out of every role (or delete the role), then end their sessions on the router.
+
+1. List the sessions. Each SSO session shows the user's email as `oidc_user` on the line after its session ID:
+
+    ```bash
+    ubus call session list | grep -E '"(ubus_rpc_session|oidc_user)"'
+    ```
+
+    ```text
+    	"ubus_rpc_session": "01c8b0237fb048cb1e8042e022e51baa",
+    		"oidc_user": "bob@example.com",
+    ```
+
+2. Destroy each of that user's sessions by its ID:
+
+    ```bash
+    ubus call session destroy '{"ubus_rpc_session": "01c8b0237fb048cb1e8042e022e51baa"}'
+    ```
+
+The user's next LuCI request is refused, and the sign-in they try next goes through the updated roles. Other users are not affected. The user may still be signed in at the IdP; revoke that there.
+
+---
+
 ## Reference
 
 - All UCI options are documented in the [UCI Configuration Reference](../../reference/uci-config.md#role-mapping-config-role).

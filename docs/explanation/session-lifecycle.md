@@ -6,12 +6,12 @@ After a successful login, `luci-sso` creates a LuCI session and hands the browse
 stateDiagram-v2
     [*] --> Active : successful OIDC login\n(UBUS session created)
     Active --> Expired : idle timeout\n(luci.sauth.sessiontime)
-    Active --> Terminated : explicit logout\n(UBUS session destroyed)
+    Active --> Terminated : logout, or destroyed by an admin\n(UBUS session destroyed)
     Expired --> [*]
     Terminated --> [*]
 ```
 
-**Textual summary:** A session begins when the OIDC flow completes and UBUS creates the session record. From that point it either expires after LuCI's idle timeout (one hour by default, regardless of IdP token expiry) or is terminated immediately by an explicit logout. Mid-session IdP revocation has no effect — the session continues until one of these two endpoints is reached. Multiple independent sessions can be active simultaneously.
+**Textual summary:** A session begins when the OIDC flow completes and UBUS creates the session record. From that point it either expires after LuCI's idle timeout (one hour by default, regardless of IdP token expiry) or is terminated immediately by a logout or by an administrator destroying it. Mid-session IdP revocation has no effect — the session continues until one of these two endpoints is reached. Multiple independent sessions can be active simultaneously.
 
 ---
 
@@ -38,7 +38,9 @@ The new value applies to sessions created after the change.
 
 The IdP's ID Token carries its own `exp` claim, which `luci-sso` validates at login time — an expired token is rejected before a session is created. But once the session exists, `luci-sso` does not re-read the token's `exp` on subsequent requests. A token with a 5-minute expiry does not shorten the session to 5 minutes, and a token with a 24-hour expiry does not change it either.
 
-The reason for decoupling session length from token expiry is the architectural constraint of the CGI model. `luci-sso` runs as a CGI script, not a daemon. There is no background process watching for token expiry and terminating sessions. The alternative — re-validating the ID Token on every LuCI page load — would require storing the raw token server-side and making a back-channel call to the IdP on every request, which is expensive for an embedded router and introduces a new failure mode if the IdP is temporarily unreachable. Reusing LuCI's idle timeout keeps SSO sessions as long-lived as password sessions, without that cost.
+The reason for decoupling session length from token expiry is the architectural constraint of the CGI model. `luci-sso` runs as a CGI script, not a daemon. There is no background process watching for token expiry and terminating sessions, and LuCI does not call `luci-sso` on later page loads, so nothing could re-check the tokens there. Doing so would also mean a back-channel call to the IdP on every request, which is expensive for an embedded router and introduces a new failure mode if the IdP is temporarily unreachable. Reusing LuCI's idle timeout keeps SSO sessions as long-lived as password sessions, without that cost.
+
+The tokens themselves are kept. The access, refresh and ID tokens from the login are stored in the `rpcd` session, next to the user's email, for as long as the session lives. `luci-sso` only ever reads the ID token back, as the `id_token_hint` of an RP-Initiated Logout; it never refreshes or re-validates the others.
 
 ---
 
@@ -46,7 +48,7 @@ The reason for decoupling session length from token expiry is the architectural 
 
 Nothing, immediately. `luci-sso` validates OIDC claims once, at login. If the IdP revokes a user's account or removes them from a group after they have logged in, the active LuCI session is not affected. The user retains their access until the session expires or they log out.
 
-This is a known, documented residual risk. The mitigation available to administrators is to log the user out explicitly, which destroys the UBUS session immediately (see below). The idle timeout also bounds the exposure window, but only once the session stops being used: an attacker who keeps using a stolen session keeps it alive.
+This is a known, documented residual risk. The mitigation available to administrators is to end the user's sessions on the router, which takes effect immediately: each SSO session is labelled with the user's email, so it can be found and destroyed without touching anyone else's. [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#end-a-users-sessions-now) shows the commands. The idle timeout also bounds the exposure window, but only once the session stops being used: an attacker who keeps using a stolen session keeps it alive.
 
 ---
 
@@ -56,7 +58,7 @@ When a browser is sent to `/cgi-bin/luci-sso/logout`:
 
 1. The CSRF token is verified — the request must include the `stoken` parameter matching the session's CSRF token.
 2. The UBUS session is destroyed. The `sysauth_https` and `sysauth` cookies are cleared with `Max-Age=0`.
-3. If the IdP's discovery document advertises an `end_session_endpoint`, the browser is redirected there (RP-Initiated Logout per the OIDC Session Management spec). Otherwise the browser is sent to `/`.
+3. If the IdP's discovery document advertises an `end_session_endpoint`, the browser is redirected there, as defined by [OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html). Otherwise the browser is sent to `/`.
 
 Destroying the UBUS session is immediate and complete — the session ID in the cookie becomes invalid the moment `rpcd` processes the destroy call. A browser holding a stale cookie after logout will be rejected on the next LuCI request.
 
@@ -68,9 +70,9 @@ LuCI's own **Log out** link does not reach this endpoint. It goes through LuCI's
 
 ## Session storage
 
-UBUS sessions live entirely in `rpcd`'s memory. They are not written to disk and do not survive a reboot or a restart of `rpcd`. Upgrading `luci-sso` with `opkg upgrade` does not restart `rpcd`, so active sessions survive the upgrade — see [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md).
+UBUS sessions live entirely in `rpcd`'s memory. They are not written to disk and do not survive a reboot or a restart of `rpcd`. Installing, upgrading or removing the `luci-sso` package restarts `rpcd`, so it ends every session — see [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md).
 
-Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and idle timeout. There is no mechanism to enumerate or revoke all sessions for a given user short of restarting `rpcd`, which evicts all sessions including those of password-authenticated users.
+Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and idle timeout. `rpcd` can list every session with its values, and SSO sessions carry the user's email as `oidc_user`, so an administrator can find one user's sessions and destroy just those. Restarting `rpcd` instead evicts every session, password logins included.
 
 ---
 
@@ -81,7 +83,7 @@ Multiple simultaneous sessions are allowed. Each login creates a new independent
 | Session store | UBUS / `rpcd` (in-memory) |
 | Session lifetime | Idle timeout from `luci.sauth.sessiontime` (default 3600 s), reset on every request |
 | Token expiry effect | Validated at login only; does not shorten or extend session |
-| Mid-session IdP revocation | Session continues until expiry or explicit logout |
+| Mid-session IdP revocation | Session continues until expiry, logout, or an administrator destroys it |
 | Logout scope | Destroys the router session; IdP session is separate |
 | Persistence across reboots | No — UBUS sessions are in-memory |
-| Persistence across `opkg upgrade` | Yes — `rpcd` is not restarted by the upgrade |
+| Persistence across a package upgrade | No — the package scripts restart `rpcd` |

@@ -26,7 +26,9 @@ The allow-list is a constant in `oidc.uc`, not a UCI option or a function parame
 
 Every comparison against a secret, or a value derived from one, uses the `constant_time_eq()` function rather than normal string equality: the `state`, the `nonce`, the `at_hash` and the logout CSRF token. Public identifiers — algorithm names, key IDs, issuers, audiences, role emails and groups — are compared with `===`, because their timing reveals nothing an attacker does not already know.
 
-Standard equality operations return early when a mismatch is found, which means they take slightly less time for a near-correct guess than for a completely wrong one. Over thousands of requests, an attacker can measure these timing differences and gradually reconstruct a secret value. Constant-time comparison always takes the same amount of time regardless of where the mismatch occurs, eliminating the signal.
+Standard equality operations return early when a mismatch is found, which means they take slightly less time for a near-correct guess than for a completely wrong one. Over thousands of requests, an attacker can measure these timing differences and gradually reconstruct a secret value.
+
+`constant_time_eq()` (in `crypto/base.uc`) removes the early exit. It walks the full length of the longer input, folds every character difference into one value with XOR and OR, and only looks at the result at the end, so where the inputs differ no longer changes how long the loop runs. It is written in ucode, not C, and an interpreter cannot promise exact constant time: garbage collection, string handling and `ord()` all vary. The function's own comment says so. It is a best-effort mitigation that takes away the obvious signal, not a guarantee.
 
 This is not a theoretical attack — timing side channels have been exploited in production OIDC implementations.
 
@@ -46,9 +48,9 @@ The alternative — checking existence and then deleting in two steps — has a 
 
 ## Zero-knowledge credential model
 
-No local passwords are stored for OIDC users. There is nothing to steal, nothing to brute-force, and no credential database to protect. Identity is derived dynamically from OIDC claims on every login, mapped to UCI roles, and expires with the session.
+No local passwords are stored for OIDC users. For them there is nothing to steal, nothing to brute-force, and no credential database to protect. Identity is derived dynamically from OIDC claims on every login, mapped to UCI roles, and expires with the session.
 
-This is a meaningful security property in the context of a router. Routers are frequently exposed to brute-force attacks on their management interfaces. Removing the local credential store removes that attack surface entirely.
+This matters on a router, whose management interface is a common brute-force target. But SSO is an addition, not a replacement: LuCI's password form stays on the same login page, and the `root` account keeps its password. The password attack surface is unchanged, and protecting it — a strong password, and LuCI kept off the WAN — remains a separate task.
 
 ---
 

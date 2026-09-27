@@ -71,9 +71,9 @@ Constant-time comparison removes this signal by making the comparison's running 
 
 ## Memory corruption in the C bridge
 
-The native C bridge handles JWT parsing, JWK deserialization, RSA/EC signature verification, and PKCE computation. These are the operations that directly process attacker-controlled data — the contents of tokens issued by the IdP. A memory safety bug in this code could allow an attacker who controls the IdP to achieve arbitrary code execution on the router.
+The native C bridge verifies RS256 and ES256 signatures, turns the IdP's JWK key material into PEM keys, and computes SHA-256 and HMAC; JWT and JWK parsing happen in ucode before it. The bridge's inputs — signatures, signed data and key material from the IdP — are attacker-controlled if the IdP or the connection to it is. A memory safety bug in this code could allow an attacker who controls the IdP to achieve arbitrary code execution on the router.
 
-The bridge is hardened at multiple levels. All input is length-checked before any parsing begins — the 16 KB input limit in `web.uc` applies before data reaches the C layer, and the C code enforces its own bounds checks internally. EC public keys are validated (coordinate length, curve membership) before use. Memory containing sensitive material — private keys, raw token bytes, PKCE secrets — is zeroed immediately after use.
+The bridge is hardened at multiple levels. All input is length-checked before any parsing begins: ucode refuses ID tokens over 16 KB, `mod/native_api.c` rejects any input over 16 KB (`NATIVE_MAX_INPUT_SIZE`) before a backend sees it, and the backends keep their own bounds checks. EC public keys are validated (coordinate length, curve membership) and RSA keys limited to the 65537 exponent and at least 2048 bits. Buffers in C that held secret-derived data, such as HMAC outputs and random bytes, are wiped before the functions return.
 
 Coverage-guided fuzz testing exercises the parsing paths continuously. AddressSanitizer is enabled in CI to catch out-of-bounds reads and writes during test runs. The goal is not to eliminate all possible bugs — that is impossible to guarantee — but to make exploitation difficult and ensure that common classes of memory error are caught before they reach a release.
 

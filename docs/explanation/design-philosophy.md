@@ -18,27 +18,26 @@
 
 ### Dependency Injection for I/O
 
-All I/O — network requests, filesystem access, timestamps, randomness — is injected through an `io` object rather than called directly. This allows every function to be tested offline with a mock environment.
+All I/O — network requests, filesystem access, ubus, UCI, timestamps, randomness and logging — is injected through a `deps` object rather than called directly. This allows every function to be tested offline with a fake environment.
 
 ```javascript
-// Production: real I/O
-let io = create_io();
-discover(io, "https://idp.com");
+// Production (the CGI script): real modules, wired by deps.uc
+let deps = create();                          // from luci_sso.deps
+discover(deps, "https://idp.example.com");    // luci_sso.discovery
 
-// Test: controlled, offline I/O
-let mock_io = create_mock_io();
-discover(mock_io, "https://idp.com");
+// Test: the same call with a deps object whose fields are fakes
+discover(fake_deps, "https://idp.example.com");
 ```
 
-The alternative — calling `uclient`, `time()`, or filesystem functions directly — makes code untestable in the embedded target environment. OpenWrt routers can't run real network tests, so every external call must be mockable.
+The alternative — calling `uclient`, `time()`, or filesystem functions directly — makes code untestable in the embedded target environment. OpenWrt routers can't run real network tests, so every external call must be fakeable.
 
-**What belongs in the `io` object** (non-deterministic or external state):
-`time`, `random`, `log`, `http_get`, `http_post`, `read_file`, `write_file`
+**What belongs in `deps`** (external or non-deterministic):
+`fs`, `http`, `ubus`, `uci`, `clock`, `native` (the crypto bridge, which also supplies randomness) and `log`
 
 **What does not** (deterministic, pure functions):
-string manipulation, JSON parsing, cryptographic hashes
+string manipulation, Base64URL and JSON handling, URL normalization
 
-The `log` function is mandatory in all `io` implementations. Logging is not optional in a security-critical application.
+`log` is part of every `deps` object. Logging is not optional in a security-critical application.
 
 ---
 
@@ -57,7 +56,7 @@ This prevents "Algorithm Confusion" and "Reflective Trust" attacks where an atta
 
 ### Minimal C Code
 
-Cryptographic primitives belong in C (MbedTLS/WolfSSL via PSA Crypto API). Everything else — business logic, state machines, role mapping, string parsing — belongs in ucode.
+Cryptographic primitives belong in C, delegated to a crypto library (mbedTLS, wolfSSL or OpenSSL). Everything else — business logic, state machines, role mapping, string parsing — belongs in ucode.
 
 C code is harder to audit, harder to test, and harder to port. Every line of C should justify its existence. If it can be done in ucode, do it in ucode.
 
@@ -65,14 +64,14 @@ C code is harder to audit, harder to test, and harder to port. Every line of C s
 
 ### Backend Abstraction
 
-Cryptographic backends must be swappable. Code must never import a backend directly. All crypto goes through the `luci_sso.native` wrapper, which resolves to the appropriate compiled backend at runtime.
+Cryptographic backends must be swappable. Code must never import a backend directly. Every backend package installs its build as `luci_sso/native.so`, so the name `luci_sso.native` always means the backend that is installed. Only `deps.uc` imports it; everything else receives it as `deps.native`.
 
 ```javascript
 // Wrong: hard-codes a backend
 import * as mbedtls from 'native_mbedtls';
 
-// Correct: backend-agnostic
-import * as native from 'luci_sso.native';
+// Correct: use the native module passed in through deps
+let res = crypto.hash_sha256(deps.native, data);
 ```
 
 ---

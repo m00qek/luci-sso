@@ -2,7 +2,7 @@
 
 **LuCI SSO** is a secure, lightweight OIDC/OAuth2 login provider for the OpenWrt web interface (LuCI).
 
-<img width="1119" height="588" alt="LuCI web interface login screen showing a blue 'Login with SSO' button prominently displayed above the standard OpenWrt password prompt." src="https://github.com/user-attachments/assets/cbe996a7-fc25-4f63-bd91-0d57dddcab75" />
+<img width="1119" height="588" alt="LuCI web interface login screen showing the standard OpenWrt username and password fields with a 'Login with SSO' button added below the Log in button." src="https://github.com/user-attachments/assets/cbe996a7-fc25-4f63-bd91-0d57dddcab75" />
 
 ---
 
@@ -16,7 +16,9 @@ LuCI's built-in authentication uses local Unix passwords. In practice, most rout
 
 **Brute-force exposure.** Routers are frequently exposed to the internet or sit at the edge of networks that are. The LuCI password endpoint is a standard target for automated credential-stuffing attacks. Password authentication over the management interface is a persistent attack surface.
 
-OIDC solves all three. A single click delegates authentication to the identity provider already trusted for the rest of the network. The IdP returns an identity — an email address and group memberships — that `luci-sso` maps to router access levels. Rotating a credential, revoking a user, or enforcing MFA happens at the IdP; the router's configuration does not need to change.
+OIDC addresses the first two directly. A single click delegates authentication to the identity provider already trusted for the rest of the network. The IdP returns an identity — an email address and group memberships — that `luci-sso` maps to router access levels. Rotating a credential, revoking a user, or enforcing MFA happens at the IdP; the router's configuration does not need to change.
+
+The third is only reduced. `luci-sso` adds a sign-in option next to the password form; it does not remove the form. People who sign in through the IdP no longer need to know the `root` password, so it can be long and rarely used, but the password endpoint stays reachable and still has to be protected on its own: a strong password, and LuCI kept off the WAN.
 
 ---
 
@@ -32,9 +34,9 @@ The obvious answer — run an OIDC reverse proxy in front of LuCI — requires a
 
 OpenWrt routers are constrained hardware. A typical device has 64 MB of RAM and 16 MB of flash storage. These limits rule out the runtimes that OIDC libraries are typically written in: no Python, no Node.js, no Go. Every dependency is flash storage consumed and RAM consumed.
 
-`luci-sso` is written in **ucode** — OpenWrt's native scripting language — with a thin C bridge for the cryptographic operations that require guaranteed memory behavior (constant-time comparisons, buffer zeroization). The C bridge is the only compiled component; everything else is interpreted ucode loaded on demand.
+`luci-sso` is written in **ucode** — OpenWrt's native scripting language — with a thin C bridge for the cryptographic primitives: signature verification, SHA-256, HMAC, random numbers and JWK-to-PEM conversion, delegated to an established crypto library. The C bridge is the only compiled component; everything else, including the best-effort constant-time comparison, is interpreted ucode loaded on demand.
 
-The same embedded constraints make testing difficult: you cannot run an integration test against a real IdP on a router that has no network interface to your test infrastructure. The architecture's strict separation between pure logic and I/O — the Functional Core / Imperative Shell pattern — exists specifically to make every authentication code path testable offline with a mock environment. See [About the Architecture](architecture.md) for how that separation is structured.
+The same embedded constraints make testing difficult: you cannot run an integration test against a real IdP on a router that has no network interface to your test infrastructure. That is why every piece of I/O and nondeterminism — filesystem, HTTP, ubus, UCI, the clock, the crypto bridge and the log — reaches the code through a single injected `deps` object: tests replace it and exercise every authentication code path offline. See [About the Architecture](architecture.md) for how that separation is structured.
 
 ---
 
@@ -45,7 +47,7 @@ The same embedded constraints make testing difficult: you cannot run an integrat
 Specifically:
 
 - The UCI configuration schema (`/etc/config/luci-sso`) is stable for the options documented in the [UCI Configuration Reference](../reference/uci-config.md).
-- The crypto backend interface (`src/native.h`) is stable for the functions documented in the [Internal API Reference](../reference/internal-api.md).
+- The crypto backend interface (`mod/native.h`) is stable for the functions documented in the [Internal API Reference](../reference/internal-api.md).
 
 The project targets **OpenWrt 24.10** and **25.12**.
 
@@ -54,6 +56,6 @@ The project targets **OpenWrt 24.10** and **25.12**.
 ## Further reading
 
 - [Design Philosophy](design-philosophy.md) — The principles behind the security and architecture decisions.
-- [About the Architecture](architecture.md) — How the Functional Core / Imperative Shell pattern is implemented.
+- [About the Architecture](architecture.md) — How the modules fit together and how `deps` isolates them from the system.
 - [Security Model](security-model.md) — The paranoid baseline and why each protection exists.
 - [Threat Model](threat-model.md) — The specific attacks the design addresses.

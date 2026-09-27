@@ -23,7 +23,7 @@ Your implementation **MUST** fulfill these security requirements:
 | Function | Security Requirement |
 | :--- | :--- |
 | `native_verify_rs256` | Reject RSA keys smaller than 2048 bits. |
-| `native_verify_es256` | Use constant-time comparison for signature verification results. |
+| `native_verify_es256` | Verify with the library's ECDSA P-256 routine, taking the signature as 64 bytes of `R` followed by `S`. Never compare signature bytes yourself. |
 | `native_random` | Must use a cryptographically secure random number generator (CSPRNG). |
 | `native_memzero` | Must use a compiler-safe zeroization function (e.g., `explicit_bzero`) to prevent optimization removal. |
 
