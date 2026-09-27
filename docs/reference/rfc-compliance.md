@@ -17,6 +17,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | [RFC 7517](https://www.rfc-editor.org/rfc/rfc7517) | JSON Web Key (JWK) |
 | [RFC 7518](https://www.rfc-editor.org/rfc/rfc7518) | JSON Web Algorithms (JWA) |
 | [RFC 7636](https://www.rfc-editor.org/rfc/rfc7636) | PKCE (Proof Key for Code Exchange) |
+| [OIDC RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) | OpenID Connect RP-Initiated Logout |
 
 ---
 
@@ -33,9 +34,9 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Token request: back-channel exchange | OIDC Core §3.1.3.1 | ✅ Implemented | HTTPS enforced. |
 | Token response: `id_token` required | OIDC Core §3.1.3.3 | ✅ Implemented | Missing `id_token` triggers `MISSING_ID_TOKEN`. |
 | Token error: `invalid_grant` handling | OIDC Core §3.1.3.4 | ✅ Implemented | Logged as `OIDC_INVALID_GRANT`. |
-| Refresh tokens | OIDC Core §12 | ❌ Not implemented | Sessions expire after LuCI's idle timeout (`luci.sauth.sessiontime`, one hour by default); re-authentication is required. By design — see [About the Session Lifecycle](../explanation/session-lifecycle.md). |
+| Refresh tokens | OIDC Core §12 | ❌ Not implemented | A refresh token the IdP returns is stored in the `rpcd` session but never used. Sessions expire after LuCI's idle timeout (`luci.sauth.sessiontime`, one hour by default); re-authentication is required. By design — see [About the Session Lifecycle](../explanation/session-lifecycle.md). |
 | UserInfo endpoint (fallback) | OIDC Core §5.3 | ✅ Implemented | Fetched when `email` claim is absent from the ID Token. |
-| RP-Initiated Logout | [OIDC Session Management](https://openid.net/specs/openid-connect-session-1_0.html) | ✅ Implemented | Browser redirected to `end_session_endpoint` if advertised by the IdP. |
+| RP-Initiated Logout | [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) §2 | ✅ Implemented | `/cgi-bin/luci-sso/logout` redirects the browser to `end_session_endpoint`, if advertised, with `id_token_hint` and `post_logout_redirect_uri`. LuCI's own logout link does not use it. |
 
 ---
 
@@ -44,7 +45,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
 | Discovery document fetch from `<issuer>/.well-known/openid-configuration` | Discovery §4 | ✅ Implemented | Cached in `/var/run/luci-sso/` (tmpfs) for 24 hours. |
-| `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must exactly match `issuer_url`. Triggers `DISCOVERY_ISSUER_MISMATCH` on mismatch. |
+| `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must match `issuer_url` after normalization (host case, default port and trailing slashes ignored). A mismatch fails discovery (`DISCOVERY_ISSUER_MISMATCH`, logged as `Discovery issuer mismatch: …` and `[500] OIDC_DISCOVERY_FAILED`). |
 | `authorization_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`. |
 | `token_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`. |
 | `jwks_uri` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`. |
@@ -57,13 +58,14 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
-| `iss` claim validation | OIDC Core §3.1.3.7 (2) | ✅ Implemented | Must exactly match `issuer_url`. |
+| `iss` claim validation | OIDC Core §3.1.3.7 (2) | ✅ Implemented | Must match `issuer_url` after URL normalization. |
 | `aud` claim validation | OIDC Core §3.1.3.7 (3) | ✅ Implemented | Must include `client_id`. |
-| `exp` claim validation | RFC 7519 §4.1.4 | ✅ Implemented | Clock skew tolerance applied via `clock_tolerance` UCI option. |
-| `iat` claim validation | OIDC Core §3.1.3.7 (9) | ✅ Implemented | Rejected if too far in the past or future. |
-| `sub` claim required | OIDC Core §3.1.3.7 (2) | ✅ Implemented | Missing `sub` triggers `MISSING_SUB_CLAIM`. |
+| `azp` claim validation | OIDC Core §3.1.3.7 (4), (5) | ✅ Implemented | Required when `aud` has several values; must equal `client_id` when present. |
+| `exp` claim validation | OIDC Core §3.1.3.7 (9) | ✅ Implemented | Clock skew tolerance applied via `clock_tolerance` UCI option. |
+| `iat` claim validation | OIDC Core §3.1.3.7 (10) | ✅ Implemented | Required. Rejected only if it is in the future by more than `clock_tolerance`; there is no maximum age. |
+| `sub` claim required | OIDC Core §2 | ✅ Implemented | Missing `sub` triggers `MISSING_SUB_CLAIM`. |
 | `nonce` claim validation | OIDC Core §3.1.3.7 (11) | ✅ Implemented | Constant-time comparison against stored nonce. |
-| `at_hash` validation | OIDC Core §3.1.3.7 (9) | ✅ Implemented | Mandatory. Binds the access token to the ID Token. Missing `at_hash` triggers `MISSING_AT_HASH`. |
+| `at_hash` validation | OIDC Core §3.1.3.8 | ⚠️ Stricter than required | Always checked, and a missing `at_hash` is rejected (`MISSING_AT_HASH`), although §3.1.3.6 makes it optional in the code flow. See [Intentional deviations](#intentional-deviations). |
 
 ---
 
@@ -95,7 +97,8 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Deviation | Rationale |
 | :--- | :--- |
 | **Split-horizon issuer URL** — When `internal_issuer_url` is set, back-channel requests use a different origin than `issuer_url`. OIDC Discovery §4.3 requires the fetch URL to match the issuer identifier. | Self-hosted deployments commonly cannot route the router's back-channel traffic through the IdP's public DNS name. Requiring a match would break most home lab configurations. The `iss` claim is still validated against the public `issuer_url`, preserving the security property that matters. |
-| **Refresh tokens not supported** — OIDC Core §12 defines the Refresh Token flow. | The router has no persistent token store. Sessions expire after LuCI's idle timeout; users re-authenticate on expiry. This avoids the need to store and protect long-lived refresh tokens on an embedded device. |
+| **Refresh tokens not supported** — OIDC Core §12 defines the Refresh Token flow. | Sessions expire after LuCI's idle timeout and users re-authenticate on expiry, so the router never has to keep using long-lived credentials. The refresh token the IdP returns is stored in the in-memory `rpcd` session with the other tokens, but nothing reads it. |
+| **`at_hash` required** — OIDC Core §3.1.3.6 makes `at_hash` optional in the authorization code flow. | `luci-sso` requires it so the access token it registers against replay is bound to the verified ID Token. IdPs that omit `at_hash` cannot be used. |
 | **Implicit flow not supported** — RFC 6749 §4.2 defines the Implicit Grant. | The Implicit flow places tokens in redirect URLs, which are logged by browsers, proxies, and servers. It is deprecated by the OAuth 2.0 Security Best Current Practice (RFC 9700). |
 | **`plain` PKCE method rejected** — RFC 7636 §4.2 defines both `plain` and `S256`. | `plain` sends the verifier as the challenge, providing no protection against an attacker who can observe the authorization request. `S256` is strictly superior when available. |
 
@@ -107,9 +110,14 @@ Verify the claims in this document by inspecting these source files:
 
 | Area | Source |
 | :--- | :--- |
-| Authorization Code Flow, token exchange, session injection | `src/handshake.uc` |
-| ID Token validation, nonce, at_hash, iss, aud, exp | `src/oidc.uc` |
-| Discovery fetch, cache, issuer mismatch detection | `src/discovery.uc` |
-| PKCE generation (S256), constant-time comparisons | `src/crypto.uc` |
-| Algorithm enforcement, JWK parsing, signature verification | `mod/native_api.c` (input guards), `mod/native_<lib>.c` (backends) |
-| HTTPS enforcement (`is_https()`) | `src/encoding.uc` |
+| Authorization Code Flow orchestration, UserInfo fallback, token replay registration | `src/luci_sso/handshake.uc` |
+| Authorization URL, token exchange, ID Token claims (nonce, `azp`, `at_hash`), algorithm allow-list | `src/luci_sso/oidc.uc` |
+| JWT signature, `iss`, `aud`, `exp`, `nbf`, `iat` | `src/luci_sso/crypto/jwt.uc` |
+| Discovery fetch, cache, issuer mismatch detection, JWKS | `src/luci_sso/discovery.uc` |
+| PKCE generation (S256) | `src/luci_sso/crypto/pkce.uc` |
+| Constant-time comparison | `src/luci_sso/crypto/base.uc` |
+| `state` storage and verification | `src/luci_sso/session/handshake.uc` |
+| JWK conversion | `src/luci_sso/crypto/jwk.uc`, `mod/native_api.c` (input guards), `mod/native_<lib>.c` (backends) |
+| Signature verification | `mod/native_api.c` (input guards), `mod/native_<lib>.c` (backends) |
+| RP-Initiated Logout | `src/luci_sso/router.uc` |
+| HTTPS enforcement (`is_https()`) | `src/luci_sso/encoding.uc` |

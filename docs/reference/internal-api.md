@@ -1,286 +1,461 @@
 # Internal API Reference
 
-This document describes the exported public API of each `luci-sso` module. It is intended for developers extending the system, writing tests, or implementing a new crypto backend.
+This document lists the exported API of every `luci-sso` module in `src/luci_sso/`, the functions of the compiled `luci_sso.native` module, and the C interface in `mod/native.h`. It is intended for developers extending the system, writing tests, or implementing a new crypto backend.
 
-For the rationale behind the architectural boundaries described here, see [About the Architecture](../explanation/architecture.md).
+For the rationale behind the module boundaries, see [About the Architecture](../explanation/architecture.md).
 
 ---
 
-## The Result type
+## Conventions
 
-All fallible functions return a **Result object** rather than throwing. The shape is:
+### The Result type
+
+Fallible functions return a **Result** instead of throwing:
 
 ```javascript
 {
     ok:      bool,    // true = success, false = failure
-    data:    any,     // present when ok == true
-    error:   string,  // error code from luci_sso.errors; present when ok == false
-    details: any      // optional diagnostic context; present when ok == false
+    data:    any,     // the value, when ok == true
+    error:   string,  // an error code, when ok == false
+    details: any      // optional context, when ok == false
 }
 ```
 
-Check `result.ok` before using `result.data`. Never access `.data` on a failed result.
+Error codes are usually constants from `luci_sso.errors` (see [Log Messages](log-messages.md)); a few internal codes, such as `NO_ROLES_MATCHED` or `CSPRNG_FAILURE`, never leave their module. When `details` is an object with `http_status` (and optionally `retry_after`), `entry.uc` uses it for the HTTP response.
+
+Functions `die()` on contract violations (wrong argument types), which the CGI entry turns into a logged crash and a generic `500` page.
+
+### The `deps` object
+
+Every function that touches the system takes `deps` as its first argument. `luci_sso.deps.create()` builds it:
+
+| Field | Type | Description |
+| :--- | :--- | :--- |
+| `fs` | module `fs` | Filesystem access. |
+| `native` | module `luci_sso.native` | The compiled crypto bridge (see [below](#luci_ssonative)). |
+| `http` | `HttpClient` | HTTPS client from `luci_sso.components.http_client`. |
+| `ubus` | `{ call(obj, method, args) → Result }` | ubus channel from `luci_sso.deps.ubus_channel`. |
+| `uci` | UCI cursor | From `uci.cursor()`. |
+| `clock` | `Clock` | From `luci_sso.components.clock`. |
+| `log` | `(level, msg) → void` | Syslog writer; `level` is `"error"`, `"warn"`, `"info"` or `"debug"`. |
+
+Functions document the fields they use, for example `deps: { fs, clock }`. The crypto functions take only the native module, as their first argument `native`.
 
 ---
 
-## `luci_sso.result`
+## `luci_sso.entry`
 
-Constructors for the Result type.
+The CGI pipeline.
 
-### `ok(data)` → `Result`
+### `run(deps, web_deps)` → `void`
 
-Creates a successful result.
-
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `data` | any | The success value. |
-
-### `err(error, details?)` → `Result`
-
-Creates a failed result.
+Parses the request, loads the configuration, calls `router.handle()` and writes the response or error page. Catches any exception and writes the crash page.
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
-| `error` | string | An error code constant from `luci_sso.errors`. |
-| `details` | any | Optional. Additional context (string, object, or `{http_status: int}`). |
+| `deps` | `Deps` | The full `deps` object. |
+| `web_deps` | object | `{ getenv, stdout, log }`: the CGI environment reader, the output stream and the log function. |
 
-### `is(obj)` → `bool`
+When `config.load()` fails with `SSO_DISABLED` and the request is `GET /?action=enabled`, the router is called with a `null` config so the probe still answers. Any other configuration failure is rendered with status `500`, after logging `Configuration rejected: <details>`.
 
-Returns `true` if `obj` is a Result instance. Use this before duck-typing `.ok`.
+---
+
+## `luci_sso.web`
+
+HTTP request parsing and response rendering. Uses `deps`-style arguments that hold only CGI I/O.
+
+### `request(deps)` → `Result<{path, query, cookies, client}>`
+
+Reads `PATH_INFO`, `QUERY_STRING`, `HTTP_COOKIE` and `REMOTE_ADDR` through `deps.getenv`. `path` defaults to `"/"`. Fails with `INPUT_TOO_LARGE` (`http_status: 431`) when a value exceeds 16 384 bytes or a list has more than 100 entries.
+
+### `parse_params(str)` → `Result<object>`
+
+Parses a query string into an object of URL-decoded keys and values. A key without `=` maps to `null`.
+
+### `parse_cookies(str)` → `Result<object>`
+
+Parses a `Cookie` header into an object. Strips surrounding double quotes from values.
+
+### `render(deps, res)` → `void`
+
+Writes `res` (`{ status, headers, body }`) to `deps.stdout` with the security headers. A `302` gets a fixed HTML body.
+
+### `render_error(deps, code, status, extra)` → `void`
+
+Logs `[<status>] <code>` through `deps.log` and writes an HTML error page with a fixed user message for `code`. `status` defaults to `500`; `extra` adds headers, such as `Retry-After`.
+
+### `error(deps, e)` → `void`
+
+Logs `Router crash: <e>` with the stack trace and writes a generic `500` page.
+
+---
+
+## `luci_sso.router`
+
+### `handle(deps, config, request)` → `Result<{status, headers, body}>`
+
+Dispatches one request. `config` is the result of `config.load()`, or `null` when SSO is disabled. `request` is the result of `web.request()`.
+
+| Path | Behaviour |
+| :--- | :--- |
+| `/` with `action=enabled` | Returns `{"enabled": true}` or `{"enabled": false}` from `config.is_enabled()`. Not rate-limited; works with a `null` config. |
+| `/` | Reaps stale handshakes, calls `handshake.initiate()`, and redirects to the IdP with the `__Host-luci_sso_state` cookie. |
+| `/callback` | Calls `handshake.authenticate()` and redirects to `/cgi-bin/luci/` with the session cookies. |
+| `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. |
+| anything else | `NOT_FOUND` (`404`). |
+
+Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`). With a `null` config, every path except the probe fails with `SSO_DISABLED` (`503`); `entry.run()` never calls it that way.
 
 ---
 
 ## `luci_sso.handshake`
 
-The OIDC state machine. This is the top-level entry point for both legs of the authorization code flow.
+The OIDC orchestrator for both legs of the authorization code flow.
 
-### `initiate(io, config)` → `Result<{url, token}>`
+### `initiate(deps, config)` → `Result<{url, token}>`
 
-Starts the login flow. Generates PKCE, state, and nonce; writes a handshake file; and returns the IdP redirect URL.
-
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `io` | io provider | The I/O provider from `luci_sso.io`. |
-| `config` | object | Loaded UCI config from `luci_sso.config.load()`. |
-
-On success, `result.data` contains:
+Runs discovery, creates the handshake state and builds the authorization URL. `deps: { fs, http, native, clock, log }`.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `url` | string | Full redirect URL to the IdP's `authorization_endpoint`. |
-| `token` | string | State token. Set this as the value of the `__Host-luci_sso_state` cookie. |
+| `url` | string | Redirect URL to the IdP's `authorization_endpoint`. |
+| `token` | string | Opaque handshake handle. Set it as the `__Host-luci_sso_state` cookie. |
 
-### `authenticate(io, config, request)` → `Result<{sid, email}>`
+Fails with `OIDC_DISCOVERY_FAILED` (`500`), `HANDSHAKE_CAPACITY_EXCEEDED` (`503`), or an error from `session.create_state()` or `oidc.get_auth_url()`.
 
-Processes the IdP callback. Verifies state and nonce, exchanges the code for tokens, validates the ID Token, maps claims to a role, and injects a UBUS session.
+### `authenticate(deps, config, request)` → `Result<{sid, email}>`
 
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `io` | io provider | The I/O provider. |
-| `config` | object | Loaded UCI config. |
-| `request` | object | Parsed request from `luci_sso.web.request()`. Contains `params` and `cookies`. |
-
-On success, `result.data` contains:
+Processes the callback: checks `error`, `code` and the handshake cookie, verifies the handshake against `state`, exchanges the code, fetches the JWK Set, verifies the ID Token (forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`), fetches UserInfo when the ID Token has no `email`, registers the access token against replay, maps the claims to roles, and creates the `rpcd` session. `deps`: all fields.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
-| `sid` | string | UBUS session ID. Set this as the `sysauth_https` and `sysauth` cookie values. |
-| `email` | string | Authenticated user's email address. |
+| `sid` | string | The `rpcd` session ID. Set it as the `sysauth_https` and `sysauth` cookies. |
+| `email` | string | The user's email address. |
 
----
-
-## `luci_sso.crypto`
-
-High-level cryptographic operations. Wraps the native C bridge — all calls go through the loaded `luci_sso.native` backend.
-
-### `constant_time_eq(a, b)` → `bool`
-
-Compares two strings in constant time. Use this for comparisons against a secret or a value derived from one (state, nonce, `at_hash`, CSRF token). Public identifiers are compared with `===`.
-
-### `jwt_verify(token, pubkey, options)` → `Result<object>`
-
-Verifies a JWT using an asymmetric public key and returns the decoded claims object.
-
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `token` | string | JWT compact serialization. |
-| `pubkey` | string | PEM-encoded public key (RSA or EC). |
-| `options` | object | Options object. `options.alg` constrains the accepted algorithm. |
-
-### `random(len)` → `string`
-
-Returns `len` cryptographically random bytes (raw binary string) from the CSPRNG.
-
-### `hash_sha256(str)` → `string`
-
-Returns the SHA-256 digest of `str` as 32 raw bytes.
-
-### `hash_sha256_hex(str)` → `string`
-
-Returns the SHA-256 digest of `str` as a 64-character lowercase hex string.
-
-### `pkce_pair(len)` → `{verifier, challenge}`
-
-Generates a PKCE verifier and its S256 code challenge.
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `verifier` | string | Base64URL-encoded random string of length `len` (43–128). |
-| `challenge` | string | Base64URL-encoded SHA256 of the verifier. Send this to the IdP. |
-
-### `jwk_to_pem(jwk)` → `Result<string>`
-
-Converts a JSON Web Key object (RSA or EC P-256) to a PEM-encoded public key string.
-
-### `safe_id(token)` → `string`
-
-Returns the first 8 characters of the hex SHA-256 of `token`. Safe to include in log messages as a non-reversible token identifier.
-
-### `set_native(n)` → `void`
-
-Replaces the active native backend. **Testing use only** — allows tests to substitute a mock crypto implementation.
+The HTTP status of each failure is listed in the [HTTP API Reference](http-api.md#error-responses).
 
 ---
 
 ## `luci_sso.oidc`
 
-Pure OIDC protocol logic. No I/O except where an `io` parameter is explicitly required. Also re-exports `discover`, `fetch_jwks`, and `find_jwk` from `luci_sso.discovery`.
+OIDC protocol steps. `exchange_code()` and `fetch_userinfo()` perform HTTP requests through `deps.http`.
 
-### `get_auth_url(io, config, discovery_doc, params)` → `Result<string>`
+### `get_auth_url(deps, config, discovery_doc, params)` → `Result<string>`
 
-Constructs the full authorization URL (including PKCE challenge, state, nonce, scope, and redirect URI).
+Builds the authorization URL with `response_type=code`, `client_id`, `redirect_uri`, `scope` (default `openid profile email`), `state`, `nonce`, `code_challenge` and `code_challenge_method=S256`. `params` is the result of `session.create_state()`; `state` and `nonce` must be at least 16 characters.
 
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `io` | io provider | Used for logging only. |
-| `config` | object | UCI config. |
-| `discovery_doc` | object | Parsed OIDC discovery document. |
-| `params` | object | Handshake state object from `luci_sso.session.create_state()`. |
+### `exchange_code(deps, config, discovery, code, verifier, session_id)` → `Result<object>`
 
-### `exchange_code(io, config, discovery, code, verifier, session_id)` → `Result<{id_token, access_token, ...}>`
+POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the client credentials to `discovery.token_endpoint`. Returns the parsed token response. `session_id` only correlates log lines. Fails with `INSECURE_TOKEN_ENDPOINT`, `INVALID_PKCE_VERIFIER`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `OIDC_INVALID_GRANT`, `TOKEN_EXCHANGE_FAILED` or `TOKEN_RESPONSE_INVALID_JSON`.
 
-Exchanges an authorization code for tokens via the IdP's token endpoint (back-channel).
+### `verify_id_token(deps, tokens, keys, config, handshake, discovery, now)` → `Result<{sub, email, name, groups}>`
+
+Validates `tokens.id_token`: algorithm (`RS256` or `ES256` only, fixed in code), key lookup by `kid`, signature, `iss`, `aud`, `exp`, `nbf`, `iat` (through `crypto.jwt_verify`), then `sub`, `exp` and `iat` presence, `nonce`, `azp` and `at_hash`.
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
-| `io` | io provider | Used for HTTP and logging. |
-| `config` | object | UCI config. |
-| `discovery` | object | Parsed OIDC discovery document. |
-| `code` | string | Authorization code from the IdP callback. |
-| `verifier` | string | PKCE code verifier generated at flow initiation. |
-| `session_id` | string | Handshake session ID (for log correlation). |
+| `tokens` | object | Token response with `id_token` and `access_token`. |
+| `keys` | array | JWK objects from `discovery.fetch_jwks()`. |
+| `config` | object | Provides `issuer_url`, `client_id` and `clock_tolerance`. |
+| `handshake` | object | Provides the expected `nonce`. |
+| `discovery` | object | Its `issuer` must match `config.issuer_url`. |
+| `now` | int | Current Unix time, from `deps.clock.time()`. |
 
-### `verify_id_token(io, tokens, keys, config, handshake, discovery, now)` → `Result<claims>`
+On success, `email` and `name` are `null` unless they are strings in the token, and `groups` is `[]` unless it is an array.
 
-Validates an ID Token against all OIDC Core §3.1.3.7 requirements: algorithm (RS256 or ES256 only, fixed in code), signature, `iss`, `aud`, `exp`, `iat`, `nonce`, and `at_hash`.
+### `fetch_userinfo(deps, endpoint, access_token)` → `Result<object>`
 
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `io` | io provider | Used for JWKS refresh on signature failure and logging. |
-| `tokens` | object | Token response object containing `id_token` and `access_token`. |
-| `keys` | array | Array of JWK objects from `fetch_jwks()`. |
-| `config` | object | UCI config. Provides `issuer_url`, `client_id`, `clock_tolerance`. |
-| `handshake` | object | Handshake state. Provides the expected `nonce`. |
-| `discovery` | object | Discovery document. Provides `jwks_uri` for refresh. |
-| `now` | int | Current Unix timestamp (from `io.time()`). |
-
-On success, `result.data` is the decoded JWT claims object.
-
-### `fetch_userinfo(io, endpoint, access_token)` → `Result<object>`
-
-Fetches user profile claims from the IdP's UserInfo endpoint. Called when the ID Token does not contain an `email` claim.
-
----
-
-## `luci_sso.config`
-
-UCI configuration loader and role mapper.
-
-### `is_enabled(io)` → `Result<bool>`
-
-Returns `Result.ok(true)` if the `enabled` option is `'1'` in UCI.
-
-### `load(io)` → `Result<config_object>`
-
-Reads and validates the full UCI configuration. Returns a config object suitable for passing to `handshake.initiate()` and `handshake.authenticate()`. Fails with `CONFIG_ERROR` if any required option is missing or invalid.
-
-The returned config object shape:
-
-| Field | Type | Source |
-| :--- | :--- | :--- |
-| `issuer_url` | string | `luci-sso.default.issuer_url` |
-| `internal_issuer_url` | string \| null | `luci-sso.default.internal_issuer_url` |
-| `client_id` | string | `luci-sso.default.client_id` |
-| `client_secret` | string | `luci-sso.default.client_secret` |
-| `redirect_uri` | string | `luci-sso.default.redirect_uri` |
-| `scope` | string | `luci-sso.default.scope` |
-| `clock_tolerance` | int | `luci-sso.default.clock_tolerance` |
-| `roles` | array | All `config role` sections |
-
-### `find_roles_for_user(config, claims)` → `Result<{role_name, read, write}>`
-
-Matches a user's OIDC claims against the configured roles. Returns the merged permissions of all matching roles.
-
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `config` | object | Loaded config from `load()`. |
-| `claims` | object | JWT claims object. Uses `claims.email` and `claims.groups`. |
-
-On success, `result.data` contains:
-
-| Field | Type | Description |
-| :--- | :--- | :--- |
-| `role_name` | string | Name of the first matched role. Used as the UBUS session label. |
-| `read` | array | Merged list of LuCI access groups granted read access. |
-| `write` | array | Merged list of LuCI access groups granted write access. |
+GETs the UserInfo endpoint with the access token as a Bearer token and returns the claims. Fails with `INSECURE_USERINFO_ENDPOINT`, `MISSING_ACCESS_TOKEN`, `USERINFO_NETWORK_ERROR`, `USERINFO_FETCH_FAILED`, `USERINFO_INVALID_JSON` or `MISSING_SUB_CLAIM`.
 
 ---
 
 ## `luci_sso.discovery`
 
-OIDC metadata fetching and caching. Also exported from `luci_sso.oidc`.
+Discovery document and JWK Set fetching, with a 24-hour cache in `/var/run/luci-sso/` keyed by a hash of the URL. When a fetch fails, an expired cache entry is used instead. `deps: { fs, http, native, clock, log }`.
 
-### `discover(io, issuer, options)` → `Result<discovery_doc>`
+### `discover(deps, issuer, options)` → `Result<discovery_doc>`
 
-Fetches and validates the OIDC discovery document from `<issuer>/.well-known/openid-configuration`. Caches the result in `/var/run/luci-sso/` for 24 hours.
+Fetches `<issuer>/.well-known/openid-configuration`, checks that its `issuer` equals `issuer` after normalization, and that `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. Drops a non-HTTPS `userinfo_endpoint` or `end_session_endpoint`.
 
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `io` | io provider | Used for HTTP and filesystem. |
-| `issuer` | string | The public OIDC issuer URL. |
-| `options` | object | Optional. `options.internal_issuer_url` overrides the fetch origin for split-horizon setups. |
+| Option | Description |
+| :--- | :--- |
+| `internal_issuer_url` | Fetch from this origin instead, keeping the issuer's path. |
+| `cache_path` | Override the cache file. |
+| `ttl` | Cache lifetime in seconds (default `86400`). |
 
-### `fetch_jwks(io, jwks_uri, options)` → `Result<{keys}>`
+### `fetch_jwks(deps, jwks_uri, options)` → `Result<array>`
 
-Fetches the JWK Set from the IdP. Caches in `/var/run/luci-sso/` for 24 hours.
-
-| Parameter | Type | Description |
-| :--- | :--- | :--- |
-| `io` | io provider | Used for HTTP and filesystem. |
-| `jwks_uri` | string | The `jwks_uri` from the discovery document. |
-| `options` | object | Optional. `options.force` bypasses the cache. |
-
-On success, `result.data.keys` is an array of JWK objects.
+Returns the `keys` array of the JWK Set. Options: `force` (skip the cache), `cache_path`, `ttl`.
 
 ### `find_jwk(keys, kid)` → `Result<jwk>`
 
-Finds a JWK by `kid` (key ID). If `kid` is absent, returns the first key.
+Returns the key whose `kid` equals `kid`, or the first key when `kid` is empty. Fails with `KEY_NOT_FOUND` or `NO_KEYS_AVAILABLE`.
 
 ---
 
-## Native C bridge (`src/native.h`)
+## `luci_sso.config`
 
-The C interface that all crypto backends must implement. See [How to Add a New Crypto Backend](../how-to/developer/adding-crypto-backend.md) for the full walkthrough.
+UCI configuration loader and role mapper. `deps: { uci, log }`.
+
+### `is_enabled(deps)` → `Result<bool>`
+
+`true` when `luci-sso.default.enabled` is `'1'`. Fails with `UCI_ERROR` when there is no cursor.
+
+### `load(deps)` → `Result<config>`
+
+Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERROR`, or `CONFIG_ERROR` with the reason in `details`.
+
+| Field | Type | Source |
+| :--- | :--- | :--- |
+| `issuer_url` | string | `luci-sso.default.issuer_url` |
+| `internal_issuer_url` | string | `luci-sso.default.internal_issuer_url`, or `issuer_url` when unset |
+| `client_id` | string | `luci-sso.default.client_id` |
+| `client_secret` | string | `luci-sso.default.client_secret` |
+| `redirect_uri` | string | `luci-sso.default.redirect_uri` |
+| `scope` | string or null | `luci-sso.default.scope` |
+| `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
+| `roles` | array | Every `config role` section with an email or group: `{ name, emails, groups, read, write }` |
+
+### `find_roles_for_user(config, claims)` → `Result<{role_name, read, write}>`
+
+Matches `claims.email` (case-insensitive) and `claims.groups` (case-sensitive) against every role and merges the `read` and `write` lists of all matches. `role_name` is the first matching role. Fails with `NO_ROLES_MATCHED` when nothing matches or the merged lists are both empty.
+
+---
+
+## `luci_sso.session`
+
+Facade over `luci_sso.session.handshake`: the handshake state files in `/var/run/luci-sso/`.
+
+| Export | Implementation |
+| :--- | :--- |
+| `create_state` | `session.handshake.create` |
+| `verify_state` | `session.handshake.verify` |
+| `consume_state` | `session.handshake.consume` |
+| `reap_stale_handshakes` | `session.handshake.reap` |
+
+### `create(deps, clock_tolerance)` → `Result<{token, state, nonce, code_challenge}>`
+
+Writes a new handshake file (mode `0600`) holding `state`, `nonce`, the PKCE verifier, `iat` and `exp` (`iat` + 300 s), and returns the opaque `token` for the cookie. At 500 pending handshakes it first removes expired ones; if none can be removed, it fails with `HANDSHAKE_CAPACITY_EXCEEDED`. Other failures: `CRYPTO_INIT_FAILED`, `STATE_SAVE_FAILED`. `deps: { fs, clock, native, log }`.
+
+### `verify(deps, handle, expected_state, clock_tolerance)` → `Result<handshake>`
+
+Reads the handshake for `handle`, checks its fields, compares `state` with `expected_state` in constant time, checks `exp` and `iat` against the clock, and only then claims the file by renaming it. Returns `{ id, state, code_verifier, nonce, iat, exp }`. A wrong `state` fails with `STATE_PARAMETER_MISMATCH` and keeps the file; `STATE_CORRUPTED`, `HANDSHAKE_EXPIRED` and `HANDSHAKE_NOT_YET_VALID` remove it. Other failures: `MALFORMED_STATE_COOKIE`, `STATE_NOT_FOUND`.
+
+### `consume(deps, handle)` → `void`
+
+Deletes the handshake file for `handle`.
+
+### `reap(deps, clock_tolerance)` → `Result<int>`
+
+Deletes handshake files older than 300 s + `clock_tolerance` + 60 s and returns how many were removed.
+
+### `luci_sso.session.common`
+
+Constants `HANDSHAKE_DURATION` (`300`), `HANDSHAKE_DIR` (`"/var/run/luci-sso"`), `REAP_GRACE_PERIOD` (`60`), `LIMIT_PENDING_HANDSHAKES` (`500`), and `ensure_handshake_dir(deps)`.
+
+---
+
+## `luci_sso.ubus`
+
+The `rpcd` session and the access-token replay registry. `deps: { ubus, fs, native, log }`, plus `uci` when present.
+
+### `create_passwordless_session(deps, username, perms, oidc_email, access_token, refresh_token, id_token)` → `Result<string>`
+
+Creates an `rpcd` session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`), grants it the ACLs for `perms` (`{ read, write }`), and sets the values `username`, `oidc_user`, `oidc_access_token`, `oidc_refresh_token`, `oidc_id_token` and `token` (a random CSRF token). `write '*'` grants full admin; any other role gets the grants `rpcd` would give a password login with the same lists. Returns the session ID. Fails with `UBUS_SESSION_FAILED` or `CRYPTO_INIT_FAILED`.
+
+### `get_session(deps, sid)` → `Result<object>`
+
+Returns the session's values.
+
+### `destroy_session(deps, sid)` → `Result`
+
+Destroys the session.
+
+### `register_token(deps, access_token)` → `Result`
+
+Creates `/var/run/luci-sso/tokens/<sha256 hex>` with `mkdir`, which succeeds only once per token. Fails with `TOKEN_REPLAYED`, `INVALID_TOKEN`, `SYSTEM_ERROR` or a hashing error.
+
+---
+
+## `luci_sso.ratelimit`
+
+Per-client request budgets, stored in `STATE_FILE`. `deps: { fs, clock, native, log }`.
+
+| Export | Value |
+| :--- | :--- |
+| `STATE_FILE` | `"/var/run/luci-sso/ratelimit.json"` |
+| `LIMITS` | `{ login: { requests: 10, window: 300 }, client: { requests: 30, window: 60 }, tracked: 256 }` |
+| `UNKNOWN_CLIENT` | `"unknown"`, the shared key for unparseable addresses |
+
+### `client_key(addr)` → `string`
+
+Maps `REMOTE_ADDR` to a key: `"v4:<address>"` for IPv4 and IPv4-mapped IPv6, `"v6:<first four groups>"` (the `/64`) for IPv6, `UNKNOWN_CLIENT` otherwise.
+
+### `check(deps, key, is_login)` → `{allowed, retry_after, budget}`
+
+Counts one request for `key` (and one login when `is_login`), saves the state, and returns whether it is allowed. When not, `budget` is `"login"` or `"client"` and `retry_after` is the seconds until that window ends.
+
+---
+
+## `luci_sso.crypto`
+
+Facade over `luci_sso.crypto.*`. Every function except `constant_time_eq` takes the native module as its first argument.
+
+| Export | Implementation |
+| :--- | :--- |
+| `constant_time_eq` | `crypto.base.constant_time_eq` |
+| `random` | `crypto.base.random` |
+| `safe_id` | `crypto.base.safe_id` |
+| `jwt_verify` | `crypto.jwt.verify` |
+| `hash_sha256` | `crypto.hash.sha256` |
+| `hash_sha256_hex` | `crypto.hash.sha256_hex` |
+| `pkce_pair` | `crypto.pkce.pair` |
+| `jwk_to_pem` | `crypto.jwk.to_pem` |
+
+### `constant_time_eq(a, b)` → `bool`
+
+Compares two strings without an early exit: it XOR-accumulates over the length of the longer string. Pure ucode, and best-effort only: an interpreter cannot guarantee constant time. Returns `false` for non-strings and for inputs over 16 384 bytes.
+
+### `random(native, len)` → `Result<string>`
+
+Returns `len` random bytes (default `32`; the native module accepts 1–4096). `die()`s if `len` is not an integer. Fails with `CSPRNG_FAILURE`.
+
+### `safe_id(native, token)` → `string`
+
+Returns the first 16 hex characters (64 bits) of the SHA-256 of `token`, for log correlation. Returns `"[INVALID]"` for a non-string or a string under 8 characters, and `"[ERROR]"` if hashing fails.
+
+### `jwt_verify(native, token, pubkey, options)` → `Result<payload>`
+
+Verifies a compact JWT with a PEM public key and returns the decoded payload.
+
+| Option | Description |
+| :--- | :--- |
+| `alg` | `"RS256"` or `"ES256"`. The header must match. |
+| `iss` | Expected issuer (compared after URL normalization). Required. |
+| `aud` | Expected audience. Required. |
+| `now` | Current Unix time. Required integer. |
+| `clock_tolerance` | Allowed skew in seconds. Required integer. |
+| `pre_parsed_header` | Optional already-decoded header. |
+
+Rejects tokens over 16 KB (`TOKEN_TOO_LARGE`); checks `exp`, `nbf` (if present) and that `iat` is not in the future.
+
+### `hash_sha256(native, str)` → `Result<string>`
+
+The SHA-256 digest of `str` as 32 raw bytes. Fails with `INVALID_ARGUMENT` for a non-string, `CRYPTO_ERROR` if the native call fails.
+
+### `hash_sha256_hex(native, str)` → `Result<string>`
+
+The SHA-256 digest as 64 lowercase hex characters.
+
+### `pkce_pair(native, len)` → `Result<{verifier, challenge}>`
+
+Generates a PKCE verifier from `len` random bytes (default `43`, range 32–96; `die()`s outside it), Base64URL-encoded, and its S256 challenge.
+
+### `jwk_to_pem(native, jwk)` → `Result<string>`
+
+Converts an `RSA` or `EC` (`P-256`) JWK to a PEM public key. Fails with `MISSING_KTY`, `UNSUPPORTED_KTY`, `MISSING_RSA_PARAMS`, `INVALID_RSA_PARAMS_ENCODING`, `UNSUPPORTED_CURVE`, `MISSING_EC_PARAMS`, `INVALID_EC_PARAMS_ENCODING` or `PEM_CONVERSION_FAILED`.
+
+`luci_sso.crypto.pkce` also exports `generate_verifier(native, len)` and `calculate_challenge(native, verifier)`.
+
+---
+
+## `luci_sso.encoding`
+
+Pure helpers.
+
+| Function | Returns | Description |
+| :--- | :--- | :--- |
+| `b64url_decode(str)` | `Result<string>` | Base64URL to raw bytes. Fails with `TOKEN_TOO_LARGE` over 32 KB, `INVALID_ENCODING` on bad input. |
+| `b64url_encode(str)` | `Result<string>` | Raw bytes to unpadded Base64URL. |
+| `binary_truncate(data, len)` | `Result<string>` | The first `len` bytes. |
+| `safe_json(data)` | `Result<any>` | Parses JSON from a string, a Result holding one, or an object with `read()`. |
+| `normalize_url(url)` | `Result<string>` | Lower-case scheme and host, default port removed, trailing slashes removed. |
+| `split_origin(url)` | `Result<{origin, rest}>` | The normalized origin and the untouched path, query and fragment. Refuses URLs with userinfo. |
+| `is_origin(url)` | `bool` | `true` for `scheme://host[:port]` with at most a trailing `/`. |
+| `rebase_origin(url, from, to)` | `string` | Moves `url` from `from`'s origin to `to`'s, keeping its path; otherwise returns it unchanged. |
+| `normalize_sub(sub)` | `Result<string>` | Lower-cases a `sub` claim. |
+| `is_https(url)` | `bool` | `true` if `url` starts with `https://`, in any case. |
+
+---
+
+## `luci_sso.result`
+
+| Function | Description |
+| :--- | :--- |
+| `ok(data)` | A successful Result. |
+| `err(error, details)` | A failed Result. |
+| `is(obj)` | `true` if `obj` was made by `ok()` or `err()`. |
+| `describe(res)` | `"<error> (<details>)"` when `details` is a non-empty string, otherwise `"<error>"`. Used in log lines. |
+
+---
+
+## `luci_sso.errors`
+
+One exported string constant per public error code, equal to its name. [Log Messages](log-messages.md) documents every one; `make lint` keeps the two in sync.
+
+---
+
+## `luci_sso.deps`
+
+### `create()` → `Deps`
+
+Builds the production `deps` object. Called once by the CGI script; never in tests.
+
+### `ubus_channel(conn)` → `{ call(obj, method, args) → Result }`
+
+Wraps a ubus connection. A `null` reply is a success unless `conn.error()` reports one (`UBUS_ERROR`); a missing connection gives `UBUS_CONNECT_FAILED`.
+
+### `syslog_channel(log_mod)` → `(level, msg) → void`
+
+Opens syslog with the tag `luci-sso` and returns the `deps.log` function.
+
+---
+
+## `luci_sso.components.http_client`
+
+### `create(uclient, uloop, fs)` → `HttpClient`
+
+Returns `{ get(url, opts), post(url, opts) }`. `opts.headers` sets request headers; `post` sends `opts.body`. Both return `Result<{status, body}>`. Only HTTPS URLs are accepted (`HTTPS_REQUIRED`). Certificates are verified against every `*.crt` and `*.pem` file in `/etc/ssl/certs/` plus the usual bundle paths. Requests time out after 10 seconds and bodies are capped at 256 KB. A failed request is `HTTP_REQUEST_FAILED` with the cause in `details`: `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE` or `UCLIENT_ERROR_<n>`, among others.
+
+## `luci_sso.components.clock`
+
+### `create(uloop, time_fn)` → `Clock`
+
+Returns `{ time(), sleep(seconds) }`. `time_fn` defaults to the built-in `time()`. `sleep` accepts 0–30 seconds.
+
+---
+
+## `luci_sso.native`
+
+The compiled bridge, `/usr/lib/ucode/luci_sso/native.so`, installed by one `luci-sso-crypto-*` package. The functions are registered only if the backend initializes; failures return `false` or `null`.
+
+| Function | Returns | Description |
+| :--- | :--- | :--- |
+| `verify_rs256(msg, sig, pem)` | `bool` | RS256 signature check. |
+| `verify_es256(msg, sig, pem)` | `bool` | ES256 check; `sig` is 64 bytes, `R` then `S`. |
+| `sha256(str)` | string or `null` | 32 raw bytes. |
+| `hmac_sha256(key, msg)` | string or `null` | 32 raw bytes. An empty key fails. |
+| `random(len)` | string or `null` | `len` bytes (1–4096, default 32) from the backend's CSPRNG. |
+| `jwk_rsa_to_pem(n, e)` | string or `null` | PEM from raw modulus and exponent; only `e` = 65537. |
+| `jwk_ec_p256_to_pem(x, y)` | string or `null` | PEM from raw 32-byte P-256 coordinates. |
+
+Every input over 16 384 bytes (`NATIVE_MAX_INPUT_SIZE`) is rejected before it reaches the backend.
+
+---
+
+## Native C bridge (`mod/native.h`)
+
+The C interface that every crypto backend implements. See [How to Add a New Crypto Backend](../how-to/developer/adding-crypto-backend.md) for the full walkthrough.
 
 These are the backend functions. Callers do not reach them directly: `mod/native_api.c` wraps each one with the input guards (the `NATIVE_MAX_INPUT_SIZE` 16 384-byte ceiling on every input, exact ES256 signature and EC coordinate lengths, the F4-only RSA exponent, the empty-HMAC-key rejection, the random length bounds) and guarantees NUL-terminated PEM output. The ucode binding in `mod/native_ucode.c` calls those wrappers.
 
 ### `native_crypto_init()` → `int`
 
-Initializes the crypto backend (e.g., PSA Crypto for mbedTLS). Called once at startup. Returns `0` on success.
+Initializes the backend (PSA Crypto for mbedTLS, the RNG for wolfSSL; nothing for OpenSSL). Called from the module's init; the functions are registered only if it returns `0`.
 
 ### `native_crypto_deinit()` → `void`
 
-Releases backend resources. Called during test teardown and fuzzing cleanup.
+Releases backend resources. Used by tests and the fuzzer.
 
 ### `native_verify_rs256(msg, msg_len, sig, sig_len, key_pem, key_len)` → `bool`
 
@@ -288,7 +463,7 @@ Verifies an RS256 signature. Rejects RSA keys shorter than `NATIVE_RSA_MIN_BITS`
 
 ### `native_verify_es256(msg, msg_len, sig, sig_len, key_pem, key_len)` → `bool`
 
-Verifies an ES256 (ECDSA P-256) signature using constant-time comparison.
+Verifies an ES256 (ECDSA P-256) signature given as 64 bytes of `R` followed by `S`.
 
 ### `native_sha256(input, input_len, output)` → `int`
 
@@ -300,11 +475,11 @@ Computes HMAC-SHA256. `output` must be at least 32 bytes. Returns `0` on success
 
 ### `native_random(buf, len)` → `int`
 
-Fills `buf` with `len` cryptographically random bytes from a CSPRNG. Returns `0` on success. **Must not use a predictable source.**
+Fills `buf` with `len` bytes from a CSPRNG. Returns `0` on success. **Must not use a predictable source.**
 
 ### `native_memzero(p, len)` → `void`
 
-Zeroizes `len` bytes at `p` using a compiler-safe method (e.g., `explicit_bzero`) that cannot be optimized away.
+Zeroizes `len` bytes at `p` with a method the compiler cannot optimize away (`mbedtls_platform_zeroize`, `OPENSSL_cleanse` or an equivalent).
 
 ### `native_jwk_rsa_to_pem(n, n_len, e, e_len, out, out_len)` → `int`
 
@@ -312,18 +487,20 @@ Converts RSA JWK modulus (`n`) and exponent (`e`) to a PEM-encoded public key. `
 
 ### `native_jwk_ec_p256_to_pem(x, x_len, y, y_len, out, out_len)` → `int`
 
-Converts EC P-256 JWK coordinates (`x`, `y`) to a PEM-encoded public key. Validates coordinate lengths against `NATIVE_EC_COORD_SIZE` (32 bytes) before use. `out` must be at least `NATIVE_EC_PEM_MAX` (2048) bytes.
+Converts EC P-256 JWK coordinates (`x`, `y`) to a PEM-encoded public key. `out` must be at least `NATIVE_EC_PEM_MAX` (2048) bytes.
 
 ---
 
-## Testing utilities (`test/`)
+## Test support (`test/`)
 
-The test framework lives in `test/` and is not part of the installed package.
+The tests run on utest (the `ucode-utest` package), which is not part of the installed package.
 
-| Module | Purpose |
+| Path | Purpose |
 | :--- | :--- |
-| `test/testing/` | Test runner, `test()`, `assert()`, `assert_eq()` |
-| `test/mock.uc` | Mock I/O provider factory — `mock.create()` |
-| `test/lib/` | Shared fixtures (valid JWTs, JWKS, discovery docs) |
+| `test/utest.config.uc` | Module search paths and the modules utest proxies. |
+| `test/context.uc` | `with_context(cfg, cb)`: builds a full `deps` object from proxies for integration tests. |
+| `test/proxies/` | Proxies for `clock`, `http_client` and `native`. |
+| `test/fixtures/` | Shared fixtures (`fixtures.oidc`, `fixtures.rsa`). |
+| `test/lib/helpers.uc` | Helpers that produce real signed JWTs. |
 
 See [Testing Architecture](testing-architecture.md) for the test buckets and [How to Run Tests](../how-to/developer/testing.md) for usage.

@@ -304,13 +304,12 @@ let x = compute();  // Cache for performance
 /**
  * Multi-line JSDoc-style for exported functions.
  * 
- * @param {object} io - I/O provider { http_get, time, ... }
+ * @param {object} deps - Injected dependencies; uses { fs, http, native, clock, log }
  * @param {string} issuer - IdP issuer URL
  * @param {object} [options] - Optional configuration
- * @returns {object} - Decoded payload
- * @throws {string} - Error code on failure
+ * @returns {object} - Result Object {ok, data/error}
  */
-export function discover(io, issuer, options) {
+export function discover(deps, issuer, options) {
 	// ...
 };
 
@@ -345,15 +344,14 @@ function validate(input) {
 
 ## C Code Style
 
-### Standards: MbedTLS 3.x / PSA Crypto
-This project exclusively uses **MbedTLS 3.x**. All new cryptographic operations MUST be implemented using the **PSA Crypto API** (`psa/crypto.h`).
+### Standards: Crypto Backends
+The native bridge in `mod/` has three backends: `native_mbedtls.c` (mbedTLS 3.x), `native_wolfssl.c` (wolfSSL) and `native_openssl.c` (OpenSSL 3). Each implements the interface in `mod/native.h`; input checks shared by all of them live in `mod/native_api.c`. New operations MUST be added to all three. See [How to Add a New Crypto Backend](../how-to/developer/adding-crypto-backend.md).
 
 **Requirements:**
-- ✅ Call `psa_crypto_init()` in `uc_module_init`.
-- ✅ Check `psa_status_t` for ALL operations.
-- ✅ Use opaque handles (`psa_key_id_t`) where possible.
-- ✅ Destroy keys (`psa_destroy_key`) on all return paths.
-- ✅ Use `MBEDTLS_PRIVATE()` macro if direct structure access is unavoidable (deprecated).
+- ✅ Initialize the library in `native_crypto_init()`, which `uc_module_init` calls; the functions are registered only when it succeeds.
+- ✅ Check the return value of ALL library calls.
+- ✅ Free keys and contexts on all return paths.
+- ✅ mbedTLS: use the **PSA Crypto API** (`psa/crypto.h`) and check `psa_status_t`; use opaque handles (`psa_key_id_t`) where possible and destroy them (`psa_destroy_key`); use the `MBEDTLS_PRIVATE()` macro only if direct structure access is unavoidable.
 
 ---
 
@@ -445,7 +443,7 @@ All stack or heap buffers containing sensitive cryptographic material (keys, non
 
 **Requirements:**
 - Use `mbedtls_platform_zeroize()` for MbedTLS backends.
-- Use `ForceZero()` or `memset_s()` equivalents for other backends.
+- Use `OPENSSL_cleanse()` for OpenSSL, and `ForceZero()` or an equivalent that cannot be optimized away for wolfSSL.
 
 ---
 
