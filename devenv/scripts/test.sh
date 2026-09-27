@@ -76,12 +76,36 @@ run_unit() {
     )
   fi
 
-  docker compose $COMPOSE_FLAGS exec openwrt \
-    utest \
-    -c /usr/share/luci-sso/test/utest.config.uc \
-    -r "$reporter" \
-    "${filter_args[@]}" \
-    "${bundles[@]}"
+  # The system bucket drives the container's one real rpcd, and its tests make
+  # rpcd reload (a restart during which its ubus objects are gone). Its files
+  # therefore run one at a time, after the other buckets, in their own run.
+  local parallel=() serial=() b
+  for b in "${bundles[@]}"; do
+    case "$b" in
+    */test/system | */test/system/ | */test/system/*) serial+=("$b") ;;
+    *) parallel+=("$b") ;;
+    esac
+  done
+
+  local failed=0
+  if [ "${#parallel[@]}" -gt 0 ]; then
+    docker compose $COMPOSE_FLAGS exec openwrt \
+      utest \
+      -c /usr/share/luci-sso/test/utest.config.uc \
+      -r "$reporter" \
+      "${filter_args[@]}" \
+      "${parallel[@]}" || failed=1
+  fi
+  if [ "${#serial[@]}" -gt 0 ]; then
+    docker compose $COMPOSE_FLAGS exec openwrt \
+      utest \
+      -c /usr/share/luci-sso/test/utest.config.uc \
+      -r "$reporter" \
+      -j 1 \
+      "${filter_args[@]}" \
+      "${serial[@]}" || failed=1
+  fi
+  return $failed
 }
 
 run_e2e() {
