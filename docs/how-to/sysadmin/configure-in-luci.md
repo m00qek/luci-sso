@@ -1,16 +1,14 @@
 # How to Configure luci-sso in the LuCI Web Interface
 
-This guide walks through the **Services > Single Sign-On** settings page. Use it when you already have credentials from your identity provider and want to enter or update them directly in LuCI.
+This guide enters or updates the identity provider's settings and the access roles on the **Services > Single Sign-On** page. Use it when you already have a client ID and secret from your identity provider.
 
-If you are connecting to a specific provider for the first time, use the [provider guides](../index.md#identity-providers) instead — they cover IdP registration and these router settings together in one flow.
+If you are connecting to a provider for the first time, use the [provider guides](../index.md#identity-providers) instead: they cover the IdP registration and these router settings together. For what each field stores, see [LuCI Form ↔ UCI Option](../../reference/uci-config.md#luci-form-uci-option).
 
 ---
 
 ## 1. Open the settings page
 
-Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading reads **SSO Login**.
-
-The page has two sections: **Settings** (OIDC provider credentials) and **Users** (role-based access control).
+Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading reads **SSO Login**. It has two sections: **Settings** and **Users**.
 
 ![LuCI Services › Single Sign-On page showing the Settings section with fields for Enable SSO, Issuer URL, Client ID, Client Secret, Redirect URI, Scopes, and Clock Tolerance, and a Users section below listing configured roles](../../assets/screenshots/luci-sso-settings.svg "LuCI Services › Single Sign-On — Settings and Users sections")
 
@@ -18,64 +16,52 @@ The page has two sections: **Settings** (OIDC provider credentials) and **Users*
 
 ## 2. Fill in the Settings section
 
-### Enable SSO
-
-Turns the SSO login button on or off. When disabled, the button disappears from the LuCI login page, the `?action=enabled` probe returns `{"enabled": false}`, and any other request to `/cgi-bin/luci-sso` gets an error page saying single sign-on is not enabled (`SSO_DISABLED` in the log). Password login is not affected.
-
-### Issuer URL
-
-The base URL of your identity provider's OIDC discovery endpoint. `luci-sso` fetches `<issuer_url>/.well-known/openid-configuration` to locate the token endpoint and JWKS. Must use HTTPS and match the `issuer` field in the discovery document exactly.
-
-### Client ID and Client Secret
-
-The OAuth2 credentials from your identity provider's client registration. The secret is stored in `/etc/config/luci-sso` — protect that file.
-
-### Redirect URI
-
-The callback URL the IdP redirects the browser to after authentication: `https://<router-host>/cgi-bin/luci-sso/callback`. The shipped configuration leaves it unset, so the form suggests one built from the host name in your browser's address bar; check it before you save. If the option is already set, the form shows the saved value instead. The value must exactly match the redirect URI registered with the IdP, and users must open LuCI at the same host name, or the login fails with `MISSING_HANDSHAKE_COOKIE`.
-
-### Scopes
-
-Space-separated OIDC scopes requested during login. The default `openid profile email` covers email-based role mapping. Add `groups` if your provider supports group claims and you want group-based role mapping — see [How to Configure Role-Based Access Control](rbac.md) for details.
-
-### Clock Tolerance
-
-Seconds of allowed clock skew when checking the ID Token's timestamps and the login handshake's own. The default `60` is sufficient for most setups. Increase it if logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` despite clocks that appear synchronized.
-
-### Internal Issuer URL
-
-Leave empty unless your router reaches the IdP at a different address than your browser does. When set, `luci-sso` uses this URL for back-channel requests (token exchange, JWKS fetch) while still validating the `iss` claim against the public Issuer URL. See [How to Configure Split-Horizon Networking](split-horizon.md).
+1.  Enter the **Issuer URL**, **Client ID** and **Client Secret** from your identity provider. The Issuer URL must be exactly the `issuer` your provider declares.
+2.  Check the **Redirect URI**. If none is saved yet, the field suggests `https://<host>/cgi-bin/luci-sso/callback` with the host you opened LuCI at. Keep it only if users will open LuCI at that same host name; otherwise, replace the host. The value must match the redirect URI registered with the IdP exactly.
+3.  If you map users by group, add `groups` to **Scopes** (for example `openid profile email groups`), provided your IdP supports it. See [How to Configure Role-Based Access Control](rbac.md).
+4.  If the router reaches the IdP at a different address than browsers do, set **Internal Issuer URL** to that origin (`https://host[:port]`, no path). Otherwise leave it empty. See [How to Configure Split-Horizon Networking](split-horizon.md).
+5.  Leave **Clock Tolerance** at `60` unless logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` while the clocks look right.
+6.  Tick **Enable SSO** when the settings and at least one role are ready.
 
 ![LuCI Services › Single Sign-On — Settings section scrolled to show the Internal Issuer URL field, which is empty by default and marked as optional](../../assets/screenshots/luci-sso-settings-advanced.svg "LuCI SSO settings — Internal Issuer URL field")
 
 ---
 
-## 3. Configure access in the Users section
+## 3. Add or change roles in the Users section
 
-The **Users** section manages roles. A role maps OIDC claims to LuCI permissions. When a user logs in, every role whose conditions match is applied and permissions are merged.
+A role says who may log in (by email or group) and which LuCI access groups they get. Every role a user matches applies, and the permissions are merged.
 
-### Add a role
+To add a role:
 
-Click **Add** and enter a name (alphanumeric and underscores). In the modal:
+1.  Type a name (letters, digits and underscores; not `default`) and click **Add**.
+2.  In the role editor, add entries to **Email Addresses**, **Groups**, or both. A role with neither is ignored.
+3.  Add access groups to **Read Access** and **Write Access**. For a full administrator, put `*` in **Write Access**. For a role that may save settings, include `luci-base` in **Write Access**.
+4.  Click **Save** to close the editor.
 
-- **Email Addresses** — one address per entry. Matched case-insensitively against the OIDC `email` claim.
-- **Groups** — one group name per entry. Matched case-sensitively against the OIDC `groups` claim. Some providers append a suffix (e.g. Pocket ID returns `GroupName@PocketID`).
-- **Read Access** — LuCI access groups this role may read (keys in `/usr/share/rpcd/acl.d/*.json`, globs allowed). `*` reads every group, and nothing more.
-- **Write Access** — LuCI access groups this role may change. Include `luci-base`, which holds the save and apply calls. `*` makes the role a full admin. Leave empty for read-only access.
+To change a role, click its pencil icon. To remove one, click its trash icon; a user who matched only that role gets `USER_NOT_AUTHORIZED` at their next login.
 
-Click **Save** to close the modal.
-
-### Edit or remove a role
-
-Use the pencil icon to edit a role's modal, or the trash icon to delete it. A user who matched only a deleted role will receive `USER_NOT_AUTHORIZED` on their next login.
+For which access groups to grant, see [How to Configure Role-Based Access Control](rbac.md).
 
 ---
 
-## 4. Save & Apply
+## 4. Save and apply
 
-Click **Save & Apply** to write the configuration to `/etc/config/luci-sso`. There is no service to restart — `luci-sso` reads configuration on every request, so changes take effect on the next login attempt.
+Click **Save & Apply**. There is no service to restart: `luci-sso` reads the configuration on every request, so the change applies from the next login. Sessions that already exist keep the permissions they were given.
 
-**Reset** reverts the form to the last saved state without writing anything.
+To discard unsaved edits, click **Reset**.
+
+---
+
+## 5. Check the result
+
+On the router:
+
+```bash
+uci get luci-sso.default.redirect_uri
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+```
+
+The first command prints the redirect URI you saved. The second answers `{"enabled": true}` once SSO is enabled; then log out and use the SSO button on the login page. If the login fails, see [How to Debug luci-sso](debugging.md).
 
 ---
 

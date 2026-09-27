@@ -30,6 +30,42 @@ A user is assigned a role if ANY of its conditions match (OR logic). Multiple ro
 | `read` | list (string) | LuCI access groups (keys in `/usr/share/rpcd/acl.d/*.json`, e.g. `luci-mod-status-realtime`) granted read access. Globs and `!negations` work as in rpcd. `*` means read on every `luci-*` group, and nothing more. Each group is expanded into the permissions its ACL file lists, as rpcd does for a password login. |
 | `write` | list (string) | LuCI access groups granted write access; write implies read. Saving anything also needs `luci-base`, whose write section holds `uci set` and `uci apply`. `*` makes the role a full admin: read and write on every group, plus unrestricted `ubus`, `uci`, `file` and `cgi-io` access. |
 
+A role that has neither an `email` nor a `group` entry is ignored, and the log says `Ignoring role '<name>': missing email or group list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).
+
+---
+
+## LuCI Form ↔ UCI Option
+
+The settings page at **Services > Single Sign-On** (view `services/sso`, heading **SSO Login**) edits `/etc/config/luci-sso`. Opening it needs the `luci-app-sso` access group. **Save & Apply** writes the form with `uci`; **Reset** reloads the last saved values without writing.
+
+### Settings section
+
+Edits `config oidc 'default'`.
+
+| Field | UCI option | Form behaviour |
+| :--- | :--- | :--- |
+| **Enable SSO** | `enabled` | Checkbox; saved as `1` or `0`. While `0`, the login page shows no SSO button, the `?action=enabled` probe answers `{"enabled": false}`, and other requests to `/cgi-bin/luci-sso` get an error page (`SSO_DISABLED`). Password login is unaffected. |
+| **Issuer URL** | `issuer_url` | Required. Rejects a value that does not start with `https://` (`Must use HTTPS`). Placeholder: `https://accounts.google.com`. |
+| **Client ID** | `client_id` | Required. |
+| **Client Secret** | `client_secret` | Required. Masked password field. |
+| **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host in the browser's address bar; when it is set, the saved value. |
+| **Scopes** | `scope` | Optional. Placeholder: `openid profile email`, which is also what the login requests when the option is empty. |
+| **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
+| **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
+
+### Users section
+
+Each row is a `config role '<name>'` section. **Add** takes the role name, which becomes the section name; the name `default` is refused, because it belongs to the OIDC section. The table's **Emails**, **Groups**, **Read Access** and **Write Access** columns list the role's values, or `(none)`. The pencil icon opens the role's editor; the trash icon deletes the section.
+
+| Field (role editor) | UCI option | Form behaviour |
+| :--- | :--- | :--- |
+| **Email Addresses** | `email` | List; one address per entry. |
+| **Groups** | `group` | List; one group per entry. |
+| **Read Access** | `read` | List of access groups. |
+| **Write Access** | `write` | List of access groups. |
+
+Matching and permission rules for these options are in [Role Mapping](#role-mapping-config-role).
+
 ---
 
 ## Example Configuration
