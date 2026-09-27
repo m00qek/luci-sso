@@ -4,17 +4,17 @@ Explanation is "understanding-oriented". It deepens the reader's understanding o
 
 ---
 
-## 🏛️ Foundations
+## Foundations
 *   [About LuCI SSO](about.md) - Project history and core goals.
 *   [About the Design Philosophy](design-philosophy.md) - Core tenets and why they exist.
-*   [Architecture](architecture.md) - The "Functional Core / Imperative Shell" design.
+*   [About the Architecture](architecture.md) - How the modules fit together, and how `deps` isolates them from the system.
 *   [About Crypto Backends](crypto-backends.md) - Understanding the trade-offs between mbedTLS, WolfSSL, and OpenSSL.
 *   [About the Test Architecture](test-architecture.md) - Why tests are divided by entry point, and why the native module has its own bucket.
 
-## 🔐 Authentication
+## Authentication
 *   [About the OIDC Login Flow](oidc-flow.md) - What happens when a user clicks "Login with SSO".
 *   [About the Session Lifecycle](session-lifecycle.md) - How sessions are created, how long they last, and what happens at logout.
 
-## 🛡️ Security
-*   [Security Model](security-model.md) - Our "Paranoid" approach to OIDC.
-*   [Threat Model](threat-model.md) - Analysis of attack vectors and mitigations.
+## Security
+*   [About the Security Model](security-model.md) - Our "Paranoid" approach to OIDC.
+*   [About the Threat Model](threat-model.md) - Analysis of attack vectors and mitigations.

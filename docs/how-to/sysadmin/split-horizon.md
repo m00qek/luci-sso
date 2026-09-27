@@ -30,7 +30,7 @@ sequenceDiagram
     R->>B: 6. Session cookie
 ```
 
-The browser uses the public `issuer_url` for steps 1–3. The router uses `internal_issuer_url` for the back-channel token exchange (step 4), which never involves the browser.
+The browser uses the public `issuer_url` for steps 1–3. The router uses `internal_issuer_url` for its back-channel requests, which never involve the browser: the discovery document, the token exchange (step 4), the JWKS and UserInfo.
 
 ---
 
@@ -97,6 +97,7 @@ Set `internal_issuer_url` alongside the standard configuration:
     | **Issuer URL** | `https://auth.homelab.local` |
     | **Client ID** | `luci-router` |
     | **Client Secret** | Your secret |
+    | **Redirect URI** | `https://<router-host>/cgi-bin/luci-sso/callback` |
     | **Internal Issuer URL** | `https://192.168.2.10:8443` |
 
     Click **Save & Apply**.
@@ -108,6 +109,7 @@ Set `internal_issuer_url` alongside the standard configuration:
     uci set luci-sso.default.issuer_url='https://auth.homelab.local'
     uci set luci-sso.default.client_id='luci-router'
     uci set luci-sso.default.client_secret='YOUR_SECRET_HERE'
+    uci set luci-sso.default.redirect_uri='https://<router-host>/cgi-bin/luci-sso/callback'
     uci set luci-sso.default.enabled='1'
 
     # Split-horizon: the router reaches the IdP via this internal address

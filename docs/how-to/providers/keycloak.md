@@ -27,6 +27,7 @@ Click **Next**. On the Login settings screen:
 | Field | Value |
 | :--- | :--- |
 | **Valid redirect URIs** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+| **Valid post logout redirect URIs** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/` (where LuCI's **Log out** returns after ending the Keycloak session) |
 
 Click **Save**.
 
@@ -153,8 +154,11 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | Symptom | Likely cause |
 | :--- | :--- |
 | `[500] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | The realm path in `issuer_url` does not match the issuer Keycloak declares; realm names are case-sensitive. Copy the `issuer` field from the realm's `/.well-known/openid-configuration` document. |
-| `TOKEN_EXCHANGE_FAILED` | **Client authentication** was left off when creating the client — the client is public, not confidential. Re-create the client with **Client authentication: On**. |
-| `USER_NOT_AUTHORIZED` with "matched no roles" | Group mapping is missing or the mapper has **Full group path** enabled, so the claim contains `/my-group` instead of `my-group`. Either disable Full group path in the mapper or update the role config to match the full path. |
-| `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Keycloak's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
+| `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. |
+| Keycloak shows `Invalid parameter: redirect_uri` instead of its login screen | The router's `redirect_uri` is not in the client's **Valid redirect URIs**. The router logs no `OIDC callback received` line. |
+| `[401] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Keycloak rejected the client credentials. Copy the **Client Secret** again from the client's **Credentials** tab. If the client has no **Credentials** tab, **Client authentication** is off: turn it on. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | Group mapping is missing or the mapper has **Full group path** enabled, so the claim contains `/my-group` instead of `my-group`. Either disable Full group path in the mapper or update the role config to match the full path. |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Keycloak's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
+| Keycloak shows an error about the redirect URI after LuCI's **Log out** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/` is not in the client's **Valid post logout redirect URIs**. Add it. |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

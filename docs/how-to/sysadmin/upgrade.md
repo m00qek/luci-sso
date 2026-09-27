@@ -15,7 +15,7 @@ This guide walks through upgrading an existing `luci-sso` installation to a new 
 | Active LuCI sessions | ✅ Yes | An upgrade or downgrade does not restart `rpcd`. On OpenWrt 24.10, upgrading *from* a release that predates this behaviour still logs everyone out once, because opkg runs the old release's removal script. |
 | `/var/run/luci-sso/` | ✅ Until reboot | This is a tmpfs directory. Its contents survive the upgrade but are cleared on the next reboot. |
 | Token registry entries | ✅ Until reboot | Expired entries are removed by the daily cleanup job, not by the upgrade. |
-| SSO button on the login page | ✅ Yes | The removal script takes it out of LuCI's templates, and the install script puts it back. |
+| SSO button on the login page | ✅ Yes | The install script puts it back with `luci-sso-repatch`. On OpenWrt 24.10 the old package's removal script takes it out first. |
 | SSO logout from LuCI's **Log out** entry | ✅ Yes | A menu override in the package (`/usr/share/luci/menu.d/luci-sso-logout.json`), not a patch, so it also survives a LuCI upgrade. |
 
 ---

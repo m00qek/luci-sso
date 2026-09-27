@@ -29,7 +29,7 @@ graph TD
     Router -->|"back-channel: token exchange &amp; JWKS\n(HTTPS mandatory)"| IdP
 ```
 
-**Textual summary:** The browser communicates with both the router and the IdP via front-channel redirects — these pass through the untrusted browser environment. The router's back-channel communication to the IdP (token exchange, JWKS fetch) bypasses the browser entirely and is protected by mandatory HTTPS. Security-critical state never leaves the router.
+**Textual summary:** The browser communicates with both the router and the IdP via front-channel redirects — these pass through the untrusted browser environment. The router's back-channel communication to the IdP (discovery, token exchange, JWKS and UserInfo fetches) bypasses the browser entirely and is protected by mandatory HTTPS. Security-critical state never leaves the router.
 
 ---
 
@@ -49,7 +49,7 @@ An attacker who captures a valid ID Token — from a logged network segment, a b
 
 The `nonce` prevents this. The router generates a random nonce at flow initiation, embeds it in the authorization request, and the IdP must include it verbatim in the ID Token. The router verifies the nonce against the stored handshake state before accepting the token. Because the handshake file is deleted atomically at the moment of first use, the nonce can only be verified once — a replayed token with the same nonce finds no matching handshake to validate against.
 
-After a successful login, the SHA256 hash of the access token is registered in the token registry (`/var/run/luci-sso/tokens/`). This is a distinct layer of protection: even if an attacker captures an access token that was already used for a valid login, attempting to reuse it will fail because the hash is already registered.
+Once the ID Token has been verified, the SHA256 hash of the access token is registered in the token registry (`/var/run/luci-sso/tokens/`). This is a distinct layer of protection: if a token response carrying an access token that was already used for a valid login arrives again, the login fails with `TOKEN_REPLAYED` because the hash is already registered. A daily job removes entries older than 24 hours, and the router logs a warning when an access token's lifetime exceeds that window.
 
 ---
 
@@ -75,7 +75,7 @@ The native C bridge verifies RS256 and ES256 signatures, turns the IdP's JWK key
 
 The bridge is hardened at multiple levels. All input is length-checked before any parsing begins: ucode refuses ID tokens over 16 KB, `mod/native_api.c` rejects any input over 16 KB (`NATIVE_MAX_INPUT_SIZE`) before a backend sees it, and the backends keep their own bounds checks. EC public keys are validated (coordinate length, curve membership) and RSA keys limited to the 65537 exponent and at least 2048 bits. Buffers in C that held secret-derived data, such as HMAC outputs and random bytes, are wiped before the functions return.
 
-Coverage-guided fuzz testing exercises the parsing paths continuously. AddressSanitizer is enabled in CI to catch out-of-bounds reads and writes during test runs. The goal is not to eliminate all possible bugs — that is impossible to guarantee — but to make exploitation difficult and ensure that common classes of memory error are caught before they reach a release.
+Coverage-guided fuzz testing exercises the bridge's entry points with every backend whenever the C code changes, and the native and crypto tests then also run under AddressSanitizer and UndefinedBehaviorSanitizer to catch out-of-bounds reads and writes. The goal is not to eliminate all possible bugs — that is impossible to guarantee — but to make exploitation difficult and ensure that common classes of memory error are caught before they reach a release.
 
 ---
 
@@ -83,13 +83,13 @@ Coverage-guided fuzz testing exercises the parsing paths continuously. AddressSa
 
 A signed-in user must get exactly what their role allows, no more. `luci-sso` creates the LuCI session itself, so it also decides its rights. For every role except full admin, it grants what rpcd would grant a password login with the same `read` and `write` lists, by expanding each access group's ACL file the same way rpcd does. A `*` wildcard only ever matches `luci-*` groups. Only `write '*'` yields unrestricted access.
 
-The risk is drift: if a future rpcd combined ACL files differently, SSO sessions could quietly get more or less than intended. A system test compares an SSO session with a real rpcd password login for several role shapes on every CI run, on each supported OpenWrt release, and fails on any difference.
+The risk is drift: if a future rpcd combined ACL files differently, SSO sessions could quietly get more or less than intended. A system test compares an SSO session with a real rpcd password login for several role shapes in CI, on each supported OpenWrt release, and fails on any difference.
 
 ---
 
 ## Denial of service
 
-An unauthenticated attacker can initiate login flows by sending requests to the `/` endpoint. Each request writes a handshake state file and makes a network connection to the IdP for discovery. Without a rate limit, this would allow an attacker to exhaust router memory, fill `/var/run/`, or overload the IdP with discovery requests.
+An unauthenticated attacker can initiate login flows by sending requests to the `/` endpoint. Each request writes a handshake state file and, whenever the cached discovery document has expired, makes a network connection to the IdP. Without a rate limit, this would allow an attacker to exhaust router memory, fill `/var/run/`, or keep the router busy with CGI processes.
 
 Three defences work together, and each is designed so that the attacker's traffic cannot take down other users' logins.
 

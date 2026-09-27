@@ -39,6 +39,7 @@ See [How to Run Tests](../how-to/developer/testing.md) for the options of each c
 | `router` | real `handshake`, `session`, `ubus`, `discovery`, `config`, `ratelimit` | integration | `router_test.uc`, `logout_test.uc` |
 | `entry` (CGI `run()` pipeline) | real `web`, `config`, `router` and everything below it | integration | `entry_test.uc` |
 | `deps` (`create()` and its channel builders) | the production wiring | integration | `bootstrap_test.uc` |
+| `luci.controller.sso` (`files/usr/share/ucode/luci/controller/sso.uc`, `action_logout`) | the controller, with LuCI's `ctx`, `http` and `ubus` globals faked | integration | `luci_logout_test.uc` |
 | `errors` | n/a | none | `make lint` checks it against [Log Messages](log-messages.md) |
 
 `handshake`, `router`, `entry` and `deps` have no unit file. `session.uc` re-exports `session/handshake.uc` (`create_state = handshake.create`, `verify_state = handshake.verify`, …); `unit/luci_sso/session_test.uc` covers that wiring and `unit/luci_sso/session/{handshake,common}_test.uc` cover the behaviour.

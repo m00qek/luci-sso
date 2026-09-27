@@ -22,7 +22,10 @@ Add a new client to your Authelia `configuration.yml` under `identity_providers.
     - email
     - groups
   userinfo_signed_response_alg: none
+  token_endpoint_auth_method: client_secret_post
 ```
+
+`luci-sso` sends the client secret in the token request body, so the client must accept `client_secret_post`.
 
 Reload Authelia after saving the configuration.
 
@@ -125,9 +128,12 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `OIDC_DISCOVERY_FAILED` | The router cannot reach `auth.example.com`. Test from the router with `uclient-fetch -q -O - 'https://auth.example.com/.well-known/openid-configuration'`. If the IdP uses a private CA, see [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
-| `TOKEN_EXCHANGE_FAILED` | The `redirect_uri` in UCI does not exactly match the `redirect_uris` entry in Authelia's client config, or the client secret is wrong. |
-| `USER_NOT_AUTHORIZED` with "matched no roles" | The user's email or group does not match any configured role. If using group mapping, verify the group name is an exact case-sensitive match. |
-| Authelia returns an error about `userinfo_signed_response_alg` | The Authelia client config is missing `userinfo_signed_response_alg: none`. Add it and reload Authelia. |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: …` | The router cannot reach `auth.example.com`; the end of the line names the cause. Test from the router with `uclient-fetch -q -O - 'https://auth.example.com/.well-known/openid-configuration'`. If the line ends in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, the router does not trust Authelia's certificate; see [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` differs from the issuer Authelia declares. Copy the declared value into `issuer_url`. |
+| `[500] CONFIG_ERROR`, preceded by `Configuration rejected: redirect_uri is mandatory and must use HTTPS` | `redirect_uri` was never saved. Set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. Other `Configuration rejected` reasons name the option to fix. |
+| Authelia shows an error page instead of its login screen | The `redirect_uri` in UCI does not exactly match a `redirect_uris` entry in Authelia's client config. The router logs no `OIDC callback received` line. |
+| `[401] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Authelia rejected the client credentials: the client secret is wrong (UCI needs the plaintext, Authelia the hash), or the client does not accept `client_secret_post`. |
+| `UserInfo fallback failed [session_id: …]: USERINFO_INVALID_JSON`, then `[403] USER_NOT_AUTHORIZED` | Authelia returned a signed UserInfo response, which `luci-sso` cannot read, so the email and groups it carries are lost. Set `userinfo_signed_response_alg: none` on the client and reload Authelia. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | The user's email or group does not match any configured role. Email matching ignores case; group matching is case-sensitive, so check the group name exactly. |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

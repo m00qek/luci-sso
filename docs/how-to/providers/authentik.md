@@ -41,7 +41,7 @@ Click **Create**. The slug you set here becomes part of the issuer URL.
 
 ## 3. Find your issuer URL
 
-The issuer URL for Authentik includes the application slug and **requires a trailing slash**:
+The issuer URL for Authentik includes the application slug. Authentik declares it with a trailing slash; `luci-sso` ignores trailing slashes when it compares issuers, so either form works:
 
 ```
 https://<YOUR_AUTHENTIK_HOST>/application/o/<APPLICATION_SLUG>/
@@ -155,8 +155,10 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | Symptom | Likely cause |
 | :--- | :--- |
 | `[500] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | The application slug in `issuer_url` does not match the issuer Authentik declares. Fetch the discovery document and copy its `issuer` field. A trailing slash makes no difference: `luci-sso` ignores it when comparing issuers. |
-| `OIDC_DISCOVERY_FAILED` | The application slug in the URL is wrong, or the Application was not created (only the Provider). Verify both the Provider and Application exist in Authentik. |
-| `USER_NOT_AUTHORIZED` with "matched no roles" | The `groups` claim is empty. In the Authentik provider settings, confirm the **profile** scope is selected under **Advanced protocol settings > Scopes**, and that the user belongs to the mapped group. |
-| `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Authentik's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch HTTP 404 from [id: …]` | The application slug in the URL is wrong, or the Application was not created (only the Provider). Verify both the Provider and Application exist in Authentik. |
+| `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. |
+| `[401] ID_TOKEN_VERIFICATION_FAILED`, preceded by `OAuth flow failed [session_id: …]: ID_TOKEN_VERIFICATION_FAILED ({ "details": "UNSUPPORTED_ALGORITHM", … })` | The provider has no **Signing Key**, so Authentik signs ID Tokens with `HS256`. Select a signing key in the provider settings. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | The `groups` claim is empty. In the Authentik provider settings, confirm the **profile** scope is selected under **Advanced protocol settings > Scopes**, and that the user belongs to the mapped group. |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Authentik's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

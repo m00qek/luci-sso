@@ -26,7 +26,7 @@ The third is only reduced. `luci-sso` adds a sign-in option next to the password
 
 The obvious answer — run an OIDC reverse proxy in front of LuCI — requires a separate machine, adds a proxy to the path for every page load, and does not integrate with LuCI's native session model. The result is a brittle dependency on external infrastructure for every management action, including diagnosing the network failure that took the proxy offline.
 
-`luci-sso` is a native OpenWrt package. It runs directly on the router, uses LuCI's existing UBUS session injection, and adds no runtime dependencies beyond the crypto library already present on the device. If the IdP is unreachable, the standard password login still works at `/cgi-bin/luci/admin/` — SSO is additive, not a replacement.
+`luci-sso` is a native OpenWrt package. It runs directly on the router, uses LuCI's existing UBUS session injection, and depends only on OpenWrt packages: ucode modules, `liblucihttp-ucode`, `luci-base` and one crypto library, which a LuCI router usually already carries. If the IdP is unreachable, the standard password login still works at `/cgi-bin/luci/admin/` — SSO is additive, not a replacement.
 
 ---
 
@@ -57,5 +57,5 @@ The project targets **OpenWrt 24.10** and **25.12**.
 
 - [About the Design Philosophy](design-philosophy.md) — The principles behind the security and architecture decisions.
 - [About the Architecture](architecture.md) — How the modules fit together and how `deps` isolates them from the system.
-- [Security Model](security-model.md) — The paranoid baseline and why each protection exists.
-- [Threat Model](threat-model.md) — The specific attacks the design addresses.
+- [About the Security Model](security-model.md) — The paranoid baseline and why each protection exists.
+- [About the Threat Model](threat-model.md) — The specific attacks the design addresses.

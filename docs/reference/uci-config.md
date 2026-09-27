@@ -9,11 +9,11 @@ The configuration for `luci-sso` is stored in `/etc/config/luci-sso`.
 | Option | Type | Description |
 | :--- | :--- | :--- |
 | `enabled` | boolean | Must be set to `1` to activate the service. |
-| `issuer_url` | string (URL) | The logical OIDC issuer identifier. Must use `https://`. Used for `iss` claim validation and as the base URL for OIDC discovery. Must exactly match the `issuer` value the IdP declares in its discovery document. |
-| `internal_issuer_url` | string (URL) | (Optional) The origin (`https://host[:port]`, no path) the router uses for back-channel HTTP requests (discovery, token exchange, JWKS fetch, UserInfo). Back-channel URLs on `issuer_url`'s origin get this origin instead; their paths are kept, so with `issuer_url` `https://kc.example.com/realms/home` and `internal_issuer_url` `https://10.0.0.5:8443`, discovery is fetched from `https://10.0.0.5:8443/realms/home/.well-known/openid-configuration`. A path, query or fragment is rejected with `CONFIG_ERROR`. The `iss` claim is still validated against `issuer_url`. See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md). |
-| `client_id` | string | The Client ID registered with your IdP. |
-| `client_secret` | string | The Client Secret registered with your IdP. Stored in plain text in `/etc/config/luci-sso` — restrict shell and physical access to the router accordingly. |
-| `redirect_uri` | string (URL) | The callback URL registered with the IdP: `https://<router-host>/cgi-bin/luci-sso/callback`. Must use `https://` and exactly match what the IdP client is configured to accept. Unset in the shipped configuration; the LuCI settings page then suggests one from the browser's host name. Enabling SSO without it fails with `CONFIG_ERROR` (`redirect_uri is mandatory and must use HTTPS`). |
+| `issuer_url` | string (URL) | Required. The logical OIDC issuer identifier. Must use `https://`. Used for `iss` claim validation and as the base URL for OIDC discovery. Must match the `issuer` value the IdP declares in its discovery document; the comparison ignores a trailing slash, the letter case of scheme and host, and an explicit `:443`. |
+| `internal_issuer_url` | string (URL) | (Optional) The origin (`https://host[:port]`, no path; a single trailing `/` is accepted) the router uses for back-channel HTTP requests (discovery, token exchange, JWKS fetch, UserInfo). Back-channel URLs on `issuer_url`'s origin get this origin instead; their paths are kept, so with `issuer_url` `https://kc.example.com/realms/home` and `internal_issuer_url` `https://10.0.0.5:8443`, discovery is fetched from `https://10.0.0.5:8443/realms/home/.well-known/openid-configuration`. A value that does not use `https://`, or has a path, query or fragment, is rejected with `CONFIG_ERROR`. The `iss` claim is still validated against `issuer_url`. See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md). |
+| `client_id` | string | Required. The Client ID registered with your IdP. |
+| `client_secret` | string | Required. The Client Secret registered with your IdP. Stored in plain text in `/etc/config/luci-sso` — restrict shell and physical access to the router accordingly. |
+| `redirect_uri` | string (URL) | The callback URL registered with the IdP: `https://<router-host>/cgi-bin/luci-sso/callback`. Must use `https://` and exactly match what the IdP client is configured to accept. Unset in the shipped configuration; the LuCI settings page then suggests one from the browser's host name, without port. Enabling SSO without it fails with `CONFIG_ERROR` (`redirect_uri is mandatory and must use HTTPS`). |
 | `scope` | string | (Optional) Space-separated list of OIDC scopes to request. Default: `openid profile email`. Add `groups` if the IdP supports group claims and role mapping by group is required. |
 | `clock_tolerance` | integer | Allowed clock skew in seconds applied to JWT `exp` and `iat` validation. Valid range: `0`–`3600`. The option has no built-in code default — if absent, the service reports `CONFIG_ERROR`. The shipped UCI configuration sets this to `60`. |
 
@@ -26,11 +26,11 @@ A user is assigned a role if ANY of its conditions match (OR logic). Multiple ro
 | Option | Type | Description |
 | :--- | :--- | :--- |
 | `email` | list (string) | Match by OIDC `email` claim. Case-insensitive. |
-| `group` | list (string) | Match by OIDC `groups` claim value. Case-sensitive. For Pocket ID, include the `@PocketID` suffix. |
+| `group` | list (string) | Match by a value of the OIDC `groups` claim, which must be a JSON array. Case-sensitive. For Pocket ID, include the `@PocketID` suffix. |
 | `read` | list (string) | LuCI access groups (keys in `/usr/share/rpcd/acl.d/*.json`, e.g. `luci-mod-status-realtime`) granted read access. Globs and `!negations` work as in rpcd. `*` means read on every `luci-*` group, and nothing more. Each group is expanded into the permissions its ACL file lists, as rpcd does for a password login. |
 | `write` | list (string) | LuCI access groups granted write access; write implies read. Saving anything also needs `luci-base`, whose write section holds `uci set` and `uci apply`. `*` makes the role a full admin: read and write on every group, plus unrestricted `ubus`, `uci`, `file` and `cgi-io` access. |
 
-A role that has neither an `email` nor a `group` entry is ignored, and the log says `Ignoring role '<name>': missing email or group list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).
+A user who matches roles that have no `read` or `write` entries at all is refused with `USER_NOT_AUTHORIZED`. A role that has neither an `email` nor a `group` entry is ignored, and the log says `Ignoring role '<name>': missing email or group list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).
 
 ---
 
@@ -48,14 +48,14 @@ Edits `config oidc 'default'`.
 | **Issuer URL** | `issuer_url` | Required. Rejects a value that does not start with `https://` (`Must use HTTPS`). Placeholder: `https://accounts.google.com`. |
 | **Client ID** | `client_id` | Required. |
 | **Client Secret** | `client_secret` | Required. Masked password field. |
-| **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host in the browser's address bar; when it is set, the saved value. |
+| **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host name in the browser's address bar without its port; when it is set, the saved value. LuCI writes a field only when its value differs from the one it loaded, so a suggestion saved unchanged may not reach UCI; `uci get luci-sso.default.redirect_uri` shows whether it did. |
 | **Scopes** | `scope` | Optional. Placeholder: `openid profile email`, which is also what the login requests when the option is empty. |
 | **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
 | **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
 
 ### Users section
 
-Each row is a `config role '<name>'` section. **Add** takes the role name, which becomes the section name; the name `default` is refused, because it belongs to the OIDC section. The table's **Emails**, **Groups**, **Read Access** and **Write Access** columns list the role's values, or `(none)`. The pencil icon opens the role's editor; the trash icon deletes the section.
+Each row is a `config role '<name>'` section. **Add** takes the role name, which becomes the section name; the name `default` is refused, because it belongs to the OIDC section. The table's **Emails**, **Groups**, **Read Access** and **Write Access** columns list the role's values, or `(none)`. Each row's **Edit** button opens the role's editor; its **Delete** button deletes the section.
 
 | Field (role editor) | UCI option | Form behaviour |
 | :--- | :--- | :--- |

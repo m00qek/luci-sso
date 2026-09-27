@@ -28,7 +28,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Authorization Code Grant | RFC 6749 §4.1 | ✅ Implemented | Only supported grant type. |
 | Implicit Grant | RFC 6749 §4.2 | ❌ Not implemented | Intentionally omitted — tokens in redirect URLs are deprecated as insecure. |
 | Authorization request: `response_type=code` | OIDC Core §3.1.2.1 | ✅ Implemented | |
-| Authorization request: `scope=openid` | OIDC Core §3.1.2.1 | ✅ Implemented | Additional scopes (`profile`, `email`, `groups`) are configurable via UCI. |
+| Authorization request: `scope=openid` | OIDC Core §3.1.2.1 | ✅ Implemented | The default scope is `openid profile email`. The UCI `scope` option replaces the whole list, so a custom value must keep `openid`; add `groups` for group claims. |
 | Authorization request: `state` parameter | RFC 6749 §4.1.1, §10.12 | ✅ Implemented | Random value, constant-time verified at callback. |
 | Authorization request: `nonce` parameter | OIDC Core §3.1.2.1 | ✅ Implemented | Required. Constant-time verified against ID Token claim. |
 | Token request: back-channel exchange | OIDC Core §3.1.3.1 | ✅ Implemented | HTTPS enforced. |
@@ -36,7 +36,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | Token error: `invalid_grant` handling | OIDC Core §3.1.3.4 | ✅ Implemented | Logged as `OIDC_INVALID_GRANT`. |
 | Refresh tokens | OIDC Core §12 | ❌ Not implemented | A refresh token the IdP returns is stored in the `rpcd` session but never used. Sessions expire after LuCI's idle timeout (`luci.sauth.sessiontime`, one hour by default); re-authentication is required. By design — see [About the Session Lifecycle](../explanation/session-lifecycle.md). |
 | UserInfo endpoint (fallback) | OIDC Core §5.3 | ✅ Implemented | Fetched when `email` claim is absent from the ID Token. |
-| RP-Initiated Logout | [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) §2 | ✅ Implemented | `/cgi-bin/luci-sso/logout` redirects the browser to `end_session_endpoint`, if advertised, with `id_token_hint` and `post_logout_redirect_uri`. LuCI's own logout link does not use it. |
+| RP-Initiated Logout | [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) §2 | ✅ Implemented | `/cgi-bin/luci-sso/logout` redirects the browser to `end_session_endpoint`, if advertised over HTTPS, with `id_token_hint` and `post_logout_redirect_uri` (the origin of `redirect_uri`). LuCI's **Log out** entry sends SSO sessions there. |
 
 ---
 
@@ -49,7 +49,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | `authorization_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
 | `token_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
 | `jwks_uri` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
-| All endpoints must use HTTPS | Discovery §4.2 | ✅ Implemented | HTTP endpoints trigger `INSECURE_ENDPOINT`, logged with the field name and its (capped) URL. |
+| All endpoints must use HTTPS | Discovery §4.2 | ✅ Implemented | A non-HTTPS `authorization_endpoint`, `token_endpoint` or `jwks_uri` triggers `INSECURE_ENDPOINT`, logged with the field name and its (capped) URL. A non-HTTPS `userinfo_endpoint` or `end_session_endpoint` is dropped with a warning. |
 | `issuer` in discovery must match fetch URL | Discovery §4.3 | ⚠️ Intentional deviation | When `internal_issuer_url` is set (split-horizon), the discovery document is fetched from the internal address but `issuer` is validated against the public `issuer_url`. See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md). |
 
 ---
@@ -73,9 +73,9 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
-| Code verifier generation | RFC 7636 §4.1 | ✅ Implemented | CSPRNG, 43–128 characters of Base64URL-safe alphabet. |
-| Code challenge method: `S256` | RFC 7636 §4.2 | ✅ Implemented | Only `S256` is accepted. |
-| Code challenge method: `plain` | RFC 7636 §4.2 | ❌ Rejected | Intentionally not supported — `plain` provides no security benefit over omitting PKCE entirely. |
+| Code verifier generation | RFC 7636 §4.1 | ✅ Implemented | 43 bytes from the CSPRNG, Base64URL-encoded to 58 characters. A stored verifier outside 43–128 characters is refused before the token request. |
+| Code challenge method: `S256` | RFC 7636 §4.2 | ✅ Implemented | Every authorization request sends `code_challenge_method=S256`. |
+| Code challenge method: `plain` | RFC 7636 §4.2 | ❌ Not used | Intentionally not supported — `plain` provides no security benefit over omitting PKCE entirely. |
 | Code challenge sent with authorization request | RFC 7636 §4.3 | ✅ Implemented | |
 | Code verifier sent with token request | RFC 7636 §4.5 | ✅ Implemented | |
 
@@ -100,7 +100,7 @@ This document maps the `luci-sso` implementation to the relevant OIDC and OAuth2
 | **Refresh tokens not supported** — OIDC Core §12 defines the Refresh Token flow. | Sessions expire after LuCI's idle timeout and users re-authenticate on expiry, so the router never has to keep using long-lived credentials. The refresh token the IdP returns is stored in the in-memory `rpcd` session with the other tokens, but nothing reads it. |
 | **`at_hash` required** — OIDC Core §3.1.3.6 makes `at_hash` optional in the authorization code flow. | `luci-sso` requires it so the access token it registers against replay is bound to the verified ID Token. IdPs that omit `at_hash` cannot be used. |
 | **Implicit flow not supported** — RFC 6749 §4.2 defines the Implicit Grant. | The Implicit flow places tokens in redirect URLs, which are logged by browsers, proxies, and servers. It is deprecated by the OAuth 2.0 Security Best Current Practice (RFC 9700). |
-| **`plain` PKCE method rejected** — RFC 7636 §4.2 defines both `plain` and `S256`. | `plain` sends the verifier as the challenge, providing no protection against an attacker who can observe the authorization request. `S256` is strictly superior when available. |
+| **`plain` PKCE method not used** — RFC 7636 §4.2 defines both `plain` and `S256`. | `plain` sends the verifier as the challenge, providing no protection against an attacker who can observe the authorization request. `S256` is strictly superior when available. |
 
 ---
 

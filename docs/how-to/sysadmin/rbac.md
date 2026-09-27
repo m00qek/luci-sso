@@ -22,8 +22,8 @@ for f in /usr/share/rpcd/acl.d/*.json; do jsonfilter -i "$f" -e '@' | grep -o '"
 
 A session gets exactly the rights rpcd would give a **password login** whose rpcd `login` entry had the same `read` and `write` lists: each granted group's `read` or `write` section is expanded into the concrete `ubus`, `uci`, `file` and `cgi-io` permissions it lists. The rules follow rpcd's:
 
-- Entries may be globs (`luci-mod-status-*`) and negations (`!luci-mod-status-logs`); negations win.
-- **Write implies read**: a group in `write` also gets its `read` section.
+- Entries may be globs (`luci-mod-status-*`) and negations (`!luci-mod-status-logs`); within a list, negations win. A pattern with a wildcard only ever matches `luci-*` groups.
+- **Write implies read**: a group in `write` also gets its `read` section, even if `read` negates it.
 - `luci-base`'s `write` section holds the calls that save and apply settings (`uci set`, `uci apply`). A role that should change anything needs `luci-base` in `write` as well as the groups for the pages it edits.
 - Every session also gets the small `unauthenticated` group that rpcd gives anonymous clients (`session access`, `luci.getFeatures`), which LuCI's pages rely on.
 
@@ -31,7 +31,7 @@ A CI test logs in both ways against the real rpcd and fails if the two ever diff
 
 ### The `*` wildcard
 
-`*` matches every `luci-*` access group, and never other groups. Its effect depends on the list:
+`*` matches every `luci-*` access group, and never other groups, such as `unauthenticated` or a group a third-party package defines under another prefix. Its effect depends on the list:
 
 | `read` | `write` | Result |
 | :--- | :--- | :--- |
@@ -57,9 +57,9 @@ config role 'admin'
 
     Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Add**, enter `admin` as the role name, then fill in the modal:
+    The default installation already has an `admin` role: click **Edit** in its row. (Without it, type `admin` as the role name in the field next to **Add** and click **Add**.) Fill in the modal:
 
-    - **Email Addresses**: `alice@example.com`
+    - **Email Addresses**: `alice@example.com`, replacing the placeholder `admin@example.com`
     - **Read Access**: `*`
     - **Write Access**: `*`
 
@@ -69,6 +69,7 @@ config role 'admin'
 
     ```bash
     uci set luci-sso.admin=role
+    uci -q del_list luci-sso.admin.email='admin@example.com'   # the shipped placeholder
     uci add_list luci-sso.admin.email='alice@example.com'
     uci add_list luci-sso.admin.read='*'
     uci add_list luci-sso.admin.write='*'
@@ -87,7 +88,7 @@ A common starting point for read-only users — access to status and network vie
 
     Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Add**, enter `viewer` as the role name, then fill in the modal:
+    Type `viewer` as the role name in the field next to **Add**, click **Add**, then fill in the modal:
 
     - **Email Addresses**: `bob@example.com`
     - **Read Access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
@@ -137,7 +138,7 @@ Then configure roles by group:
 
     Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Add**, enter `ops_admin` as the role name, then fill in the modal:
+    Type `ops_admin` as the role name in the field next to **Add**, click **Add**, then fill in the modal:
 
     - **Groups**: `network-ops`
     - **Read Access**: `*`
@@ -145,7 +146,7 @@ Then configure roles by group:
 
     Click **Save**.
 
-    Click **Add** again, enter `sec_viewer`, then fill in the modal:
+    Type `sec_viewer` as the role name in the field next to **Add**, click **Add**, then fill in the modal:
 
     - **Groups**: `security-team`
     - **Read Access**: `luci-base`, `luci-mod-status-*`
@@ -205,7 +206,15 @@ Then log in as the user in question and confirm the LuCI navigation matches what
 
 --8<-- "check-log.md"
 
-If you see `USER_NOT_AUTHORIZED`, the user's email or group claims do not match any configured role, or the matched role has no `read` or `write` entries. Verify the exact claim value the IdP is sending — email addresses are matched case-insensitively, but must otherwise be exact.
+If you see `USER_NOT_AUTHORIZED`, the user's email or group claims do not match any configured role, or the matched role has no `read` or `write` entries. Verify the exact claim value the IdP is sending — email addresses are matched case-insensitively, but must otherwise be exact; group names are matched case-sensitively.
+
+If the user logs in but a page they should see is missing or read-only, look for this line from the login:
+
+```
+luci-sso[1234]: Role grants unknown access group 'luci-mod-network'; no ACL file defines it
+```
+
+It names a `read` or `write` entry that matches no access group, usually a file name used instead of a group name, or a typo. Globs and negations are not checked this way.
 
 ---
 

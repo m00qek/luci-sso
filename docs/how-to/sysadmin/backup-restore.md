@@ -9,7 +9,7 @@ This guide covers preserving your `luci-sso` configuration across a router refla
 | Item | Location | Backed up by OpenWrt? | Notes |
 | :--- | :--- | :--- | :--- |
 | UCI configuration | `/etc/config/luci-sso` | Yes — included in the standard sysupgrade backup | Contains IdP credentials, role mappings, and all UCI options. |
-| Runtime state | `/var/run/luci-sso/` | No — tmpfs, not persistent | Discovery cache and token registry. Rebuilt automatically on next login. |
+| Runtime state | `/var/run/luci-sso/` | No — tmpfs, not persistent | Discovery and JWK Set caches, logins in progress, token registry, rate-limit state. Rebuilt automatically as needed. |
 | Active sessions | UBUS memory | No | Sessions do not survive a reboot regardless. |
 | The `luci-sso` packages | `/usr/share/ucode/luci_sso/`, `/www/cgi-bin/luci-sso` and others | No | A firmware image only contains the packages it was built with. Keep the package files so you can reinstall them. |
 

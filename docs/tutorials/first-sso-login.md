@@ -102,6 +102,13 @@ Expected response:
 
 If we see `{"enabled": false}`, verify that **Enable SSO** is toggled on in **Services > Single Sign-On** and that we clicked **Save & Apply**.
 
+If we get an error page instead, SSO is on but the configuration is incomplete. The system log (**Status > System Log**) has a line starting `Configuration rejected:` that names the option. If it says `redirect_uri is mandatory and must use HTTPS`, the Redirect URI was not saved. We set it over SSH and try again:
+
+```bash
+uci set luci-sso.default.redirect_uri='https://router.example.com/cgi-bin/luci-sso/callback'
+uci commit luci-sso
+```
+
 ---
 
 ## Step 4: See the SSO button

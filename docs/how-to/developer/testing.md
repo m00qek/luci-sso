@@ -6,9 +6,10 @@
 
 ## Native, Unit & Integration Tests
 
-`make unit-test` runs four buckets inside the `openwrt` container using the `ucode` interpreter: `test/native` (the compiled crypto module), `test/unit` (one module at a time), `test/integration` (orchestrators and wiring) and `test/system` (checks against the container's real rpcd). No real router or network access is required, but the CI stack must be running:
+`make unit-test` runs four buckets inside the `openwrt` container using the `ucode` interpreter: `test/native` (the compiled crypto module), `test/unit` (one module at a time), `test/integration` (orchestrators and wiring) and `test/system` (checks against the container's real rpcd). No real router or network access is required, but the native module must be built and the CI stack must be running:
 
 ```bash
+make compile
 make up
 ```
 
@@ -29,7 +30,8 @@ make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'
 make unit-test MODULES='test/integration'
 make unit-test MODULES='test/system'
 
-# Select the crypto backend to test (mbedtls, wolfssl, openssl)
+# Select the crypto backend to test (mbedtls, wolfssl, openssl); build it first
+make compile CRYPTO_LIB=wolfssl
 make unit-test CRYPTO_LIB=wolfssl
 ```
 
@@ -40,7 +42,8 @@ make unit-test CRYPTO_LIB=wolfssl
 These tests run in a Playwright-enabled Docker container and verify the full browser login flow against a Mock Identity Provider.
 
 ```bash
-# Start the test stack
+# Build the native module and start the test stack
+make compile
 make up
 
 # Execute all browser tests

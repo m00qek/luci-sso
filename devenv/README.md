@@ -11,9 +11,9 @@ For a full walkthrough, see [Development Workflow](https://m00qek.github.io/luci
 | Stack | Purpose | Start | Stop |
 | :--- | :--- | :--- | :--- |
 | **Local** (`DOCKER_SUITE=local`) | Manual dev, hot-reload, interactive shell | `make local-up` | `make local-down` |
-| **CI** (`DOCKER_SUITE=ci`) | Automated browser tests, CI simulation | `make up` | `make down` |
+| **CI** (`DOCKER_SUITE=ci`) | Automated unit and browser tests, CI simulation | `make up` | `make down` |
 
-You can run Local and CI simultaneously. You cannot run two instances of the same stack.
+You can run Local and CI simultaneously. You cannot run two instances of the same stack for the same `SDK_ARCH` and `SDK_VERSION`.
 
 ## Services (local stack)
 
@@ -27,8 +27,9 @@ All TLS certificates are generated with `localhost` in the SAN. Import `devenv/.
 ## Common commands
 
 ```bash
+make compile          # Build the native module (needed before any stack runs tests or logins)
 make local-up          # Start local stack
-make local-shell       # SSH into the OpenWrt container
+make local-shell       # Open a shell in the OpenWrt container
 make up && make unit-test  # Start the CI stack; run native, unit, integration and system tests
 make up && make e2e-test  # Start CI stack and run browser tests
 make package SDK_ARCH=x86-64  # Build the luci-sso packages (.ipk on 24.10, .apk with SDK_VERSION=25.12.3)

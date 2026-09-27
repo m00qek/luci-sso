@@ -55,8 +55,8 @@ The router could not start the login, so the browser never reached the IdP.
     - `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)`: the router could not connect. See [A back-channel request to the IdP failed](#a-back-channel-request-to-the-idp-failed).
     - `Discovery fetch HTTP <status> from [id: …]`: the IdP answered with an error, usually `404` for a wrong path in `issuer_url`.
     - `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field>` or `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "…"`: the IdP's document lacks a required endpoint, or advertises it over plain HTTP. Fix the IdP's configuration; `luci-sso` will not use a plain-HTTP endpoint.
-- **Log shows `[429] TOO_MANY_REQUESTS`**: this client started more than 10 logins in 5 minutes, or sent more than 30 requests in a minute. Wait for the time in the `Retry-After` header, or a few minutes.
-- **Log shows `[503] HANDSHAKE_CAPACITY_EXCEEDED`**: 500 logins are already in progress. Pending logins expire after 5 minutes. Password login still works meanwhile.
+- **Log shows `[429] TOO_MANY_REQUESTS`**: this client started more than 10 logins in 5 minutes, or sent more than 30 requests in a minute. A client is its IP address (for IPv6, its /64 prefix), so users behind one NAT address share these limits. The line before it is `Login rate limit exceeded for client [id: …]` or `Request rate limit exceeded for client [id: …]`. Wait for the time in the `Retry-After` header, or a few minutes.
+- **Log shows `[503] HANDSHAKE_CAPACITY_EXCEEDED`**: 500 logins are already in progress, preceded by `Handshake capacity reached (<n> pending, limit 500); refusing new login`. Logins in progress are never dropped to make room; a pending login's slot is freed once it is older than 5 minutes plus `clock_tolerance`. Password login still works meanwhile.
 
 ---
 
@@ -71,7 +71,7 @@ The browser reached the IdP and came back, but the callback failed. Nothing retr
 - **Log shows `[401] STATE_NOT_FOUND`**: the callback was already used (a double submit or a reload of the callback URL), or the handshake was cleaned up as stale.
 - **Log shows `[401] HANDSHAKE_EXPIRED` or `[401] HANDSHAKE_NOT_YET_VALID`**: the router's own clock jumped during the login. The handshake is written and checked with the router's clock only, so the browser's clock does not matter. See [The router's clock is wrong](#the-routers-clock-is-wrong).
 - **Log shows `[400] IDP_ERROR`**: the IdP refused the request. The line before it gives the IdP's reason: `IDP_ERROR: the IdP returned error=<error> (<error_description>)`. `access_denied` usually means the user cancelled or is not assigned to the client in the IdP.
-- **Log shows `[400] OIDC_INVALID_GRANT` or `TOKEN_EXCHANGE_FAILED`**: the IdP rejected the code exchange. Check the client secret, that the client is confidential, and that `redirect_uri` matches the IdP registration exactly.
+- **Log shows `[400] OIDC_INVALID_GRANT` or `[<status>] TOKEN_EXCHANGE_FAILED`**: the IdP rejected the code exchange. `TOKEN_EXCHANGE_FAILED` carries the IdP's own HTTP status, often `401` for a wrong client secret. Check the client secret, that the client is confidential, and that `redirect_uri` matches the IdP registration exactly.
 - **Log shows `[401] ID_TOKEN_VERIFICATION_FAILED`**: the `OAuth flow failed` line before it names the failed check, such as `TOKEN_EXPIRED` or `UNSUPPORTED_ALGORITHM`. See [ID Token Verification Detail Codes](../../reference/log-messages.md#id-token-verification-detail-codes).
 
 ---
@@ -173,7 +173,9 @@ The valid range is `0`–`3600` seconds.
 
 ## Login succeeds but the session has no access
 
-The log shows `[500] UBUS_LOGIN_FAILED`, preceded by a line such as `UBUS session creation failed` or `Failed to load LuCI ACLs for role`.
+If the login ends in an error page, the log shows `[500] UBUS_LOGIN_FAILED`, preceded by a line such as `UBUS session creation failed`, `Failed to load LuCI ACLs for role` or `UBUS session set failed`.
+
+If the login completes but pages are missing or refuse access, look in the lines from that login for `UBUS session grant failed [sid: …] [scope: …]`, which means `rpcd` refused part of the rights, or `Role grants unknown access group '<name>'`, which means a role names a group no ACL file defines; see [How to Configure Role-Based Access Control](rbac.md#verify-a-role-is-working).
 
 - Verify `rpcd` is running: `ps | grep rpcd`. If it is not, start it: `/etc/init.d/rpcd start`.
 - Verify LuCI ACL files are present: `ls /usr/share/rpcd/acl.d/`. Missing files indicate an incomplete LuCI installation.
@@ -184,7 +186,7 @@ The log shows `[500] UBUS_LOGIN_FAILED`, preceded by a line such as `UBUS sessio
 
 LuCI pages start failing with "Access denied" or permission errors for users who logged in through SSO, while password users are fine. This happens after anything reloads `rpcd`, most often installing or upgrading a LuCI package: `rpcd` keeps the SSO sessions but drops their rights. See [About the Session Lifecycle](../../explanation/session-lifecycle.md#session-storage).
 
-Log out and log in through SSO again. The new session gets its rights back.
+Log out and log in through SSO again. The new session gets its rights back. If LuCI's **Log out** fails as well, open `https://<router-host>/cgi-bin/luci-sso` to start a new SSO login; the new session cookie replaces the old one.
 
 ---
 

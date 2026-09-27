@@ -10,7 +10,7 @@ This guide covers the day-to-day development cycle for `luci-sso`.
 - `make`
 - The repo checked out locally
 
-All development commands go through `Makefile`, which delegates to `devenv/scripts/test.sh`.
+All development commands go through `Makefile`. The test targets delegate to `devenv/scripts/test.sh`.
 
 ---
 
@@ -32,14 +32,15 @@ Native C compilation is guarded by a sentinel file, `bin/lib/<SDK_ARCH>/<SDK_VER
 
 ## Test
 
-Unit tests run inside the `openwrt` container, so the CI stack must be up first:
+Unit tests run inside the `openwrt` container against the native module that `make compile` builds, so build it and start the CI stack first:
 
 ```bash
+make compile
 make up
 ```
 
 ```bash
-# Run the native, unit and integration tests
+# Run the native, unit, integration and system tests
 make unit-test
 
 # Run with detailed output
@@ -59,7 +60,8 @@ See [Running Tests](testing.md) for how to run individual buckets and files, and
 ## E2E Tests
 
 ```bash
-# Start the full OIDC test stack (mock IdP + router simulation)
+# Build the native module and start the full OIDC test stack (mock IdP + router simulation)
+make compile
 make up
 
 # Run browser tests
@@ -97,13 +99,14 @@ If a check fails, see [How to add error codes, limit constants, and cookies](add
 4. Run the tests and the lint checks:
 
     ```bash
+    make compile
     make up
     make unit-test
     make e2e-test
     make lint
     ```
 
-    `make test` runs `unit-test` and `e2e-test` together. If you changed `mod/`, also run `make fuzzer-test` and `make sanitizer-test`; CI runs them when native code changes.
+    `make test` runs `unit-test` and `e2e-test` together. If you changed `mod/`, also run `make fuzzer-test` and `make sanitizer-test`. CI runs both when `mod/` or the fuzz harness changes, and the sanitizer run also when `test/native/` or `test/unit/luci_sso/crypto/` changes.
 
     If your change touches only documentation (files under `docs/`, any `*.md` file, or `mkdocs.yml`), skip the test suites. Run `make lint` and a strict docs build instead, with `make -C docs build` (see [How to Write Documentation](documentation.md)).
 
@@ -114,7 +117,7 @@ If a check fails, see [How to add error codes, limit constants, and cookies](add
     - every `TODO` names an issue.
 6. If you changed behaviour or an interface, update the matching page in `docs/` in the same pull request.
 7. Commit following the [commit message format](../../reference/style-guide.md#commit-messages).
-8. Open the pull request. CI runs the lint checks on every pull request. It skips the test suites when only documentation changed, and builds the docs site with `--strict` whenever `docs/` or `mkdocs.yml` changes.
+8. Open the pull request. CI runs the lint checks on every pull request. It runs the test suites only when the pull request changes `src/`, `mod/`, `files/`, `test/`, `openwrt/`, `Makefile`, or the `openwrt`, `idp`, `browser` or `pki` service under `devenv/services/`, and builds the docs site whenever `docs/` or `mkdocs.yml` changes. The CI docs build is not strict, so run `make -C docs build` locally to catch broken links.
 
 ---
 

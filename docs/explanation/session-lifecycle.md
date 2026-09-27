@@ -19,7 +19,7 @@ stateDiagram-v2
 
 `luci-sso` does not create local user accounts. There is no entry in `/etc/passwd`, no stored password, no local identity record. Instead, after a successful OIDC flow, it calls UBUS to create a **UBUS session** — an in-memory record managed by `rpcd` — and injects the user's ACLs and a CSRF token into it.
 
-The browser receives a `sysauth_https` cookie containing the UBUS session ID. Every subsequent LuCI request presents this cookie; `rpcd` looks up the session and enforces the ACLs. From LuCI's perspective, a OIDC-authenticated user is indistinguishable from a password-authenticated one.
+The browser receives a `sysauth_https` cookie (and the legacy `sysauth`) containing the UBUS session ID. Every subsequent LuCI request presents this cookie; `rpcd` looks up the session and enforces the ACLs. From LuCI's perspective, an OIDC-authenticated user is indistinguishable from a password-authenticated one, with one exception on an `rpcd` reload (see [Session storage](#session-storage)).
 
 ---
 
@@ -56,11 +56,11 @@ This is a known, documented residual risk. The mitigation available to administr
 
 LuCI's own **Log out** menu entry is the way users log out. For a session created through SSO it leads to `/cgi-bin/luci-sso/logout`; for any other session it does exactly what it always did. `luci-sso` does this by overriding the menu entry's action, not by patching LuCI (see [About the Architecture](architecture.md#session-integration)).
 
-When a browser is sent to `/cgi-bin/luci-sso/logout`:
+When a browser is sent to `/cgi-bin/luci-sso/logout` with a live session (without one, it is simply sent to `/`):
 
 1. The CSRF token is verified — the request must include the `stoken` parameter matching the session's CSRF token.
-2. The UBUS session is destroyed. The `sysauth_https` and `sysauth` cookies are cleared with `Max-Age=0`.
-3. If the IdP's discovery document advertises an `end_session_endpoint`, the browser is redirected there, as defined by [OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html). Otherwise the browser is sent to `/`.
+2. The UBUS session is destroyed. The `sysauth_https` and `sysauth` cookies are cleared with `Max-Age=0`, both at `Path=/` and at LuCI's own `Path=/cgi-bin/luci`.
+3. If the IdP's discovery document advertises an HTTPS `end_session_endpoint`, the browser is redirected there with the stored ID token as `id_token_hint` and the router's own origin as `post_logout_redirect_uri`, as defined by [OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html). Otherwise the browser is sent to `/`.
 
 Destroying the UBUS session is immediate and complete — the session ID in the cookie becomes invalid the moment `rpcd` processes the destroy call. A browser holding a stale cookie after logout will be rejected on the next LuCI request.
 

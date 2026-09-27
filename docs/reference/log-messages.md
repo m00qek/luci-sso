@@ -29,6 +29,8 @@ The examples below leave out the date and priority: `luci-sso[1289]: [500] OIDC_
 | `UserInfo fallback failed [session_id: …]: <CODE>` | Why the optional UserInfo request failed. |
 | `Access token registry write failed [session_id: …]: <CODE>` | Why the replay registry could not be written. |
 
+At the callback, most failures after the handshake check (discovery, token exchange, JWK Set, UserInfo identity and the replay registry) also log `OAuth flow failed [session_id: …]: <CODE> ({ "http_status": <status> })` just before the `[<status>]` line. It repeats that line's code and status; only for `ID_TOKEN_VERIFICATION_FAILED` does it add the detail code.
+
 **3. Named in the line before a broader code.** Every discovery failure ends as `[500] OIDC_DISCOVERY_FAILED`. The line before it names the specific code where there is one:
 
 ```
@@ -40,7 +42,7 @@ Values that come from the IdP or the browser, such as the declared issuer or the
 
 **4. Not at all.** A few codes are never written; the request ends with a broader code, and a descriptive line may precede it, as the tables below say.
 
-`[id: …]` values are the first 16 hex characters of the SHA-256 of the normalized URL: scheme and host in lower case, no `:443`, no trailing slash. To check which URL an id belongs to, hash the candidate on the router:
+In discovery and JWKS lines, `[id: …]` values are the first 16 hex characters of the SHA-256 of the normalized URL: scheme and host in lower case, no `:443`, no trailing slash. (In rate-limit lines, `[id: …]` is the same kind of hash of the client key, so no address is logged.) To check which URL an id belongs to, hash the candidate on the router:
 
 ```bash
 printf '%s' 'https://id.example.com' | sha256sum | cut -c1-16
@@ -249,7 +251,7 @@ These indicate infrastructure-level failures unrelated to a specific OIDC step.
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
 | `HTTPS_REQUIRED` | A back-channel request was attempted to a non-HTTPS URL | Normally unreachable, because every endpoint is HTTPS-checked earlier. | In a `Discovery fetch failed`, `JWKS fetch failed`, `Token exchange network error` or `UserInfo fetch network error` line |
-| `HTTP_REQUEST_FAILED` | A back-channel HTTPS request did not complete | Followed by the cause in parentheses: `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE` or `UCLIENT_ERROR_<n>`. See [How to Debug luci-sso](../how-to/sysadmin/debugging.md#a-back-channel-request-to-the-idp-failed) for what each means. | In the same lines as `HTTPS_REQUIRED` |
+| `HTTP_REQUEST_FAILED` | A back-channel HTTPS request did not complete | Followed by the cause in parentheses: `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE`, `UCLIENT_ERROR_<n>`, or, rarely, `REQUEST_START_FAILED`, `UCLIENT_ALLOC_FAILED` or `INVALID_DATA_TYPE`. See [How to Debug luci-sso](../how-to/sysadmin/debugging.md#a-back-channel-request-to-the-idp-failed) for what each means. | In the same lines as `HTTPS_REQUIRED` |
 | `SSL_INIT_FAILED` | TLS could not be set up before connecting | The TLS library or the system CA store is missing. An untrusted IdP certificate is reported as `CERT_UNTRUSTED` instead. | As the cause: `HTTP_REQUEST_FAILED (SSL_INIT_FAILED)` |
 | `CRYPTO_ERROR` | A native hash operation returned no result | Internal error in the native crypto bridge. | In `Access token registry write failed`, or as the detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `CRYPTO_INIT_FAILED` | The random number generator (CSPRNG) returned no data or too little | The crypto backend could not produce random bytes. This can happen with any backend (mbedtls, wolfssl or openssl). | At login: `[500] CRYPTO_INIT_FAILED`, preceded by `CRITICAL: CSPRNG failure during handshake state generation`. At the callback, the same failure ends as `[500] UBUS_LOGIN_FAILED`. |

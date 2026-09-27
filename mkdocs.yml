@@ -106,6 +106,6 @@ nav:
       - About the Session Lifecycle: explanation/session-lifecycle.md
       - About Crypto Backends: explanation/crypto-backends.md
       - About the Test Architecture: explanation/test-architecture.md
-      - Security Model: explanation/security-model.md
-      - Architecture: explanation/architecture.md
-      - Threat Model: explanation/threat-model.md
+      - About the Security Model: explanation/security-model.md
+      - About the Architecture: explanation/architecture.md
+      - About the Threat Model: explanation/threat-model.md

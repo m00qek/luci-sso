@@ -16,6 +16,7 @@ Fill in the following:
 | :--- | :--- |
 | **Name** | `luci-router` (or any label you prefer) |
 | **Callback URL** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+| **Logout Callback URL** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/` (where LuCI's **Log out** returns after ending the Pocket ID session) |
 
 Save the client. Pocket ID will display the generated **Client ID** and **Client Secret** — copy both.
 
@@ -124,7 +125,10 @@ Open the LuCI login page at the host name used in the Redirect URI; the login fa
 | Symptom | Likely cause |
 | :--- | :--- |
 | `[500] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path. It must use the host name Pocket ID is configured with, not an IP address or another alias. |
-| `USER_NOT_AUTHORIZED` | Authentication succeeded but no UCI role matched. If using group mapping, verify the group name includes the `@PocketID` suffix. |
-| User is redirected back to the login page without an error | The user has no passkey registered in Pocket ID, or the Pocket ID client's **Allowed User Groups** excludes them. |
+| `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with the `uci set luci-sso.default.redirect_uri=…` command from Step 2. |
+| `[401] MISSING_HANDSHAKE_COOKIE` | The login started at a different host name than the one in the Redirect URI. Open LuCI at the Redirect URI's host and try again. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | Authentication succeeded but no UCI role matched. If using group mapping, verify the group name includes the `@PocketID` suffix; group matching is case-sensitive. |
+| `[400] IDP_ERROR`, preceded by `IDP_ERROR: the IdP returned error=<error> (<description>)` | Pocket ID refused the login, for example because the client's **Allowed User Groups** excludes the user. The line gives Pocket ID's reason. |
+| The login stops at Pocket ID and never returns to the router | The user has no passkey registered in Pocket ID. The router logs no `OIDC callback received` line. |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

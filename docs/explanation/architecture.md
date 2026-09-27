@@ -73,11 +73,13 @@ graph TD
     router --> ubus
     router --> discovery
     router --> config
+    router --> crypto
     handshake --> oidc
     handshake --> discovery
     handshake --> session
     handshake --> ubus
     handshake --> config
+    handshake --> crypto
     oidc --> discovery
     oidc --> crypto
     discovery --> crypto

@@ -51,7 +51,7 @@ From the repository root, pass both values.
     make package SDK_ARCH=aarch64_cortex-a53 SDK_VERSION=25.12.3
     ```
 
-The build uses the SDK image `ghcr.io/openwrt/sdk:<SDK_ARCH>-<SDK_VERSION>`. The first build for a given architecture and version downloads it and prepares its feeds, which takes a while; later builds reuse it. If Docker cannot find the image, check that `SDK_ARCH` and `SDK_VERSION` name an SDK that OpenWrt publishes.
+The build runs in a container image built on the SDK image `ghcr.io/openwrt/sdk:<SDK_ARCH>-<SDK_VERSION>`. The first build for a given architecture and version downloads it and prepares its feeds, which takes a while; later builds reuse it. If Docker cannot find the image, check that `SDK_ARCH` and `SDK_VERSION` name an SDK that OpenWrt publishes.
 
 The build compiles `luci-sso` and all three crypto backends, and ends with:
 

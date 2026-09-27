@@ -92,7 +92,7 @@ make fuzzer-test CRYPTO_LIB=boringssl
 
 ## Package for OpenWrt
 
-To allow users to install your backend via `opkg`, you must add a new package definition to `openwrt/luci-sso/Makefile`.
+To allow users to install your backend with the package manager (`opkg` on OpenWrt 24.10, `apk` on 25.12), you must add a new package definition to `openwrt/luci-sso/Makefile`.
 
 ### Define the Package
 Add a new `Package/luci-sso-crypto-xxx` section. It must `PROVIDES:=luci-sso-crypto` so the main package can depend on it.

@@ -17,7 +17,7 @@ Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading r
 ## 2. Fill in the Settings section
 
 1.  Enter the **Issuer URL**, **Client ID** and **Client Secret** from your identity provider. The Issuer URL must be exactly the `issuer` your provider declares.
-2.  Check the **Redirect URI**. If none is saved yet, the field suggests `https://<host>/cgi-bin/luci-sso/callback` with the host you opened LuCI at. Keep it only if users will open LuCI at that same host name; otherwise, replace the host. The value must match the redirect URI registered with the IdP exactly.
+2.  Check the **Redirect URI**. If none is saved yet, the field suggests `https://<host>/cgi-bin/luci-sso/callback` with the host name you opened LuCI at, without its port. Keep it only if users will open LuCI at that same host name; otherwise, replace the host. The value must match the redirect URI registered with the IdP exactly. A suggestion you leave untouched may not be saved, because LuCI only writes a field whose value differs from the one it loaded; if you keep it, retype it, and confirm it in [step 5](#5-check-the-result).
 3.  If you map users by group, add `groups` to **Scopes** (for example `openid profile email groups`), provided your IdP supports it. See [How to Configure Role-Based Access Control](rbac.md).
 4.  If the router reaches the IdP at a different address than browsers do, set **Internal Issuer URL** to that origin (`https://host[:port]`, no path). Otherwise leave it empty. See [How to Configure Split-Horizon Networking](split-horizon.md).
 5.  Leave **Clock Tolerance** at `60` unless logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` while the clocks look right.
@@ -38,7 +38,7 @@ To add a role:
 3.  Add access groups to **Read Access** and **Write Access**. For a full administrator, put `*` in **Write Access**. For a role that may save settings, include `luci-base` in **Write Access**.
 4.  Click **Save** to close the editor.
 
-To change a role, click its pencil icon. To remove one, click its trash icon; a user who matched only that role gets `USER_NOT_AUTHORIZED` at their next login.
+To change a role, click **Edit** in its row. To remove one, click **Delete**; a user who matched only that role gets `USER_NOT_AUTHORIZED` at their next login.
 
 For which access groups to grant, see [How to Configure Role-Based Access Control](rbac.md).
 
@@ -61,7 +61,7 @@ uci get luci-sso.default.redirect_uri
 uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
 ```
 
-The first command prints the redirect URI you saved. The second answers `{"enabled": true}` once SSO is enabled; then log out and use the SSO button on the login page. If the login fails, see [How to Debug luci-sso](debugging.md).
+The first command prints the saved redirect URI. If it prints `uci: Entry not found`, the redirect URI was not saved: set it again in the form, or with `uci set luci-sso.default.redirect_uri='https://<router-host>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. The second answers `{"enabled": true}` once SSO is enabled and the configuration is complete (with a missing or invalid option it returns an error page instead); then log out and use the SSO button on the login page. If the login fails, see [How to Debug luci-sso](debugging.md).
 
 ---
 

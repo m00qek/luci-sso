@@ -1,6 +1,6 @@
 # Tests
 
-Native, unit, integration, and end-to-end tests for `luci-sso`.
+Native, unit, integration, system and end-to-end tests for `luci-sso`.
 
 For the buckets and the mocking interface, see
 [Testing Architecture](https://m00qek.github.io/luci-sso/reference/testing-architecture/);
@@ -27,7 +27,7 @@ make fuzzer-test CRYPTO_LIB=mbedtls     # C-level fuzzer (~60s)
 | :--- | :--- | :--- |
 | **native** | `native/` | `luci_sso.native` FFI exports (crypto KAT, memory safety, hardening) |
 | **unit** | `unit/**` (mirrors `src/`) | one module's exported function; system boundary faked |
-| **integration** | `integration/**` | an orchestrator/wiring seam (`handshake`, `router`, `logout`) |
+| **integration** | `integration/**` | an orchestrator/wiring seam (`handshake`, `router`, `logout`, `entry`, `deps` bootstrap, the LuCI logout controller) |
 | **system** | `system/` | the real rpcd, no browser (e.g. rpcd parity of SSO session ACLs) |
 | **e2e** | `e2e/` | Playwright → real uhttpd/rpcd/IdP |
 

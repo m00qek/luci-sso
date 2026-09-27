@@ -17,6 +17,7 @@ sequenceDiagram
     B->>R: GET /cgi-bin/luci-sso/
 
     Note over R: Phase 1 — Initiation
+    R->>I: GET /.well-known/openid-configuration (cached 24 h) — back-channel
     R->>R: Generate state (CSRF), nonce (replay), PKCE pair
     R->>R: Save handshake to /var/run/luci-sso/handshake_{handle}.json
     R-->>B: 302 → IdP /authorize?state=…&nonce=…&code_challenge=…
@@ -33,6 +34,7 @@ sequenceDiagram
     R->>R: Check state (constant-time) and expiry, then consume handshake file (atomic)
     R->>I: POST /token (code + PKCE verifier) — back-channel
     I-->>R: {id_token, access_token}
+    R->>I: GET jwks_uri (cached 24 h) — back-channel
     R->>R: Validate id_token: algorithm, signature, iss, aud, exp, nonce, at_hash
     opt Email claim missing from ID token
         R->>I: GET /userinfo — back-channel
@@ -40,8 +42,8 @@ sequenceDiagram
     end
 
     Note over R: Phase 4 — Session injection
-    R->>R: Match claims to UCI roles
     R->>R: Register access_token (replay prevention)
+    R->>R: Match claims to UCI roles
     R->>R: Inject UBUS session with ACLs
     R-->>B: 302 → /cgi-bin/luci/ (with session cookie)
     B->>User: LuCI dashboard
@@ -49,13 +51,13 @@ sequenceDiagram
 
 The textual summary below explains what happens in each phase.
 
-**Phase 1 — Initiation:** The router generates the security parameters for this specific login attempt and redirects the browser to the IdP.
+**Phase 1 — Initiation:** The router loads the IdP's discovery document, generates the security parameters for this specific login attempt and redirects the browser to the IdP.
 
 **Phase 2 — IdP authentication:** The browser handles everything. The router is not involved. The user enters their credentials and the IdP redirects back with a short-lived authorization code.
 
 **Phase 3 — Code exchange:** The router's back-channel takes over. The code is exchanged for tokens, and every security property of the tokens is verified before anything is trusted.
 
-**Phase 4 — Session injection:** The user's identity is mapped to a LuCI role and a session is created. The browser receives a session cookie and lands on the dashboard.
+**Phase 4 — Session injection:** The access token is registered so it cannot be used for a second login, the user's identity is mapped to a LuCI role, and a session is created. The browser receives a session cookie and lands on the dashboard.
 
 ---
 
@@ -83,7 +85,7 @@ Without `state`, an attacker could craft a callback URL and trick the user's bro
 
 The `nonce` is included in the authorization request and must appear verbatim in the ID Token the IdP issues. The router checks it at validation time using constant-time comparison.
 
-This prevents an attacker from capturing a valid ID Token from one session and replaying it in another. The nonce is only ever generated once, stored in the handshake file, and verified exactly once before that file is deleted.
+This prevents an attacker from capturing a valid ID Token from one session and replaying it in another. The nonce is generated once and stored in the handshake file. That file is consumed at the callback, before the code is exchanged, so the nonce is checked exactly once and can never match again.
 
 ### The handshake file is atomically consumed
 
@@ -101,7 +103,7 @@ If an attacker substitutes a different access token in the token response — wh
 
 After a successful login, the SHA256 hash of the access token is registered in `/var/run/luci-sso/tokens/`. This is an atomic `mkdir` operation: the first process to create the directory wins; subsequent attempts fail. A daily cleanup job removes entries older than 24 hours, and the router logs a warning when an access token lives longer than that window.
 
-This prevents an attacker who observes a valid access token from reusing it after the user has logged out.
+The registration happens only after the ID Token has been verified, so forged tokens cannot fill the registry. From then on, a token response carrying the same access token cannot create a second session: a replayed response, or an IdP that reissues access tokens, ends with `TOKEN_REPLAYED`.
 
 ---
 

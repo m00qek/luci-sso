@@ -100,10 +100,12 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `OIDC_DISCOVERY_FAILED` | The router cannot reach `accounts.google.com`. Check DNS and firewall rules from the router, not just from your laptop. |
-| `TOKEN_EXCHANGE_FAILED` | The `redirect_uri` in UCI does not exactly match the authorized redirect URI in Google Cloud Console. Both must be identical, including scheme and path. |
-| `USER_NOT_AUTHORIZED` | Authentication succeeded but the Gmail address is not in any role. Add it with `uci add_list luci-sso.admin.email='...'`. |
-| Google returns "Access blocked: This app's request is invalid" | The authorized redirect URI in Google Cloud Console is missing or wrong. Double-check it matches `https://<router>/cgi-bin/luci-sso/callback`. |
-| Google sign-in works but redirects back to Google | The OAuth consent screen app is in **External** mode and the signing-in account is not listed as a test user. Add it under **OAuth consent screen > Test users**. |
+| `[500] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: …` | The router cannot reach `accounts.google.com`; the end of the line names the cause. Check DNS and firewall rules from the router, not just from your laptop. |
+| `[500] CONFIG_ERROR`, preceded by `Configuration rejected: redirect_uri is mandatory and must use HTTPS` | `redirect_uri` was never saved. Set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. Other `Configuration rejected` reasons name the option to fix. |
+| `[401] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Google rejected the client credentials. Check that `client_id` and `client_secret` are the pair from Step 1. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | Authentication succeeded but the Gmail address is not in any role. Add it with `uci add_list luci-sso.admin.email='...'`. Email matching ignores case. |
+| Google shows an error page, such as `redirect_uri_mismatch`, instead of the sign-in screen | The authorized redirect URI in Google Cloud Console is missing or differs from the router's `redirect_uri`. Both must be identical, including scheme and path. The router logs no `OIDC callback received` line, because Google never sends the browser back. |
+| Google shows "Access blocked" for an account | The OAuth consent screen app is in **External** mode and the account is not listed as a test user. Add it under **OAuth consent screen > Test users**. |
+| **Log out** in LuCI leaves you signed in to Google | Expected. Google's discovery document has no `end_session_endpoint`, so **Log out** ends only the router session; the next **Login with SSO** may complete without asking for a password. Sign out of Google to end that session. |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

@@ -616,7 +616,7 @@ if (substr(url, 0, 8) !== "https://") ...
 luci-sso/
 ├── src/luci_sso/          # ucode modules, installed as luci_sso.*
 │   ├── entry.uc           # CGI pipeline: request → config → router → response
-│   ├── deps.uc            # Production dependency graph (fs, ubus, uci, http, clock, log)
+│   ├── deps.uc            # Production dependency graph (fs, http, ubus, uci, clock, native, log)
 │   ├── router.uc          # Endpoint dispatch, logout
 │   ├── ratelimit.uc       # Per-client rate limits
 │   ├── handshake.uc       # OIDC login orchestration
@@ -638,12 +638,13 @@ luci-sso/
 │   ├── native_api.c       # Input guards
 │   ├── native.h           # Backend interface
 │   └── native_<lib>.c     # mbedtls, wolfssl, openssl backends
-├── files/                 # Installed as-is: CGI script, LuCI views, uci-defaults
+├── files/                 # Installed as-is: CGI script, LuCI view, menu and controller, rpcd ACL, uci-defaults, luci-sso-repatch
 ├── openwrt/luci-sso/      # OpenWrt package Makefile
 ├── test/
 │   ├── native/            # The compiled crypto module's contract
 │   ├── unit/luci_sso/     # One module at a time (mirrors src/)
-│   ├── integration/       # Orchestrators and wiring (handshake, router, logout, entry)
+│   ├── integration/       # Orchestrators and wiring (handshake, router, logout, entry, bootstrap, LuCI logout)
+│   ├── system/            # Checks against the container's real rpcd
 │   ├── e2e/               # Playwright browser tests
 │   ├── fixtures/          # Shared keys, tokens, discovery documents
 │   ├── lib/               # Test helpers (signed JWTs)
@@ -669,23 +670,19 @@ luci-sso/
 **Export only public API:**
 
 ```javascript
-// crypto.uc
+// crypto/jwk.uc
 
 // Private helpers (not exported)
-function b64url_to_b64(str) {
+function rsa_to_pem(native, jwk) {
+	// ...
+}
+
+function ec_to_pem(native, jwk) {
 	// ...
 }
 
 // Public API (exported)
-export function constant_time_eq(a, b) {
-	// ...
-}
-
-export function jwt_verify(token, pubkey, options) {
-	// ...
-};
-
-export function pkce_pair(len) {
+export function to_pem(native, jwk) {
 	// ...
 };
 ```
@@ -725,7 +722,7 @@ deps.log("info", `ID token: ${id_token}`);
 
 // ✅ CORRECT: claim names only, identifiers as a hashed prefix
 deps.log("debug", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
-deps.log("info", `Session created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}]`);
+deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}]`);
 ```
 
 ---

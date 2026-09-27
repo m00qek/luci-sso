@@ -261,7 +261,7 @@ The `rpcd` session and the access-token replay registry. `deps: { ubus, fs, nati
 
 ### `create_passwordless_session(deps, username, perms, oidc_email, access_token, refresh_token, id_token)` → `Result<string>`
 
-Creates an `rpcd` session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`), grants it the ACLs for `perms` (`{ read, write }`), and sets the values `username`, `oidc_user`, `oidc_access_token`, `oidc_refresh_token`, `oidc_id_token` and `token` (a random CSRF token). `write '*'` grants full admin; any other role gets the grants `rpcd` would give a password login with the same lists. Returns the session ID. Fails with `UBUS_SESSION_FAILED` or `CRYPTO_INIT_FAILED`.
+Creates an `rpcd` session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`), grants it the ACLs for `perms` (`{ read, write }`), and sets the values `username` (`handshake` passes the first matching role's name), `oidc_user` (the email), `oidc_access_token`, `oidc_refresh_token`, `oidc_id_token` and `token` (a random CSRF token). `write '*'` grants full admin; any other role gets the grants `rpcd` would give a password login with the same lists. Returns the session ID. Fails with `UBUS_SESSION_FAILED` or `CRYPTO_INIT_FAILED`.
 
 ### `get_session(deps, sid)` → `Result<object>`
 
@@ -375,6 +375,7 @@ Pure helpers.
 | `rebase_origin(url, from, to)` | `string` | Moves `url` from `from`'s origin to `to`'s, keeping its path; otherwise returns it unchanged. |
 | `normalize_sub(sub)` | `Result<string>` | Lower-cases a `sub` claim. |
 | `is_https(url)` | `bool` | `true` if `url` starts with `https://`, in any case. |
+| `log_safe(value, max)` | `string` | Replaces every byte outside printable ASCII with `?` and cuts the result to `max` bytes (default `200`), adding `...`. A non-string gives `""`. For untrusted values in log lines. |
 
 ---
 

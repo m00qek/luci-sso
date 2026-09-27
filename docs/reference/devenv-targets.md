@@ -11,7 +11,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | Stack | Purpose | Ports |
 | :--- | :--- | :--- |
 | **CI** (`up`) | Automated tests — no ports exposed to the host | None |
-| **Local** (`local-up`) | Browser interaction — router accessible at `https://localhost:8443` | `8443` |
+| **Local** (`local-up`) | Browser interaction — router at `https://localhost:8443`, mock IdP at `https://localhost:5556` | `8443`, `5556` |
 
 ---
 
@@ -37,11 +37,11 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 
 | Target | Stack | Description |
 | :--- | :--- | :--- |
-| `unit-test` | CI | Run the native, unit, integration and system test buckets. Requires `up`. |
-| `e2e-test` | CI | Run browser-based end-to-end tests via Playwright. Requires `up`. |
+| `unit-test` | CI | Run the native, unit, integration and system test buckets. Requires `compile` and `up`. |
+| `e2e-test` | CI | Run browser-based end-to-end tests via Playwright. Requires `compile` and `up`. |
 | `test` | CI | Alias for `unit-test` followed by `e2e-test`. |
 | `watch-tests` | CI | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. Requires `inotify-tools` on the host. |
-| `fuzzer-test` | CI | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. |
+| `fuzzer-test` | CI | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. Needs no running stack. |
 | `sanitizer-test` | CI | Run `test/native` and `test/unit/luci_sso/crypto` against the native module built with AddressSanitizer + UndefinedBehaviorSanitizer, in an interpreter built the same way. Fails on any sanitizer report, including leaks found at process exit. Needs no running stack. |
 | `lint` | — | Run the three documentation lint checks (error codes, request limits, cookies). No stack required. |
 
@@ -49,14 +49,14 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 
 | Target | Stack | Description |
 | :--- | :--- | :--- |
-| `compile` | CI | Compile native C components for the target architecture. Skipped if the sentinel file is current. |
-| `package` | CI | Build the `luci-sso` and `luci-sso-crypto-*` packages for `SDK_ARCH`/`SDK_VERSION` into `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `.ipk` for 24.10, `.apk` for 25.12. Replaces the previous build's `luci-sso` packages there. |
+| `compile` | — | Compile native C components for the target architecture. Skipped if the sentinel file is current. Runs a one-shot `sdk` container; needs no running stack. |
+| `package` | — | Build the `luci-sso` and `luci-sso-crypto-*` packages for `SDK_ARCH`/`SDK_VERSION` into `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `.ipk` for 24.10, `.apk` for 25.12. Replaces the previous build's `luci-sso` packages there. Runs a one-shot `sdk` container; needs no running stack. |
 
 ### Utilities
 
 | Target | Stack | Description |
 | :--- | :--- | :--- |
-| `sync-headers` | CI | Copy C headers from the SDK container into `devenv/.include/` for LSP support. |
+| `sync-headers` | — | Copy C headers from the SDK container into `devenv/.include/` for LSP support. |
 | `print-env` | — | Print the value of a Makefile variable. Usage: `make print-env VAR=SDK_ARCH` |
 
 ---
@@ -70,6 +70,7 @@ Variables are passed on the command line as `KEY=value` after the target name.
 | Variable | Default | Description |
 | :--- | :--- | :--- |
 | `SDK_ARCH` | Host architecture | Target CPU architecture. Determines which OpenWrt SDK container is used and where build output goes. |
+| `SDK_VERSION` | `24.10.5` | OpenWrt release of the SDK and `openwrt` images. `24.10.x` builds `.ipk` packages, `25.12.x` builds `.apk`. |
 | `CRYPTO_LIB` | `mbedtls` | Cryptographic backend to build and test against. Accepted values: `mbedtls`, `wolfssl`, `openssl`. |
 
 Common `SDK_ARCH` values:
@@ -86,7 +87,7 @@ Common `SDK_ARCH` values:
 | :--- | :--- | :--- |
 | `FILTER` | `unit-test`, `e2e-test`, `watch-tests` | Regex matched against test names. Only matching tests run. Example: `FILTER='discovery'` |
 | `MODULES` | `unit-test`, `e2e-test`, `watch-tests` | Path to a specific test file or directory. Example: `MODULES='test/unit/luci_sso/oidc_test.uc'` |
-| `VERBOSE` | `unit-test`, `e2e-test` | Set to `1` for detailed per-test output. |
+| `VERBOSE` | `unit-test`, `e2e-test`, `watch-tests` | Set to `1` for detailed per-test output. |
 
 ### Fuzzer
 
@@ -107,7 +108,8 @@ Common `SDK_ARCH` values:
 ## Examples
 
 ```bash
-# Start the CI stack and run all tests
+# Build the native module, start the CI stack and run the ucode tests
+make compile
 make up
 make unit-test
 

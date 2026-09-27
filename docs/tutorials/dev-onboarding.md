@@ -57,7 +57,7 @@ Let's verify everything is working correctly:
 make unit-test
 ```
 
-You should see a row of green dots for each bundle — the native crypto tests, the unit tests and the integration tests — ending with a summary like:
+You should see a row of green dots for each bundle — the native crypto tests, the unit tests, the integration tests and the system tests — ending with a summary like:
 
 ```
 Summary:
@@ -77,6 +77,8 @@ make local-up
 
 Then open `https://localhost:8443` in your browser and choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
 
+The stack's certificates come from a private CA that the stack generated on its first start, so the browser warns about them at first. Import `devenv/.pki/CA.crt` into the browser to trust them, or accept the warning for `localhost:8443` and again for the mock IdP at `localhost:5556`.
+
 Notice that the login goes to the mock IdP and straight back to LuCI. The mock IdP has no login form: it approves every request at once and issues an ID Token for `admin@example.com`, which the default `admin` role accepts. Apart from that missing step, it is the same flow a real user experiences with Google or Authelia.
 
 ---
@@ -86,7 +88,7 @@ Notice that the login goes to the mock IdP and straight back to LuCI. The mock I
 * A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
 * A mock Identity Provider that signs every login in as `admin@example.com`, without a login form.
 * A CI stack (`make up`) for running the test suite, and a local stack (`make local-up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
-* A full test suite — native, unit, integration and browser end-to-end — runnable without a physical router or a real IdP.
+* A full test suite — native, unit, integration, system and browser end-to-end — runnable without a physical router or a real IdP.
 
 ---
 

@@ -28,7 +28,7 @@ If you want to verify the final production output:
 make -C docs build
 ```
 
-The output will be generated in the `bin/site/` directory in the project root. The build is strict: any warning, such as a link to a missing page, fails it, the same way CI does.
+The output will be generated in the `bin/site/` directory in the project root. The build is strict: any warning, such as a link to a missing page, fails it. The CI docs build is not strict, so this local build is the one that catches broken links.
 
 ### 3. Clean Up
 To remove the generated `bin/site/` directory:
@@ -48,7 +48,7 @@ Before submitting a PR, ensure your changes follow our [Documentation Standards]
 
 ### Reuse a shared block
 
-Blocks that appear on many pages live in `docs/_snippets/` and are included with [pymdownx.snippets](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/). Put the marker on a line of its own, at column 0:
+Blocks that appear on many pages live in `docs/_snippets/` and are included with [pymdownx.snippets](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/). Put the marker on a line of its own, at column 0. In the example below, the leading `;` only stops the marker from being expanded on this page; leave it out in yours:
 
 ```text
 ;--8<-- "check-log.md"

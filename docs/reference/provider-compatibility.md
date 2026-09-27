@@ -12,9 +12,9 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | :--- | :--- | :--- |
 | HTTPS issuer | `issuer_url` starts with `https://` | `CONFIG_ERROR` |
 | Discovery document | `<issuer_url>/.well-known/openid-configuration` returns HTTP 200 with a JSON object | `[500] OIDC_DISCOVERY_FAILED` |
-| Matching issuer | The document's `issuer` equals `issuer_url`. Scheme and host case, the default port and trailing slashes are ignored. | `[500] OIDC_DISCOVERY_FAILED` |
-| Endpoints | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS | `[500] OIDC_DISCOVERY_FAILED` |
-| Authorization endpoint | Contains no `#` fragment (RFC 6749 §3.1) | `INVALID_AUTH_ENDPOINT` |
+| Matching issuer | The document's `issuer` equals `issuer_url`. Scheme and host case, the default port and trailing slashes are ignored. | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`, then `[500] OIDC_DISCOVERY_FAILED` |
+| Endpoints | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS | A `DISCOVERY_MISSING_ENDPOINT` or `INSECURE_ENDPOINT` line naming the field, then `[500] OIDC_DISCOVERY_FAILED` |
+| Authorization endpoint | Contains no `#` fragment (RFC 6749 §3.1) | `[500] INVALID_AUTH_ENDPOINT` |
 | Optional endpoints | `userinfo_endpoint` and `end_session_endpoint` are used only when HTTPS. A plain-HTTP value is ignored with a warning. | None |
 
 ### Authorization request and token exchange
@@ -46,7 +46,7 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | Claim | Check | Failure (detail of `ID_TOKEN_VERIFICATION_FAILED`) |
 | :--- | :--- | :--- |
 | `iss` | Equals `issuer_url`, normalized as for discovery | `ISSUER_MISMATCH` |
-| `aud` | Equals `client_id`, or is a non-empty array that contains it | `AUDIENCE_MISMATCH`, `INVALID_AUDIENCE` |
+| `aud` | Equals `client_id`, or is a non-empty array of strings that contains it | `AUDIENCE_MISMATCH`, `INVALID_AUDIENCE`, `MALFORMED_AUDIENCE` |
 | `exp` | Present, an integer, and not in the past by more than `clock_tolerance` | `MISSING_EXP_CLAIM`, `INVALID_EXP_CLAIM`, `TOKEN_EXPIRED` |
 | `iat` | Present, an integer, and not in the future by more than `clock_tolerance` | `MISSING_IAT_CLAIM`, `INVALID_IAT_CLAIM`, `TOKEN_ISSUED_IN_FUTURE` |
 | `nbf` | Optional. When present, an integer not in the future by more than `clock_tolerance`. | `INVALID_NBF_CLAIM`, `TOKEN_NOT_YET_VALID` |
@@ -59,8 +59,15 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 
 | Requirement | Check | Failure |
 | :--- | :--- | :--- |
-| `email` or `groups` | Roles match on the `email` claim or on values of the `groups` array. When the ID Token has no `email`, the UserInfo endpoint is asked for `email`, and for `name` and `groups` if the ID Token lacks them. | `[403] USER_NOT_AUTHORIZED` |
+| `email` or `groups` | Roles match on the `email` claim (case-insensitive) or on values of the `groups` claim (case-sensitive). `groups` must be a JSON array; any other type is ignored. When the ID Token has no `email`, the UserInfo endpoint is asked for `email`, and for `name` and `groups` if the ID Token lacks them. | `[403] USER_NOT_AUTHORIZED` |
 | UserInfo response | HTTP 200 with a plain JSON object, not a signed JWT. Its `sub` matches the ID Token's `sub`. | `[403] IDENTITY_MISMATCH` for a different `sub`. Other UserInfo failures are logged as warnings and the login continues with the ID Token's claims. |
+
+### Logout
+
+| Requirement | Check | Failure |
+| :--- | :--- | :--- |
+| `end_session_endpoint` | Optional. When the discovery document has an HTTPS one, LuCI's **Log out** for an SSO session sends the browser there with `id_token_hint` and `post_logout_redirect_uri`. Without one, the browser goes to `/` and the IdP session stays. | None |
+| `post_logout_redirect_uri` | The origin of `redirect_uri` followed by `/`, for example `https://router.example.com/`. The IdP must accept it; most require it to be registered on the client. | The IdP's own error page |
 
 ---
 
@@ -68,8 +75,8 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 
 | Provider | Status | Guide | Notes |
 | :--- | :--- | :--- | :--- |
-| Google | Supported | [How to Configure Google](../how-to/providers/google.md) | Google accepts only a redirect URI whose host is a public domain name. |
-| Authelia | Supported | [How to Configure Authelia](../how-to/providers/authelia.md) | The client sets `userinfo_signed_response_alg: none`, so UserInfo returns plain JSON. |
+| Google | Supported | [How to Configure Google](../how-to/providers/google.md) | Google accepts only a redirect URI whose host is a public domain name. Its discovery document has no `end_session_endpoint`, so **Log out** does not end the Google session. |
+| Authelia | Supported | [How to Configure Authelia](../how-to/providers/authelia.md) | The client sets `userinfo_signed_response_alg: none`, so UserInfo returns plain JSON, and `token_endpoint_auth_method: client_secret_post`. |
 | Keycloak | Supported | [How to Configure Keycloak](../how-to/providers/keycloak.md) | **Client authentication** must be on, which makes the client confidential. |
 | Authentik | Supported | [How to Configure Authentik](../how-to/providers/authentik.md) | A **Signing Key** must be selected. Without one, Authentik signs ID Tokens with `HS256` and the client secret ([Authentik docs](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/)), which fails with `UNSUPPORTED_ALGORITHM`. |
 | Pocket ID | Supported | [How to Configure Pocket ID](../how-to/providers/pocket-id.md) | Group names carry the `@PocketID` suffix. |
