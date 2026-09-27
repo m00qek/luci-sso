@@ -51,6 +51,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | Target | Stack | Description |
 | :--- | :--- | :--- |
 | `screenshots` | CI | Capture the LuCI screenshots in `docs/assets/screenshots/` by running `test/e2e/screenshots.capture.js` in the `browser` container, then compress them losslessly with `oxipng` in a throwaway `alpine` container. Overwrites the PNGs there; restores the router state it changes. Not part of `e2e-test`. Requires `compile` and `up`. |
+| `idp-screenshots` | — | Capture the identity provider screenshots in `docs/assets/screenshots/idp/` by running `devenv/scripts/idp-screenshots/run.sh`. Starts each IdP (Keycloak, Authelia, Pocket ID, Authentik; pinned image tags) in its own containers and network, one at a time, with generated secrets, captures its admin pages in the browser image, compresses the PNGs losslessly with `oxipng`, and removes the containers and network. Overwrites the PNGs there. Needs no running stack; needs the browser image (`build-images`). |
 
 ### Build
 
@@ -104,6 +105,12 @@ Common `SDK_ARCH` values:
 | `DETECT_LEAKS` | `0` | Set to `1` to enable AddressSanitizer leak detection. Disabled by default to speed up initial coverage runs. |
 | `SANITIZER_LEAKS` | `1` | `sanitizer-test` only. Set to `0` to disable LeakSanitizer. |
 
+### Screenshots
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `IDP` | *(all)* | `idp-screenshots` only. `keycloak`, `authelia`, `pocket-id` or `authentik`, or a space-separated list, to capture only those IdPs. |
+
 ### Container
 
 | Variable | Default | Description |
@@ -145,6 +152,10 @@ make sanitizer-test CRYPTO_LIB=wolfssl SANITIZER_LEAKS=0
 
 # Retake the documentation screenshots
 make screenshots
+
+# Retake the identity provider screenshots, or only Pocket ID's
+make idp-screenshots
+make idp-screenshots IDP=pocket-id
 
 # Open a shell in the running openwrt container
 make shell

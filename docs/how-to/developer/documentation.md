@@ -50,6 +50,15 @@ make screenshots
 
 Look at every image before committing it: the capture shows whatever the pages show, including dates and the uptime. If a page changes what an image shows, update the image's `alt` text and title too. To add or change a shot, edit the script; each shot is one function.
 
+The identity provider screenshots in `docs/assets/screenshots/idp/` come from real Keycloak, Authelia, Pocket ID and Authentik instances. Retake them when a provider guide moves to a newer IdP release:
+
+```bash
+make idp-screenshots                    # every IdP, one after the other
+make idp-screenshots IDP=authentik      # one IdP
+```
+
+The target needs no running stack, only the browser image (`make build-images`). For each IdP, `devenv/scripts/idp-screenshots/<idp>.sh` starts the pinned image in its own containers and network, under an `example.com` host name, with generated passwords and secrets. Then `<idp>.js` walks the admin pages through the guide's steps and crops each shot. Secrets are masked before a capture. The script removes the containers and network when it ends, even on failure. To move to a newer IdP release, change the image tag in `<idp>.sh`, retake the shots, check the guide's steps against the new UI, and update the release the guide names.
+
 ---
 
 ## Standards & Style
