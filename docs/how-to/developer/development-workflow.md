@@ -104,6 +104,8 @@ If a check fails, see [How to add error codes, limit constants, and cookies](add
 
     `make test` runs `unit-test` and `e2e-test` together. If you changed `mod/`, also run `make fuzzer-test` and `make sanitizer-test`; CI runs them when native code changes.
 
+    If your change touches only documentation (files under `docs/`, any `*.md` file, or `mkdocs.yml`), skip the test suites. Run `make lint` and a strict docs build instead, with `make -C docs build` (see [How to Write Documentation](documentation.md)).
+
 5. Check the diff against the [style guide](../../reference/style-guide.md):
     - no secrets in code or log lines;
     - runtime failures return a `Result`, contract bugs `die()`;
@@ -111,7 +113,7 @@ If a check fails, see [How to add error codes, limit constants, and cookies](add
     - every `TODO` names an issue.
 6. If you changed behaviour or an interface, update the matching page in `docs/` in the same pull request.
 7. Commit following the [commit message format](../../reference/style-guide.md#commit-messages).
-8. Open the pull request. CI runs the lint checks on every pull request, and the test suites when code changes.
+8. Open the pull request. CI runs the lint checks on every pull request. It skips the test suites when only documentation changed, and builds the docs site with `--strict` whenever `docs/` or `mkdocs.yml` changes.
 
 ---
 

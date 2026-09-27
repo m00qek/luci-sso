@@ -28,7 +28,7 @@ If you want to verify the final production output:
 make -C docs build
 ```
 
-The output will be generated in the `bin/site/` directory in the project root.
+The output will be generated in the `bin/site/` directory in the project root. The build is strict: any warning, such as a link to a missing page, fails it, the same way CI does.
 
 ### 3. Clean Up
 To remove the generated `bin/site/` directory:
