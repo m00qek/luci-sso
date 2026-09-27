@@ -4,6 +4,29 @@ This document lists the exported API of every `luci-sso` module in `src/luci_sso
 
 For the rationale behind the module boundaries, see [About the Architecture](../explanation/architecture.md).
 
+| Module | Role |
+| :--- | :--- |
+| [`luci_sso.entry`](#luci_ssoentry) | The CGI pipeline. |
+| [`luci_sso.web`](#luci_ssoweb) | HTTP request parsing and response rendering. |
+| [`luci_sso.router`](#luci_ssorouter) | Dispatches one request by path. |
+| [`luci_sso.handshake`](#luci_ssohandshake) | The OIDC orchestrator for both legs of the authorization code flow. |
+| [`luci_sso.oidc`](#luci_ssooidc) | OIDC protocol steps. |
+| [`luci_sso.discovery`](#luci_ssodiscovery) | Discovery document and JWK Set fetching, with a cache. |
+| [`luci_sso.config`](#luci_ssoconfig) | UCI configuration loader and role mapper. |
+| [`luci_sso.session`](#luci_ssosession) | The handshake state files. |
+| [`luci_sso.ubus`](#luci_ssoubus) | The `rpcd` session and the access-token replay registry. |
+| [`luci_sso.ratelimit`](#luci_ssoratelimit) | Per-client request budgets. |
+| [`luci_sso.crypto`](#luci_ssocrypto) | Facade over the crypto wrappers. |
+| [`luci_sso.encoding`](#luci_ssoencoding) | Pure encoding and URL helpers. |
+| [`luci_sso.result`](#luci_ssoresult) | The Result constructors. |
+| [`luci_sso.errors`](#luci_ssoerrors) | The public error code constants. |
+| [`luci_sso.deps`](#luci_ssodeps) | Builds the production `deps` object. |
+| [`luci_sso.components.http_client`](#luci_ssocomponentshttp_client) | The HTTPS client for back-channel requests. |
+| [`luci_sso.components.clock`](#luci_ssocomponentsclock) | Time and sleep. |
+| [`luci_sso.native`](#luci_ssonative) | The compiled crypto bridge. |
+| [Native C bridge](#native-c-bridge-modnativeh) | The C interface every crypto backend implements. |
+| [Test support](#test-support-test) | Test harness files under `test/`. |
+
 ---
 
 ## Conventions
@@ -92,6 +115,8 @@ Logs `Router crash: <e>` with the stack trace and writes a generic `500` page.
 
 ## `luci_sso.router`
 
+Request dispatch by path.
+
 ### `handle(deps, config, request)` → `Result<{status, headers, body}>`
 
 Dispatches one request. `config` is the result of `config.load()`, or `null` when SSO is disabled. `request` is the result of `web.request()`.
@@ -125,7 +150,17 @@ Fails with `OIDC_DISCOVERY_FAILED` (`502`), `HANDSHAKE_CAPACITY_EXCEEDED` (`503`
 
 ### `authenticate(deps, config, request)` → `Result<{sid, email}>`
 
-Processes the callback: checks `error`, `code` and the handshake cookie, verifies the handshake against `state`, exchanges the code, fetches the JWK Set, verifies the ID Token (forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`), fetches UserInfo when the ID Token has no `email`, registers the access token against replay, maps the claims to roles, and creates the `rpcd` session. `deps`: all fields.
+Processes the callback. `deps`: all fields. In order, it:
+
+1. checks `error`, `code` and the handshake cookie;
+2. verifies the handshake against `state`;
+3. exchanges the code;
+4. fetches the JWK Set;
+5. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
+6. fetches UserInfo when the ID Token has no `email`;
+7. registers the access token against replay;
+8. maps the claims to roles;
+9. creates the `rpcd` session.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
@@ -261,7 +296,18 @@ The `rpcd` session and the access-token replay registry. `deps: { ubus, fs, nati
 
 ### `create_passwordless_session(deps, username, perms, oidc_email, access_token, refresh_token, id_token)` → `Result<string>`
 
-Creates an `rpcd` session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`), grants it the ACLs for `perms` (`{ read, write }`), and sets the values `username` (`handshake` passes the first matching role's name), `oidc_user` (the email), `oidc_access_token`, `oidc_refresh_token`, `oidc_id_token` and `token` (a random CSRF token). `write '*'` grants full admin; any other role gets the grants `rpcd` would give a password login with the same lists. Returns the session ID. Fails with `UBUS_SESSION_FAILED` or `CRYPTO_INIT_FAILED`.
+Creates an `rpcd` session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`) and grants it the ACLs for `perms` (`{ read, write }`). `write '*'` grants full admin; any other role gets the grants `rpcd` would give a password login with the same lists. Returns the session ID. Fails with `UBUS_SESSION_FAILED` or `CRYPTO_INIT_FAILED`.
+
+The session holds these values:
+
+| Value | Content |
+| :--- | :--- |
+| `username` | The `username` argument; `handshake` passes the first matching role's name. |
+| `oidc_user` | The email. |
+| `oidc_access_token` | The access token. |
+| `oidc_refresh_token` | The refresh token. |
+| `oidc_id_token` | The ID token. |
+| `token` | A random CSRF token. |
 
 ### `get_session(deps, sid)` → `Result<object>`
 
@@ -381,6 +427,8 @@ Pure helpers.
 
 ## `luci_sso.result`
 
+Constructors and helpers for [the Result type](#the-result-type).
+
 | Function | Description |
 | :--- | :--- |
 | `ok(data)` | A successful Result. |
@@ -398,6 +446,8 @@ One exported string constant per public error code, equal to its name. [Log Mess
 
 ## `luci_sso.deps`
 
+The production wiring of [the `deps` object](#the-deps-object).
+
 ### `create()` → `Deps`
 
 Builds the production `deps` object. Called once by the CGI script; never in tests.
@@ -414,11 +464,22 @@ Opens syslog with the tag `luci-sso` and returns the `deps.log` function.
 
 ## `luci_sso.components.http_client`
 
+The HTTPS client behind `deps.http`, used for every request from the router to the IdP.
+
 ### `create(uclient, uloop, fs)` → `HttpClient`
 
-Returns `{ get(url, opts), post(url, opts) }`. `opts.headers` sets request headers; `post` sends `opts.body`. Both return `Result<{status, body}>`. Only HTTPS URLs are accepted (`HTTPS_REQUIRED`). Certificates are verified against every `*.crt` and `*.pem` file in `/etc/ssl/certs/` plus the usual bundle paths. Requests time out after 10 seconds and bodies are capped at 256 KB. A failed request is `HTTP_REQUEST_FAILED` with the cause in `details`: `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE` or `UCLIENT_ERROR_<n>`, among others.
+Returns `{ get(url, opts), post(url, opts) }`. `opts.headers` sets request headers; `post` sends `opts.body`. Both return `Result<{status, body}>`.
+
+- Only HTTPS URLs are accepted (`HTTPS_REQUIRED`).
+- Certificates are verified against every `*.crt` and `*.pem` file in `/etc/ssl/certs/` plus the usual bundle paths.
+- Requests time out after 10 seconds and bodies are capped at 256 KB.
+- A failed request is `HTTP_REQUEST_FAILED` with the cause in `details`: `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE` or `UCLIENT_ERROR_<n>`, among others.
+
+---
 
 ## `luci_sso.components.clock`
+
+The time source behind `deps.clock`.
 
 ### `create(uloop, time_fn)` → `Clock`
 
