@@ -16,6 +16,8 @@ All paths below are relative to this base. The script does not check the scheme 
 
 ## Endpoints
 
+The three paths the CGI script answers. Each entry lists whether the endpoint is rate-limited, whether it needs a valid configuration, and the cookies it sets or clears.
+
 ### `GET /` — Probe or initiate login
 
 **Without parameters:** Starts the OIDC authorization code flow. Removes stale handshake files, loads the IdP's discovery document (cached for 24 hours), generates a PKCE pair, nonce, and state token, saves them to a handshake file, and redirects the browser to the IdP's authorization endpoint.
@@ -83,6 +85,8 @@ If no active session is found (cookie absent or session already expired), the en
 ---
 
 ## Cookies
+
+The cookies `luci-sso` sets. The handshake cookie lives only during a login; the two session cookies carry the LuCI session afterwards.
 
 ### `__Host-luci_sso_state`
 
@@ -206,9 +210,12 @@ The size limits apply to every request, including `?action=enabled`. The rate li
 | Clients tracked at once | 256; the least recently seen is forgotten first |
 | Logins in progress (handshakes) | 500 at once; expired ones are removed to make room, live ones never are. Beyond that, a new login gets `503` |
 
-Rate limits are per client. A client is its source address as uhttpd reports it (`REMOTE_ADDR`): the full address for IPv4, the `/64` prefix for IPv6, and one shared bucket for an address that cannot be parsed. `GET /` spends both budgets; `/callback`, `/logout` and unknown paths spend only the per-minute one. `?action=enabled` is never limited. There is no router-wide limit: uhttpd's cap on concurrent CGI processes bounds the total load.
+Rate limits are per client:
 
-Behind a reverse proxy, every client arrives with the proxy's address and shares one budget. `X-Forwarded-For` is not trusted.
+- **Client identity.** A client is its source address as uhttpd reports it (`REMOTE_ADDR`): the full address for IPv4, the `/64` prefix for IPv6, and one shared bucket for an address that cannot be parsed.
+- **Budgets spent.** `GET /` spends both budgets; `/callback`, `/logout` and unknown paths spend only the per-minute one. `?action=enabled` is never limited.
+- **No global limit.** There is no router-wide limit: uhttpd's cap on concurrent CGI processes bounds the total load.
+- **Reverse proxies.** Behind a reverse proxy, every client arrives with the proxy's address and shares one budget. `X-Forwarded-For` is not trusted.
 
 Requests that exceed the size limits return `431`. Requests that exceed a rate limit return `429` with a `Retry-After` header giving the seconds until that budget resets.
 
