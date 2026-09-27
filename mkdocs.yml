@@ -104,6 +104,7 @@ nav:
       - About the Design Philosophy: explanation/design-philosophy.md
       - About the OIDC Login Flow: explanation/oidc-flow.md
       - About the Session Lifecycle: explanation/session-lifecycle.md
+      - About Roles and Permissions: explanation/roles-and-permissions.md
       - About Crypto Backends: explanation/crypto-backends.md
       - About the Test Architecture: explanation/test-architecture.md
       - About the Security Model: explanation/security-model.md

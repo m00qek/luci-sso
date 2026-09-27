@@ -14,6 +14,7 @@ Explanation is "understanding-oriented". It deepens the reader's understanding o
 ## Authentication
 *   [About the OIDC Login Flow](oidc-flow.md) - What happens when a user clicks "Login with SSO".
 *   [About the Session Lifecycle](session-lifecycle.md) - How sessions are created, how long they last, and what happens at logout.
+*   [About Roles and Permissions](roles-and-permissions.md) - Why a role's permissions live in `rpcd`, and why the first matching role wins.
 
 ## Security
 *   [About the Security Model](security-model.md) - Our "Paranoid" approach to OIDC.
