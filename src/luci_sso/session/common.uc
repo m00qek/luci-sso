@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Shared constants and common logic for the session module.

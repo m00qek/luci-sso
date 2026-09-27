@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as crypto from 'luci_sso.crypto';
 import * as session from 'luci_sso.session';
@@ -27,7 +27,7 @@ function response(status, headers, body) {
 		headers: headers || {},
 		body: body || ""
 	};
-};
+}
 
 /**
  * Handles the initial login redirect.
@@ -46,7 +46,7 @@ function handle_login(deps, config) {
 		"Location": res.data.url,
 		"Set-Cookie": `__Host-luci_sso_state=${res.data.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
 	}));
-};
+}
 
 /**
  * Handles the OIDC callback path.
@@ -91,7 +91,7 @@ function handle_callback(deps, config, request) {
 			"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 		]
 	}));
-};
+}
 
 /**
  * Handles the logout request.
@@ -132,12 +132,12 @@ function handle_logout(deps, config, request) {
 
 		// The browser carries id_token_hint to this URL, so it must be HTTPS.
 		if (encoding.is_https(end_session)) {
-			let sep = (index(end_session, '?') == -1) ? '?' : '&';
+			let sep = (index(end_session, "?") == -1) ? "?" : "&";
 
 			logout_url = end_session;
 			if (id_token_hint) {
 				logout_url += `${sep}id_token_hint=${lucihttp.urlencode(id_token_hint, 1)}`;
-				sep = '&';
+				sep = "&";
 			}
 
 			let redirect_uri = config.redirect_uri || "";
@@ -161,7 +161,7 @@ function handle_logout(deps, config, request) {
 			"sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0"
 		]
 	}));
-};
+}
 
 /**
  * Main entry point for the router.

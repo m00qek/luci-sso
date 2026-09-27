@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as Result from 'luci_sso.result';
 import { INVALID_ARGUMENT, TOKEN_TOO_LARGE } from 'luci_sso.errors';
@@ -14,18 +14,18 @@ const MAX_UTILS_SIZE = 32768; // 32 KB
  * @private
  */
 function _map_to_url_safe(str) {
-	let res = replace(str, /\+/g, '-');
-	return replace(res, /\//g, '_');
-};
+	let res = replace(str, /\+/g, "-");
+	return replace(res, /\//g, "_");
+}
 
 /**
  * Maps URL-safe characters back to standard Base64.
  * @private
  */
 function _map_from_url_safe(str) {
-	let res = replace(str, /-/g, '+');
-	return replace(res, /_/g, '/');
-};
+	let res = replace(str, /-/g, "+");
+	return replace(res, /_/g, "/");
+}
 
 /**
  * Adds padding characters to a Base64 string if needed.
@@ -34,18 +34,18 @@ function _map_from_url_safe(str) {
 function _add_padding(str) {
 	let pad = (4 - (length(str) % 4)) % 4;
 	for (let i = 0; i < pad; i++) {
-		str += '=';
+		str += "=";
 	}
 	return str;
-};
+}
 
 /**
  * Removes all padding characters from a Base64 string.
  * @private
  */
 function _strip_padding(str) {
-	return replace(str, /=/g, '');
-};
+	return replace(str, /=/g, "");
+}
 
 /**
  * Converts Base64URL to Standard Base64 with padding.
@@ -61,7 +61,7 @@ function b64url_to_b64(str) {
 		return null;
 	
 	return _add_padding(_map_from_url_safe(str));
-};
+}
 
 /**
  * Decodes a Base64URL string to a raw string.

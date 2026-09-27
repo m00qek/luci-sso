@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * CGI entry pipeline for luci-sso.
@@ -33,7 +33,7 @@ function emit(web_deps, res) {
 	} else {
 		web.render(web_deps, res.data);
 	}
-};
+}
 
 /**
  * Runs the full request → config → route → render pipeline.

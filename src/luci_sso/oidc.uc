@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
@@ -37,7 +37,7 @@ export function get_auth_url(deps, config, discovery_doc, params) {
 	}
 	
 	// RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
-	if (index(discovery_doc.authorization_endpoint, '#') != -1) {
+	if (index(discovery_doc.authorization_endpoint, "#") != -1) {
 		return Result.err(INVALID_AUTH_ENDPOINT, "authorization_endpoint MUST NOT contain a fragment");
 	}
 
@@ -53,11 +53,11 @@ export function get_auth_url(deps, config, discovery_doc, params) {
 	};
 	let url = discovery_doc.authorization_endpoint;
 
-	let sep = (index(url, '?') == -1) ? '?' : '&';
+	let sep = (index(url, "?") == -1) ? "?" : "&";
 	for (let k, v in query) {
 		if (v == null) continue;
 		url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
-		sep = '&';
+		sep = "&";
 	}
 	return Result.ok(url);
 };

@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
@@ -21,7 +21,7 @@ function get_cache_path(native, id_res, prefix) {
 	let h_res = encoding.b64url_encode(hash_res.data);
 	if (!h_res.ok) return null;
 	return `/var/run/luci-sso/oidc-${prefix}-${substr(h_res.data, 0, 32)}.json`;
-};
+}
 
 /**
  * Reads and validates a cached object.
@@ -45,7 +45,7 @@ function _read_cache(deps, path, ttl, ignore_ttl) {
 	} catch (e) {
 		return null;
 	}
-};
+}
 
 /**
  * Writes data to cache with a timestamp (Atomic).
@@ -74,7 +74,7 @@ function _write_cache(deps, path, data) {
 	} catch (e) {
 		deps.log("error", `Cache write failure: ${e}`);
 	}
-};
+}
 
 /**
  * Fetches and caches OIDC discovery document.
@@ -112,7 +112,7 @@ export function discover(deps, issuer, options) {
 	}
 	if (!encoding.is_https(fetch_url)) return Result.err(INSECURE_FETCH_URL);
 
-	if (substr(fetch_url, -1) != '/') fetch_url += '/';
+	if (substr(fetch_url, -1) != "/") fetch_url += "/";
 	fetch_url += ".well-known/openid-configuration";
 
 	let res_http = deps.http.get(fetch_url, { verify: true });

@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Standardised result monad for luci-sso.

@@ -11,13 +11,13 @@
 // Every other session, and any session that cannot be looked up, gets LuCI's
 // own logout, called unchanged.
 
-'use strict';
+"use strict";
 
 import { urlencode } from 'lucihttp';
 
 function is_sso_session(sid) {
-	const reply = ubus.call('session', 'get', { ubus_rpc_session: sid });
-	return type(reply?.values) == 'object' && !!reply.values.oidc_user;
+	const reply = ubus.call("session", "get", { ubus_rpc_session: sid });
+	return type(reply?.values) == "object" && !!reply.values.oidc_user;
 }
 
 return {
@@ -32,6 +32,6 @@ return {
 
 		// Nested calls see the dispatcher's globals, so LuCI's own function
 		// runs exactly as if the menu still pointed at it.
-		require('luci.controller.admin.index').action_logout();
+		require("luci.controller.admin.index").action_logout();
 	}
 };

@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as lucihttp from 'lucihttp';
 import * as encoding from 'luci_sso.encoding';
@@ -78,16 +78,16 @@ const LOGIN_URL = "/cgi-bin/luci/";
  * @private
  */
 function _error_page(message) {
-	return '<!DOCTYPE html>\n' +
+	return "<!DOCTYPE html>\n" +
 		'<html lang="en">\n' +
 		'<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Single sign-on</title></head>\n' +
-		'<body>\n' +
-		'<h1>Single sign-on</h1>\n' +
+		"<body>\n" +
+		"<h1>Single sign-on</h1>\n" +
 		`<p>${message}</p>\n` +
 		`<p><a href="${LOGIN_URL}">Back to the login page</a></p>\n` +
-		'</body>\n' +
-		'</html>\n';
-};
+		"</body>\n" +
+		"</html>\n";
+}
 
 /**
  * Safely retrieves an environment variable with length enforcement.
@@ -97,7 +97,7 @@ function safe_getenv(getenv, key) {
 	let val = getenv(key);
 	if (val && length(val) > LIMIT_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431, key: key });
 	return Result.ok(val);
-};
+}
 
 /**
  * Parses a query string into an object with URL decoding.
@@ -115,8 +115,8 @@ export function parse_params(str) {
 		let k = parts[0];
 		let v = parts[1];
 		if (k) {
-			let key = lucihttp.urldecode(replace(k, /\+/g, ' '));
-			let val = (v != null) ? lucihttp.urldecode(replace(v, /\+/g, ' ')) : null;
+			let key = lucihttp.urldecode(replace(k, /\+/g, " "));
+			let val = (v != null) ? lucihttp.urldecode(replace(v, /\+/g, " ")) : null;
 			params[key] = val;
 		}
 	}
@@ -157,7 +157,7 @@ export function parse_cookies(str) {
 function _sanitize_header(val) {
 	if (type(val) != "string") return val;
 	return replace(val, /[\r\n]+/g, " ");
-};
+}
 
 /**
  * Internal helper to write HTTP headers and body.
@@ -184,7 +184,7 @@ function _out(stdout, headers, body) {
 		stdout.write(body);
 	}
 	stdout.flush();
-};
+}
 
 /**
  * Applies security headers to a response headers object in-place.
@@ -197,7 +197,7 @@ function _apply_security_headers(headers) {
 	headers["X-Frame-Options"] = "DENY";
 	headers["Cache-Control"] = "no-store";
 	headers["Referrer-Policy"] = "no-referrer";
-};
+}
 
 /**
  * Extracts and parses the request context from the CGI environment.
@@ -252,7 +252,7 @@ export function render(deps, res) {
 
 	if (res.status == 302) {
 		headers["Content-Type"] = "text/html";
-		body = '<html><body><p>Redirecting...</p></body></html>\n';
+		body = "<html><body><p>Redirecting...</p></body></html>\n";
 	}
 
 	_out(deps.stdout, headers, body);

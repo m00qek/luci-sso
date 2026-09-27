@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';

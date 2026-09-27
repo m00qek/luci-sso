@@ -17,13 +17,13 @@
 static psa_status_t _psa_init_status = PSA_ERROR_BAD_STATE;
 
 int native_crypto_init(void) {
-    _psa_init_status = psa_crypto_init();
-    return (_psa_init_status == PSA_SUCCESS) ? 0 : -1;
+	_psa_init_status = psa_crypto_init();
+	return (_psa_init_status == PSA_SUCCESS) ? 0 : -1;
 }
 
 void native_crypto_deinit(void) {
-    mbedtls_psa_crypto_free();
-    _psa_init_status = PSA_ERROR_BAD_STATE;
+	mbedtls_psa_crypto_free();
+	_psa_init_status = PSA_ERROR_BAD_STATE;
 }
 
 static int ecdsa_raw_to_der_robust(const unsigned char *raw, size_t raw_len, 

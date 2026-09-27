@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Per-client rate limiting for the CGI endpoints.

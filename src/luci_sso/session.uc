@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Public session façade for luci-sso.

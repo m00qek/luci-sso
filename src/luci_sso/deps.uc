@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Production dependency factory for luci-sso.

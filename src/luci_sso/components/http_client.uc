@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * HTTPS-only HTTP client component backed by uclient and uloop.
@@ -129,7 +129,7 @@ export function create(uclient, uloop, fs) {
 	return {
 		get: function(url, opts) {
 			if (!encoding.is_https(url)) return Result.err(HTTPS_REQUIRED);
-			let res = do_request(uclient, uloop, fs, 'GET', url, {
+			let res = do_request(uclient, uloop, fs, "GET", url, {
 				timeout: 10000,
 				headers: (opts && opts.headers) ? opts.headers : {}
 			});
@@ -139,7 +139,7 @@ export function create(uclient, uloop, fs) {
 
 		post: function(url, opts) {
 			if (!encoding.is_https(url)) return Result.err(HTTPS_REQUIRED);
-			let res = do_request(uclient, uloop, fs, 'POST', url, {
+			let res = do_request(uclient, uloop, fs, "POST", url, {
 				timeout: 10000,
 				headers: (opts && opts.headers) ? opts.headers : {},
 				post_data: (opts && opts.body) ? opts.body : null

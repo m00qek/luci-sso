@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Logic for loading and validating UCI configuration.
@@ -18,7 +18,7 @@ export function is_enabled(deps) {
 	if (!cursor) return Result.err(UCI_ERROR);
 
 	let enabled = cursor.get("luci-sso", "default", "enabled");
-	return Result.ok(enabled === '1');
+	return Result.ok(enabled === "1");
 };
 
 /**

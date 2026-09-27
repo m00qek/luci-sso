@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
@@ -51,7 +51,7 @@ function _load_acl_entries(deps) {
 		}
 	}
 	return Result.ok({ entries, groups: sort(keys(groups)) });
-};
+}
 
 // fnmatch(3) without flags, as rpcd matches role lists against group names:
 // `*` and `?` are wildcards and `[...]` is a character class ([!...] negates).
@@ -182,7 +182,7 @@ function _session_timeout(deps) {
 	if (!deps.uci) return DEFAULT_SESSION_TIMEOUT;
 	let t = int(deps.uci.get("luci", "sauth", "sessiontime"));
 	return (type(t) == "int" && t > 0) ? t : DEFAULT_SESSION_TIMEOUT;
-};
+}
 
 /**
  * Creates a real LuCI system session via UBUS WITHOUT a password.

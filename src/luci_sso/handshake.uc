@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
@@ -50,7 +50,7 @@ function _validate_callback_request(deps, config, request) {
 	}
 
 	return Result.ok({ code: query.code, handshake: handshake_res.data, token: state_token });
-};
+}
 
 /**
  * Executes the full OIDC exchange and verification flow.
@@ -182,7 +182,7 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 		refresh_token: tokens.refresh_token,
 		id_token: tokens.id_token
 	});
-};
+}
 
 /**
  * Initiates the OIDC login flow.

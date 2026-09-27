@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import { b64url_decode } from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
@@ -20,7 +20,7 @@ function rsa_to_pem(native, jwk) {
 		return Result.err(PEM_CONVERSION_FAILED);
 
 	return Result.ok(pem);
-};
+}
 
 function ec_to_pem(native, jwk) {
 	if (jwk.crv != "P-256")
@@ -41,7 +41,7 @@ function ec_to_pem(native, jwk) {
 		return Result.err(PEM_CONVERSION_FAILED);
 
 	return Result.ok(pem);
-};
+}
 
 /**
  * Logic for managing and converting JSON Web Keys (JWK).

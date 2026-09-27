@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Wall-clock and sleep component backed by the uloop event loop.

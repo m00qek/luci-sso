@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as Result from 'luci_sso.result';
 import { CRYPTO_ERROR, INVALID_ARGUMENT } from 'luci_sso.errors';

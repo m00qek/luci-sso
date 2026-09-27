@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Public crypto façade for luci-sso.

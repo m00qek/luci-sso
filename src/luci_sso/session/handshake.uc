@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
@@ -30,7 +30,7 @@ function _reap_older_than(deps, files, max_age) {
 		}
 	}
 	return reaped;
-};
+}
 
 /**
  * Removes handshake files older than the duration.
