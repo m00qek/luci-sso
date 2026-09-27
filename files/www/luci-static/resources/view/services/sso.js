@@ -347,8 +347,7 @@ return view.extend({
 		o.rmempty = true;
 
 		o = s.option(form.DynamicList, 'group', _('Groups'),
-			_('Match by OIDC <code>groups</code> claim (case-sensitive). ' +
-			  'For Pocket ID, include the <code>@PocketID</code> suffix.'));
+			_('Match by OIDC <code>groups</code> claim (case-sensitive).'));
 		o.modalonly = true;
 		o.rmempty = true;
 
