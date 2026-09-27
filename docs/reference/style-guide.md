@@ -322,7 +322,19 @@ function helper_function(arg) {
 ### String Formatting
 
 - **Interpolation:** Logic SHOULD use template literals for string building.
-- **Quotes:** Double quotes MUST be used for standard strings.
+- **Quotes:** Standard strings MUST use double quotes, including the `"use strict";` directive. Two exceptions use single quotes:
+    - **Import specifiers**, as everywhere in this codebase and in OpenWrt ucode: `import * as result from 'luci_sso.result';`
+    - **A string that contains a double quote** MAY use single quotes to avoid escaping it, for example JSON: `'{"enabled": %s}'`.
+- **Scope:** The quote rule applies to production ucode in `src/` and `files/`. Tests follow the same rule and exceptions in new code where practical; existing test strings are not converted.
+
+```javascript
+"use strict";
+
+import * as result from 'luci_sso.result';
+
+let method = "GET";
+let body = sprintf('{"enabled": %s}', enabled ? "true" : "false");
+```
 
 ### Imports
 
@@ -843,6 +855,7 @@ EC keys (key type) not ES256 signatures (algorithm).
 | **Indentation** | Tabs (OpenWrt standard) | Consistency review |
 | **Naming** | snake_case for variables/functions | Style review |
 | **Exports** | Trailing semicolon on `export` statements | Syntax requirement |
+| **Quotes** | Double quotes for strings; single quotes for import specifiers and strings containing `"` | Style review |
 | **Testing** | Every function, every error path, security attacks | Test coverage review |
 | **Error codes, limits, cookies** | Match the reference pages | `make lint` (CI) |
 
