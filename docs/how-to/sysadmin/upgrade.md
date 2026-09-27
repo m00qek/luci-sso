@@ -60,7 +60,7 @@ apk list --installed luci-sso
 
 === "From a local package"
 
-    Build the new version (see [Building from Source](../../tutorials/building.md)) and copy it to the router:
+    Build the new version (see [How to Build the Packages from Source](build-from-source.md)) and copy it to the router:
 
     ```bash
     # OpenWrt 24.10

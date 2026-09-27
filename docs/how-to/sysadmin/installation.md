@@ -32,7 +32,7 @@ grep DISTRIB_ARCH /etc/openwrt_release
 - `aarch64_generic`
 - `aarch64_cortex-a53`
 
-If your router's architecture is one of them, [install from the package feed](#3-install-from-the-package-feed). Any other architecture (for example `mipsel_24kc` or `arm_cortex-a7`) has to [build from source and install a local package](#4-install-from-a-local-package).
+If your router's architecture is one of them, [install from the package feed](#3-install-from-the-package-feed). Any other architecture (for example `mipsel_24kc` or `arm_cortex-a7`) has to [build the packages from source](build-from-source.md) and [install them as a local package](#4-install-from-a-local-package).
 
 ---
 
@@ -91,7 +91,7 @@ Adding the feed's signing key needs a shell: LuCI's **Software** page can edit t
 
 ## 4. Install from a local package
 
-Use this for an architecture the feed does not serve, or to try a build of your own. Build the packages as described in [Building from Source](../../tutorials/building.md). The build leaves the `luci-sso` packages in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `luci-sso` and the three crypto backends. On OpenWrt 24.10 they are `.ipk` files, and you need two of them:
+Use this for an architecture the feed does not serve, or to try a build of your own. Build the packages as described in [How to Build the Packages from Source](build-from-source.md). The build leaves the `luci-sso` packages in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `luci-sso` and the three crypto backends. On OpenWrt 24.10 they are `.ipk` files, and you need two of them:
 
 ```text
 luci-sso_<version>_<arch>.ipk

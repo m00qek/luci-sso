@@ -49,7 +49,7 @@ For other architectures, or to try your own changes, build the packages with Doc
 make package SDK_ARCH=x86-64
 ```
 
-See [Building from Source](https://m00qek.github.io/luci-sso/tutorials/building/).
+See [How to Build the Packages from Source](https://m00qek.github.io/luci-sso/how-to/sysadmin/build-from-source/).
 
 ---
 

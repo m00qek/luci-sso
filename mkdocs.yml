@@ -53,7 +53,6 @@ nav:
       - Overview: tutorials/index.md
       - First SSO Login (Public IdP): tutorials/first-sso-login.md
       - First SSO Login (Self-hosted): tutorials/pocket-id-sso-login.md
-      - Building from Source: tutorials/building.md
       - Developer Onboarding: tutorials/dev-onboarding.md
   - How-to Guides:
       - Overview: how-to/index.md
@@ -66,6 +65,7 @@ nav:
           - Pocket ID: how-to/providers/pocket-id.md
       - Sysadmin:
           - Installation: how-to/sysadmin/installation.md
+          - Building from Source: how-to/sysadmin/build-from-source.md
           - Configuring in LuCI: how-to/sysadmin/configure-in-luci.md
           - Installing a Private CA Certificate: how-to/sysadmin/install-ca-certificate.md
           - Upgrading: how-to/sysadmin/upgrade.md

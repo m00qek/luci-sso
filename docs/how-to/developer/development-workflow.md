@@ -17,13 +17,14 @@ All development commands go through `Makefile`, which delegates to `devenv/scrip
 ## Build
 
 ```bash
-# Build the IPK package for a specific architecture
+# Build the packages for a specific architecture (OpenWrt 24.10, .ipk)
 make package SDK_ARCH=x86-64
 
-# Other common targets
-make package SDK_ARCH=aarch64_generic
-make package SDK_ARCH=mipsel_24kc
+# The same for OpenWrt 25.12 (.apk)
+make package SDK_ARCH=x86-64 SDK_VERSION=25.12.3
 ```
+
+The packages land in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`. See [How to Build the Packages from Source](../sysadmin/build-from-source.md) for choosing the architecture and version.
 
 Native C compilation is guarded by a sentinel file, `bin/lib/<SDK_ARCH>/<SDK_VERSION>/.built-<CRYPTO_LIB>`. When a file in `mod/` (`*.c`, `*.h` or `CMakeLists.txt`) is newer than the sentinel, the next `make compile` rebuilds the C components for that architecture, version and backend.
 

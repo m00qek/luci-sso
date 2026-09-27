@@ -16,6 +16,7 @@ GitHub is not supported. See [Provider Compatibility](../reference/provider-comp
 
 ## System Administration
 *   [Installation](sysadmin/installation.md) - How to install `luci-sso` from the package feed, or from a package you built.
+*   [Building from Source](sysadmin/build-from-source.md) - How to build the packages with the OpenWrt SDK for an architecture the package feed does not serve.
 *   [Configure in LuCI](sysadmin/configure-in-luci.md) - How to configure the OIDC settings and roles from the LuCI web interface.
 *   [Installing a Private CA Certificate](sysadmin/install-ca-certificate.md) - How to make the router trust a self-signed or private CA certificate.
 *   [Upgrading](sysadmin/upgrade.md) - How to upgrade to a new version and restore the login button after a LuCI upgrade.
