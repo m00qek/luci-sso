@@ -37,10 +37,9 @@ If you want to restrict which Pocket ID groups are allowed to authenticate to th
     | **Issuer URL** | `https://id.example.com` |
     | **Client ID** | Your Client ID from Step 1 |
     | **Client Secret** | Your Client Secret from Step 1 |
+    | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
 
-    Replace `https://id.example.com` with the actual URL of your Pocket ID instance.
-
-    The **Redirect URI** field is pre-filled from your browser's address bar — verify it matches the callback URL set in Step 1.
+    Replace `https://id.example.com` with the actual URL of your Pocket ID instance. The Redirect URI must exactly match the callback URL set in Step 1; the shipped configuration has `https://router.lan/cgi-bin/luci-sso/callback` there.
 
     Click **Save & Apply**.
 
@@ -50,11 +49,12 @@ If you want to restrict which Pocket ID groups are allowed to authenticate to th
     uci set luci-sso.default.issuer_url='https://id.example.com'
     uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
     uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
+    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
     uci set luci-sso.default.enabled='1'
     uci commit luci-sso
     ```
 
-    Replace `https://id.example.com` with the actual URL of your Pocket ID instance.
+    Replace `https://id.example.com` with the actual URL of your Pocket ID instance. The `redirect_uri` must exactly match the callback URL set in Step 1.
 
 ---
 
@@ -116,7 +116,7 @@ uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso
 # Expected: {"enabled": true}
 ```
 
-Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to your Pocket ID passkey authentication screen.
+Open the LuCI login page at the host name used in the Redirect URI; the login fails with `MISSING_HANDSHAKE_COOKIE` if it starts at a different address. The **Login with SSO** button should appear. Clicking it redirects to your Pocket ID passkey authentication screen.
 
 ---
 

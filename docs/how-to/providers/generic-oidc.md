@@ -154,7 +154,7 @@ uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso
 
 Then open the LuCI login page in a browser.
 
-![LuCI login page showing a prominent blue "Login with SSO" button above the standard username and password fields](../../assets/screenshots/luci-login-sso-button.svg "LuCI login page with SSO button visible")
+![LuCI login page showing the standard username and password fields and the Log in button, with a "Login with SSO" button added below it](../../assets/screenshots/luci-login-sso-button.svg "LuCI login page with SSO button visible")
 
 The **Login with SSO** button should appear. Clicking it redirects to your IdP's login screen. After authenticating, you should be redirected back to the LuCI dashboard.
 

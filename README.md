@@ -9,13 +9,13 @@
 
 **Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.**
 
-<img width="1119" height="588" alt="LuCI web interface login screen showing a blue 'Login with SSO' button prominently displayed above the standard OpenWrt password prompt." src="https://github.com/user-attachments/assets/cbe996a7-fc25-4f63-bd91-0d57dddcab75" />
+<img width="1119" height="588" alt="LuCI web interface login screen showing the standard OpenWrt username and password fields with a 'Login with SSO' button added below the Log in button." src="https://github.com/user-attachments/assets/cbe996a7-fc25-4f63-bd91-0d57dddcab75" />
 
 ---
 
 ## What is this?
 
-`luci-sso` replaces the standard LuCI password prompt with an **OpenID Connect (OIDC)** flow, letting you secure your router with identity providers like Google, GitHub, or Authelia.
+`luci-sso` adds an **OpenID Connect (OIDC)** sign-in option to the LuCI login page, so you can log in to your router through identity providers like Google, Keycloak, Authentik, Authelia or Pocket ID. The standard password login stays available.
 
 ## Documentation
 

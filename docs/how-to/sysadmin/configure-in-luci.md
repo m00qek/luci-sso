@@ -32,7 +32,7 @@ The OAuth2 credentials from your identity provider's client registration. The se
 
 ### Redirect URI
 
-The callback URL the IdP redirects the browser to after authentication. It is pre-filled with `https://<your-router-hostname>/cgi-bin/luci-sso/callback`. This value must exactly match the redirect URI registered with the IdP.
+The callback URL the IdP redirects the browser to after authentication: `https://<router-host>/cgi-bin/luci-sso/callback`. Set it yourself. The shipped configuration contains `https://router.lan/cgi-bin/luci-sso/callback`; the form suggests the address in your browser only when the option is empty. The value must exactly match the redirect URI registered with the IdP, and users must open LuCI at the same host name, or the login fails with `MISSING_HANDSHAKE_COOKIE`.
 
 ### Scopes
 

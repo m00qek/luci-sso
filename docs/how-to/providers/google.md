@@ -12,8 +12,10 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
 4. Navigate to **APIs & Services > Credentials > Create Credentials > OAuth client ID**.
    - **Application type:** Web application.
    - **Name:** `LuCI Router`.
-   - **Authorized redirect URIs:** `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback`.
+   - **Authorized redirect URIs:** `https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback`.
 5. Click **Create**. Copy the generated **Client ID** and **Client Secret**.
+
+Google rejects redirect URIs whose host is an IP address or does not end in a public domain (so `router.lan` does not work). Use a name under a domain you own; it only has to resolve for your browsers, for example through the LAN's DNS.
 
 !!! note "External apps and test users"
     If you chose **External** on the OAuth consent screen, Google restricts sign-in to accounts listed as test users until the app is verified. Add your Gmail address under **OAuth consent screen > Test users** before proceeding.
@@ -34,7 +36,7 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
     | **Issuer URL** | `https://accounts.google.com` |
     | **Client ID** | Your Client ID from Step 1 |
     | **Client Secret** | Your Client Secret from Step 1 |
-    | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+    | **Redirect URI** | `https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback` |
     | **Scopes** | `openid profile email` |
     | **Clock Tolerance** | `60` |
 
@@ -48,7 +50,7 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
     uci set luci-sso.default.issuer_url='https://accounts.google.com'
     uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
     uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
-    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
+    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback'
     uci set luci-sso.default.scope='openid profile email'
     uci set luci-sso.default.clock_tolerance='60'
     uci set luci-sso.default.enabled='1'

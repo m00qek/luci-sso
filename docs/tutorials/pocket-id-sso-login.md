@@ -1,6 +1,6 @@
 # Your First SSO Login: Self-hosted IdP
 
-In this tutorial, we will enable single sign-on on your OpenWrt router using [Pocket ID](https://pocket-id.org/) — a self-hosted identity provider that runs entirely on your LAN. No external accounts or public infrastructure are required; the entire login flow stays on your network.
+In this tutorial, we will enable single sign-on on your OpenWrt router using [Pocket ID](https://pocket-id.org/) — a self-hosted identity provider (IdP), the service that checks who the user is and tells the router, running entirely on your LAN. No external accounts or public infrastructure are required; the entire login flow stays on your network.
 
 Users authenticate with a passkey (biometric or hardware security key) instead of a password.
 
@@ -29,6 +29,7 @@ We need:
 
 - `luci-sso` installed on the router. If not, follow [How to Install luci-sso](../how-to/sysadmin/installation.md) first.
 - Pocket ID running on a device on your LAN, with at least one user and passkey enrolled.
+- **The router trusting Pocket ID's certificate.** The router connects to Pocket ID itself, over HTTPS. If Pocket ID's certificate comes from a private CA, install that CA on the router first: [How to Install a Private CA Certificate](../how-to/sysadmin/install-ca-certificate.md).
 - **LuCI accessible over HTTPS with a certificate the browser trusts.** If using a self-signed certificate, navigate to LuCI in the browser and click through the certificate warning to trust it before continuing — the SSO callback will fail otherwise.
 
 !!! warning "Accepting certificate warnings is a security risk"
@@ -67,9 +68,9 @@ Fill in the **Settings** section with the values from Step 1:
 | **Scopes** | `openid profile email` |
 | **Clock Tolerance** | `60` |
 
-Replace `https://id.example.com` with the actual URL of our Pocket ID instance. The **Redirect URI** is pre-filled from our browser's address bar — verify it matches the callback URL set in Step 1.
+Replace `https://id.example.com` with the actual URL of our Pocket ID instance. The shipped configuration has `https://router.lan/cgi-bin/luci-sso/callback` in the **Redirect URI** field; we replace it with exactly the callback URL we set in Step 1.
 
-Scroll to the **Users** section, click **Edit** on the `admin` role, add our email address to **Email Addresses**, and click **Save**.
+Scroll to the **Users** section and click **Edit** on the `admin` role. In **Email Addresses**, remove the placeholder `admin@example.com`, add our email address, and click **Save**.
 
 Click **Save & Apply**.
 
@@ -80,8 +81,10 @@ Click **Save & Apply**.
 
 ## Step 3: Confirm the service is running
 
-```bash
-curl -s https://192.168.1.1/cgi-bin/luci-sso?action=enabled
+In the browser, we open:
+
+```text
+https://192.168.1.1/cgi-bin/luci-sso?action=enabled
 ```
 
 Expected response:
@@ -96,9 +99,12 @@ If we see `{"enabled": false}`, verify that **Enable SSO** is toggled on in **Se
 
 ## Step 4: See the SSO button
 
-Navigate to `https://192.168.1.1/cgi-bin/luci/`. The login page should show a "Login with SSO" button above the standard fields.
+Navigate to `https://192.168.1.1/cgi-bin/luci/`. The login page should show a "Login with SSO" button below the **Log in** button.
 
-![LuCI login page showing the standard username and password fields, with a blue "Login with SSO" button prominently displayed above them](../assets/screenshots/luci-login-sso-button.svg "LuCI login page with the SSO button enabled")
+!!! warning "Use the same host name as the Redirect URI"
+    Open LuCI at the same address as in the Redirect URI, here `192.168.1.1`. If the Redirect URI uses a host name instead, open LuCI at that name. The login starts at whatever address the browser shows, and its cookie is only sent back to that exact host, so a login started at one address fails when Pocket ID returns to another.
+
+![LuCI login page showing the standard username and password fields and the Log in button, with a "Login with SSO" button added below it](../assets/screenshots/luci-login-sso-button.svg "LuCI login page with the SSO button enabled")
 
 If the button is not there, clear the browser cache and reload. If it still does not appear, check the system log:
 
