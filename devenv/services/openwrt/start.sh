@@ -27,12 +27,53 @@ cat <<EOF >/etc/board.json
 EOF
 
 # 4. Minimal rpcd mock
+# A container runs no procd, so this stands in for its `system` ubus object.
+# It answers the two calls LuCI makes, board and info, in the shape procd
+# uses, so the header shows the hostname and Status > Overview has its values.
 mkdir -p /usr/libexec/rpcd
 cat <<'EOF' >/usr/libexec/rpcd/system
 #!/bin/sh
+. /usr/share/libubox/jshn.sh
+
+meminfo() { sed -n "s/^$1: *\([0-9]*\) kB/\1/p" /proc/meminfo | awk '{ printf "%.0f", $1 * 1024 }'; }
+
 case "$1" in
 	list) echo '{"info":{},"board":{}}' ;;
-	call) cat /etc/board.json ;;
+	call)
+		json_init
+		case "$2" in
+			board)
+				. /etc/openwrt_release
+				json_add_string kernel "$(sed -n 's/^Version: \([0-9.]*\).*/\1/p' /usr/lib/opkg/info/kernel.control)"
+				json_add_string hostname "$(uci -q get system.@system[0].hostname || echo OpenWrt)"
+				json_add_string system "$DISTRIB_ARCH"
+				json_add_string model "$(jsonfilter -i /etc/board.json -e '@.model.name')"
+				json_add_string board_name "$(jsonfilter -i /etc/board.json -e '@.model.id')"
+				json_add_object release
+				json_add_string distribution "$DISTRIB_ID"
+				json_add_string version "$DISTRIB_RELEASE"
+				json_add_string revision "$DISTRIB_REVISION"
+				json_add_string target "$DISTRIB_TARGET"
+				json_add_string description "$DISTRIB_DESCRIPTION"
+				json_close_object
+				;;
+			info)
+				json_add_int localtime "$(date +%s)"
+				json_add_int uptime "$(cut -d. -f1 /proc/uptime)"
+				json_add_array load
+				for l in $(cut -d' ' -f1-3 /proc/loadavg); do
+					json_add_int "" "$(awk -v l="$l" 'BEGIN { printf "%d", l * 65536 }')"
+				done
+				json_close_array
+				json_add_object memory
+				for f in total:MemTotal free:MemFree shared:Shmem buffered:Buffers available:MemAvailable cached:Cached; do
+					json_add_int "${f%%:*}" "$(meminfo "${f#*:}")"
+				done
+				json_close_object
+				;;
+		esac
+		json_dump
+		;;
 esac
 EOF
 chmod +x /usr/libexec/rpcd/system

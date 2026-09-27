@@ -66,7 +66,7 @@ COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_D
 SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
 
 # --- 3. PUBLIC INTERFACE ---
-.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint fuzzer-test sanitizer-test
+.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint fuzzer-test sanitizer-test screenshots
 .PHONY: local-up local-down local-ps local-shell local-run
 
 # Sentinel file tracks the last successful build for a specific arch/version/crypto combo
@@ -117,6 +117,9 @@ e2e-test: .e2e-test
 
 watch-tests: DOCKER_SUITE = ci
 watch-tests: .watch-tests
+
+screenshots: DOCKER_SUITE = ci
+screenshots: .screenshots
 
 test: unit-test e2e-test
 
@@ -180,6 +183,19 @@ SANITIZER_LEAKS ?= 1
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
+
+# Documentation screenshots: runs test/e2e/screenshots.capture.js in the
+# browser container, copies the PNGs into docs/assets/screenshots/ and
+# compresses them losslessly with oxipng in a throwaway Alpine container.
+SCREENSHOTS_DIR := $(PROJECT_ROOT)/docs/assets/screenshots
+
+.screenshots:
+	$(VALIDATE_SUITE_RUNNING)
+	docker compose $(COMPOSE_FLAGS) exec openwrt rm -f /var/run/luci-sso/ratelimit.json
+	docker compose $(COMPOSE_FLAGS) exec browser sh -c 'rm -rf /tmp/luci-sso-screenshots && node tests/screenshots.capture.js'
+	docker compose $(COMPOSE_FLAGS) cp browser:/tmp/luci-sso-screenshots/. $(SCREENSHOTS_DIR)/
+	docker run --rm -v $(SCREENSHOTS_DIR):/out alpine:$(ALPINE_VERSION) sh -c \
+		'apk add -q --no-cache oxipng && oxipng -q -o 4 --strip safe /out/*.png && chown $(UID):$(GID) /out/*.png'
 
 .build-images:
 	docker compose $(COMPOSE_FLAGS) build --pull=false

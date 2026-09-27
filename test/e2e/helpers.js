@@ -17,4 +17,13 @@ async function gotoSSOSettings(page) {
     await page.waitForSelector('.cbi-map');
 }
 
-module.exports = { loginAsRoot, gotoSSOSettings };
+// Logs in through the SSO button. The mock IdP signs in admin@example.com
+// without a prompt and redirects straight back to LuCI.
+async function loginViaSSO(page) {
+    await page.context().clearCookies();
+    await page.goto('/');
+    await page.locator('#luci-sso-login-btn').click();
+    await page.locator('a[href*="/logout"]').waitFor({ state: 'visible', timeout: 5000 });
+}
+
+module.exports = { loginAsRoot, gotoSSOSettings, loginViaSSO };
