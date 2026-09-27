@@ -23,34 +23,22 @@ log_success() { echo -e " ${GREEN}✅${RESET} $1"; }
 log_warn() { echo -e " ${YELLOW}⚠️${RESET}  $1"; }
 log_error() { echo -e " ${RED}⛔${RESET}  $1"; }
 
-translate_unit_paths() {
-  local modules=$1
-  local translated=""
-  for mod in $modules; do
-    # test/unit/luci_sso/crypto_test.uc -> /usr/share/luci-sso/test/unit/luci_sso/crypto_test.uc
-    local t="/usr/share/luci-sso/$(echo "$mod" | sed -E 's|^\.\./||')"
-    if [ -z "$translated" ]; then
-      translated="$t"
-    else
-      translated="$translated $t"
-    fi
-  done
-  echo "$translated"
+# MODULES is a whitespace-separated list of paths. split_modules splits it into
+# the array named by $2 without glob expansion, so a pattern reaches the
+# container's runner as written instead of being matched on the host.
+split_modules() {
+  local -n _out=$2
+  read -r -a _out <<<"$1"
 }
 
-translate_e2e_paths() {
-  local modules=$1
-  local translated=""
-  for mod in $modules; do
-    # test/e2e/01-login.spec.js -> tests/01-login.spec.js
-    local t=$(echo "$mod" | sed -E 's|^(\.\./)?test/e2e/|tests/|')
-    if [ -z "$translated" ]; then
-      translated="$t"
-    else
-      translated="$translated $t"
-    fi
-  done
-  echo "$translated"
+# test/unit/luci_sso/crypto_test.uc -> /usr/share/luci-sso/test/unit/luci_sso/crypto_test.uc
+translate_unit_path() {
+  echo "/usr/share/luci-sso/${1#../}"
+}
+
+# test/e2e/01-login.spec.js -> tests/01-login.spec.js
+translate_e2e_path() {
+  echo "$1" | sed -E 's|^(\.\./)?test/e2e/|tests/|'
 }
 
 # --- EXECUTION ---
@@ -66,22 +54,34 @@ run_unit() {
   local reporter
   [ "$VERBOSE" = "1" ] && reporter="detailed" || reporter="compact"
 
-  local filter_flag=""
-  [ -n "$filter" ] && filter_flag="-f $filter"
+  # One array element per argument: a filter with spaces stays one argument.
+  local filter_args=()
+  [ -n "$filter" ] && filter_args=(-f "$filter")
 
-  local bundles
+  local bundles=() mods=() mod
   if [ -n "$modules" ]; then
-    bundles=$(translate_unit_paths "$modules")
+    split_modules "$modules" mods
+    for mod in "${mods[@]}"; do
+      bundles+=("$(translate_unit_path "$mod")")
+    done
   else
-    bundles="/usr/share/luci-sso/test/native /usr/share/luci-sso/test/integration /usr/share/luci-sso/test/unit/luci_sso /usr/share/luci-sso/test/unit/luci_sso/components /usr/share/luci-sso/test/unit/luci_sso/crypto /usr/share/luci-sso/test/unit/luci_sso/session /usr/share/luci-sso/test/system"
+    bundles=(
+      /usr/share/luci-sso/test/native
+      /usr/share/luci-sso/test/integration
+      /usr/share/luci-sso/test/unit/luci_sso
+      /usr/share/luci-sso/test/unit/luci_sso/components
+      /usr/share/luci-sso/test/unit/luci_sso/crypto
+      /usr/share/luci-sso/test/unit/luci_sso/session
+      /usr/share/luci-sso/test/system
+    )
   fi
 
   docker compose $COMPOSE_FLAGS exec openwrt \
     utest \
     -c /usr/share/luci-sso/test/utest.config.uc \
     -r "$reporter" \
-    $filter_flag \
-    $bundles
+    "${filter_args[@]}" \
+    "${bundles[@]}"
 }
 
 run_e2e() {
@@ -89,8 +89,8 @@ run_e2e() {
   local filter=$2
 
   log_info "🧪 Running E2E tests (${CRYPTO_LIB}) in browser container..."
-  local grep_flag=""
-  [ -n "$filter" ] && grep_flag="-g $filter"
+  local grep_args=()
+  [ -n "$filter" ] && grep_args=(-g "$filter")
 
   docker compose $COMPOSE_FLAGS exec openwrt \
     sh -c "rm -rf /usr/lib/ucode/luci_sso && ln -sf '/luci_sso/backends/${CRYPTO_LIB}/luci_sso' '/usr/lib/ucode/luci_sso'"
@@ -100,17 +100,22 @@ run_e2e() {
   # file runs as its own Playwright invocation, preceded by a reset of the
   # rate-limit state, so every file starts with a full budget. The limiter
   # itself is covered by the unit and integration tests.
-  local specs
+  local specs=() mods=() mod
   if [ -n "$modules" ]; then
-    specs=$(translate_e2e_paths "$modules")
+    split_modules "$modules" mods
+    for mod in "${mods[@]}"; do
+      specs+=("$(translate_e2e_path "$mod")")
+    done
   else
-    specs=$(cd "$BASE_DIR/test/e2e" && ls *.spec.js | sed 's|^|tests/|')
+    for mod in "$BASE_DIR"/test/e2e/*.spec.js; do
+      specs+=("tests/${mod##*/}")
+    done
   fi
 
   local failed=0 spec
-  for spec in $specs; do
+  for spec in "${specs[@]}"; do
     docker compose $COMPOSE_FLAGS exec openwrt rm -f /var/run/luci-sso/ratelimit.json
-    docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test "$spec" $grep_flag --pass-with-no-tests || failed=1
+    docker compose $COMPOSE_FLAGS exec -e VERBOSE="$VERBOSE" browser ./node_modules/.bin/playwright test "$spec" "${grep_args[@]}" --pass-with-no-tests || failed=1
   done
   return $failed
 }
