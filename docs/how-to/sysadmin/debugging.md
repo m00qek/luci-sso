@@ -193,6 +193,14 @@ The log shows `[500] UBUS_LOGIN_FAILED`, preceded by a line such as `UBUS sessio
 
 ---
 
+## SSO users suddenly get access errors while still logged in
+
+LuCI pages start failing with "Access denied" or permission errors for users who logged in through SSO, while password users are fine. This happens after anything reloads `rpcd`, most often installing or upgrading a LuCI package: `rpcd` keeps the SSO sessions but drops their rights. See [About the Session Lifecycle](../../explanation/session-lifecycle.md#session-storage).
+
+Log out and log in through SSO again. The new session gets its rights back.
+
+---
+
 ## Security note
 
 When sharing logs for troubleshooting, redact tokens and internal IP addresses before posting them publicly.

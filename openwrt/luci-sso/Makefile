@@ -93,11 +93,17 @@ sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
 # back: the new package's uci-defaults script runs luci-sso-repatch again.
 [ -x /usr/sbin/luci-sso-repatch ] && /usr/sbin/luci-sso-repatch --remove >/dev/null 2>&1
 
-# Remove the SSO ACL entry and reload rpcd so the permission is revoked
-# immediately. opkg removes the file after prerm exits, so we delete it here
-# first; opkg's own removal becomes a harmless no-op.
-rm -f /usr/share/rpcd/acl.d/luci-app-sso.json 2>/dev/null
-[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+# Real removal only: revoke the SSO settings ACL at once. rpcd keeps the grants
+# of existing sessions until it restarts, and a reload is not enough (it drops
+# every grant of SSO sessions while keeping them logged in), so it restarts,
+# which logs everyone out. An upgrade or downgrade keeps the ACL file, so it
+# skips this and nobody is logged out: opkg exports PKG_UPGRADE=1 then, and apk
+# does not run this script on upgrade at all. opkg --force-reinstall looks like
+# a removal (PKG_UPGRADE=0) and still restarts rpcd.
+if [ "$${PKG_UPGRADE:-0}" != "1" ]; then
+	rm -f /usr/share/rpcd/acl.d/luci-app-sso.json 2>/dev/null
+	[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+fi
 
 # Clear LuCI cache to reflect removal
 rm -rf /tmp/luci-modulecache/* 2>/dev/null

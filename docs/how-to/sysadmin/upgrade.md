@@ -2,8 +2,8 @@
 
 This guide walks through upgrading an existing `luci-sso` installation to a new version, restoring the SSO button after a LuCI upgrade, and rolling back.
 
-!!! warning "Upgrading logs everyone out"
-    Upgrading, reinstalling or removing `luci-sso` runs the package's removal script, which restarts `rpcd`. Every LuCI session ends, password logins included, and users have to log in again. Do it when a short interruption is acceptable. Keep an SSH session open: it is not affected.
+!!! note "Sessions survive an upgrade"
+    Installing a newer or older `luci-sso` package over the installed one keeps every LuCI session, SSO and password logins alike. Only a real removal, or `opkg install --force-reinstall` on OpenWrt 24.10, restarts `rpcd` and logs everyone out.
 
 ---
 
@@ -12,7 +12,7 @@ This guide walks through upgrading an existing `luci-sso` installation to a new 
 | Item | Persists? | Notes |
 | :--- | :--- | :--- |
 | `/etc/config/luci-sso` | ✅ Yes | Declared as a `conffile`. If you changed it, your version is kept and the new default is saved next to it as `/etc/config/luci-sso-opkg` (`luci-sso.apk-new` on OpenWrt 25.12). |
-| Active LuCI sessions | ❌ No | The removal script restarts `rpcd`, which ends every session. |
+| Active LuCI sessions | ✅ Yes | An upgrade or downgrade does not restart `rpcd`. On OpenWrt 24.10, upgrading *from* a release that predates this behaviour still logs everyone out once, because opkg runs the old release's removal script. |
 | `/var/run/luci-sso/` | ✅ Until reboot | This is a tmpfs directory. Its contents survive the upgrade but are cleared on the next reboot. |
 | Token registry entries | ✅ Until reboot | Expired entries are removed by the daily cleanup job, not by the upgrade. |
 | SSO button on the login page | ✅ Yes | The removal script takes it out of LuCI's templates, and the install script puts it back. |
@@ -68,10 +68,9 @@ If the crypto backend has a new version too, copy that package as well.
 
 === "OpenWrt 25.12 (apk)"
 
-    Remove the old version and add the new file. Your changed `/etc/config/luci-sso` stays in place, and the crypto backend stays installed.
+    Add the new file. `apk add` replaces the installed version in place; your changed `/etc/config/luci-sso` stays, and so does the crypto backend. Do not `apk del` first: that is a removal, which logs everyone out.
 
     ```bash
-    apk del luci-sso
     apk add --allow-untrusted /tmp/luci-sso-<version>.apk
     ```
 
@@ -154,6 +153,10 @@ scp -O luci-sso_<old-version>_<arch>.ipk root@192.168.1.1:/tmp/
 opkg install --force-downgrade /tmp/luci-sso_<old-version>_<arch>.ipk
 ```
 
-On OpenWrt 25.12, remove the current version and add the old file, as in [Step 3](#step-3-install-the-upgrade).
+On OpenWrt 25.12, add the old file:
 
-The install script runs as part of the rollback, and your `/etc/config/luci-sso` is kept.
+```bash
+apk add --allow-untrusted /tmp/luci-sso-<old-version>.apk
+```
+
+The install script runs as part of the rollback, your `/etc/config/luci-sso` is kept, and nobody is logged out.

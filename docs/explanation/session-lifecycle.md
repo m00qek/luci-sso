@@ -70,7 +70,9 @@ LuCI's own **Log out** link does not reach this endpoint. It goes through LuCI's
 
 ## Session storage
 
-UBUS sessions live entirely in `rpcd`'s memory. They are not written to disk and do not survive a reboot or a restart of `rpcd`. Installing, upgrading or removing the `luci-sso` package restarts `rpcd`, so it ends every session — see [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md).
+UBUS sessions live entirely in `rpcd`'s memory. They are not written to disk and do not survive a reboot or a restart of `rpcd`. Upgrading or downgrading `luci-sso` leaves `rpcd` alone, so sessions survive it; removing the package restarts `rpcd` to revoke its settings ACL at once, which ends every session — see [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md) and [How to Remove luci-sso](../how-to/sysadmin/uninstall.md).
+
+A *reload* of `rpcd` is different, and it affects SSO sessions only. On a reload, `rpcd` keeps every session and its values but rebuilds each session's rights from its own login configuration (`/etc/config/rpcd`), keyed by the session's user name. Password sessions get their rights back. SSO sessions have no entry there, so they come back logged in but with no rights at all, and every LuCI page then fails with access errors until the user logs in again. LuCI's own packages reload `rpcd` when they are installed or upgraded, so installing or upgrading any LuCI app has this effect on everyone logged in through SSO.
 
 Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and idle timeout. `rpcd` can list every session with its values, and SSO sessions carry the user's email as `oidc_user`, so an administrator can find one user's sessions and destroy just those. Restarting `rpcd` instead evicts every session, password logins included.
 
@@ -86,4 +88,5 @@ Multiple simultaneous sessions are allowed. Each login creates a new independent
 | Mid-session IdP revocation | Session continues until expiry, logout, or an administrator destroys it |
 | Logout scope | Destroys the router session; IdP session is separate |
 | Persistence across reboots | No — UBUS sessions are in-memory |
-| Persistence across a package upgrade | No — the package scripts restart `rpcd` |
+| Persistence across a `luci-sso` upgrade | Yes — only removal restarts `rpcd` |
+| Effect of an `rpcd` reload (e.g. installing a LuCI app) | SSO sessions stay but lose all rights; users must log in again |
