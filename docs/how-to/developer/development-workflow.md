@@ -91,6 +91,18 @@ If a check fails, see [How to add error codes, limit constants, and cookies](add
 
 ---
 
+## Blame past reformatting commits
+
+Commits that only reformat code are listed in `.git-blame-ignore-revs`. To make `git blame` skip them and show the commit that last changed each line's content, run once in your clone:
+
+```bash
+git config blame.ignoreRevsFile .git-blame-ignore-revs
+```
+
+GitHub's blame view reads the file without any setup. When you land a commit that only reformats code, add its full hash to the file in a follow-up commit.
+
+---
+
 ## Prepare a pull request
 
 1. Create a branch: `git checkout -b feat/my-feature`
