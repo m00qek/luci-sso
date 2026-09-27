@@ -19,7 +19,7 @@ const ENABLED_UCI = {
 		issuer_url: "https://idp.com", client_id: "c1", client_secret: "s1",
 		redirect_uri: "https://r1/callback", clock_tolerance: "300",
 	},
-	r1: { ".type": "role", email: "admin@test.com", read: ["*"], write: ["*"] },
+	r1: { ".type": "role", email: "admin@test.com" },
 };
 
 // A present-but-disabled config: config.load resolves this to SSO_DISABLED. The

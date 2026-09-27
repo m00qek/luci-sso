@@ -5,7 +5,7 @@ import * as common from 'luci_sso.session.common';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
-import { with_context, UBUS_NO_DATA } from 'context';
+import { with_context, rpcd_logins, UBUS_NO_DATA } from 'context';
 import * as f from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
@@ -271,7 +271,7 @@ describe('handshake: recovery', () => {
 			internal_issuer_url: f.MOCK_CONFIG.issuer_url,
 			redirect_uri: "https://r/c",
 			roles: [
-				{ name: "r1", emails: ["user-123"], read: ["*"], write: ["*"] }
+				{ name: "r1", emails: ["user-123"] }
 			]
 		};
 
@@ -285,6 +285,7 @@ describe('handshake: recovery', () => {
 		with_context({
 			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ r1: { read: ["*"], write: ["*"] } }) },
 			http_client: {
 				behavior: {
 					get: (url, opts) => {
@@ -337,12 +338,13 @@ describe('handshake: userinfo', () => {
 			...f.MOCK_CONFIG,
 			issuer_url: "https://trusted.idp",
 			internal_issuer_url: "https://trusted.idp",
-			roles: [ { name: "admin", emails: ["user@example.com"], read: ["*"], write: ["*"] } ]
+			roles: [ { name: "admin", emails: ["user@example.com"] } ]
 		};
 
 		with_context({
 			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ admin: { read: ["*"], write: ["*"] } }) },
 			http_client: {
 				data: {
 					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
@@ -439,7 +441,7 @@ describe('handshake: userinfo', () => {
 		let test_config = {
 			...f.MOCK_CONFIG,
 			internal_issuer_url: "https://trusted.idp",
-			roles: [ { name: "admin", emails: ["user@example.com"], read: ["*"], write: ["*"] } ]
+			roles: [ { name: "admin", emails: ["user@example.com"] } ]
 		};
 
 		let nonce_captured = null;
@@ -447,6 +449,7 @@ describe('handshake: userinfo', () => {
 		with_context({
 			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ admin: { read: ["*"], write: ["*"] } }) },
 			http_client: {
 				data: {
 					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
@@ -502,13 +505,14 @@ describe('handshake: restricted roles', () => {
 		};
 		let config = {
 			...f.MOCK_CONFIG, internal_issuer_url: f.MOCK_CONFIG.issuer_url,
-			roles: [ { name: "operator", emails: [ "admin@example.com" ], groups: [], read: [ "luci-base" ], write: [ "luci-mod-system-config" ] } ]
+			roles: [ { name: "operator", emails: [ "admin@example.com" ], groups: [] } ]
 		};
 		let grants = null, result = null;
 
 		with_context({
 			fs: { data: acl },
 			ubus: { data: { "session:create": { "ubus_rpc_session": "s-op" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ operator: { read: [ "luci-base" ], write: [ "luci-mod-system-config" ] } }) },
 			http_client: {
 				data: {
 					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
@@ -546,6 +550,93 @@ describe('handshake: restricted roles', () => {
 	});
 });
 
+// ─── authenticate: role selection and the role's rpcd login entry ─────────────
+
+describe('handshake: role selection', () => {
+	// Runs a full callback for a user with the given claims against `roles`
+	// and the rpcd sections in `rpcd`. Returns the result, the session values
+	// set, whether a session was created, and the log lines.
+	function login(roles, rpcd, claims) {
+		let out = { result: null, values: null, created: false, logs: [] };
+		with_context({
+			fs:   { data: {} },
+			uci:  { data: { rpcd } },
+			ubus: { data: {
+				"session:create": () => { out.created = true; return { ubus_rpc_session: "s-role" }; },
+				"session:grant":  UBUS_NO_DATA,
+				"session:set":    (args) => { out.values = args.values; return UBUS_NO_DATA; },
+			} },
+			http_client: {
+				data: {
+					[DISCOVERY_URL]:           { status: 200, body: f.MOCK_DISCOVERY },
+					[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+				},
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-role";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let payload = { ...f.MOCK_CLAIMS, ...claims, nonce: "test-nonce", at_hash };
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token: h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256") }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			deps.log = (l, m) => push(out.logs, m);
+			let hs = session.create_state(deps, 0).data;
+			let path = "/var/run/luci-sso/handshake_" + hs.token + ".json";
+			let raw = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw));
+			out.result = handshake.authenticate(deps, base_config({ roles }),
+				{ query: { code: "c", state: raw.state }, cookies: { "__Host-luci_sso_state": hs.token } });
+		});
+		return out;
+	}
+
+	let entries = rpcd_logins({ staff: { read: [ "*" ] }, admins: { read: [ "*" ], write: [ "*" ] }, me: { read: [ "*" ] } }).rpcd;
+	let claims = { email: "alice@example.com", groups: [ "staff", "admins" ] };
+
+	it('the first matching role in config order wins, and the log names it and the other matches', () => {
+		let roles = [
+			{ name: "admins", emails: [], groups: [ "admins" ] },
+			{ name: "nobody", emails: [ "bob@example.com" ], groups: [] },
+			{ name: "staff", emails: [], groups: [ "staff" ] },
+			{ name: "me", emails: [ "alice@example.com" ], groups: [] },
+		];
+		let r = login(roles, entries, claims);
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:admins", r.values.username, "the session is the first role's");
+		assert.match(1, length(filter(r.logs, (m) => match(m, /mapped to role 'admins', the first match; also matched: staff, me \[session_id: /))));
+
+		let reordered = login([ roles[3], roles[2], roles[0] ], entries, claims);
+		assert.match("sso:me", reordered.values.username, "order, not privilege, decides");
+	});
+
+	it('a single match logs no other matches', () => {
+		let r = login([ { name: "staff", emails: [], groups: [ "staff" ] } ], entries, claims);
+		assert.match("sso:staff", r.values.username);
+		assert.match(1, length(filter(r.logs, (m) => match(m, /mapped to role 'staff' \[session_id: /))));
+	});
+
+	it("fails with UBUS_LOGIN_FAILED (500) and no session when the chosen role has no rpcd login entry", () => {
+		// "root" is the stock rpcd login's user, never a role's entry.
+		let r = login([ { name: "root", emails: [ "alice@example.com" ], groups: [] } ],
+			{ root: { ".type": "login", username: "root", password: "$p$root", read: [ "*" ], write: [ "*" ] } }, claims);
+		assert.match(contains({ ok: false, error: "UBUS_LOGIN_FAILED", details: { http_status: 500 } }), r.result);
+		assert.match(false, r.created);
+		assert.match(1, length(filter(r.logs, (m) => index(m, "MISSING_RPCD_LOGIN: role 'root'") == 0)));
+	});
+
+	it("fails with UBUS_LOGIN_FAILED (500) and no session when the role's entry has a password", () => {
+		let rpcd = { luci_sso_staff: { ...entries.luci_sso_staff, password: "" } };
+		let r = login([ { name: "staff", emails: [], groups: [ "staff" ] } ], rpcd, claims);
+		assert.match(contains({ ok: false, error: "UBUS_LOGIN_FAILED", details: { http_status: 500 } }), r.result);
+		assert.match(false, r.created);
+		assert.match(1, length(filter(r.logs, (m) => index(m, "INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_staff'") == 0)));
+	});
+});
+
 describe('handshake: split-horizon', () => {
 	// Full callback with a pathful issuer behind split-horizon. The ID token
 	// carries no email, so UserInfo is fetched too. Every back-channel request
@@ -569,13 +660,14 @@ describe('handshake: split-horizon', () => {
 		};
 		let config = {
 			...f.MOCK_CONFIG, issuer_url: issuer, internal_issuer_url: internal, redirect_uri: "https://router/callback",
-			roles: [ { name: "admin", emails: ["admin@example.com"], read: ["*"], write: ["*"] } ]
+			roles: [ { name: "admin", emails: ["admin@example.com"] } ]
 		};
 		let posted = [], result = null, got = null;
 
 		with_context({
 			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ admin: { read: ["*"], write: ["*"] } }) },
 			http_client: {
 				data: {
 					[priv(issuer_path + "/.well-known/openid-configuration")]: { status: 200, body: discovery_doc },
@@ -652,13 +744,14 @@ describe('handshake: split-horizon', () => {
 			internal_issuer_url: internal_issuer_url,
 			redirect_uri: "https://router/callback",
 			roles: [
-				{ name: "admin", emails: ["admin@example.com"], read: ["*"], write: ["*"] }
+				{ name: "admin", emails: ["admin@example.com"] }
 			]
 		};
 
 		with_context({
 			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ admin: { read: ["*"], write: ["*"] } }) },
 			http_client: {
 				data: {
 					[internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
@@ -722,12 +815,13 @@ describe('handshake: split-horizon', () => {
 			issuer_url: issuer_url,
 			internal_issuer_url: internal_issuer_url,
 			redirect_uri: "https://router/callback",
-			roles: [ { name: "admin", emails: ["admin@example.com"], read: ["*"], write: ["*"] } ]
+			roles: [ { name: "admin", emails: ["admin@example.com"] } ]
 		};
 
 		with_context({
 			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s456" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ admin: { read: ["*"], write: ["*"] } }) },
 			http_client: {
 				data: {
 					[internal_issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
@@ -830,7 +924,7 @@ describe('handshake: warning', () => {
 			...f.MOCK_CONFIG,
 			internal_issuer_url: f.MOCK_CONFIG.issuer_url,
 			redirect_uri: "https://r/c",
-			roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
+			roles: [{ name: "admin", emails: ["user-123"] }]
 		};
 
 		let log_calls = [];
@@ -839,6 +933,7 @@ describe('handshake: warning', () => {
 		with_context({
 			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ admin: { read: ["*"], write: ["*"] } }) },
 			http_client: {
 				data: {
 					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
@@ -887,7 +982,7 @@ describe('handshake: warning', () => {
 			...f.MOCK_CONFIG,
 			internal_issuer_url: f.MOCK_CONFIG.issuer_url,
 			redirect_uri: "https://r/c",
-			roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
+			roles: [{ name: "admin", emails: ["user-123"] }]
 		};
 
 		let cases = [
@@ -903,6 +998,7 @@ describe('handshake: warning', () => {
 			with_context({
 				fs:    { data: {} },
 				ubus:  { data: { "session:create": { "ubus_rpc_session": "s1" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+				uci:   { data: rpcd_logins({ admin: { read: ["*"], write: ["*"] } }) },
 				http_client: {
 					data: {
 						[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
@@ -1039,7 +1135,7 @@ describe('handshake: token registration ordering', () => {
 			...f.MOCK_CONFIG,
 			internal_issuer_url: f.MOCK_CONFIG.issuer_url,
 			redirect_uri: "https://r/c",
-			roles: [{ name: "admin", emails: ["user-123"], read: ["*"], write: ["*"] }]
+			roles: [{ name: "admin", emails: ["user-123"] }]
 		};
 
 		with_context({
@@ -1098,13 +1194,14 @@ describe('handshake: reproduction', () => {
 		let test_config = {
 			...f.MOCK_CONFIG,
 			internal_issuer_url: "https://trusted.idp",
-			roles: [ { name: "admin", groups: ["idp-admin"], emails: ["user@example.com"], read: ["*"], write: ["*"] } ]
+			roles: [ { name: "admin", groups: ["idp-admin"], emails: ["user@example.com"] } ]
 		};
 		let nonce_ref = null;
 
 		with_context({
 			fs:    { data: {} },
 			ubus:  { data: { "session:create": { "ubus_rpc_session": "s123" }, "session:grant": UBUS_NO_DATA, "session:set": UBUS_NO_DATA } },
+			uci:   { data: rpcd_logins({ admin: { read: ["*"], write: ["*"] } }) },
 			http_client: {
 				data: {
 					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },

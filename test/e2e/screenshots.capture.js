@@ -103,17 +103,20 @@ async function ubus(page, obj, method, params) {
   return reply.result[1];
 }
 
-// Sets the devenv admin role's read/write lists, as root.
+// Sets the read/write lists of the devenv admin role's rpcd login entry
+// (rpcd.luci_sso_admin), as root, through the luci-sso ubus object, and waits
+// for the rpcd reload the change triggers (as 11-granular-roles does).
 async function setRole(browser, read, write) {
   const page = await newPage(browser);
   try {
     await loginAsRoot(page);
-    for (const [option, list] of [['read', read], ['write', write]]) {
-      await ubus(page, 'uci', 'delete', { config: 'luci-sso', section: 'admin', option }).catch(() => {});
-      if (list.length)
-        await ubus(page, 'uci', 'set', { config: 'luci-sso', section: 'admin', values: { [option]: list } });
+    await ubus(page, 'luci-sso', 'set_role', { name: 'admin', read, write });
+    for (let waited = 0; ; waited += 250) {
+      const done = await ubus(page, 'luci-sso', 'list_roles', {}).then(r => r.reload_pending === false, () => false);
+      if (done) break;
+      if (waited > 15000) throw new Error('rpcd did not reload');
+      await page.waitForTimeout(250);
     }
-    await ubus(page, 'uci', 'apply', { rollback: false });
   } finally {
     await page.context().close();
   }

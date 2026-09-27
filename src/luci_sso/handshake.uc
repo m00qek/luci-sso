@@ -246,19 +246,22 @@ export function authenticate(deps, config, request) {
 	}
 
 	let user_data = oauth_res.data.data;
-	let res_perms = config_mod.find_roles_for_user(config, user_data);
+	let res_role = config_mod.find_role_for_user(config, user_data);
 
-	if (!res_perms.ok) {
+	if (!res_role.ok) {
 		deps.log("warn", `User [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] matched no roles [session_id: ${session_id}]`);
 		return Result.err(USER_NOT_AUTHORIZED, { http_status: 403 });
 	}
 
-	let perms = res_perms.data;
+	let role = res_role.data.role_name;
+	let others = res_role.data.also_matched;
+	deps.log("info", `User [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] mapped to role '${role}'` +
+		(length(others) ? `, the first match; also matched: ${join(", ", others)}` : "") +
+		` [session_id: ${session_id}]`);
 
 	let ubus_res = ubus.create_passwordless_session(
 		deps,
-		perms.role_name,
-		perms,
+		role,
 		user_data.email,
 		oauth_res.data.access_token,
 		oauth_res.data.refresh_token,
@@ -269,7 +272,7 @@ export function authenticate(deps, config, request) {
 		return Result.err(UBUS_LOGIN_FAILED, { http_status: 500 });
 	}
 
-	deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}] (mapped to role=${perms.role_name})`);
+	deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}] (mapped to role=${role})`);
 
 	return Result.ok({
 		sid: ubus_res.data,

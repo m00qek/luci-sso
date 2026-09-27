@@ -364,6 +364,8 @@ Only `UBUS_LOGIN_FAILED` is logged as the result of the request.
 | `UBUS_CONNECT_FAILED` | The router could not connect to the ubus socket | `ubusd` is not running or the socket is inaccessible. | Not logged by name: `UBUS session creation failed`, then `[500] UBUS_LOGIN_FAILED` |
 | `UBUS_ERROR` | A ubus call reached `rpcd` but was rejected | Usually `rpcd`'s `session` object refused the call. | Not logged by name |
 | `UBUS_SESSION_FAILED` | Creating, granting or labelling the session failed | `rpcd` did not create the session, the ACL files could not be read, or the session variables could not be set. | Not logged by name: one of the lines listed under `UBUS_LOGIN_FAILED` |
+| `MISSING_RPCD_LOGIN` | The matched role has no usable `rpcd` login entry: no section `luci_sso_<role>` of type `login` with `username` `sso:<role>` | The role's permissions are missing, so no session is created. Create the entry from the settings page. | `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`, then `[500] UBUS_LOGIN_FAILED` |
+| `INSECURE_RPCD_LOGIN` | The role's `rpcd` login entry has a `password` option | The entry could be used for a password login, so no session is created. Remove the option. | `INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_<role>' of role '<role>' has a password option; remove it`, then `[500] UBUS_LOGIN_FAILED` |
 
 ---
 

@@ -48,10 +48,19 @@ uci -q set luci-sso.default.clock_tolerance="300"
 
 uci -q set luci-sso.admin=role
 uci -q add_list luci-sso.admin.email="admin@example.com"
-uci -q add_list luci-sso.admin.read="*"
-uci -q add_list luci-sso.admin.write="*"
 
 uci commit luci-sso
+
+# --- RPCD: the admin role's permissions ---
+# A role's rights are its rpcd login entry: section luci_sso_<role>, username
+# sso:<role>, and never a password (the luci-sso ubus object writes these).
+# Written directly here because this runs before rpcd starts.
+uci -q delete rpcd.luci_sso_admin
+uci -q set rpcd.luci_sso_admin=login
+uci -q set rpcd.luci_sso_admin.username="sso:admin"
+uci -q add_list rpcd.luci_sso_admin.read="*"
+uci -q add_list rpcd.luci_sso_admin.write="*"
+uci commit rpcd
 
 echo "✅ UCI configuration applied."
 

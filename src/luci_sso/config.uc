@@ -22,7 +22,8 @@ export function is_enabled(deps) {
 };
 
 /**
- * Loads the OIDC and Role configuration from UCI.
+ * Loads the OIDC and Role configuration from UCI. A role carries its name and
+ * matching rules only; its permissions are its rpcd login entry.
  * 
  * @param {object} io - I/O provider
  * @returns {object} - Result Object {ok, data/error}
@@ -77,20 +78,21 @@ export function load(deps) {
 	cursor.foreach("luci-sso", "role", (s) => {
 		let emails = (type(s.email) == "array") ? s.email : (s.email ? [ s.email ] : []);
 		let groups = (type(s.group) == "array") ? s.group : (s.group ? [ s.group ] : []);
-		let read = (type(s.read) == "array") ? s.read : (s.read ? [ s.read ] : []);
-		let write = (type(s.write) == "array") ? s.write : (s.write ? [ s.write ] : []);
 
 		if (length(emails) == 0 && length(groups) == 0) {
 			deps.log("warn", `Ignoring role '${s[".name"]}': missing email or group list`);
 			return;
 		}
 
+		// A role's permissions live in its rpcd login entry (see ubus.uc), so
+		// read/write lists left over from an earlier version grant nothing.
+		if (s.read != null || s.write != null)
+			deps.log("warn", `Ignoring read/write on role '${s[".name"]}': its permissions are the rpcd login entry 'luci_sso_${s[".name"]}'`);
+
 		push(roles, {
 			name: s[".name"],
 			emails: emails,
-			groups: groups,
-			read: read,
-			write: write
+			groups: groups
 		});
 	});
 
@@ -120,67 +122,48 @@ export function load(deps) {
 };
 
 /**
- * Maps OIDC user claims to matched permissions (read/write lists).
- * 
- * @param {object} config - The loaded config
- * @param {object} claims - OIDC ID Token claims (email, groups, etc)
- * @returns {object} - Result Object {ok, data: {read, write, role_name}/error}
+ * Returns true when the claims match a role, by email (case-insensitive) or
+ * by group (exact).
+ * @private
  */
-export function find_roles_for_user(config, claims) {
-	let perms = { read: [], write: [], role_name: null };
-	let email = claims.email;
-	let groups = (type(claims.groups) == "array") ? claims.groups : [];
-
-	for (let role in config.roles) {
-		let matched = false;
-
-		// Match email
-		if (email) {
-			let lc_email = lc(email);
-			for (let e in role.emails) {
-				if (lc(e) === lc_email) {
-					matched = true;
-					break;
-				}
-			}
-		}
-
-		// Match groups
-		if (!matched && length(groups) > 0) {
-			for (let g_claim in groups) {
-				for (let g_role in role.groups) {
-					if (g_claim === g_role) {
-						matched = true;
-						break;
-					}
-				}
-				if (matched) break;
-			}
-		}
-
-		if (matched) {
-			// Merge permissions with deduplication
-			for (let r in role.read) {
-				let exists = false;
-				for (let pr in perms.read) { if (pr == r) { exists = true; break; } }
-				if (!exists) push(perms.read, r);
-			}
-			for (let w in role.write) {
-				let exists = false;
-				for (let pw in perms.write) { if (pw == w) { exists = true; break; } }
-				if (!exists) push(perms.write, w);
-			}
-			
-			// Use the first matched role name as identity
-			if (!perms.role_name) {
-				perms.role_name = role.name;
-			}
+function _role_matches(role, email, groups) {
+	if (email) {
+		let lc_email = lc(email);
+		for (let e in role.emails) {
+			if (lc(e) === lc_email) return true;
 		}
 	}
+	for (let g_claim in groups) {
+		for (let g_role in role.groups) {
+			if (g_claim === g_role) return true;
+		}
+	}
+	return false;
+}
 
-	if (!perms.role_name || (length(perms.read) == 0 && length(perms.write) == 0)) {
+/**
+ * Finds the role a user gets: the FIRST role, in config order, whose emails
+ * or groups match the claims. A session carries one role's rights, because
+ * rpcd rebuilds it from a single login entry; roles are not merged.
+ *
+ * @param {object} config - The loaded config
+ * @param {object} claims - OIDC ID Token claims (email, groups, etc)
+ * @returns {object} - Result Object {ok, data: {role_name, also_matched}/error},
+ *   where also_matched lists the other matching roles, in order
+ */
+export function find_role_for_user(config, claims) {
+	let email = claims.email;
+	let groups = (type(claims.groups) == "array") ? claims.groups : [];
+	let matched = [];
+
+	for (let role in config.roles) {
+		if (_role_matches(role, email, groups))
+			push(matched, role.name);
+	}
+
+	if (length(matched) == 0) {
 		return Result.err("NO_ROLES_MATCHED");
 	}
 
-	return Result.ok(perms);
+	return Result.ok({ role_name: matched[0], also_matched: slice(matched, 1) });
 };

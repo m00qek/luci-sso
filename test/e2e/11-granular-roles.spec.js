@@ -5,10 +5,15 @@ const { loginAsRoot } = require('./helpers');
 // Granular SSO roles against the real rpcd.
 //
 // The mock IdP always signs in admin@example.com, which the devenv maps to the
-// `admin` role. This spec rewrites that role's read/write lists as root over
-// /ubus/ before each case and restores read '*' / write '*' afterwards.
+// `admin` role. That role's permissions are its rpcd login entry,
+// rpcd.luci_sso_admin (username sso:admin). This spec rewrites the entry's
+// read/write lists as root over /ubus/ before each case, through the
+// luci-sso ubus object, and restores read '*' / write '*' afterwards.
+// (A LuCI session has no UCI write access to rpcd, not even root's.) Each
+// change makes rpcd reload, and the spec waits for the reload to finish so
+// that no step races rpcd's restart.
 //
-// luci-sso expands a role's access groups into the concrete ubus/uci grants
+// luci-sso expands the entry's access groups into the concrete ubus/uci grants
 // rpcd gives a password login with the same lists. Without that expansion an
 // SSO session holds only access-group names, rpcd refuses every data call,
 // and the overview below renders without its values.
@@ -19,14 +24,22 @@ const { loginAsRoot } = require('./helpers');
 // becomes status 'denied', as does the uci plugin's own ubus status 6
 // (UBUS_STATUS_PERMISSION_DENIED). LuCI sessions may not `uci commit`; they stage
 // changes and `uci apply` them.
+//
+// A call that reaches rpcd while it restarts is never answered, so each call
+// gives up after two seconds and reports status 'timeout'.
 async function ubus(page, obj, method, params) {
   const reply = await page.evaluate(async ([o, m, p]) => {
-    const r = await fetch('/ubus/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'call', params: [L.env.sessionid, o, m, p] }),
-    });
-    return r.json();
+    try {
+      const r = await fetch('/ubus/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'call', params: [L.env.sessionid, o, m, p] }),
+        signal: AbortSignal.timeout(2000),
+      });
+      return await r.json();
+    } catch (e) {
+      return { error: { code: 'timeout' } };
+    }
   }, [obj, method, params]);
   if (reply.error)
     return { status: reply.error.code === -32002 ? 'denied' : reply.error.code, data: null };
@@ -34,18 +47,26 @@ async function ubus(page, obj, method, params) {
   return { status: reply.result[0] === 6 ? 'denied' : reply.result[0], data: reply.result[1] };
 }
 
-// Sets the devenv admin role's read/write lists, as root.
+// Waits until the reload a luci-sso write scheduled is over: list_roles
+// reports reload_pending until rpcd has re-executed itself.
+async function awaitReload(page) {
+  await expect.poll(async () => {
+    const r = await ubus(page, 'luci-sso', 'list_roles', {});
+    return r.status === 0 && r.data.reload_pending === false;
+  }, { timeout: 15000 }).toBe(true);
+}
+
+// Sets the read/write lists of the devenv admin role's rpcd login entry, as
+// root, through the luci-sso ubus object.
 async function setRole(browser, read, write) {
   const context = await browser.newContext();
   const page = await context.newPage();
   try {
     await loginAsRoot(page);
-    for (const [option, list] of [['read', read], ['write', write]]) {
-      await ubus(page, 'uci', 'delete', { config: 'luci-sso', section: 'admin', option });
-      if (list.length)
-        expect((await ubus(page, 'uci', 'set', { config: 'luci-sso', section: 'admin', values: { [option]: list } })).status).toBe(0);
-    }
-    expect((await ubus(page, 'uci', 'apply', { rollback: false })).status).toBe(0);
+    const r = await ubus(page, 'luci-sso', 'set_role', { name: 'admin', read, write });
+    expect(r.status).toBe(0);
+    expect(r.data).toEqual({ role: { name: 'admin', read, write } });
+    await awaitReload(page);
   } finally {
     await context.close();
   }

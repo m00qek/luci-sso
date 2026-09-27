@@ -122,6 +122,8 @@ export const UBUS_LOGIN_FAILED         = "UBUS_LOGIN_FAILED";
 export const UBUS_CONNECT_FAILED       = "UBUS_CONNECT_FAILED";
 export const UBUS_ERROR                = "UBUS_ERROR";
 export const UBUS_SESSION_FAILED       = "UBUS_SESSION_FAILED";
+export const MISSING_RPCD_LOGIN        = "MISSING_RPCD_LOGIN";
+export const INSECURE_RPCD_LOGIN       = "INSECURE_RPCD_LOGIN";
 
 // Back-channel HTTP (logged by discovery, token exchange and UserInfo)
 export const HTTP_REQUEST_FAILED = "HTTP_REQUEST_FAILED";

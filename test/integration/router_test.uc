@@ -7,7 +7,7 @@ import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_loader from 'luci_sso.config';
 import * as web_mod from 'luci_sso.web';
-import { with_context, UBUS_NO_DATA } from 'context';
+import { with_context, rpcd_logins, UBUS_NO_DATA } from 'context';
 import * as tf from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
@@ -22,7 +22,7 @@ const MOCK_CONFIG = {
 	internal_issuer_url: "https://idp.com",
 	redirect_uri: "https://router/callback",
 	roles: [
-		{ name: "system_admin", emails: ["user-123"], read: ["*"], write: ["*"] }
+		{ name: "system_admin", emails: ["user-123"] }
 	]
 };
 
@@ -120,6 +120,7 @@ describe('router: callback', () => {
 					}
 				}
 			},
+			uci: { data: rpcd_logins({ system_admin: { read: ["*"], write: ["*"] } }) },
 			ubus: {
 				data: {
 					"session:create": (args) => { ubus_create_called = true; return { ubus_rpc_session: "session-for-root" }; },
@@ -175,6 +176,7 @@ describe('router: callback', () => {
 					}
 				}
 			},
+			uci: { data: rpcd_logins({ system_admin: { read: ["*"], write: ["*"] } }) },
 			ubus: {
 				data: {
 					"session:create": (args) => ({ ubus_rpc_session: "s" }),

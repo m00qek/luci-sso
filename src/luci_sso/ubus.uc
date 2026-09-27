@@ -3,7 +3,7 @@
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as Result from 'luci_sso.result';
-import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED, INVALID_TOKEN, SYSTEM_ERROR, TOKEN_REPLAYED } from 'luci_sso.errors';
+import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED, INVALID_TOKEN, SYSTEM_ERROR, TOKEN_REPLAYED, MISSING_RPCD_LOGIN, INSECURE_RPCD_LOGIN } from 'luci_sso.errors';
 
 /**
  * Logic for interacting with UBUS sessions.
@@ -74,11 +74,9 @@ function _glob_regexp(pattern) {
 	return regexp(out + "$");
 }
 
-// A role list entry matches a group. Hardening beyond rpcd: a pattern with a
-// wildcard only ever matches "luci-*" groups, so `*` cannot reach groups such
-// as "unauthenticated" or a third-party package's own groups.
+// A login list entry matches a group exactly as in rpcd: fnmatch(3), so `*`
+// matches every group, LuCI's or not.
 function _entry_matches(pattern, group) {
-	if (match(pattern, /[*?\[]/) && !match(group, /^luci-/)) return false;
 	return match(group, _glob_regexp(pattern)) != null;
 }
 
@@ -106,9 +104,9 @@ function _role_permits(perms, perm, group) {
 }
 
 /**
- * Expands a role into the grants rpcd gives a password login whose rpcd login
- * entry has the same `read`/`write` lists (rpc_login_setup_acl_file).
- * test/system/rpcd_parity_test.uc compares the result with a real rpcd
+ * Expands a login entry's `read`/`write` lists into the grants rpcd gives a
+ * password login with that entry (rpc_login_setup_acl_file).
+ * test/system/rpcd_parity_test.uc requires the result to equal a real rpcd
  * password login on every CI run, so a change in rpcd's rules fails CI:
  *   - for every permitted (group, perm) section, each scope is granted:
  *       table notation  "<scope>": { "<object>": [ "<function>", ... ] }
@@ -163,6 +161,46 @@ function _grant_all(deps, sid, grants) {
 }
 
 /**
+ * rpcd login entries that hold the permissions of luci-sso's roles: section
+ * `luci_sso_<role>`, username `sso:<role>`, written by the `luci-sso` ubus
+ * object (files/usr/share/rpcd/ucode/luci-sso.uc) and never with a password.
+ */
+const LOGIN_SECTION_PREFIX = "luci_sso_";
+const LOGIN_USERNAME_PREFIX = "sso:";
+
+function _as_list(v) {
+	if (type(v) == "array") return v;
+	return (v != null) ? [ v ] : [];
+}
+
+/**
+ * Reads the rpcd login entry of a role and returns its `{ read, write }`
+ * lists. The session gets its rights from this entry now, and rpcd rebuilds
+ * them from the same entry on every reload, because the session's username
+ * is the entry's.
+ *
+ * Refuses an entry that is missing, is not a login, or names another user:
+ * rpcd would not find it for the session on reload. Refuses an entry with a
+ * password option, whatever its value: it could be used for a password login.
+ * @private
+ */
+function _load_login(deps, role) {
+	let section = LOGIN_SECTION_PREFIX + role;
+	let username = LOGIN_USERNAME_PREFIX + role;
+	let s = deps.uci.get_all("rpcd", section);
+
+	if (type(s) != "object" || s[".type"] != "login" || s.username !== username) {
+		deps.log("error", `${MISSING_RPCD_LOGIN}: role '${role}' has no rpcd login entry '${section}' with username '${username}'`);
+		return Result.err(MISSING_RPCD_LOGIN);
+	}
+	if (exists(s, "password")) {
+		deps.log("error", `${INSECURE_RPCD_LOGIN}: rpcd login entry '${section}' of role '${role}' has a password option; remove it`);
+		return Result.err(INSECURE_RPCD_LOGIN);
+	}
+	return Result.ok({ read: _as_list(s.read), write: _as_list(s.write) });
+}
+
+/**
  * Idle timeout used when LuCI's own setting is unavailable. Matches the
  * luci.sauth.sessiontime default that OpenWrt ships.
  */
@@ -174,12 +212,11 @@ const DEFAULT_SESSION_TIMEOUT = 3600;
  * for password logins, so SSO and password sessions behave alike. rpcd
  * treats it as an idle timeout: each access resets it.
  *
- * Falls back to DEFAULT_SESSION_TIMEOUT when deps.uci is absent or the
- * option is missing or not a positive integer.
+ * Falls back to DEFAULT_SESSION_TIMEOUT when the option is missing or not a
+ * positive integer.
  * @private
  */
 function _session_timeout(deps) {
-	if (!deps.uci) return DEFAULT_SESSION_TIMEOUT;
 	let t = int(deps.uci.get("luci", "sauth", "sessiontime"));
 	return (type(t) == "int" && t > 0) ? t : DEFAULT_SESSION_TIMEOUT;
 }
@@ -196,23 +233,57 @@ function _abort_session(deps, sid, code) {
 }
 
 /**
- * Creates a real LuCI system session via UBUS WITHOUT a password.
+ * Creates a real LuCI system session via UBUS WITHOUT a password, with the
+ * rights of the role's rpcd login entry.
  *
- * @param {object} deps - { fs, ubus, uci, log, clock }; uci is optional
- * @param {string} username - Target system username (e.g. root)
- * @param {object} perms - Permissions object { read: [], write: [] }
+ * The session's username is `sso:<role>`, the username of the entry
+ * `luci_sso_<role>` in /etc/config/rpcd, and it is granted exactly what rpcd
+ * grants a password login with that entry's lists. When rpcd reloads, it
+ * rebuilds the session's rights from the same entry, so they survive.
+ *
+ * @param {object} deps - { fs, ubus, uci, log, native }
+ * @param {string} role - The luci-sso role the user matched
  * @param {string} oidc_email - The real user's email for tagging
  * @param {string} access_token - OIDC access token to persist
  * @param {string} refresh_token - OIDC refresh token to persist
  * @param {string} id_token - OIDC ID token to persist (for logout)
  * @returns {object} - Result Object {ok, data/error}
  */
-export function create_passwordless_session(deps, username, perms, oidc_email, access_token, refresh_token, id_token) {
+export function create_passwordless_session(deps, role, oidc_email, access_token, refresh_token, id_token) {
 	if (type(deps.ubus) != "object" || type(deps.ubus.call) != "function") {
 		die("CONTRACT_VIOLATION: ubus.create_passwordless_session requires deps.ubus.call");
 	}
+	// A real UCI cursor is a resource, a test proxy an object.
+	if (deps.uci == null) {
+		die("CONTRACT_VIOLATION: ubus.create_passwordless_session requires deps.uci");
+	}
+	if (type(role) != "string" || !length(role)) {
+		die("CONTRACT_VIOLATION: ubus.create_passwordless_session requires a role name");
+	}
 
-	// 1. Create a raw session
+	// 1. Read the role's rpcd login entry and the ACL files before creating
+	// anything, so a refusal leaves no session behind.
+	let login_res = _load_login(deps, role);
+	if (!login_res.ok) return login_res;
+	let perms = login_res.data;
+
+	let acl_res = _load_acl_entries(deps);
+	if (!acl_res.ok) {
+		deps.log("error", `Failed to load LuCI ACLs for role '${role}'`);
+		return Result.err(UBUS_SESSION_FAILED);
+	}
+
+	// A named group that no ACL file defines grants nothing: say so.
+	let known = {};
+	for (let g in acl_res.data.groups) known[g] = true;
+	for (let list in [ perms.read, perms.write ]) {
+		for (let n in list) {
+			if (type(n) == "string" && !match(n, /^!|[*?\[]/) && !known[n])
+				deps.log("warn", `Role '${role}' grants unknown access group '${n}'; no ACL file defines it`);
+		}
+	}
+
+	// 2. Create a raw session
 	let res_create = deps.ubus.call("session", "create", { timeout: _session_timeout(deps) });
 	if (!res_create.ok || !res_create.data.ubus_rpc_session) {
 		deps.log("error", "UBUS session creation failed");
@@ -221,75 +292,17 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 
 	let sid = res_create.data.ubus_rpc_session;
 
-	// 2. Grant Permissions
-	let grant_perm = (scope, obj, func) => {
-		let res = deps.ubus.call("session", "grant", {
-			ubus_rpc_session: sid,
-			scope: scope,
-			objects: [[obj, func]]
-		});
-		if (!res.ok) {
-			deps.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(deps.native, sid)}] [scope: ${scope}] [obj: ${obj}] [func: ${func}]`);
-		}
-	};
-	// write '*' is full admin: unrestricted ubus/uci/file/cgi-io plus read and
-	// write on every luci-* access group (LuCI's UI checks those), plus read on
-	// the "unauthenticated" group, whose marker an rpcd '*' login also carries.
+	// 3. Grant what rpcd grants a password login with the entry. Granting only
+	// the access-group names is not enough: rpcd checks ubus and uci calls
+	// against the concrete scopes, which it expands only at login.
 	//
-	// Every other role gets exactly what rpcd would grant a password login
-	// with the same read/write lists: each permitted access group's ACL
-	// sections are expanded into concrete scope grants (see _expand_role).
-	// Granting only the access-group names is not enough: rpcd checks ubus and
-	// uci calls against the concrete scopes, which it expands only at login.
-	let write_all = false;
-	for (let w in (perms.write || [])) if (w === "*") write_all = true;
+	// Baseline: every session also reads the "unauthenticated" group, which
+	// is what rpcd grants an anonymous client (session access/login,
+	// luci.getFeatures). LuCI's views call those.
+	let with_baseline = { read: [ ...perms.read, "unauthenticated" ], write: perms.write };
+	_grant_all(deps, sid, _expand_role(acl_res.data.entries, with_baseline));
 
-	let acl_res = _load_acl_entries(deps);
-	if (!acl_res.ok) {
-		deps.log("error", `Failed to load LuCI ACLs for role [sid: ${crypto.safe_id(deps.native, sid)}]`);
-		return _abort_session(deps, sid, UBUS_SESSION_FAILED);
-	}
-	let entries = acl_res.data.entries;
-
-	if (write_all) {
-		grant_perm("ubus", "*", "*");
-		grant_perm("uci", "*", "*");
-		grant_perm("file", "*", "*");
-		grant_perm("cgi-io", "*", "*");
-
-		let all = filter(acl_res.data.groups, (g) => match(g, /^luci-/));
-		let admin = [];
-		for (let mode in [ "read", "write" ]) {
-			for (let g in all)
-				push(admin, [ "access-group", g, mode ]);
-		}
-		// An rpcd '*' login also matches the non-luci "unauthenticated" group.
-		// Its calls are already covered by the raw ubus '*' above; the marker
-		// keeps admin sessions identical to rpcd's for anything that checks it.
-		if (index(acl_res.data.groups, "unauthenticated") != -1)
-			push(admin, [ "access-group", "unauthenticated", "read" ]);
-		_grant_all(deps, sid, admin);
-	} else {
-		// A named group that no ACL file defines grants nothing: say so.
-		let known = {};
-		for (let g in acl_res.data.groups) known[g] = true;
-		for (let list in [ perms.read, perms.write ]) {
-			for (let n in (list || [])) {
-				if (type(n) == "string" && !match(n, /^!|[*?\[]/) && !known[n])
-					deps.log("warn", `Role grants unknown access group '${n}'; no ACL file defines it`);
-			}
-		}
-
-		// Baseline: every session also reads the "unauthenticated" group, which
-		// is what rpcd grants an anonymous client (session access/login,
-		// luci.getFeatures). LuCI's views call those; a root password login gets
-		// them through its read '*' glob, but luci-sso's wildcards skip non-luci
-		// groups on purpose, so name the group explicitly.
-		let with_baseline = { read: [ ...(perms.read || []), "unauthenticated" ], write: perms.write };
-		_grant_all(deps, sid, _expand_role(entries, with_baseline));
-	}
-
-	// 3. Generate CSRF token
+	// 4. Generate CSRF token
 	let res_csrf = crypto.random(deps.native, 32);
 	if (!res_csrf.ok) {
 		deps.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
@@ -302,12 +315,12 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 	}
 	let csrf_token = csrf_res.data;
 
-	// 4. Set session variables. Without them the session has no CSRF token and
+	// 5. Set session variables. Without them the session has no CSRF token and
 	// no username, so a failure here must not hand back a usable session.
 	let res_set = deps.ubus.call("session", "set", {
 		ubus_rpc_session: sid,
 		values: {
-			username: username,
+			username: LOGIN_USERNAME_PREFIX + role,
 			oidc_user: oidc_email,
 			oidc_access_token: access_token,
 			oidc_refresh_token: refresh_token,
@@ -320,7 +333,7 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 		return _abort_session(deps, sid, UBUS_SESSION_FAILED);
 	}
 
-	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${username}`);
+	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${LOGIN_USERNAME_PREFIX}${role}`);
 
 	return Result.ok(sid);
 };

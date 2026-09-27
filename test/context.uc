@@ -40,6 +40,19 @@ export function mock_ubus_channel(conn) {
 	return channel;
 };
 
+/**
+ * UCI data holding the rpcd login entries the luci-sso ubus object writes for
+ * the given roles, as { <role>: { read: [...], write: [...] } }: section
+ * luci_sso_<role>, username sso:<role>, no password. Pass it as `uci.data`
+ * (merged with other packages) to a test whose login must succeed.
+ */
+export function rpcd_logins(roles) {
+	let rpcd = {};
+	for (let name, lists in roles)
+		rpcd[`luci_sso_${name}`] = { ".type": "login", username: `sso:${name}`, read: lists.read || [], write: lists.write || [] };
+	return { rpcd };
+};
+
 function build_deps(proxies) {
 	let deps = {};
 
