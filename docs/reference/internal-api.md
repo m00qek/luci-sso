@@ -154,13 +154,14 @@ Processes the callback. `deps`: all fields. In order, it:
 
 1. checks `error`, `code` and the handshake cookie;
 2. verifies the handshake against `state`;
-3. exchanges the code;
-4. fetches the JWK Set;
-5. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
-6. fetches UserInfo when the ID Token has no `email`;
-7. registers the access token against replay;
-8. maps the claims to roles;
-9. creates the `rpcd` session.
+3. runs discovery (from the cache when fresh);
+4. exchanges the code;
+5. fetches the JWK Set;
+6. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
+7. fetches UserInfo when the ID Token has no `email`;
+8. registers the access token against replay;
+9. maps the claims to roles;
+10. creates the `rpcd` session.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
