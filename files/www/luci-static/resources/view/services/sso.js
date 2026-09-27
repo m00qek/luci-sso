@@ -61,6 +61,10 @@ return view.extend({
 				return 'https://' + window.location.hostname + '/cgi-bin/luci-sso/callback';
 			return val;
 		};
+		/* The widget shows the suggestion cfgvalue returns, so on an untouched
+		 * save formvalue equals cfgvalue and LuCI's form.save() would skip the
+		 * write, leaving redirect_uri unset. forcewrite persists it regardless. */
+		o.forcewrite = true;
 
 		o = s.option(form.Value, 'scope', _('Scopes'),
 		        _('Space-separated OIDC scopes. Add <code>groups</code> if your provider supports group claims.'));
