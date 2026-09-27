@@ -3,7 +3,7 @@
 This guide covers updating the OIDC client credentials on your router — either because the client secret has expired, been compromised, or because you are migrating to a new client registration or a different identity provider.
 
 !!! warning "Secret storage"
-    The client secret is stored in plain text in `/etc/config/luci-sso`. It is readable only by root, but anyone with shell access or physical access to the router can read it. Do not store this file in version control or share it in support tickets.
+    The client secret is stored in plain text in `/etc/config/luci-sso`. The package installs that file with mode `0644`, so every local user and process can read it, as can anyone with root shell or physical access. To limit it to root, run `chmod 600 /etc/config/luci-sso`; `uci commit` keeps that mode. Do not store this file in version control or share it in support tickets.
 
 ---
 
@@ -81,7 +81,7 @@ If re-registering the client entirely (new application registration in the IdP):
 
 ## Switch to a different identity provider
 
-Changing `issuer_url` requires clearing the discovery cache in addition to updating credentials, because the cached JWKS and token endpoint URLs from the old IdP will no longer match.
+Changing `issuer_url` needs no cache clearing: the discovery and JWK Set caches in `/var/run/luci-sso/` are keyed by the issuer and `jwks_uri` URLs, so the new IdP's documents are fetched on the first login. Do not delete `/var/run/luci-sso/*.json`: that directory also holds logins in progress and the rate-limit state.
 
 **Step 1.** Register a new client with the new IdP.
 
@@ -100,13 +100,7 @@ Changing `issuer_url` requires clearing the discovery cache in addition to updat
     uci commit luci-sso
     ```
 
-**Step 3.** Clear the discovery and JWKS cache so the router fetches fresh data from the new IdP:
-
-```bash
-rm -f /var/run/luci-sso/*.json
-```
-
-**Step 4.** Update any role mappings if email addresses or group names differ between the old and new IdP:
+**Step 3.** Update any role mappings if email addresses or group names differ between the old and new IdP:
 
 === "Browser (LuCI)"
 
@@ -120,7 +114,7 @@ rm -f /var/run/luci-sso/*.json
     uci commit luci-sso
     ```
 
-**Step 5.** Verify with a fresh login.
+**Step 4.** Verify with a fresh login.
 
 Active sessions issued by the old IdP continue to work until they expire — they are UBUS sessions and the router does not re-validate them against the IdP after creation.
 

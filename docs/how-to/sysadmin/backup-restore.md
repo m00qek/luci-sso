@@ -11,8 +11,9 @@ This guide covers preserving your `luci-sso` configuration across a router refla
 | UCI configuration | `/etc/config/luci-sso` | Yes — included in the standard sysupgrade backup | Contains IdP credentials, role mappings, and all UCI options. |
 | Runtime state | `/var/run/luci-sso/` | No — tmpfs, not persistent | Discovery cache and token registry. Rebuilt automatically on next login. |
 | Active sessions | UBUS memory | No | Sessions do not survive a reboot regardless. |
+| The `luci-sso` packages | `/usr/share/ucode/luci_sso/`, `/www/cgi-bin/luci-sso` and others | No | A firmware image only contains the packages it was built with. Keep the package files so you can reinstall them. |
 
-The only file you must back up is `/etc/config/luci-sso`. Everything else is either regenerated automatically or does not survive a reboot anyway.
+The only file you must back up is `/etc/config/luci-sso`. Everything else is either reinstalled, regenerated automatically, or does not survive a reboot anyway.
 
 ---
 
@@ -46,7 +47,9 @@ The only file you must back up is `/etc/config/luci-sso`. Everything else is eit
 
 ### After a sysupgrade (firmware update)
 
-`sysupgrade` preserves `conffiles` — files the package declares as configuration. `/etc/config/luci-sso` is declared as a conffile, so it survives a sysupgrade automatically. You do not need to restore it manually unless you performed a factory reset.
+`sysupgrade` preserves `conffiles` — files the package declares as configuration. `/etc/config/luci-sso` is declared as a conffile, so your configuration survives a sysupgrade automatically.
+
+The package itself does not. The new firmware contains only the packages it was built with, so after the sysupgrade `luci-sso` is gone and the login page has no SSO button. Reinstall `luci-sso` and its crypto backend, built for the new OpenWrt version (see [How to Install luci-sso](installation.md)). The reinstall keeps the preserved `/etc/config/luci-sso` and saves the package's default next to it as `/etc/config/luci-sso-opkg` (`luci-sso.apk-new` on OpenWrt 25.12), which you can delete.
 
 ### After a factory reset or reflash
 
@@ -75,11 +78,11 @@ The only file you must back up is `/etc/config/luci-sso`. Everything else is eit
     uci show luci-sso
     ```
 
-**Step 3.** Verify the service is working:
+**Step 3.** Verify the service is working. On the router:
 
 ```bash
-curl -sk https://192.168.1.1/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+# Expected: {"enabled": true}
 ```
 
 Attempt a login to confirm the IdP credentials are still valid. If the client secret has been rotated at the IdP since the backup was made, update it before testing:

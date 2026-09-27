@@ -2,30 +2,51 @@
 
 This guide covers completely removing `luci-sso` from your router and restoring the standard LuCI password login.
 
+!!! warning "Removal logs everyone out"
+    Removing `luci-sso` restarts `rpcd`, which ends every LuCI session: SSO users, password users, and you, if you are removing it from LuCI. Before you start, make sure you can log in with the `root` password, or use SSH, which is not affected.
+
 ---
 
-## Step 1: Remove the Packages
+## What removal does
 
-Choose your preferred method below to remove the software.
+Removing the `luci-sso` package runs its removal script, which:
 
-=== "Browser (LuCI)"
+- takes the cleanup job out of root's crontab,
+- removes the SSO button from LuCI's login templates,
+- deletes the `luci-app-sso` access group and restarts `rpcd`, which ends every LuCI session,
+- clears LuCI's cache.
 
-    1.  **Log in** to your router's LuCI web interface.
-    2.  Navigate to **System** -> **Software**.
-    3.  Click the **Installed** tab.
-    4.  In the **Filter** box, type `luci-sso`.
-    5.  Click **Remove** next to `luci-sso`.
-    6.  Find your crypto backend (e.g., `luci-sso-crypto-mbedtls`) and click **Remove**.
+The crypto backend is a separate package and has to be removed as well. `luci-sso` depends on it, so remove `luci-sso` first, or both in one command.
 
-    ![LuCI Software page showing the 'Installed' tab and the filter box used to find luci-sso packages](../../assets/screenshots/luci-software-uninstall.svg "Removing packages via LuCI")
+---
+
+## Step 1: Remove the packages
 
 === "Terminal (SSH)"
 
-    1.  **Remove the main package and its crypto backend**:
-        ```bash
-        opkg remove luci-sso luci-sso-crypto-mbedtls
-        ```
-    2.  If you installed a different backend, replace `luci-sso-crypto-mbedtls` with the one you used (e.g., `luci-sso-crypto-wolfssl`).
+    On OpenWrt 24.10:
+
+    ```bash
+    opkg remove luci-sso luci-sso-crypto-mbedtls
+    ```
+
+    On OpenWrt 25.12:
+
+    ```bash
+    apk del luci-sso luci-sso-crypto-mbedtls
+    ```
+
+    If you installed a different backend, replace `luci-sso-crypto-mbedtls` with the one you used (for example `luci-sso-crypto-wolfssl`).
+
+=== "Browser (LuCI)"
+
+    1.  **Log in** to your router's LuCI web interface with the `root` password.
+    2.  Navigate to **System** -> **Software** and click the **Installed** tab.
+    3.  In the **Filter** box, type `luci-sso`.
+    4.  Click **Remove** next to `luci-sso`. LuCI logs you out while the package is removed.
+    5.  Log in again with the `root` password, return to **System** -> **Software**, and click **Remove** next to your crypto backend (for example `luci-sso-crypto-mbedtls`).
+
+    ![LuCI Software page showing the 'Installed' tab and the filter box used to find luci-sso packages](../../assets/screenshots/luci-software-uninstall.svg "Removing packages via LuCI")
 
 ---
 
@@ -33,78 +54,46 @@ Choose your preferred method below to remove the software.
 
 Navigate to `https://<YOUR_ROUTER>/cgi-bin/luci/`. The SSO button should be gone, and only the standard username and password fields should be visible.
 
-If the SSO button is still showing, the LuCI cache may not have cleared automatically. You can force a refresh:
+If the SSO button is still showing, your browser may be using a cached copy of the page. Clear the browser's cache for the router's address and reload. On the router, you can also clear LuCI's cache again:
 
-=== "Browser (LuCI)"
-
-    1.  In **System** -> **Software**, click **Update lists...** (this often triggers a cache check).
-    2.  Or simply clear your browser's site data/cache for the router's IP.
-
-=== "Terminal (SSH)"
-
-    Run the following command to clear the LuCI template cache:
-    ```bash
-    rm -rf /tmp/luci-modulecache/ /tmp/luci-indexcache
-    ```
+```bash
+rm -rf /tmp/luci-modulecache/ /tmp/luci-indexcache*
+```
 
 ---
 
 ## Step 3: Clean up remaining files (optional)
 
-`opkg remove` does not delete two categories of files: conffiles and files created at runtime.
+Removal leaves a few files behind:
 
-=== "Browser (LuCI)"
+- **Configuration** — if you changed `/etc/config/luci-sso`, the package manager keeps it. An unchanged file is removed with the package. To delete a kept file:
 
-    Most cleanup is easier via the terminal, but you can remove the main configuration file:
-    1.  Navigate to **System** -> **Backup / Flash Firmware**.
-    2.  Click the **Configuration** tab.
-    3.  If `/etc/config/luci-sso` is listed, you can exclude it from future backups or use a file manager plugin to delete it.
-
-=== "Terminal (SSH)"
-
-    **Configuration** — `/etc/config/luci-sso` is preserved by opkg's conffile mechanism. Remove it manually:
     ```bash
     rm /etc/config/luci-sso
     ```
 
-    **Leftover key from older versions** — older releases created `/etc/luci-sso/secret.key` on first login. Current versions neither create nor read it. If the directory exists, it is safe to delete:
+- **Leftover key from older versions** — older releases created `/etc/luci-sso/secret.key` on first login. Current versions neither create nor read it. If the directory exists, it is safe to delete:
+
     ```bash
     rm -rf /etc/luci-sso
     ```
 
-    **Runtime state** — `/var/run/luci-sso/` disappears on the next reboot. To clear it immediately:
+- **Runtime state** — `/var/run/luci-sso/` (discovery cache, token registry, rate-limit state) disappears on the next reboot. To clear it immediately:
+
     ```bash
     rm -rf /var/run/luci-sso
     ```
 
-**Custom CA certificates** — If you added a private CA certificate for a self-hosted IdP during split-horizon setup, remove it manually:
+- **Empty module directories** — `/usr/share/ucode/luci_sso/` and `/usr/lib/ucode/luci_sso/` may remain, empty. They are harmless; delete them if you like:
 
-```bash
-rm /etc/ssl/certs/my-homelab-ca.crt
-update-ca-certificates
-```
-
----
-
-## What happens to active SSO sessions
-
-Users who are currently logged in via SSO remain logged in until their UBUS session expires. `opkg remove` does not invalidate existing sessions — that would require a UBUS restart, which would also log out any password-authenticated users.
-
-If you need to immediately revoke all active sessions, restart the UBUS session manager (`rpcd`):
-
-=== "Browser (LuCI)"
-
-    1.  Navigate to **System** -> **Startup**.
-    2.  Find `rpcd` in the list of Init Scripts.
-    3.  Click **Restart**.
-    
-    *Note: This will immediately log you out of the current session.*
-
-=== "Terminal (SSH)"
-
-    Run the following command to restart the session manager:
     ```bash
-    /etc/init.d/rpcd restart
+    rm -rf /usr/share/ucode/luci_sso /usr/lib/ucode/luci_sso
     ```
 
-This logs out all users, including those authenticated with a password.
+- **Custom CA certificates** — if you added a private CA certificate for a self-hosted IdP, and nothing else on the router needs it, remove it:
+
+    ```bash
+    rm /etc/ssl/certs/my-homelab-ca.crt
+    ```
+
+    There is no certificate store to rebuild: `luci-sso` reads the files in `/etc/ssl/certs/` directly.

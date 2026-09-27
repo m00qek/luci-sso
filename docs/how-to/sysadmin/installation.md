@@ -1,76 +1,119 @@
 # How to Install luci-sso
 
-This guide describes how to install the `luci-sso` package and its required dependencies on your OpenWrt router.
+This guide describes how to install `luci-sso` and its crypto backend on your OpenWrt router.
+
+`luci-sso` is two packages: `luci-sso` itself, plus **exactly one** crypto backend package. `luci-sso` depends on a virtual `luci-sso-crypto` package that each backend provides, so the package manager will not install it alone, and will not pick a backend for you. All three backends install the same file, `/usr/lib/ucode/luci_sso/native.so`, so installing more than one fails.
 
 ---
 
-## 1. Choose a Crypto Backend
+## 1. Choose a crypto backend
 
-`luci-sso` requires a native crypto bridge to handle secure tokens. Use **mbedTLS** unless you have a reason not to — it is lightweight and already present on most OpenWrt systems. Use **wolfSSL** as an alternative lightweight option, or **OpenSSL** if the router already uses it for other services such as VPNs.
+| Package | Library it uses |
+| :--- | :--- |
+| `luci-sso-crypto-mbedtls` | mbedTLS |
+| `luci-sso-crypto-wolfssl` | wolfSSL |
+| `luci-sso-crypto-openssl` | OpenSSL |
+
+Use **mbedTLS** unless you have a reason not to: it is lightweight and already present on most OpenWrt systems. Use **wolfSSL** as an alternative lightweight option, or **OpenSSL** if the router already uses it for other services such as VPNs. The package manager installs the library from the OpenWrt feeds if it is missing. For the trade-offs, see [About Crypto Backends](../../explanation/crypto-backends.md).
 
 ---
 
-## 2. Install the Package
+## 2. Get the packages
 
-Choose your preferred method below to install the `.ipk` file.
+Build them as described in [Building from Source](../../tutorials/building.md). On OpenWrt 24.10 the build leaves `.ipk` files in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`, next to every other package the SDK built. You need two of them:
+
+```text
+luci-sso_<version>_<arch>.ipk
+luci-sso-crypto-mbedtls_<version>_<arch>.ipk
+```
+
+OpenWrt 25.12 uses `apk` packages instead, named `luci-sso-<version>.apk` and `luci-sso-crypto-mbedtls-<version>.apk`. The build does not copy them out yet; see [Building from Source](../../tutorials/building.md#step-3-find-the-packages).
+
+---
+
+## 3. Install the packages
 
 === "Browser (LuCI)"
+
+    These steps are for OpenWrt 24.10. On 25.12, use the terminal.
 
     1.  **Log in** to your router's LuCI web interface.
     2.  Navigate to **System** -> **Software**.
 
     ![LuCI interface showing the Software page with the 'Update lists...' and 'Upload Package...' buttons highlighted](../../assets/screenshots/luci-software-install.svg "LuCI Software installation page")
 
-    3.  Click **Update lists...** to refresh package information.
-    4.  Click **Upload Package...** and select your local `luci-sso` file.
-    5.  **Installation**: When prompted, confirm the installation.
-    6.  **Backend**: If `luci-sso-crypto-mbedtls` is not automatically installed, search for it in the **Filter** box and install it manually.
+    3.  Click **Update lists...** so the backend's crypto library can be installed from the OpenWrt feeds.
+    4.  Click **Upload Package...**, select the backend file (for example `luci-sso-crypto-mbedtls_<version>_<arch>.ipk`) and confirm the installation.
+    5.  Click **Upload Package...** again, select the `luci-sso_<version>_<arch>.ipk` file and confirm. The backend must already be installed: `luci-sso` cannot be installed without one.
 
 === "Terminal (SSH)"
 
-    1.  **Upload the Package**: Copy the `.ipk` file to your router (e.g., via `scp`). If you used the `devenv` build, the path will look like this:
+    1.  **Copy the two packages to the router**, for example with `scp` from the build machine:
+
         ```bash
-        scp -O bin/lib/<ARCH>/<VERSION>/packages/luci-sso*.ipk root@192.168.1.1:/tmp/
+        scp -O luci-sso_<version>_<arch>.ipk luci-sso-crypto-mbedtls_<version>_<arch>.ipk root@192.168.1.1:/tmp/
         ```
-    2.  **Install via opkg**: Run the following commands on the router:
+
+    2.  **Install both in one command** on the router.
+
+        On OpenWrt 24.10 (`opkg`):
+
         ```bash
         opkg update
-        opkg install /tmp/luci-sso*.ipk
+        opkg install /tmp/luci-sso_<version>_<arch>.ipk /tmp/luci-sso-crypto-mbedtls_<version>_<arch>.ipk
         ```
-    3.  **Verify Backend**: By default, `opkg` will attempt to pull in `luci-sso-crypto-mbedtls`. To use a different one:
+
+        On OpenWrt 25.12 (`apk`):
+
         ```bash
-        opkg install luci-sso-crypto-wolfssl
+        apk update
+        apk add --allow-untrusted /tmp/luci-sso-<version>.apk /tmp/luci-sso-crypto-mbedtls-<version>.apk
         ```
+
+        `--allow-untrusted` is needed because packages you built yourself are not signed with a key the router trusts; without it `apk` stops with `UNTRUSTED signature`.
+
+Installing runs the package's setup scripts once: they create `/var/run/luci-sso/`, add a daily cleanup job to root's crontab, and add the SSO button to LuCI's login page templates.
+
+### Switch to a different backend later
+
+Remove the old backend without removing `luci-sso`, then install the new one:
+
+```bash
+opkg remove --force-depends luci-sso-crypto-mbedtls
+opkg install /tmp/luci-sso-crypto-openssl_<version>_<arch>.ipk
+```
 
 ---
 
-## 3. Verify the Installation
+## 4. Verify the installation
 
-After installing, check that the `luci-sso` service is responsive and active.
+The package ships with SSO turned off (`enabled '0'`), so right after installation the probe answers `false`. That answer shows the CGI script and the crypto backend are working.
 
 === "Browser (LuCI)"
 
     Navigate to the following URL in your browser:
     `https://192.168.1.1/cgi-bin/luci-sso?action=enabled`
 
-    It should return a JSON response: `{"enabled": true}`.
+    It should return a JSON response: `{"enabled": false}`.
 
 === "Terminal (SSH)"
 
-    You can simulate a web request directly from the SSH terminal to verify the service is alive:
+    Run the CGI script directly on the router:
 
     ```bash
-    # On the router
     QUERY_STRING="action=enabled" /www/cgi-bin/luci-sso
     ```
 
-    **Expected Output:**
+    **Expected output** (the security headers are left out here):
+
     ```http
     Status: 200 OK
     Content-Type: application/json
 
-    {"enabled": true}
+    {"enabled": false}
     ```
+
+The probe answers `{"enabled": true}` once you have configured an identity provider and turned SSO on.
 
 ---
 
