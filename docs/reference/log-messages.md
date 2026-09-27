@@ -54,8 +54,6 @@ A request that fails ends with one line that holds the HTTP status sent to the b
 Sat Sep 26 23:15:06 2026 user.err luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED
 ```
 
-In the same way, `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN` are named in the line before `[500] UBUS_LOGIN_FAILED`.
-
 The examples on this page leave out the date and priority: `luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED`.
 
 Only one code is ever written this way per request. The lines logged just before it, with the same process ID, usually say what went wrong.
