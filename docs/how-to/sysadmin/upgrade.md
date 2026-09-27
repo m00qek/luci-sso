@@ -140,6 +140,8 @@ The install script moves each role's permissions, in role order:
 
 Running the script again changes nothing. SSO sessions opened before the upgrade lose their rights at the `rpcd` reload that follows; their users log in again.
 
+If a role has the same name as an `rpcd` login, such as `root`, its open sessions would instead get that login's rights at the reload. End them before you upgrade, as described in [How to Configure Role-Based Access Control](rbac.md#change-access-for-users-already-logged-in).
+
 ### Check the result
 
 1.  Read the warnings. The install script prints them and logs them:
