@@ -2,8 +2,11 @@
 
 This guide walks through upgrading an existing `luci-sso` installation to a new version, restoring the SSO button after a LuCI upgrade, and rolling back.
 
+!!! warning "Upgrading from 0.9.1 or earlier: role permissions move to rpcd"
+    Releases up to 0.9.1 kept each role's permissions in `/etc/config/luci-sso`. Later releases keep them in `/etc/config/rpcd`, and a user gets only the **first** matching role. The upgrade moves the permissions for you, but read [Upgrading from 0.9.1 or earlier](#upgrading-from-091-or-earlier) before you start.
+
 !!! note "Sessions survive an upgrade"
-    Installing a newer or older `luci-sso` package over the installed one keeps every LuCI session, SSO and password logins alike. Only a real removal, or `opkg install --force-reinstall` on OpenWrt 24.10, restarts `rpcd` and logs everyone out.
+    Installing a newer or older `luci-sso` package over the installed one keeps every LuCI session. The install script reloads `rpcd`, which keeps each session and rebuilds its rights from its login entry. The one exception is the upgrade from 0.9.1 or earlier: SSO sessions opened before it lose their rights at that reload, and their users log in again.
 
 ---
 
@@ -12,7 +15,8 @@ This guide walks through upgrading an existing `luci-sso` installation to a new 
 | Item | Persists? | Notes |
 | :--- | :--- | :--- |
 | `/etc/config/luci-sso` | ✅ Yes | Declared as a `conffile`. If you changed it, your version is kept and the new default is saved next to it as `/etc/config/luci-sso-opkg` (`luci-sso.apk-new` on OpenWrt 25.12). |
-| Active LuCI sessions | ✅ Yes | An upgrade or downgrade does not restart `rpcd`. On OpenWrt 24.10, upgrading *from* a release that predates this behaviour still logs everyone out once, because opkg runs the old release's removal script. |
+| Role permissions | ✅ Yes | Each role's rpcd login entry, `luci_sso_<role>` in `/etc/config/rpcd`, is left as it is. An upgrade from 0.9.1 or earlier creates the entries from the roles' old `read` and `write` lists. |
+| Active LuCI sessions | ✅ Yes | The install script reloads `rpcd`, which keeps every session and rebuilds its rights from its login entry. SSO sessions opened before an upgrade from 0.9.1 or earlier lose their rights at that reload. On OpenWrt 24.10, upgrading *from* a release whose removal script restarts `rpcd` also logs everyone out once, because opkg runs the old release's removal script. |
 | `/var/run/luci-sso/` | ✅ Until reboot | This is a tmpfs directory. Its contents survive the upgrade but are cleared on the next reboot. |
 | Token registry entries | ✅ Until reboot | Expired entries are removed by the daily cleanup job, not by the upgrade. |
 | SSO button on the login page | ✅ Yes | The install script puts it back with `luci-sso-repatch`. On OpenWrt 24.10 the old package's removal script takes it out first. |
@@ -89,7 +93,7 @@ apk list --installed luci-sso
     apk add --allow-untrusted /tmp/luci-sso-<version>.apk
     ```
 
-The install script runs again during the upgrade: it recreates `/var/run/luci-sso/` if needed, keeps the cleanup cron job, re-applies the SSO button to LuCI's login templates (with `luci-sso-repatch`) and clears LuCI's cache. There is nothing to run by hand.
+The install script runs again during the upgrade: it recreates `/var/run/luci-sso/` if needed, keeps the cleanup cron job, moves any role permissions still in `/etc/config/luci-sso` into rpcd login entries, reloads `rpcd`, re-applies the SSO button to LuCI's login templates (with `luci-sso-repatch`) and clears LuCI's cache. There is nothing to run by hand, except the checks in [Upgrading from 0.9.1 or earlier](#upgrading-from-091-or-earlier) when they apply.
 
 If `/etc/config/luci-sso-opkg` (or `luci-sso.apk-new`) appeared, compare it with your configuration for new options, then delete it.
 
@@ -107,20 +111,56 @@ Then attempt a login from a browser. Check the log if anything goes wrong:
 
 ---
 
-## Roles with only `read '*'`
+## Upgrading from 0.9.1 or earlier
 
-Older releases treated a `*` in **either** list as full admin. A role that set `list read '*'` without `list write '*'` therefore got full read and write access, plus unrestricted `ubus`, `uci` and `file` access, by mistake. It now gets what the documentation always described: read on every LuCI access group, and nothing more.
+Releases up to 0.9.1 kept a role's permissions as `read` and `write` lists on the role in `/etc/config/luci-sso`. Later releases keep them in a login entry in `/etc/config/rpcd`, one per role, which the settings page edits. [About Roles and Permissions](../../explanation/roles-and-permissions.md) explains why.
 
-If such a role was meant to be a full admin, add the write wildcard:
+### What changes
 
-```bash
-uci add_list luci-sso.<role>.write='*'
-uci commit luci-sso
-```
+- **The configuration format.** A role in `/etc/config/luci-sso` keeps only its name, `email` and `group`. Its permissions are the entry `luci_sso_<role>` in `/etc/config/rpcd`, with `option username 'sso:<role>'`, the `read` and `write` lists, and never a password. See [UCI Configuration](../../reference/uci-config.md). Leftover `read` or `write` options on a role are ignored, with a warning in the log.
+- **The first matching role wins.** A user who matches several roles gets the first one, in the order of `/etc/config/luci-sso` and of the settings page. Earlier releases merged every matching role's rights.
+- **`*` has rpcd's meaning.** `*` matches every access group, not only LuCI's. A role with `*` in both lists gets exactly what a `root` password login gets. Earlier, `read '*'` read only LuCI's groups, and `write '*'` added raw grants of its own.
+- **Every read list includes `unauthenticated`.** LuCI needs that access group on every page, so it is always stored, and the settings page does not list it.
+- **Permissions take effect at Save.** On the settings page, read and write access are written to `rpcd` when you click **Save** (or **Save & Apply**), and are in force about a second later, once `rpcd` has reloaded. Emails, groups and role order still take effect with **Save & Apply**. The role editor shows a note saying so.
+- **SSO sessions survive `rpcd` reloads.** Installing a LuCI package that reloads `rpcd` no longer strips SSO users of their rights.
+- **An ID Token without `at_hash` is accepted.** OIDC Core makes it optional in the authorization code flow, and `luci-sso` now follows it, so IdPs that never send it, such as Authentik, work. A present `at_hash` is still checked, and a wrong one is refused with `AT_HASH_MISMATCH`. The `MISSING_AT_HASH` code is gone.
+- **Removal keeps the permissions.** Removing the package copies each entry's lists back onto its role, then deletes the entries. Installing again moves them back. See [How to Remove luci-sso](uninstall.md).
+- **Internal:** the `luci-sso` ubus object has no `move_role` method. Role order is the order of `/etc/config/luci-sso`, which the settings page changes by drag and drop.
 
-The shipped `admin` role sets both wildcards and is unaffected.
+### What the upgrade does
 
----
+The install script moves each role's permissions, in role order:
+
+| Role before the upgrade | After the upgrade |
+| :--- | :--- |
+| Has `read` or `write` lists | An entry with those lists, plus `unauthenticated`. The lists are removed from the role. |
+| The shipped `admin` role, untouched: only `email 'admin@example.com'`, no other email and no group, and no lists | An entry with `read '*'` and `write '*'` |
+| Any other role without lists, including an edited `admin` role | An entry that grants nothing but `unauthenticated`, and a warning in the log |
+| A name longer than 32 characters or with characters other than letters, digits and `_`, or a read list that denies `unauthenticated` | No entry. The role keeps its lists, and a warning names it. Its users cannot log in. |
+
+Running the script again changes nothing. SSO sessions opened before the upgrade lose their rights at the `rpcd` reload that follows; their users log in again.
+
+### Check the result
+
+1.  Read the warnings. The install script prints them and logs them:
+
+    ```bash
+    logread -e luci-sso | grep "role '"
+    ```
+
+    Each line names a role and what to do, for example `role 'ops' had no permissions to move: its rpcd login entry grants nothing but 'unauthenticated'; set its permissions on the settings page`.
+
+2.  List the entries the upgrade created:
+
+    ```bash
+    ubus call luci-sso list_roles
+    ```
+
+3.  Open **Services > Single Sign-On**. A role whose **Read Access** shows "(none): this role grants no access" lets its users log in to an empty LuCI. A role that shows "Not set: edit and save this role, or its users cannot log in" has no entry. Edit each one, set its access, and click **Save**.
+
+4.  Check the order of the roles. If a user matches several, only the first counts. Drag the most privileged or most specific role to the top, then click **Save & Apply**. A user who used to combine two roles needs one role that grants both; see [How to Configure Role-Based Access Control](rbac.md).
+
+5.  If a role had `read '*'`, it can now read every access group, not only LuCI's. If it should stay limited to LuCI, list the LuCI groups it needs instead.
 
 ## Leftover secret key from older versions
 
@@ -164,3 +204,23 @@ apk add --allow-untrusted /tmp/luci-sso-<old-version>.apk
 ```
 
 The install script runs as part of the rollback, your `/etc/config/luci-sso` is kept, and nobody is logged out.
+
+### Rolling back to 0.9.1 or earlier
+
+Releases up to 0.9.1 read permissions from the roles, not from `rpcd`, and a downgrade does not run the removal script that puts them back. Remove the package first, then install the old one:
+
+On OpenWrt 24.10:
+
+```bash
+opkg remove luci-sso
+opkg install /tmp/luci-sso_<old-version>_<arch>.ipk
+```
+
+On OpenWrt 25.12:
+
+```bash
+apk del luci-sso
+apk add --allow-untrusted /tmp/luci-sso-<old-version>.apk
+```
+
+The removal copies each role's permissions back onto the role, `unauthenticated` included, and deletes the `luci_sso_*` entries. SSO users lose their rights at the removal and log in again. The old release then merges matching roles and gives `*` its old meaning.
