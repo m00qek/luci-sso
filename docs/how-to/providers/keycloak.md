@@ -168,4 +168,4 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | `USER_NOT_AUTHORIZED` with "matched no roles" | Group mapping is missing or the mapper has **Full group path** enabled, so the claim contains `/my-group` instead of `my-group`. Either disable Full group path in the mapper or update the role config to match the full path. |
 | `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Keycloak's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
 
-For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md).
+For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

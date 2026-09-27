@@ -170,4 +170,4 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | `USER_NOT_AUTHORIZED` with "matched no roles" | The `groups` claim is empty. In the Authentik provider settings, confirm the **profile** scope is selected under **Advanced protocol settings > Scopes**, and that the user belongs to the mapped group. |
 | `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Authentik's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
 
-For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md).
+For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

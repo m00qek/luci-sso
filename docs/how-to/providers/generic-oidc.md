@@ -12,6 +12,9 @@ Your identity provider must support:
 - **PKCE** (RFC 7636) — `S256` method. `luci-sso` requires PKCE; providers that only support the `plain` method or no PKCE at all will not work.
 - **RS256 or ES256** signatures for ID Tokens. HS256 is not accepted.
 - **An `at_hash` claim in every ID Token.** `luci-sso` requires it, although OIDC Core makes it optional in the authorization code flow. Without it every login fails with `MISSING_AT_HASH`. Check a decoded ID Token from your IdP for `at_hash` before you start.
+- **A confidential client** with a client secret, accepted in the token request body (`client_secret_post`).
+
+These are the requirements providers most often miss. The complete list, with the error each failure logs and the status of known providers, is in [Provider Compatibility](../../reference/provider-compatibility.md).
 
 If your provider requires PKCE to be explicitly enabled on the client, enable it before proceeding.
 
@@ -49,6 +52,7 @@ Set the following values:
 | Field | Value |
 | :--- | :--- |
 | **Application type** | Web application (confidential client) |
+| **Token endpoint authentication** | `client_secret_post` (client ID and secret in the request body), if the IdP asks |
 | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
 | **Scopes** | `openid profile email` — add `groups` if you want group-based role mapping |
 

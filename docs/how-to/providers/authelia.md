@@ -141,4 +141,4 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | `USER_NOT_AUTHORIZED` with "matched no roles" | The user's email or group does not match any configured role. If using group mapping, verify the group name is an exact case-sensitive match. |
 | Authelia returns an error about `userinfo_signed_response_alg` | The Authelia client config is missing `userinfo_signed_response_alg: none`. Add it and reload Authelia. |
 
-For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md).
+For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

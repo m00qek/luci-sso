@@ -55,7 +55,7 @@ The project targets **OpenWrt 24.10** and **25.12**.
 
 ## Further reading
 
-- [Design Philosophy](design-philosophy.md) — The principles behind the security and architecture decisions.
+- [About the Design Philosophy](design-philosophy.md) — The principles behind the security and architecture decisions.
 - [About the Architecture](architecture.md) — How the modules fit together and how `deps` isolates them from the system.
 - [Security Model](security-model.md) — The paranoid baseline and why each protection exists.
 - [Threat Model](threat-model.md) — The specific attacks the design addresses.

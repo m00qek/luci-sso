@@ -117,4 +117,4 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | Google returns "Access blocked: This app's request is invalid" | The authorized redirect URI in Google Cloud Console is missing or wrong. Double-check it matches `https://<router>/cgi-bin/luci-sso/callback`. |
 | Google sign-in works but redirects back to Google | The OAuth consent screen app is in **External** mode and the signing-in account is not listed as a test user. Add it under **OAuth consent screen > Test users**. |
 
-For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md).
+For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).
