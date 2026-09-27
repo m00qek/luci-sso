@@ -30,13 +30,13 @@ Common patterns:
 | Dex | `https://dex.example.com` |
 | Zitadel | `https://zitadel.example.com` |
 
-Verify the discovery endpoint is reachable before proceeding:
+Verify the router can fetch the discovery document before proceeding. On the router:
 
 ```bash
-curl -s https://<issuer_url>/.well-known/openid-configuration | python3 -m json.tool
+uclient-fetch -q -O - '<issuer_url>/.well-known/openid-configuration' | jsonfilter -e '@.issuer' -e '@.authorization_endpoint' -e '@.token_endpoint' -e '@.jwks_uri'
 ```
 
-The response should be a JSON document containing `authorization_endpoint`, `token_endpoint`, and `jwks_uri`.
+The command should print four HTTPS URLs. The first is the issuer: your `issuer_url` must match it, apart from a trailing slash. A certificate error means the router does not trust the IdP's certificate; see [How to Install a Private CA Certificate](../../how-to/sysadmin/install-ca-certificate.md).
 
 ---
 
@@ -145,11 +145,11 @@ The role name (`admin` above) must match a `config role` section in `/etc/config
 
 ## Step 5: Verify
 
-Check that the service is active:
+Check that the service is active. On the router:
 
 ```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+# Expected: {"enabled": true}
 ```
 
 Then open the LuCI login page in a browser.

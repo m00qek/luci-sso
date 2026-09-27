@@ -6,77 +6,59 @@ This guide describes how to make the router trust a private or self-signed CA ce
 
 ## When you need this
 
-If your IdP uses a certificate issued by a private CA (common in home labs and corporate self-hosted setups), the router will fail the back-channel TLS handshake and log a line ending in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, followed by an error such as `OIDC_DISCOVERY_FAILED` or `TOKEN_ENDPOINT_NETWORK_ERROR`. Installing the CA certificate on the router resolves this.
+If your IdP uses a certificate issued by a private CA (common in home labs and corporate self-hosted setups), the router fails the back-channel TLS handshake. The log shows a line ending in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, followed by the request's error, usually `[500] OIDC_DISCOVERY_FAILED`:
 
-You do not need this guide if your IdP uses a Let's Encrypt or other publicly trusted certificate.
+```
+luci-sso[1234]: Discovery fetch failed for [id: 957cfa182d5cc6db]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)
+luci-sso[1234]: [500] OIDC_DISCOVERY_FAILED
+```
+
+Installing the CA certificate on the router resolves this.
+
+You do not need this guide if your IdP uses a Let's Encrypt or other publicly trusted certificate. Those are covered by the `ca-bundle` package, which standard OpenWrt images include.
 
 ---
 
 ## Prerequisites
 
 - SSH access to the router.
-- Your CA certificate in **PEM format** (a `.crt` or `.pem` file beginning with `-----BEGIN CERTIFICATE-----`).
-- The `ca-bundle` package installed on the router. If it is not, install it first:
-
-```bash
-opkg update && opkg install ca-bundle
-```
+- Your CA certificate in **PEM format**: a file beginning with `-----BEGIN CERTIFICATE-----`.
 
 ---
 
 ## Step 1: Copy the certificate to the router
 
-From your local machine, copy the CA certificate to the router's certificate directory:
+From your local machine, copy the CA certificate into the router's certificate directory. Give it a `.crt` extension:
 
 ```bash
 scp -O /path/to/my-ca.crt root@192.168.1.1:/etc/ssl/certs/my-ca.crt
 ```
 
-Replace `my-ca.crt` with a descriptive name for the CA (e.g., `homelab-ca.crt`). The name does not affect trust — only the file's presence matters.
+Replace `my-ca.crt` with a descriptive name for the CA (for example `homelab-ca.crt`). The name does not affect trust, but the extension does: `luci-sso` loads every `*.crt` and `*.pem` file in `/etc/ssl/certs/`, and `uclient-fetch`, used to check the result below, loads only `*.crt`.
+
+There is no certificate store to rebuild. `luci-sso` reads the files in `/etc/ssl/certs/` on every request, so the certificate is used from the next login on.
 
 ---
 
-## Step 2: Update the CA bundle
+## Step 2: Verify the certificate is trusted
 
-Run this command on the router to rebuild the trusted certificate store:
-
-```bash
-update-ca-certificates
-```
-
-You should see output confirming the certificate was added:
-
-```
-Updating certificates in /etc/ssl/certs...
-1 added, 0 removed; done.
-```
-
----
-
-## Step 3: Verify the certificate is trusted
-
-Test that the router now trusts your IdP's certificate. Replace `<issuer_url>` with your configured issuer URL:
+On the router, fetch your IdP's discovery document. Replace the URL with your `issuer_url`, or with `internal_issuer_url` if you use [split-horizon networking](split-horizon.md):
 
 ```bash
-curl -s https://<YOUR_ISSUER_URL>/.well-known/openid-configuration
+uclient-fetch -q -O - 'https://id.example.com/.well-known/openid-configuration'
 ```
 
-If the command returns a JSON document, the certificate is trusted. If it returns a certificate error, double-check that:
+If the command prints a JSON document, the certificate is trusted. If it prints `SSL verify error: certificate is self-signed or not signed by a trusted CA`, check that:
 
 1. The certificate you copied is the **CA** certificate (the issuer), not the IdP's server certificate.
 2. The file is valid PEM — open it and confirm it begins with `-----BEGIN CERTIFICATE-----`.
-3. `update-ca-certificates` was run after copying the file.
+3. The file name ends in `.crt`.
 
 ---
 
-## Step 4: Confirm luci-sso can reach the IdP
+## Step 3: Confirm luci-sso can reach the IdP
 
-```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
-```
-
-Then attempt a login. If you previously saw `CERT_UNTRUSTED` in the log, it should no longer appear.
+Attempt a login. The `CERT_UNTRUSTED` line should no longer appear in the log.
 
 === "Browser (LuCI)"
 
@@ -92,11 +74,10 @@ Then attempt a login. If you previously saw `CERT_UNTRUSTED` in the log, it shou
 
 ## Removing the certificate
 
-If you later remove `luci-sso` or switch to a publicly trusted IdP, remove the certificate and rebuild the store:
+If you later remove `luci-sso` or switch to a publicly trusted IdP, delete the file:
 
 ```bash
 rm /etc/ssl/certs/my-ca.crt
-update-ca-certificates
 ```
 
 ---
@@ -104,4 +85,4 @@ update-ca-certificates
 ## Related guides
 
 - [How to Configure Split-Horizon Networking](split-horizon.md) — if the router and browser reach the IdP at different addresses, you may need both this guide and split-horizon configuration.
-- [How to Debug luci-sso](debugging.md) — for diagnosing `CERT_UNTRUSTED` and other back-channel errors.
+- [How to Debug luci-sso](debugging.md#a-back-channel-request-to-the-idp-failed) — for diagnosing `CERT_UNTRUSTED` and other back-channel errors.

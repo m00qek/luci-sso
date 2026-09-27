@@ -32,10 +32,10 @@ The most common case: the secret is expired or has been compromised. The client 
     uci commit luci-sso
     ```
 
-**Step 3.** Verify the change is live:
+**Step 3.** Verify the configuration is still valid. On the router:
 
 ```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
 # Expected: {"enabled": true}
 ```
 

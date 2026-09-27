@@ -84,11 +84,11 @@ For Google Workspace accounts, group-based mapping requires the Admin SDK and is
 
 ## 4. Verify
 
-Check that the service is active:
+Check that the service is active. On the router:
 
 ```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+# Expected: {"enabled": true}
 ```
 
 Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to Google's sign-in screen.

@@ -71,17 +71,13 @@ The IdP's discovery document must still declare the public `issuer_url` as its `
 The internal address must:
 
 - Use **HTTPS** — plain HTTP is rejected even for internal addresses.
-- Have a certificate the router trusts. If the IdP uses a self-signed or private CA certificate, install it on the router:
+- Have a certificate the router trusts, issued for the host name in `internal_issuer_url`. If the IdP uses a self-signed or private CA certificate, copy the CA certificate to the router. There is no store to rebuild afterwards; see [How to Install a Private CA Certificate](install-ca-certificate.md).
 
 ```bash
-# Copy your CA certificate to the router
 scp -O ca.crt root@192.168.1.1:/etc/ssl/certs/my-homelab-ca.crt
-
-# Update the CA bundle
-update-ca-certificates
 ```
 
-If the router cannot verify the IdP's certificate, the token exchange will fail with `TOKEN_ENDPOINT_NETWORK_ERROR`, and the line before it will end in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, or `(CERT_NAME_MISMATCH)` if the certificate does not cover the internal host name. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
+If the router cannot verify the IdP's certificate, discovery already fails when the user clicks the button: the log shows `[500] OIDC_DISCOVERY_FAILED`, and the line before it ends in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, or `(CERT_NAME_MISMATCH)` if the certificate does not cover the internal host name. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
 
 ---
 
@@ -124,11 +120,11 @@ Set `internal_issuer_url` alongside the standard configuration:
 
 ## Verify
 
-After committing, confirm the back-channel is working:
+After committing, confirm the configuration is valid. On the router:
 
 ```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+# Expected: {"enabled": true}
 ```
 
 Then attempt a login from your browser. If the browser redirects to the IdP correctly but the router fails to exchange the code, the problem is in the back-channel. Check the log:
@@ -143,10 +139,16 @@ Then attempt a login from your browser. If the browser redirects to the IdP corr
     logread -e luci-sso | tail -30
     ```
 
-Back-channel failures typically appear as `TOKEN_EXCHANGE_FAILED`, `OIDC_DISCOVERY_FAILED`, or `JWKS_FETCH_FAILED`. All three indicate the router cannot reach the internal address. Check:
+Back-channel connection failures end as `[500] OIDC_DISCOVERY_FAILED`, `[500] TOKEN_ENDPOINT_NETWORK_ERROR` or `[500] JWKS_FETCH_FAILED`, with a line ending in `HTTP_REQUEST_FAILED (<cause>)` before them. Check:
 
-1. The router can reach `internal_issuer_url` — test with `curl -sk <internal_issuer_url>/.well-known/openid-configuration` from the router.
-2. The certificate is trusted — test with `curl -s` (without `-k`) to verify without skipping certificate checks.
+1. The router can reach the internal address and trusts its certificate. Fetch the discovery document through it from the router, adding the issuer's path if it has one:
+
+    ```bash
+    uclient-fetch -q -O - 'https://192.168.2.10:8443/.well-known/openid-configuration'
+    ```
+
+    A JSON document means both work. `SSL verify error` means the certificate is not trusted, or does not cover that host name.
+2. The document's `issuer` is the public `issuer_url`, not the internal address.
 3. `internal_issuer_url` is only an origin. If the log shows `Configuration rejected: internal_issuer_url must be an origin`, remove its path: the issuer's path is added automatically.
 4. The internal address serves the IdP under the same paths as the public one.
 

@@ -53,11 +53,13 @@ Using the slug `luci-router` from Step 2:
 https://authentik.example.com/application/o/luci-router/
 ```
 
-Verify the discovery document is reachable:
+Verify the router can fetch the discovery document. On the router:
 
 ```bash
-curl -s 'https://authentik.example.com/application/o/luci-router/.well-known/openid-configuration'
+uclient-fetch -q -O - 'https://authentik.example.com/application/o/luci-router/.well-known/openid-configuration'
 ```
+
+A certificate error here means the router does not trust Authentik's certificate; see [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md).
 
 ---
 
@@ -138,11 +140,11 @@ Authentik delivers group memberships through the `profile` scope, so no separate
 
 ## 6. Verify
 
-Check that the service is active:
+Check that the service is active. On the router:
 
 ```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+# Expected: {"enabled": true}
 ```
 
 Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to your Authentik login screen.

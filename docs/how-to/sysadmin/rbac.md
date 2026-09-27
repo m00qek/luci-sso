@@ -197,12 +197,12 @@ Charlie can view status, view network settings, and edit network settings — bu
 
 ## Verify a role is working
 
-After committing configuration, test with:
+After committing configuration, test on the router with:
 
 ```bash
 # Confirm the service is enabled and config is valid
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+# Expected: {"enabled": true}
 ```
 
 Then log in as the user in question and confirm the LuCI navigation matches what you expect. If a user is denied despite correct credentials, check the log for `USER_NOT_AUTHORIZED` (the line before it will say "matched no roles" if the issue is role mapping):

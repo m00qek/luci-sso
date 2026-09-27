@@ -42,11 +42,13 @@ The issuer URL includes the realm name. In the Keycloak admin console, navigate 
 https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>
 ```
 
-Verify the discovery document is reachable before proceeding:
+Verify the router can fetch the discovery document before proceeding. On the router:
 
 ```bash
-curl -s https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>/.well-known/openid-configuration
+uclient-fetch -q -O - 'https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>/.well-known/openid-configuration'
 ```
+
+A certificate error here means the router does not trust Keycloak's certificate; see [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md).
 
 ---
 
@@ -136,11 +138,11 @@ Then enable the `groups` scope on the router and map the group:
 
 ## 5. Verify
 
-Check that the service is active:
+Check that the service is active. On the router:
 
 ```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+# Expected: {"enabled": true}
 ```
 
 Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to your Keycloak login screen.

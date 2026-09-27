@@ -111,11 +111,11 @@ Authelia returns LDAP/AD group memberships in the `groups` claim. The group name
 
 ## 4. Verify
 
-Check that the service is active:
+Check that the service is active. On the router:
 
 ```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
+uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
+# Expected: {"enabled": true}
 ```
 
 Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to your Authelia instance.
@@ -136,7 +136,7 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `OIDC_DISCOVERY_FAILED` | The router cannot reach `auth.example.com`. Test with `curl -s https://auth.example.com/.well-known/openid-configuration` from the router. If the IdP uses a private CA, see [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
+| `OIDC_DISCOVERY_FAILED` | The router cannot reach `auth.example.com`. Test from the router with `uclient-fetch -q -O - 'https://auth.example.com/.well-known/openid-configuration'`. If the IdP uses a private CA, see [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
 | `TOKEN_EXCHANGE_FAILED` | The `redirect_uri` in UCI does not exactly match the `redirect_uris` entry in Authelia's client config, or the client secret is wrong. |
 | `USER_NOT_AUTHORIZED` with "matched no roles" | The user's email or group does not match any configured role. If using group mapping, verify the group name is an exact case-sensitive match. |
 | Authelia returns an error about `userinfo_signed_response_alg` | The Authelia client config is missing `userinfo_signed_response_alg: none`. Add it and reload Authelia. |
