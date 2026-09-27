@@ -20,7 +20,7 @@ The most important structural decision in `luci-sso` is that no module reaches t
 
 `deps.uc` builds this object with the real modules. The CGI script (`files/www/cgi-bin/luci-sso`) is only a few lines: it calls `deps.create()` and hands the result, plus the CGI environment, to `entry.run()`. Functions deeper down receive `deps` (or just `deps.native`, for the crypto wrappers) as their first argument and pass it on.
 
-The reason this matters: OpenWrt routers can't run network tests. Because the real system only enters through `deps`, a test that fakes `deps` controls a module *and* everything it imports. The same fake drives a single crypto wrapper or the whole login flow, with real module code and no network. See [Testing Architecture](../reference/testing-architecture.md) for how the test buckets use this.
+The reason this matters: OpenWrt routers can't run network tests. Because the real system only enters through `deps`, a test that fakes `deps` controls a module *and* everything it imports. The same fake drives a single crypto wrapper or the whole login flow, with real module code and no network. See [About the Test Architecture](test-architecture.md) for how the test buckets use this.
 
 ### Module responsibilities
 

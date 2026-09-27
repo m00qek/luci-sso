@@ -1,151 +1,74 @@
 # Testing Architecture
 
-`luci-sso` organises its tests into five **buckets** by scope and intended
-assertion — not by which collaborators are faked. Faking is total and free at
-every level (see [Core principle](#core-principle-everything-funnels-through-deps)),
-so the dividing line is the **entry point** and what each test asserts.
+The test buckets, which source module belongs in which, and the mocking interface. For why the suite is divided this way, see [About the Test Architecture](../explanation/test-architecture.md). The rules every test must follow are in the [Style Guide](style-guide.md#testing-standards).
+
+---
+
+## Buckets
 
 | Bucket | Path | Entry point | System boundary (`deps`) | `luci_sso` collaborators |
 |---|---|---|---|---|
-| **native** | `test/native/` | `luci_sso.native` exports | n/a (is the boundary) | none — `native` (+ pure helpers) only |
+| **native** | `test/native/` | `luci_sso.native` exports | n/a (is the boundary) | none: `native` (+ pure helpers) only |
 | **unit** | `test/unit/**/*_test.uc` (mirrors `src/`) | one src module's exports | faked | may run for real, but incidental |
-| **integration** | `test/integration/**/*_test.uc` | an orchestrator / composition seam | faked | real subgraph, asserted |
+| **integration** | `test/integration/*_test.uc` | an orchestrator or wiring seam | faked | real subgraph, asserted |
 | **system** | `test/system/` | the real rpcd in the openwrt container, no browser | real | real |
 | **e2e** | `test/e2e/` (Playwright) | browser → real uhttpd/rpcd/IdP | real | real |
 
-Run the native/unit/integration/system buckets with `make unit-test`; the
-browser suite with `make e2e-test`; the C-level fuzzer with `make fuzzer-test`.
-`make e2e-test` runs each spec file as its own Playwright invocation and resets
-the rate-limit state before each, since every browser request comes from one
-address; the limiter itself is covered by unit and integration tests.
+| Command | Runs |
+| :--- | :--- |
+| `make unit-test` | native, unit, integration and system, in the `openwrt` container |
+| `make e2e-test` | e2e. Each spec file is its own Playwright invocation, and the rate-limit state is reset before each. |
+| `make fuzzer-test` | the C-level libFuzzer harness, `test/fuzz_test.c` |
+| `make sanitizer-test` | native and `unit/luci_sso/crypto` against a module built with AddressSanitizer and UndefinedBehaviorSanitizer |
+
+See [How to Run Tests](../how-to/developer/testing.md) for the options of each command.
 
 ---
 
-## Core principle: everything funnels through `deps`
+## Placement rule
 
-All IO and nondeterminism enters through the `deps` object — `deps.fs`,
-`deps.http`, `deps.ubus`, `deps.clock`, `deps.native`, `deps.log` — including the
-`components/*` wrappers (`http_client`, `clock`), which are proxied in
-`test/utest.config.uc` exactly like the C modules.
+> A module *M* gets an **integration** file if and only if faking `deps` for *M*
+> transitively executes *other non-pure modules* (*M* is an orchestrator).
+> Otherwise *M* is deps-isolable and gets a **unit** file only.
 
-Consequently, **faking `deps` transitively controls a module _and its entire
-static-import subgraph_.** It works identically for a leaf (`crypto/base`) and an
-orchestrator (`handshake`) — the orchestrator just pulls its real collaborators
-along, all driven by the same fake `deps`.
+| src module(s) | A deps-faked test runs… | Bucket | Test file(s) |
+|---|---|---|---|
+| `crypto/*`, `crypto`, `encoding`, `result`, `config`, `web` | itself (+ pure leaves) | unit | `unit/luci_sso/<module>_test.uc`, `unit/luci_sso/crypto/*_test.uc` |
+| `discovery`, `oidc`, `ubus`, `ratelimit`, `session`, `session/*`, `components/*` | itself + pure leaves | unit | `unit/luci_sso/…` (mirrors `src/`) |
+| `handshake` | real `oidc`, `discovery`, `session`, `ubus`, `config` | integration | `handshake_test.uc` |
+| `router` | real `handshake`, `session`, `ubus`, `discovery`, `config`, `ratelimit` | integration | `router_test.uc`, `logout_test.uc` |
+| `entry` (CGI `run()` pipeline) | real `web`, `config`, `router` and everything below it | integration | `entry_test.uc` |
+| `deps` (`create()` and its channel builders) | the production wiring | integration | `bootstrap_test.uc` |
+| `errors` | n/a | none | `make lint` checks it against [Log Messages](log-messages.md) |
 
-Therefore **"what is mocked" is _not_ the unit/integration dividing line** —
-faking is total at every level. The line is **scope + intended assertion**, i.e.
-the entry point.
-
----
-
-## Unit vs integration
-
-- **unit** — entry is one module's exported function; assert *that module's
-  input→output contract*; the system boundary is faked. If the module's static
-  imports are all pure or transparent-through-`deps`, this genuinely isolates it.
-- **integration** — entry is an orchestrator (`handshake`, `router`) or a wiring
-  seam (`deps.create`, the CGI `main`); faking `deps` unavoidably runs a
-  multi-module subgraph; assert *cross-module wiring and invariants*. Split by
-  **scenario** (`describe` blocks), not by sub-module.
-
-### Placement rule
-
-> A module *M* gets an **integration** file iff faking `deps` for *M*
-> transitively executes *other non-pure modules* (i.e. *M* is an orchestrator).
-> Otherwise *M* is deps-isolable → **unit** file only.
-
-| src module(s) | deps-faked test runs… | bucket |
-|---|---|---|
-| `crypto/*`, `encoding`, `result`, `config`, `web`, `errors` | itself (+ pure leaves) | unit |
-| `discovery`, `oidc`, `ubus`, `session/*`, `components/*` | itself + pure leaves | unit |
-| `handshake` | real `oidc + discovery + session + ubus + config` | integration |
-| `router` | real `handshake + web + session + ubus + config` | integration |
-| `deps` (`create()`) / CGI entry | wires the whole graph vs real system modules | integration |
-
-`integration/` is **not** a `src/` mirror — only orchestrators and wiring seams
-appear (`handshake_test.uc`, `router_test.uc`, `logout_test.uc`, plus the
-composition root: `bootstrap_test.uc` for `deps.create()`'s channel builders and
-`entry_test.uc` for the CGI `run()` pipeline). Two honest consequences:
-
-1. `unit/` is not a perfect `src/` mirror either — `handshake`, `router` and
-   `deps` have no unit file (no isolable unit surface).
-2. `session.uc` is a pure façade (`create_state = handshake.create`,
-   `verify_state = handshake.verify`, …). Its wiring is covered by
-   `unit/luci_sso/session_test.uc`; the submodules' behaviour lives in
-   `unit/luci_sso/session/{handshake,common}_test.uc`.
-
----
-
-## The `system` bucket: the guard against rpcd rule drift
-
-`luci-sso` creates LuCI sessions itself, so it must grant the concrete
-`ubus`/`uci`/`file`/`cgi-io` rights rpcd would give a password login with the
-same `read`/`write` lists (`ubus.uc`, `_expand_role`). The group *definitions*
-are read from `acl.d` at every login, but the *combining rules* (write implies
-read, table vs array notation, globs, negations) are a copy of rpcd's C code.
-
-`test/system/rpcd_parity_test.uc` is what keeps that copy honest. For several
-role shapes (read `*`, a specific read group, a specific write group, a mixed
-role, globs with a negation) it creates a temporary rpcd password login with the
-same lists, creates an SSO session through the real code, and requires the two
-sessions' ACLs to be identical, printing every entry that differs. Full admin is
-checked for coverage instead: its raw `*` grants must cover everything an rpcd
-`*` login gets, with no exceptions. CI runs it on every OpenWrt release in the matrix, so an rpcd that
-changes its rules fails CI instead of breaking users' roles.
-
-Use this bucket only for invariants that need the real daemon; everything else
-stays in unit/integration with faked `deps`.
+`handshake`, `router`, `entry` and `deps` have no unit file. `session.uc` re-exports `session/handshake.uc` (`create_state = handshake.create`, `verify_state = handshake.verify`, …); `unit/luci_sso/session_test.uc` covers that wiring and `unit/luci_sso/session/{handshake,common}_test.uc` cover the behaviour.
 
 ---
 
 ## The `native` bucket
 
-`native` has no `src/*.uc` — it is `mod/*.c` reached over the ucode FFI, so it
-mirrors `mod/`, not `src/`. Its job is **the C extension's exported contract**:
-correct crypto outputs (KAT vectors), memory safety, hardening, and the
-boundary/error behaviour of the seven exports (`random`, `sha256`,
-`hmac_sha256`, `verify_rs256`, `verify_es256`, `jwk_rsa_to_pem`,
-`jwk_ec_p256_to_pem`). It is the **primary gate for swapping crypto backends**
-(mbedtls / wolfssl / openssl).
+`test/native/native_test.uc` covers the seven exports of `luci_sso.native` (`mod/*.c`): `random`, `sha256`, `hmac_sha256`, `verify_rs256`, `verify_es256`, `jwk_rsa_to_pem` and `jwk_ec_p256_to_pem`. It asserts known-answer vectors (`test/native/fixtures.uc`), memory safety, hardening, and boundary and error behaviour.
 
-Rules:
+- It imports **only** `luci_sso.native`, plus pure helpers such as `encoding` as scaffolding. It does not import `luci_sso.crypto`.
+- `unit/luci_sso/crypto/*` tests fake `native` with `mock.inject('native', { strict: true, data: { … } }, …)`, through `test/proxies/native.uc`. They do not assert crypto correctness.
 
-- Import **only** `luci_sso.native` (plus pure helpers like `encoding` as
-  scaffolding). Do **not** route through `luci_sso.crypto` — that is wrapper
-  coverage, which belongs to the crypto unit tests.
+| Coverage of the native module | Reaches |
+| :--- | :--- |
+| `make fuzzer-test` | the guarded entry points in `mod/native_api.c` and the backend; not the ucode binding (`mod/native_ucode.c`) |
+| native bucket | the compiled module, binding included |
+| every other ucode test | the real module, incidentally, wherever `native` is not faked |
 
-The native module gets three kinds of coverage; this bucket is one of them:
+---
 
-1. **C-level libFuzzer** (`make fuzzer-test`) — deepest / adversarial. It
-   calls the guarded entry points in `mod/native_api.c`, so it runs the
-   input guards and the backend exactly as production does; only the thin
-   ucode binding (`mod/native_ucode.c`) is outside it.
-2. **native conformance** (this bucket) — the FFI contract, through the
-   compiled module, binding included.
-3. **transitive** — every crypto/orchestrator test hits the real module
-   incidentally.
+## The `system` bucket
 
-`make sanitizer-test` additionally runs this bucket and `unit/luci_sso/crypto`
-against a module built with AddressSanitizer + UndefinedBehaviorSanitizer (see
-[How to Run Tests](../how-to/developer/testing.md#sanitizer-testing)).
-
-### `unit/crypto/*` mocks `native`
-
-The crypto wrappers pass `native` as an explicit argument, so their unit tests
-inject a literal fake (`hash.sha256({ sha256: () => null }, 'x')`) —
-no proxy needed. This keeps `native_test.uc` the single source of
-crypto-correctness truth, lets a fake deterministically hit failure branches real
-crypto won't produce (`verify_rs256 → false ⇒ INVALID_SIGNATURE`), and keeps the
-wrappers green regardless of the compiled backend. Real-wrapper-over-real-crypto
-coverage still exists transitively in integration and e2e.
+`test/system/rpcd_parity_test.uc` compares SSO sessions with rpcd password logins. For each role shape (read `*`, a specific read group, a specific write group, a mixed role, globs with a negation) it creates a temporary rpcd password login with the same `read`/`write` lists, creates an SSO session through the real code, and requires the two sessions' ACLs to be identical, printing every entry that differs. Full admin is checked for coverage: its raw `*` grants must cover everything an rpcd `*` login gets. CI runs it on every OpenWrt release in the matrix.
 
 ---
 
 ## Mocking: the proxy DSL
 
-The system boundary is faked with `mock.inject_all` (or `mock.inject` for a
-single module), which hands back **proxies** driven by a spec:
+The system boundary is faked with `mock.inject_all` (or `mock.inject` for a single module), which hands back **proxies** driven by a `{ strict, data, behavior }` spec:
 
 ```javascript
 import { mock, spy } from 'utest';
@@ -164,46 +87,37 @@ mock.inject_all({
 });
 ```
 
-Guidelines:
+| Element | Meaning |
+| :--- | :--- |
+| `strict: true` | Any call the spec does not model dies. |
+| `data:` | Canned values: file contents for `fs`, `{ now }` for `clock`, URL → `{ status, body }` for `http_client`, return values by function name for `native`. |
+| `behavior:` | Callbacks that compute a response from the call arguments or count. |
+| `spy(proxy).calls.<fn>` | The recorded calls, as an array of argument tuples. |
+| Proxied modules | `fs`, `uci`, `ubus`, `uclient`, `uloop` (built into utest), and `http_client`, `clock`, `native` (`test/proxies/`), as configured in `test/utest.config.uc`. |
 
-- **Prefer `mock.inject_all`; never hand-write a stub object when a proxy
-  exists.** `fs`, `uci`, `ubus`, `uloop`, and the `http_client` / `clock` /
-  `native` components are all proxied.
-- **Prefer `data:` over `behavior:`.** Reach for a `behavior:` callback only when
-  the response must depend on call arguments or count.
-- Use `strict: true` so any un-modelled call dies loudly.
-- Inspect side effects with `spy(proxy).calls.<fn>` (an array of argument
-  tuples).
-- Integration and deps-graph-heavy unit tests build the full `deps` object via
-  `with_context(cfg, cb)` (`test/context.uc`), which assembles every proxy into
-  a real `deps` and seeds the runtime state files.
+### `with_context`
 
-Shared fixtures live in `test/fixtures/` (`fixtures.rsa`, `fixtures.oidc`);
-real signed JWTs come from `test/lib/helpers.uc`
-(`lib.helpers`).
+`with_context(cfg, cb)` (`test/context.uc`) injects a proxy for every key of `cfg`, builds a full `deps` object from them, and passes it to `cb`:
 
----
+| `deps` field | Built from |
+| :--- | :--- |
+| `fs` | the `fs` proxy, strict, seeded with an empty `/var/run/luci-sso/ratelimit.json` and `/usr/share/rpcd/acl.d/luci-base.json` |
+| `uci` | `uci.cursor()` on the strict proxy, seeded with `luci.sauth.sessiontime = 3600` |
+| `ubus` | the production `ubus_channel()` over the proxy connection. `UBUS_NO_DATA` stands for a successful call with no reply. |
+| `http` | `http_client.create()` on the proxy |
+| `clock` | `clock.create()` on the proxy |
+| `native` | the real compiled module, unless `cfg.native.behavior` is set |
+| `log` | a no-op |
 
-## Execution model (parallelism)
-
-`utest` runs **each `_test.uc` file in its own process**, up to *X* jobs
-concurrently (*X* ≈ core count). The parallelism unit is therefore **the file**:
-
-- Splitting a slow file into several `_test.uc` files parallelises it for free.
-- **Wall-time floor = the single longest file.** Balance heavy cases (RSA-4096
-  verify, high-iteration property tests) across files.
-- Per-file process startup (module load + `native_crypto_init()`) is paid once
-  per file, so don't over-split — tiny files let startup dominate. Split a file
-  only once it becomes a multi-second long pole.
+Shared fixtures live in `test/fixtures/` (`fixtures.rsa`, `fixtures.oidc`); real signed JWTs come from `test/lib/helpers.uc` (`lib.helpers`).
 
 ---
 
-## Minimum coverage per exported function
+## Execution model
 
-- One success case (happy path).
-- One error case per error type / branch.
-- Edge cases (empty input, `null`, boundary values).
-- Security cases where relevant (tampering, injection, replay, alg confusion,
-  bypass attempts). Security-critical code **must** include attack tests.
-
-All tests **must** run offline, with no external network dependency.
+| Property | Value |
+| :--- | :--- |
+| Process | Each `_test.uc` file runs in its own `ucode` process, so module load and `native_crypto_init()` happen once per file. |
+| Concurrency | One file at a time. `devenv/scripts/test.sh` passes no `-j` and `test/utest.config.uc` sets no `jobs`; utest 1.5.1 defaults to 1. `-j N` or a `jobs` config key runs *N* files in parallel. |
+| Timeout | 60 seconds per file (utest default; `timeout` config key). |
+| Bundles | The directories `test.sh` passes to `utest`: `native`, `integration`, `unit/luci_sso`, `unit/luci_sso/components`, `unit/luci_sso/crypto`, `unit/luci_sso/session`, `system`. |

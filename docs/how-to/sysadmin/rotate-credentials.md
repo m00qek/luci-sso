@@ -9,7 +9,9 @@ This guide covers updating the OIDC client credentials on your router — either
 
 ## How credential changes take effect
 
-`luci-sso` reads UCI configuration on every request. There is no daemon to restart — changes committed with `uci commit` take effect on the next login attempt. Active LuCI sessions are not affected: UBUS sessions do not carry the client secret, so users who are already logged in remain logged in until their session expires naturally.
+`luci-sso` reads UCI configuration on every request. There is no daemon to restart — changes committed with `uci commit` take effect on the next login attempt. Active LuCI sessions are not affected: UBUS sessions do not carry the client secret, so users who are already logged in stay logged in until they log out or their session times out after a period of inactivity.
+
+A leaked client secret does not by itself let anyone into the router: they would still need to sign in at the IdP with an account that matches one of your roles. If you also want to end existing sessions, see [End a user's sessions now](rbac.md#end-a-users-sessions-now).
 
 ---
 
@@ -41,7 +43,15 @@ uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso
 
 Then attempt a fresh login from a browser. If the token exchange succeeds, the new secret is working.
 
-If login fails with `TOKEN_EXCHANGE_FAILED` in the log, the new secret was not accepted by the IdP. Double-check it was copied correctly — it is case-sensitive and may contain special characters that need quoting:
+If the IdP rejects the new secret, the login fails and the log shows lines like these, with the status the IdP returned (usually `401`):
+
+```
+Token exchange HTTP 401 [session_id: …]
+OAuth flow failed [session_id: …]: TOKEN_EXCHANGE_FAILED ({ "http_status": 401 })
+[401] TOKEN_EXCHANGE_FAILED
+```
+
+The IdP's own error code (typically `invalid_client`) is not logged. Double-check the secret was copied correctly — it is case-sensitive and may contain special characters that need quoting:
 
 === "Browser (LuCI)"
 
@@ -59,7 +69,7 @@ If login fails with `TOKEN_EXCHANGE_FAILED` in the log, the new secret was not a
 
 If re-registering the client entirely (new application registration in the IdP):
 
-**Step 1.** Register a new OAuth2/OIDC client in your IdP. Set the redirect URI to `https://<YOUR_ROUTER>/cgi-bin/luci-sso/callback`.
+**Step 1.** Register a new OAuth2/OIDC client in your IdP. Its redirect URI must exactly match the router's configured **Redirect URI**; copy it from **Services > Single Sign-On**, or print it with `uci get luci-sso.default.redirect_uri`.
 
 **Step 2.** Update the router with both values:
 
@@ -75,7 +85,9 @@ If re-registering the client entirely (new application registration in the IdP):
     uci commit luci-sso
     ```
 
-**Step 3.** Verify with a fresh login. Active sessions from the old client registration remain valid until they expire.
+**Step 3.** Verify with a fresh login. Active sessions from the old client registration stay valid until they log out or time out.
+
+A login that was already under way when you saved the change returns from the IdP with a code issued to the old client, so its token exchange fails. Starting the login again works.
 
 ---
 
@@ -83,7 +95,7 @@ If re-registering the client entirely (new application registration in the IdP):
 
 Changing `issuer_url` needs no cache clearing: the discovery and JWK Set caches in `/var/run/luci-sso/` are keyed by the issuer and `jwks_uri` URLs, so the new IdP's documents are fetched on the first login. Do not delete `/var/run/luci-sso/*.json`: that directory also holds logins in progress and the rate-limit state.
 
-**Step 1.** Register a new client with the new IdP.
+**Step 1.** Register a new client with the new IdP. Its redirect URI must exactly match the router's configured **Redirect URI** (`uci get luci-sso.default.redirect_uri`).
 
 **Step 2.** Update the router configuration:
 
@@ -100,6 +112,17 @@ Changing `issuer_url` needs no cache clearing: the discovery and JWK Set caches 
     uci commit luci-sso
     ```
 
+If you use [split-horizon networking](split-horizon.md), `internal_issuer_url` still points at the old IdP's internal address, and discovery for the new IdP will fail with `OIDC_DISCOVERY_FAILED`. Set it to the new IdP's internal origin, or remove it if the router can reach the new IdP directly:
+
+```bash
+uci set luci-sso.default.internal_issuer_url='https://10.0.0.5:8443'
+# or
+uci delete luci-sso.default.internal_issuer_url
+uci commit luci-sso
+```
+
+In the browser, the same field is **Internal Issuer URL** on **Services > Single Sign-On**.
+
 **Step 3.** Update any role mappings if email addresses or group names differ between the old and new IdP:
 
 === "Browser (LuCI)"
@@ -114,17 +137,23 @@ Changing `issuer_url` needs no cache clearing: the discovery and JWK Set caches 
     uci commit luci-sso
     ```
 
-**Step 4.** Verify with a fresh login.
+**Step 4.** Verify with a fresh login. A login that was already under way when you saved the change will fail once; start it again.
 
-Active sessions issued by the old IdP continue to work until they expire — they are UBUS sessions and the router does not re-validate them against the IdP after creation.
+Active sessions issued by the old IdP keep working until they log out or time out — they are UBUS sessions and the router does not re-validate them against the IdP after creation.
 
 ---
 
 ## Verify roles still match after rotation
 
-If the new credentials come with a different `scope` (for example, the old client had `groups` scope and the new one does not), users may authenticate successfully but see `USER_NOT_AUTHORIZED` in the log — the line before it will say "matched no roles", indicating the group claims are missing.
+A new client registration, or a new IdP, may not release the same claims as the old one. For example, the old client was allowed the `groups` scope or had a groups mapper, and the new one does not. Users then authenticate successfully but are refused: the log shows `USER_NOT_AUTHORIZED`, and the line before it says "matched no roles".
 
-Check what the IdP is returning after a successful login:
+Check which claims the IdP sent. After each login, `luci-sso` logs a debug-level line listing the claim names, not their values. For example:
+
+```
+ID Token verified. Claims present: iss, sub, aud, exp, iat, nonce, at_hash, email
+```
+
+If `groups` (or `email`) is missing there, fix it at the IdP: allow the scope for the new client, or add the claim mapper. To see the line:
 
 === "Browser (LuCI)"
 
@@ -136,7 +165,7 @@ Check what the IdP is returning after a successful login:
     logread -e luci-sso | tail -30
     ```
 
-If you see `USER_NOT_AUTHORIZED` with a "matched no roles" line before it, confirm the `scope` option includes all the scopes your role mappings rely on:
+Also confirm the router still requests the scopes your role mappings rely on. `scope` is a router option, not part of the client registration:
 
 ```bash
 uci show luci-sso.default.scope

@@ -22,13 +22,13 @@ MKDOCS_IMAGE := squidfunk/mkdocs-material:9.5.17
 help:
 	@echo -e "$(BLUE)LuCI SSO Documentation Toolkit$(RESET)"
 	@echo -e "Usage:"
-	@echo -e "  make build  - Generate the static site in $(PROJECT_ROOT)/bin/site/"
+	@echo -e "  make build  - Generate the static site in $(PROJECT_ROOT)/bin/site/ (warnings fail the build)"
 	@echo -e "  make serve  - Run a live-reloading dev server on http://localhost:8000"
 	@echo -e "  make clean  - Remove the generated site directory"
 
 build:
 	@echo -e " $(BLUE)🔨$(RESET) Building static documentation..."
-	docker run --rm -v $(PROJECT_ROOT):/docs $(MKDOCS_IMAGE) build
+	docker run --rm -v $(PROJECT_ROOT):/docs $(MKDOCS_IMAGE) build --strict
 
 serve: dev
 dev:

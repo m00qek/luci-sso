@@ -11,7 +11,8 @@ How-to guides are recipes. They take the reader through the steps required to so
 *   [Keycloak](providers/keycloak.md)
 *   [Authentik](providers/authentik.md)
 *   [Pocket ID](providers/pocket-id.md)
-*   [GitHub](providers/github.md) - Not supported: why, and what to use instead.
+
+GitHub is not supported. See [Provider Compatibility](../reference/provider-compatibility.md) for what a provider must support, and for the alternative.
 
 ## System Administration
 *   [Installation](sysadmin/installation.md) - How to install `luci-sso` from the package feed, or from a package you built.
@@ -26,7 +27,7 @@ How-to guides are recipes. They take the reader through the steps required to so
 *   [Removing luci-sso](sysadmin/uninstall.md) - How to completely uninstall the package and restore password login.
 
 ## Development
-*   [Development Workflow](developer/development-workflow.md) - The day-to-day loop: build, test, lint, and try changes in the local stack.
+*   [Development Workflow](developer/development-workflow.md) - The day-to-day loop: build, test, lint, and prepare a pull request.
 *   [Adding a New Crypto Backend](developer/adding-crypto-backend.md) - How to implement a new native C provider (e.g., for BoringSSL).
 *   [Running Tests](developer/testing.md) - How to run each test bucket, a single file, or a filtered subset.
 *   [Running the Fuzzer](developer/fuzzing.md) - How to run the coverage-guided fuzzer.

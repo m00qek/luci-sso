@@ -60,7 +60,6 @@ nav:
       - Providers:
           - Generic OIDC Provider: how-to/providers/generic-oidc.md
           - Google: how-to/providers/google.md
-          - GitHub (not supported): how-to/providers/github.md
           - Authelia: how-to/providers/authelia.md
           - Keycloak: how-to/providers/keycloak.md
           - Authentik: how-to/providers/authentik.md
@@ -88,6 +87,7 @@ nav:
       - Log Messages: reference/log-messages.md
       - HTTP API: reference/http-api.md
       - UCI Configuration: reference/uci-config.md
+      - Provider Compatibility: reference/provider-compatibility.md
       - Internal API: reference/internal-api.md
       - Style Guide: reference/style-guide.md
       - Testing Architecture: reference/testing-architecture.md
@@ -96,10 +96,11 @@ nav:
   - Explanation:
       - Overview: explanation/index.md
       - About LuCI SSO: explanation/about.md
-      - Design Philosophy: explanation/design-philosophy.md
+      - About the Design Philosophy: explanation/design-philosophy.md
       - About the OIDC Login Flow: explanation/oidc-flow.md
       - About the Session Lifecycle: explanation/session-lifecycle.md
       - About Crypto Backends: explanation/crypto-backends.md
+      - About the Test Architecture: explanation/test-architecture.md
       - Security Model: explanation/security-model.md
       - Architecture: explanation/architecture.md
       - Threat Model: explanation/threat-model.md
