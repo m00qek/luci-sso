@@ -1,6 +1,6 @@
 # LuCI SSO Style Guide
 
-This document is the technical reference for coding standards in the luci-sso project. For the reasoning behind these standards, see [Design Philosophy](../explanation/design-philosophy.md).
+This document is the technical reference for coding standards in the luci-sso project. For the reasoning behind these standards, see [About the Design Philosophy](../explanation/design-philosophy.md).
 
 Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, and trailing semicolons on exported functions. For real-world implementations, see `src/luci_sso/` (production) and `test/` (tests).
 
@@ -9,16 +9,17 @@ Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, 
 ## Table of Contents
 
 1. [Terminology](#terminology)
-2. [Error Handling](#error-handling)
-3. [Testing Standards](#testing-standards)
-4. [ucode Style](#ucode-style)
-5. [C Code Style](#c-code-style)
-6. [Module Organization](#module-organization)
-7. [Security Guidelines](#security-guidelines)
-8. [Documentation Standards](#documentation-standards)
-9. [Commit Messages](#commit-messages)
-10. [Summary of Key Rules](#summary-of-key-rules)
-11. [Technical Debt & Known Exceptions](#technical-debt-known-exceptions)
+2. [Design Rules](#design-rules)
+3. [Error Handling](#error-handling)
+4. [Testing Standards](#testing-standards)
+5. [ucode Style](#ucode-style)
+6. [C Code Style](#c-code-style)
+7. [Module Organization](#module-organization)
+8. [Security Guidelines](#security-guidelines)
+9. [Documentation Standards](#documentation-standards)
+10. [Commit Messages](#commit-messages)
+11. [Summary of Key Rules](#summary-of-key-rules)
+12. [Technical Debt & Known Exceptions](#technical-debt-known-exceptions)
 
 For the steps to take before opening a pull request, see [How to Work on luci-sso Day to Day](../how-to/developer/development-workflow.md#prepare-a-pull-request).
 
@@ -27,6 +28,57 @@ For the steps to take before opening a pull request, see [How to Work on luci-ss
 ## Terminology
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document and all other project documentation are to be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
+
+---
+
+## Design Rules
+
+The reasoning behind these rules is in [About the Design Philosophy](../explanation/design-philosophy.md).
+
+### I/O Through `deps`
+
+All I/O and nondeterminism MUST reach a module through the `deps` object: `fs`, `http`, `ubus`, `uci`, `clock`, `native` and `log`. Only `deps.uc` (which builds the production object) and `components/*` (which implement `http` and `clock`) MAY import `fs`, `uci`, `ubus`, `uclient`, `uloop`, `log` or `luci_sso.native`, or call `time()`.
+
+- A function that needs I/O MUST take `deps` as its first argument and pass it on. The `crypto/*` wrappers take only `native`.
+- Every `deps` object MUST include `log`.
+- Deterministic, pure operations (string handling, Base64URL, JSON, URL normalization) MUST NOT go through `deps`.
+
+```javascript
+// Production (the CGI script): real modules, wired by deps.uc
+let deps = create();                          // from luci_sso.deps
+discover(deps, "https://idp.example.com");    // luci_sso.discovery
+
+// Test: the same call with a deps object built from proxies
+with_context({ fs: { data: {} }, http_client: { data: { … } }, clock: { data: { now: 1516239022 } } },
+	(deps) => discover(deps, "https://idp.example.com"));
+```
+
+### Crypto Backend Independence
+
+Code MUST NOT import a crypto backend directly. It MUST use the `native` module passed in through `deps` (or as the `native` argument of a `crypto/*` wrapper). New native operations MUST be added to all three backends (see [C Code Style](#c-code-style)).
+
+**❌ INCORRECT:**
+```javascript
+import * as mbedtls from 'native_mbedtls';
+```
+
+**✅ CORRECT:**
+```javascript
+let res = crypto.hash_sha256(deps.native, data);
+```
+
+### Security Invariants in Code
+
+Security invariants MUST be constants in code. They MUST NOT be UCI options or function parameters. Examples: the ID Token algorithm allow-list (`ALLOWED_ALGS` in `oidc.uc`), the PKCE method (`S256`), and the input size limits.
+
+```javascript
+// oidc.uc
+const ALLOWED_ALGS = ["RS256", "ES256"];
+```
+
+### Minimal C
+
+C code MUST be limited to cryptographic primitives. Everything else MUST be written in ucode. See [Minimize C Code](#minimize-c-code).
 
 ---
 
@@ -670,7 +722,7 @@ deps.log("info", `Session created for user [sub_id: ${crypto.safe_id(deps.native
 
 ### 6. Algorithm Allow-Lists
 
-The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be implemented or accepted.
+The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be implemented or accepted. ID Tokens MUST be verified with `RS256` or `ES256` only. Both lists are [security invariants in code](#security-invariants-in-code).
 
 ---
 
