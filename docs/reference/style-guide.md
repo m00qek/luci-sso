@@ -412,18 +412,28 @@ Every backend implements the same `native_<operation>` names, so no backend name
 
 ### Error Handling in C
 
+What a ucode binding in `mod/native_ucode.c` returns on failure depends on what it returns on success:
+
+| Kind | Bindings | Success | Any failure |
+| :--- | :--- | :--- | :--- |
+| Value | `sha256`, `hmac_sha256`, `random`, `jwk_rsa_to_pem`, `jwk_ec_p256_to_pem` | the value (a string) | `null` |
+| Predicate | `verify_rs256`, `verify_es256` | `true` | `false` |
+
+- A value binding MUST return `null` on every failure, including wrong argument types, oversized input and backend errors.
+- A predicate binding MUST return `true` only for a verified signature, and `false` for everything else: wrong argument types, oversized input, an unparsable key or a bad signature. It MUST NOT return `null`, and MUST NOT distinguish an error from an invalid signature. A check has exactly two outcomes, so no caller can treat "could not check" as anything other than a rejection.
+- Callers MUST treat anything other than `true` from a predicate as a failure.
+
 ```c
-// Return NULL for errors (ucode convention)
-if (error_condition) {
-	mbedtls_pk_free(&pk);
-	return NULL;
-}
+// Value binding: null on any failure
+if (ucv_type(arg) != UC_STRING) return NULL;
+...
+return ucv_string_new_length((const char *)output, NATIVE_SHA256_SIZE);
 
-// Return boolean for success/failure
-return ucv_boolean_new(ret == 0);
-
-// Return string for data
-return ucv_string_new_length((const char *)output, 32);
+// Predicate binding: false on any failure, true only when verified
+if (ucv_type(v_msg) != UC_STRING || ucv_type(v_sig) != UC_STRING || ucv_type(v_key) != UC_STRING)
+	return ucv_boolean_new(false);
+...
+return ucv_boolean_new(native_api_verify_rs256(msg, msg_len, sig, sig_len, key, key_len));
 ```
 
 ### Memory Management & Safety
