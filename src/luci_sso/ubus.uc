@@ -294,13 +294,9 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 
 	// 3. Grant what rpcd grants a password login with the entry. Granting only
 	// the access-group names is not enough: rpcd checks ubus and uci calls
-	// against the concrete scopes, which it expands only at login.
-	//
-	// Baseline: every session also reads the "unauthenticated" group, which
-	// is what rpcd grants an anonymous client (session access/login,
-	// luci.getFeatures). LuCI's views call those.
-	let with_baseline = { read: [ ...perms.read, "unauthenticated" ], write: perms.write };
-	_grant_all(deps, sid, _expand_role(acl_res.data.entries, with_baseline));
+	// against the concrete scopes, which it expands only at login. Nothing is
+	// added to the lists: rpcd rebuilds the session from them alone on reload.
+	_grant_all(deps, sid, _expand_role(acl_res.data.entries, perms));
 
 	// 4. Generate CSRF token
 	let res_csrf = crypto.random(deps.native, 32);

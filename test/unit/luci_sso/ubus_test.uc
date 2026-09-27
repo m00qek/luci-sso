@@ -489,13 +489,15 @@ describe('ubus: create_passwordless_session — access-group expansion (rpcd rul
 		assert.match(sort(OTHER_READ), grants_for({ read: ['other-*'], write: [] }));
 	});
 
-	it('every session also reads the unauthenticated group, which LuCI needs', () => {
+	it('grants nothing a list does not name: no unauthenticated baseline', () => {
 		let files = { ...ACL_FILES, 'unauthenticated.json': sprintf('%J', {
 			'unauthenticated': { read: { ubus: { session: [ 'access', 'login' ], luci: [ 'getFeatures' ] } } },
 		}) };
-		let base = [ 'access-group unauthenticated read', 'ubus luci getFeatures', 'ubus session access', 'ubus session login' ];
-		assert.match(sort([ ...BASE_READ, ...base ]), grants_for({ read: ['luci-base'], write: [] }, acl_fs(files)));
-		assert.match(sort([ ...base ]), grants_for({ read: [], write: [] }, acl_fs(files)), 'even an entry with no lists');
+		let unauth = [ 'access-group unauthenticated read', 'ubus luci getFeatures', 'ubus session access', 'ubus session login' ];
+		assert.match(sort(BASE_READ), grants_for({ read: ['luci-base'], write: [] }, acl_fs(files)));
+		assert.match([], grants_for({ read: [], write: [] }, acl_fs(files)), 'an entry with no lists grants nothing');
+		assert.match(sort([ ...BASE_READ, ...unauth ]), grants_for({ read: ['luci-base', 'unauthenticated'], write: [] }, acl_fs(files)),
+			'the group is granted when the entry names it');
 	});
 
 	it('an unknown group is logged and grants nothing', () => {

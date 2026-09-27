@@ -62,7 +62,7 @@ describe('system: SSO sessions across an rpcd reload', () => {
 	});
 
 	survives("a restricted role keeps its rights", {
-		read: [ "luci-base", "luci-mod-status-*", "unauthenticated" ], write: [ "luci-mod-system-config" ]
+		read: [ "luci-base", "luci-mod-status-*" ], write: [ "luci-mod-system-config" ]
 	});
 	survives("a full admin role keeps its rights", { read: [ "*" ], write: [ "*" ] });
 

@@ -19,10 +19,6 @@ import * as r from 'lib.rpcd';
 const LOGIN = "ssoparity";
 const ROLE = "systest_parity";
 
-// The "unauthenticated" read that luci-sso still adds to every SSO session;
-// the rpcd side names it so the comparison stays exact.
-const BASELINE = [ "unauthenticated" ];
-
 const SHAPES = [
 	{ name: "read '*' only",               read: [ "*" ],                                            write: [] },
 	{ name: 'a specific read group',       read: [ "luci-base" ],                                    write: [] },
@@ -45,7 +41,7 @@ function with_both_sessions(shape, fn) {
 	let rpcd_sid = null, sso_sid = null, failure = null;
 	try {
 		drop_all();
-		r.put_login(LOGIN, { username: LOGIN, password: "$p$root", read: [ ...shape.read, ...BASELINE ], write: shape.write });
+		r.put_login(LOGIN, { username: LOGIN, password: "$p$root", read: shape.read, write: shape.write });
 		r.put_login(r.ENTRY_PREFIX + ROLE, { username: `sso:${ROLE}`, read: shape.read, write: shape.write });
 
 		// rpcd re-reads /etc/config/rpcd on each login: no reload needed.
