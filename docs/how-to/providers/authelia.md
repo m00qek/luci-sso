@@ -2,32 +2,58 @@
 
 This guide describes how to connect `luci-sso` to an [Authelia](https://www.authelia.com/) instance.
 
+The configuration and screenshot were checked against Authelia 4.39.28. Key names can differ in other releases.
+
 ---
 
 ## 1. Register an OIDC client in Authelia
 
-Add a new client to your Authelia `configuration.yml` under `identity_providers.oidc.clients`. Generate a hashed secret with `authelia hash-password` and use the hash (not the plaintext) in the config:
+Generate a client secret and its hash:
 
-```yaml
-- id: luci-router
-  description: OpenWrt Router
-  secret: '$pbkdf2-sha512$310000$...'  # authelia hash-password <your-secret>
-  public: false
-  authorization_policy: one_factor
-  redirect_uris:
-    - https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback
-  scopes:
-    - openid
-    - profile
-    - email
-    - groups
-  userinfo_signed_response_alg: none
-  token_endpoint_auth_method: client_secret_post
+```bash
+authelia crypto hash generate pbkdf2 --variant sha512 --random --random.length 72 --random.charset rfc3986
 ```
 
-`luci-sso` sends the client secret in the token request body, so the client must accept `client_secret_post`.
+The command prints a `Random Password` (the plaintext secret, for the router) and a `Digest` (the hash, for Authelia). To hash a secret you already have, use `--password '<your-secret>'` in place of the three `--random` options. If Authelia runs in Docker, prefix the command with `docker run --rm authelia/authelia:latest`.
 
-Reload Authelia after saving the configuration.
+Add the client to your Authelia `configuration.yml`, with the digest as `client_secret`:
+
+```yaml
+identity_providers:
+  oidc:
+    claims_policies:
+      luci_sso:
+        id_token: ['email', 'name', 'groups']
+    clients:
+      - client_id: luci-router
+        client_name: OpenWrt Router
+        client_secret: '$pbkdf2-sha512$310000$...'  # the Digest, not the plaintext
+        public: false
+        authorization_policy: one_factor
+        redirect_uris:
+          - https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback
+        scopes:
+          - openid
+          - profile
+          - email
+          - groups
+        userinfo_signed_response_alg: none
+        token_endpoint_auth_method: client_secret_post
+        claims_policy: luci_sso
+```
+
+`luci-sso` sends the client secret in the token request body (`client_secret_post`). Keep the `token_endpoint_auth_method` line: without it, Authelia accepts only `client_secret_basic` and rejects the router's token request with HTTP 401.
+
+By default Authelia leaves `email` and `groups` out of the ID Token and returns them only from its UserInfo endpoint. `luci-sso` then fetches UserInfo on every login, which works while `userinfo_signed_response_alg` is `none` (the default). The `luci_sso` claims policy puts them in the ID Token, so no UserInfo request is needed.
+
+Optional settings for the client:
+
+- `require_pkce: true` and `pkce_challenge_method: S256` make Authelia refuse any login without PKCE. `luci-sso` always sends an S256 challenge.
+- Authelia asks the user to consent on every login. To let users tick **Remember Consent**, add `consent_mode: pre-configured` and `pre_configured_consent_duration: 1y` (any duration).
+
+![Authelia consent page for Alice Example. The OpenWrt Router client, luci-router, requests the openid, profile, email and groups scopes. Below are a Remember Consent switch, which appears with consent_mode pre-configured, and the Accept and Deny buttons.](../../assets/screenshots/idp/authelia-consent.png "The consent page on the first SSO login")
+
+Restart Authelia after saving the configuration: it reads the file only at start.
 
 ---
 
@@ -70,9 +96,13 @@ The **Client Secret** is the **plaintext** secret — Authelia stores the hash, 
 
     The `redirect_uri` must exactly match the value in the Authelia client config.
 
+The **Issuer URL** is the `authelia_url` of the session cookie that covers Authelia's domain in `configuration.yml`, exactly: same host and port, no path. Authelia answers discovery requests for other host names with HTTP 400.
+
 ---
 
 ## 3. Configure role mapping
+
+A role says which users it matches, by email or by group. What the role may do on the router is its `rpcd` login entry. On a fresh install, the shipped `admin` role grants full access. To give some users less, add a role with its own **Read Access** and **Write Access**, as described in [How to Configure Role-Based Access Control](../sysadmin/rbac.md). A user gets the first role that matches, from the top.
 
 ### Map by email
 
@@ -80,26 +110,27 @@ The **Client Secret** is the **plaintext** secret — Authelia stores the hash, 
 
     Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
+    Click **Edit** in the `admin` row. In **Email Addresses**, replace the placeholder `admin@example.com` with the user's email address, then click **Save** in the editor.
 
     Click **Save & Apply**.
 
 === "Terminal (SSH)"
 
     ```bash
+    uci -q del_list luci-sso.admin.email='admin@example.com'
     uci add_list luci-sso.admin.email='user@example.com'
     uci commit luci-sso
     ```
 
 ### Map by group
 
-Authelia returns LDAP/AD group memberships in the `groups` claim. The group name must exactly match the name as Authelia returns it (case-sensitive).
+Authelia returns the user's groups from its authentication backend (file or LDAP) in the `groups` claim: in the ID Token with the `luci_sso` claims policy from Step 1, otherwise through UserInfo. The group name must exactly match the name as Authelia returns it (case-sensitive).
 
 === "Browser (LuCI)"
 
     Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name in **Groups**, then click **Save**.
+    Click **Edit** in the `admin` row. In **Groups**, enter the group name, then click **Save** in the editor.
 
     Click **Save & Apply**.
 
@@ -118,7 +149,9 @@ Check that the service is active. On the router:
 
 --8<-- "probe-enabled.md"
 
-Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to your Authelia instance.
+Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to your Authelia instance. After the user signs in, Authelia shows the consent page from Step 1, then returns to the router.
+
+Authelia has no end-session endpoint, so LuCI's **Log out** ends the router session only. The Authelia session stays, and the next **Login with SSO** does not ask for a password. To end the Authelia session too, open `https://auth.example.com/logout`.
 
 ---
 
@@ -129,11 +162,12 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | Symptom | Likely cause |
 | :--- | :--- |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: …` | The router cannot reach `auth.example.com`; the end of the line names the cause. Test from the router with `uclient-fetch -q -O - 'https://auth.example.com/.well-known/openid-configuration'`. If the line ends in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, the router does not trust Authelia's certificate; see [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
+| `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch HTTP 400 from [id: …]` | `issuer_url` is not the `authelia_url` of any session cookie in Authelia's configuration (a different host name, a port, or an IP address). Authelia logs `no session cookie configuration matches url '…'`. Set `issuer_url` to the `authelia_url` exactly. |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` differs from the issuer Authelia declares. Copy the declared value into `issuer_url`. |
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: redirect_uri is mandatory and must use HTTPS` | `redirect_uri` was never saved. Set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. Other `Configuration rejected` reasons name the option to fix. |
-| Authelia shows an error page instead of its login screen | The `redirect_uri` in UCI does not exactly match a `redirect_uris` entry in Authelia's client config. The router logs no `OIDC callback received` line. |
-| `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Authelia rejected the client credentials: the client secret is wrong (UCI needs the plaintext, Authelia the hash), or the client does not accept `client_secret_post`. |
-| `UserInfo fallback failed [session_id: …]: USERINFO_INVALID_JSON`, then `[403] USER_NOT_AUTHORIZED` | Authelia returned a signed UserInfo response, which `luci-sso` cannot read, so the email and groups it carries are lost. Set `userinfo_signed_response_alg: none` on the client and reload Authelia. |
+| Authelia shows "An error occurred processing the request" with the hint "The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'" | The `redirect_uri` in UCI does not exactly match a `redirect_uris` entry in Authelia's client config. The router logs no `OIDC callback received` line. |
+| `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Authelia rejected the client credentials: the client secret is wrong (UCI needs the plaintext, Authelia the hash), or the client config has no `token_endpoint_auth_method: client_secret_post` line (Authelia logs `… is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'`). |
+| `UserInfo fallback failed [session_id: …]: USERINFO_INVALID_JSON`, then `[403] USER_NOT_AUTHORIZED` | Authelia returned a signed UserInfo response, which `luci-sso` cannot read, so the email and groups it carries are lost. Set `userinfo_signed_response_alg: none` on the client, or add the `luci_sso` claims policy from Step 1 so that UserInfo is not needed, and restart Authelia. |
 | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | The user's email or group does not match any configured role. Email matching ignores case; group matching is case-sensitive, so check the group name exactly. |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).
