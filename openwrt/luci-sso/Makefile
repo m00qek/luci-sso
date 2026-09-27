@@ -65,6 +65,7 @@ define Package/$(PKG_NAME)/install
 	$(CP) ./files/etc/config/luci-sso $(1)/etc/config/luci-sso
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/etc/uci-defaults/10-luci-sso-setup $(1)/etc/uci-defaults/10-luci-sso-setup
+	$(INSTALL_BIN) ./files/etc/uci-defaults/20-luci-sso-rpcd $(1)/etc/uci-defaults/20-luci-sso-rpcd
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-luci-sso-ui $(1)/etc/uci-defaults/99-luci-sso-ui
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-cleanup $(1)/usr/sbin/luci-sso-cleanup
@@ -98,16 +99,27 @@ sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
 # back: the new package's uci-defaults script runs luci-sso-repatch again.
 [ -x /usr/sbin/luci-sso-repatch ] && /usr/sbin/luci-sso-repatch --remove >/dev/null 2>&1
 
-# Real removal only: revoke the SSO settings ACL at once. rpcd keeps the grants
-# of existing sessions until it restarts, and a reload is not enough (it drops
-# every grant of SSO sessions while keeping them logged in), so it restarts,
-# which logs everyone out. An upgrade or downgrade keeps the ACL file, so it
-# skips this and nobody is logged out: opkg exports PKG_UPGRADE=1 then, and apk
-# does not run this script on upgrade at all. opkg --force-reinstall looks like
-# a removal (PKG_UPGRADE=0) and still restarts rpcd.
+# Real removal only: take away everything luci-sso gave rpcd. The SSO roles'
+# login entries (luci_sso_*) are deleted, and so are the settings ACL and the
+# luci-sso ubus object, before the package manager removes the rest. Then rpcd
+# reloads: it re-executes itself and rebuilds each session's rights from
+# /etc/config/rpcd and the ACL files left, so password logins stay logged in
+# without the SSO settings ACL, and SSO sessions, whose entries are gone, keep
+# no rights at all. An upgrade or downgrade keeps all of this, so it skips it:
+# opkg exports PKG_UPGRADE=1 then, and apk does not run this script on upgrade
+# at all. opkg --force-reinstall looks like a removal (PKG_UPGRADE=0), so it
+# deletes the entries too: each role's permissions must then be saved again.
 if [ "$${PKG_UPGRADE:-0}" != "1" ]; then
-	rm -f /usr/share/rpcd/acl.d/luci-app-sso.json 2>/dev/null
-	[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+	# A private delta directory, so the commit writes only these deletions,
+	# never rpcd changes someone else staged in /tmp/.uci.
+	d=$$(mktemp -d)
+	for s in $$(uci -q -t "$$d" show rpcd | sed -n 's/^rpcd\.\(luci_sso_[^.=]*\)=.*/\1/p'); do
+		uci -q -t "$$d" delete "rpcd.$$s"
+	done
+	uci -q -t "$$d" commit rpcd
+	rm -rf "$$d"
+	rm -f /usr/share/rpcd/acl.d/luci-app-sso.json /usr/share/rpcd/ucode/luci-sso.uc 2>/dev/null
+	[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd reload >/dev/null 2>&1 || true
 fi
 
 # Clear LuCI cache to reflect removal

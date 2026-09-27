@@ -1,0 +1,16 @@
+#!/bin/sh
+
+# LuCI SSO - make rpcd pick up the luci-sso ubus object.
+#
+# rpcd loads its plugins (/usr/share/rpcd/ucode/luci-sso.uc) only when it
+# starts or reloads, so after an install or upgrade the settings page could
+# not reach the new object until the next reboot. A reload (SIGHUP) re-executes
+# rpcd and keeps every session: each one's rights are rebuilt from its login
+# entry in /etc/config/rpcd, and SSO sessions have theirs (luci_sso_<role>).
+#
+# Runs after an install or upgrade (the package's postinst runs uci-defaults)
+# and at first boot, when rpcd is not running yet and the reload does nothing.
+
+[ -x /etc/init.d/rpcd ] && /etc/init.d/rpcd reload >/dev/null 2>&1
+
+exit 0
