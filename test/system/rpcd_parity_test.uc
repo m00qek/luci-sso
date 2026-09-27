@@ -26,6 +26,8 @@ const SHAPES = [
 	{ name: "mixed: read '*', write one",  read: [ "*" ],                                            write: [ "luci-mod-network-config" ] },
 	{ name: 'globs and negation',          read: [ "luci-mod-status-*", "!luci-mod-status-logs" ],   write: [] },
 	{ name: "full admin: read '*', write '*'", read: [ "*" ],                                        write: [ "*" ] },
+	{ name: 'restricted, as stored: with unauthenticated', read: [ "luci-mod-status-*", "unauthenticated" ], write: [] },
+	{ name: 'unauthenticated only',        read: [ "unauthenticated" ],                              write: [] },
 	{ name: 'a read negation beats the write list', read: [ "!luci-base" ],                           write: [ "luci-base" ] },
 	{ name: 'single options instead of lists (rpcd ignores them)', read: "*", write: "luci-base", grants_nothing: true },
 ];

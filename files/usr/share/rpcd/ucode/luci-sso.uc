@@ -15,6 +15,14 @@
 // never be used to log in. An EMPTY password would accept any password, so
 // this plugin never writes the option at all, and removes one it finds.
 //
+// The naming, the checks and the lists' rules live in luci_sso.rpcd_login,
+// which the login path shares. In particular, set_role stores a read list that
+// grants the `unauthenticated` access group, which LuCI needs on every page:
+// it appends the group unless the list grants it already (by name or through
+// a pattern such as '*'), and refuses a list that denies it. The reply and
+// list_roles show the lists as stored. A role whose lists grant nothing else
+// is valid: its users can log in but see nothing.
+//
 // The settings page changes permissions only through this object, so its ACL
 // needs no UCI write access to the whole `rpcd` configuration. Every write
 // touches only sections named `luci_sso_*`.
@@ -25,7 +33,8 @@
 //
 //   list_roles {}                            -> { roles: [ { name, read, write } ],
 //                                                reload_pending }
-//   set_role { name, read, write }           -> { role: { name, read, write } }
+//   set_role { name, read, write }           -> { role: { name, read, write } },
+//                                               the lists as stored
 //   delete_role { name }                     -> { result: true }
 //   move_role { name, index }                -> { roles: [ ... ] }
 //
@@ -56,20 +65,10 @@
 import { cursor } from 'uci';
 import { mkdir, readlink } from 'fs';
 import * as uloop from 'uloop';
+import * as rpcd_login from 'luci_sso.rpcd_login';
 
-const CONFIG = "rpcd";
-const SECTION_PREFIX = "luci_sso_";
-const USERNAME_PREFIX = "sso:";
-
-// Role names become part of a UCI section name, so they use its alphabet.
-const NAME_MAX = 32;
-const NAME_RE = /^[A-Za-z0-9_]+$/;
-
-// Access group names and rpcd patterns (globs, "!" negations) are short.
-const LIST_MAX = 128;
-const ENTRY_MAX = 128;
-// NUL cannot appear in a POSIX regex, so it is checked on its own.
-const CONTROL_RE = regexp("[\x01-\x1f\x7f]");
+const CONFIG = rpcd_login.CONFIG;
+const SECTION_PREFIX = rpcd_login.SECTION_PREFIX;
 
 // A private UCI delta directory: a commit here writes only this plugin's own
 // changes, never changes to rpcd that someone else staged and did not commit.
@@ -97,33 +96,9 @@ function open_cursor() {
 	return uci;
 }
 
-function check_name(name) {
-	if (type(name) != "string" || !length(name))
-		return fail("INVALID_NAME", "name is required");
-	if (length(name) > NAME_MAX)
-		return fail("INVALID_NAME", `name is longer than ${NAME_MAX} characters`);
-	if (!match(name, NAME_RE))
-		return fail("INVALID_NAME", "name may contain only letters, digits and underscores");
-	return null;
-}
-
-function check_list(label, list) {
-	if (type(list) != "array")
-		return fail("INVALID_LIST", `${label} must be an array of strings`);
-	if (length(list) > LIST_MAX)
-		return fail("INVALID_LIST", `${label} has more than ${LIST_MAX} entries`);
-	for (let i = 0; i < length(list); i++) {
-		let e = list[i];
-		if (type(e) != "string")
-			return fail("INVALID_LIST", `${label}[${i}] is not a string`);
-		if (!length(e))
-			return fail("INVALID_LIST", `${label}[${i}] is empty`);
-		if (length(e) > ENTRY_MAX)
-			return fail("INVALID_LIST", `${label}[${i}] is longer than ${ENTRY_MAX} characters`);
-		if (match(e, CONTROL_RE) || index(e, chr(0)) >= 0)
-			return fail("INVALID_LIST", `${label}[${i}] contains a control character`);
-	}
-	return null;
+// A failed Result from luci_sso.rpcd_login as a reply.
+function refused(res) {
+	return fail(res.error, res.details);
 }
 
 // The luci_sso_* login entries in config order, with their absolute section
@@ -134,7 +109,7 @@ function sso_entries(uci) {
 		let name = substr(s[".name"], length(SECTION_PREFIX));
 		if (s[".type"] != "login" || substr(s[".name"], 0, length(SECTION_PREFIX)) != SECTION_PREFIX)
 			return;
-		if (!length(name) || !match(name, NAME_RE))
+		if (!rpcd_login.check_name(name).ok)
 			return;
 		push(out, {
 			section: s[".name"],
@@ -184,43 +159,32 @@ const methods = {
 		args: { name: "name", read: [], write: [] },
 		call: function(req) {
 			let a = req.args;
-			let err = check_name(a.name) || check_list("read", a.read) || check_list("write", a.write);
-			if (err) return err;
+			let res = rpcd_login.entry(a.name, a.read, a.write);
+			if (!res.ok) return refused(res);
+			let e = res.data;
 
 			let uci = open_cursor();
-			let section = SECTION_PREFIX + a.name;
+			rpcd_login.stage(uci, e);
 
-			// A section of another type under an owned name is replaced.
-			if (uci.get(CONFIG, section) != "login")
-				uci.set(CONFIG, section, "login");
-
-			uci.set(CONFIG, section, "username", USERNAME_PREFIX + a.name);
-			uci.delete(CONFIG, section, "password");
-			for (let opt in [ "read", "write" ]) {
-				uci.delete(CONFIG, section, opt);
-				if (length(a[opt]))
-					uci.set(CONFIG, section, opt, a[opt]);
-			}
-
-			err = commit(uci);
+			let err = commit(uci);
 			if (err) return err;
-			return { role: { name: a.name, read: a.read, write: a.write } };
+			return { role: { name: e.name, read: e.read, write: e.write } };
 		}
 	},
 
 	delete_role: {
 		args: { name: "name" },
 		call: function(req) {
-			let err = check_name(req.args.name);
-			if (err) return err;
+			let res = rpcd_login.check_name(req.args.name);
+			if (!res.ok) return refused(res);
 
 			let uci = open_cursor();
-			let section = SECTION_PREFIX + req.args.name;
+			let section = rpcd_login.section_name(req.args.name);
 			if (uci.get(CONFIG, section) == null)
 				return fail("NOT_FOUND", `no rpcd login entry for role '${req.args.name}'`);
 
 			uci.delete(CONFIG, section);
-			err = commit(uci);
+			let err = commit(uci);
 			if (err) return err;
 			return { result: true };
 		}
@@ -230,8 +194,8 @@ const methods = {
 		args: { name: "name", index: 0 },
 		call: function(req) {
 			let a = req.args;
-			let err = check_name(a.name);
-			if (err) return err;
+			let res = rpcd_login.check_name(a.name);
+			if (!res.ok) return refused(res);
 
 			let uci = open_cursor();
 			let entries = sso_entries(uci);
@@ -258,7 +222,7 @@ const methods = {
 				swap(uci, want.section, want.index, occupant.section, slots[i]);
 			}
 
-			err = commit(uci);
+			let err = commit(uci);
 			if (err) return err;
 			return { roles: map(sso_entries(uci), (e) => e.role) };
 		}

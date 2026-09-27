@@ -64,7 +64,11 @@ describe('system: SSO sessions across an rpcd reload', () => {
 	survives("a restricted role keeps its rights", {
 		read: [ "luci-base", "luci-mod-status-*" ], write: [ "luci-mod-system-config" ]
 	});
+	survives("a restricted role as the luci-sso object stores it keeps its rights, unauthenticated included", {
+		read: [ "luci-mod-status-*", "unauthenticated" ], write: []
+	});
 	survives("a full admin role keeps its rights", { read: [ "*" ], write: [ "*" ] });
+	survives("a role that grants only unauthenticated keeps it", { read: [ "unauthenticated" ], write: [] });
 
 	it("a session named sso:root gets no rights when there is no such entry, although a root login exists", () => {
 		with_rpcd((conn) => {

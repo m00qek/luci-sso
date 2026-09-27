@@ -61,11 +61,11 @@ describe('system: luci-sso ubus object — set_role', () => {
 		with_rpcd((conn) => {
 			let before = others();
 			let res = write(conn, "set_role", { name: `${P}viewer`, read: [ "luci-mod-status-*", "!luci-mod-status-logs" ], write: [ "luci-base" ] });
-			assert.match({ role: { name: `${P}viewer`, read: [ "luci-mod-status-*", "!luci-mod-status-logs" ], write: [ "luci-base" ] } }, res);
+			let stored = [ "luci-mod-status-*", "!luci-mod-status-logs", "unauthenticated" ];
+			assert.match({ role: { name: `${P}viewer`, read: stored, write: [ "luci-base" ] } }, res, "the reply shows the lists as stored");
 
 			let e = entry(`${P}viewer`);
-			assert.match(contains({ ".type": "login", username: `sso:${P}viewer`,
-				read: [ "luci-mod-status-*", "!luci-mod-status-logs" ], write: [ "luci-base" ] }), e);
+			assert.match(contains({ ".type": "login", username: `sso:${P}viewer`, read: stored, write: [ "luci-base" ] }), e);
 			assert.match(false, exists(e, "password"), "an sso: entry never has a password option");
 			assert.match(before, others(), "no other section changes");
 		});
@@ -79,7 +79,7 @@ describe('system: luci-sso ubus object — set_role', () => {
 
 			assert.match([ `${P}a`, `${P}b` ], sso_names(conn));
 			let e = entry(`${P}a`);
-			assert.match([ "*" ], e.read);
+			assert.match([ "*" ], e.read, "'*' grants unauthenticated already");
 			assert.match(false, exists(e, "write"));
 		});
 	});
@@ -92,7 +92,7 @@ describe('system: luci-sso ubus object — set_role', () => {
 			let e = entry(`${P}pw`);
 			assert.match(false, exists(e, "password"));
 			assert.match(`sso:${P}pw`, e.username);
-			assert.match([ "luci-base" ], e.read);
+			assert.match([ "luci-base", "unauthenticated" ], e.read);
 		});
 	});
 
@@ -114,6 +114,51 @@ describe('system: luci-sso ubus object — set_role', () => {
 	});
 });
 
+describe('system: luci-sso ubus object — the unauthenticated group', () => {
+	// LuCI calls session.access and luci.getFeatures on every page; the
+	// `unauthenticated` group grants them, and without them LuCI reports an
+	// expired session. The entry holds it, so a reload keeps it.
+	let stores = (label, read, stored) => it(label, () => {
+		with_rpcd((conn) => {
+			let res = write(conn, "set_role", { name: `${P}u`, read, write: [] });
+			assert.match({ role: { name: `${P}u`, read: stored, write: [] } }, res);
+			assert.match(stored, entry(`${P}u`).read);
+		});
+	});
+
+	stores('appends it to a read list without it', [ "luci-base" ], [ "luci-base", "unauthenticated" ]);
+	stores('never adds a second copy', [ "unauthenticated", "luci-base" ], [ "unauthenticated", "luci-base" ]);
+	stores("keeps a list whose pattern grants it, such as '*'", [ "*" ], [ "*" ]);
+	stores('stores it alone for a role that grants nothing else, which is valid', [], [ "unauthenticated" ]);
+
+	it('refuses a read list whose negation denies it, and writes nothing', () => {
+		with_rpcd((conn) => {
+			let before = r.rpcd_sections();
+			assert.match(contains({ error: "INVALID_LIST" }), call(conn, "set_role", { name: `${P}u`, read: [ "*", "!unauth*" ], write: [] }));
+			assert.match(before, r.rpcd_sections());
+			assert.match(false, call(conn, "list_roles").reload_pending);
+		});
+	});
+
+	it('a restricted role gets session.access and luci.getFeatures, before and after a reload', () => {
+		with_rpcd((conn) => {
+			write(conn, "set_role", { name: `${P}u`, read: [ "luci-mod-status-*" ], write: [] });
+			let sid = r.marked_session(conn, `sso:${P}u`);
+			let has_baseline = (acls) => acls["access-group unauthenticated read"] && acls["ubus session access"] && acls["ubus luci getFeatures"];
+			try {
+				r.await_reload(conn, () => system("kill -HUP $(pidof rpcd)"));
+				assert.match(true, !!has_baseline(r.acls_of(conn, sid)), "rebuilt from the entry, with the group");
+				r.await_reload(conn, () => system("kill -HUP $(pidof rpcd)"));
+				assert.match(true, !!has_baseline(r.acls_of(conn, sid)), "and again after a second reload");
+			} catch (e) {
+				conn.call("session", "destroy", { ubus_rpc_session: sid });
+				die(e);
+			}
+			conn.call("session", "destroy", { ubus_rpc_session: sid });
+		});
+	});
+});
+
 describe('system: luci-sso ubus object — reload', () => {
 	it('list_roles reports a pending reload from a write until rpcd has reloaded', () => {
 		with_rpcd((conn) => {
@@ -125,7 +170,7 @@ describe('system: luci-sso ubus object — reload', () => {
 				assert.match(true, call(c, "list_roles").reload_pending, "a second write shares it");
 			});
 			assert.match(false, call(conn, "list_roles").reload_pending, "done after the reload");
-			assert.match([ "luci-base" ], entry(`${P}pending`).read, "the reload came after the last write");
+			assert.match([ "luci-base", "unauthenticated" ], entry(`${P}pending`).read, "the reload came after the last write");
 		});
 	});
 
