@@ -336,6 +336,19 @@ let method = "GET";
 let body = sprintf('{"enabled": %s}', enabled ? "true" : "false");
 ```
 
+### Enforcement
+
+`make lint` runs `devenv/scripts/check-code-style.sh`, which checks three of these rules and reports each violation as `file:line: rule: detail`:
+
+| Rule | Files | Check |
+| :--- | :--- | :--- |
+| `indent` | Production ucode: `src/**/*.uc`, `files/**/*.uc`, `files/www/cgi-bin/luci-sso` | No line is indented with spaces. Tabs followed by spaces for alignment are allowed. |
+| `func-end` | Production ucode | An exported function ends with `};`, a private top-level function with `}`. |
+| `quotes` | Production ucode | No single-quoted string, except import specifiers and strings that contain `"`. |
+| `indent` | C (`mod/*.c`, `mod/*.h`, `test/fuzz_test.c`) and browser JavaScript (`files/www/**/*.js`) | No line is indented with spaces, except a continuation line (the previous line ends with `,`, `(` or an operator), such as parameters aligned under a top-level `(`. |
+
+Comments and template literals are not checked. The other rules on this page are checked in review.
+
 ### Imports
 
 - **Ordering:** Imports MUST follow the order: Standard Library, External Dependencies, Internal Modules.
@@ -852,10 +865,10 @@ EC keys (key type) not ES256 signatures (algorithm).
 | **C Code** | Crypto primitives only, everything else in ucode | Architecture review |
 | **PKCE** | S256 only, no `plain` method support | Security review |
 | **RBAC Merging** | Aggregate role permissions using logical OR with deduplication | Logic review |
-| **Indentation** | Tabs (OpenWrt standard) | Consistency review |
+| **Indentation** | Tabs (OpenWrt standard) | `make lint` (CI) |
 | **Naming** | snake_case for variables/functions | Style review |
-| **Exports** | Trailing semicolon on `export` statements | Syntax requirement |
-| **Quotes** | Double quotes for strings; single quotes for import specifiers and strings containing `"` | Style review |
+| **Exports** | Trailing semicolon on `export` statements; none on private functions | `make lint` (CI) |
+| **Quotes** | Double quotes for strings; single quotes for import specifiers and strings containing `"` | `make lint` (CI) |
 | **Testing** | Every function, every error path, security attacks | Test coverage review |
 | **Error codes, limits, cookies** | Match the reference pages | `make lint` (CI) |
 

@@ -81,13 +81,13 @@ Never hardcode environment-specific values (versions, domains) in Dockerfiles or
 
 ## Lint
 
-Three documentation contracts are enforced by CI. Run them locally before pushing:
+CI runs four lint checks: three documentation contracts and a code style check. Run them locally before pushing:
 
 ```bash
 make lint
 ```
 
-If a check fails, see [How to add error codes, limit constants, and cookies](adding-documented-interfaces.md) for what to update.
+If a documentation check fails, see [How to add error codes, limit constants, and cookies](adding-documented-interfaces.md) for what to update. The code style check (`devenv/scripts/check-code-style.sh`) prints `file:line: rule: detail` for each violation; the rules are in the [style guide](../../reference/style-guide.md#enforcement).
 
 ---
 
