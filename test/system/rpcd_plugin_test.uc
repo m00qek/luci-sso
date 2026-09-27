@@ -114,6 +114,30 @@ describe('system: luci-sso ubus object — set_role', () => {
 	});
 });
 
+describe('system: luci-sso ubus object — reload', () => {
+	it('list_roles reports a pending reload from a write until rpcd has reloaded', () => {
+		with_rpcd((conn) => {
+			assert.match(false, call(conn, "list_roles").reload_pending, "nothing pending before");
+			r.await_reload(conn, (c) => {
+				call(c, "set_role", { name: `${P}pending`, read: [ "*" ], write: [] });
+				assert.match(true, call(c, "list_roles").reload_pending, "pending right after the write");
+				call(c, "set_role", { name: `${P}pending`, read: [ "luci-base" ], write: [] });
+				assert.match(true, call(c, "list_roles").reload_pending, "a second write shares it");
+			});
+			assert.match(false, call(conn, "list_roles").reload_pending, "done after the reload");
+			assert.match([ "luci-base" ], entry(`${P}pending`).read, "the reload came after the last write");
+		});
+	});
+
+	it('an invalid write schedules no reload', () => {
+		with_rpcd((conn) => {
+			call(conn, "set_role", { name: "bad-name", read: [], write: [] });
+			call(conn, "delete_role", { name: `${P}missing` });
+			assert.match(false, call(conn, "list_roles").reload_pending);
+		});
+	});
+});
+
 describe('system: luci-sso ubus object — validation', () => {
 	// Each invalid call returns an error and writes nothing.
 	let rejects = (label, args, expected) => it(label, () => {

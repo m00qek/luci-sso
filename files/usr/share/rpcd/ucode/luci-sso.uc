@@ -23,7 +23,8 @@
 // listed, with UBUS_STATUS_INVALID_ARGUMENT; every other error is a reply of
 // the form { error: "<CODE>", message: "<text>" }:
 //
-//   list_roles {}                            -> { roles: [ { name, read, write } ] }
+//   list_roles {}                            -> { roles: [ { name, read, write } ],
+//                                                reload_pending }
 //   set_role { name, read, write }           -> { role: { name, read, write } }
 //   delete_role { name }                     -> { result: true }
 //   move_role { name, index }                -> { roles: [ ... ] }
@@ -46,6 +47,9 @@
 // procd, but it also works where rpcd is not run by procd. Writes that arrive
 // while a reload is pending share it: the reload reads the configuration as
 // it is when it runs, and a second signal during rpcd's restart could stop it.
+// list_roles reports reload_pending: true from a write until rpcd has
+// re-executed itself (the new process starts with it false), so a caller can
+// wait for the new rights to be in force.
 
 "use strict";
 
@@ -146,8 +150,10 @@ function schedule_reload() {
 		return;
 	let pid = int(readlink("/proc/self"));
 	reload_timer = uloop.timer(RELOAD_DELAY_MS, () => {
-		reload_timer = null;
-		system([ "/bin/kill", "-HUP", `${pid}` ]);
+		// Left set on success: rpcd is about to re-execute itself, and calls
+		// it still answers until then must see the reload as pending.
+		if (system([ "/bin/kill", "-HUP", `${pid}` ]) != 0)
+			reload_timer = null;
 	});
 }
 
@@ -170,7 +176,7 @@ const methods = {
 	list_roles: {
 		call: function() {
 			let uci = open_cursor();
-			return { roles: map(sso_entries(uci), (e) => e.role) };
+			return { roles: map(sso_entries(uci), (e) => e.role), reload_pending: reload_timer != null };
 		}
 	},
 

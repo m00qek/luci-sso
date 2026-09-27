@@ -77,10 +77,13 @@ export function has_marker(conn, sid) {
 export function await_reload(conn, fn, timeout_ms) {
 	let canary = marked_session(conn, null);
 	let res = fn(conn);
+	// A call that reaches rpcd while it restarts is never answered, so poll on
+	// a connection that gives up after a second instead of the default 30.
+	let poll = ubus_lib.connect(null, 1);
 	let waited = 0, limit = timeout_ms || 10000;
 	while (true) {
-		let listed = conn.list("luci-sso");
-		if (!has_marker(conn, canary) && listed && length(listed))
+		let listed = poll.list("luci-sso");
+		if (listed && length(listed) && !has_marker(poll, canary))
 			break;
 		if (waited >= limit)
 			die(`rpcd did not reload within ${limit} ms`);
