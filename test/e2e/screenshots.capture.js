@@ -13,9 +13,14 @@
 // specs do it:
 //   - the SSO settings page is fed example configuration through a mocked
 //     `uci get` (as in 08-sso-crud), so the images show example values rather
-//     than the devenv's, and the client secret field stays masked;
+//     than the devenv's, and the client secret field stays masked. The roles'
+//     permissions come from rpcd (list_roles), so the example `viewer` role's
+//     entry is created for real through the luci-sso object's set_role, which
+//     adds the `unauthenticated` group as for any role, and deleted after;
 //   - the read-only session rewrites the devenv `admin` role over /ubus/ as
-//     root (as in 11-granular-roles) and restores read '*' / write '*' after;
+//     root through set_role (as in 11-granular-roles), which adds
+//     `unauthenticated` to the read-only list, and restores read '*' /
+//     write '*' after;
 //   - the Software page's installed list gains luci-sso and its mbedtls
 //     backend in the browser only, from the feed's own package index, because
 //     the devenv mounts luci-sso instead of installing its package. No package
@@ -52,14 +57,11 @@ const EXAMPLE_CONFIG = {
   admin: {
     '.name': 'admin', '.type': 'role', '.anonymous': false,
     email: ['admin@example.com'],
-    read: ['*'],
-    write: ['*'],
   },
   viewer: {
     '.name': 'viewer', '.type': 'role', '.anonymous': false,
     email: ['bob@example.com'],
     group: ['network-viewers'],
-    read: ['luci-base', 'luci-mod-status-*', 'luci-mod-network-*'],
   },
 };
 
@@ -103,20 +105,28 @@ async function ubus(page, obj, method, params) {
   return reply.result[1];
 }
 
-// Sets the read/write lists of the devenv admin role's rpcd login entry
-// (rpcd.luci_sso_admin), as root, through the luci-sso ubus object, and waits
-// for the rpcd reload the change triggers (as 11-granular-roles does).
-async function setRole(browser, read, write) {
+// Waits for the rpcd reload a luci-sso write triggers (as 11-granular-roles).
+async function awaitReload(page) {
+  for (let waited = 0; ; waited += 250) {
+    const done = await ubus(page, 'luci-sso', 'list_roles', {}).then(r => r.reload_pending === false, () => false);
+    if (done) return;
+    if (waited > 15000) throw new Error('rpcd did not reload');
+    await page.waitForTimeout(250);
+  }
+}
+
+// Writes a role's rpcd login entry (rpcd.luci_sso_<name>), as root, through
+// the luci-sso ubus object, which adds `unauthenticated` to a read list that
+// lacks it, and waits for the reload. With `read` null, deletes the entry.
+async function setRole(browser, read, write, name = 'admin') {
   const page = await newPage(browser);
   try {
     await loginAsRoot(page);
-    await ubus(page, 'luci-sso', 'set_role', { name: 'admin', read, write });
-    for (let waited = 0; ; waited += 250) {
-      const done = await ubus(page, 'luci-sso', 'list_roles', {}).then(r => r.reload_pending === false, () => false);
-      if (done) break;
-      if (waited > 15000) throw new Error('rpcd did not reload');
-      await page.waitForTimeout(250);
-    }
+    if (read === null)
+      await ubus(page, 'luci-sso', 'delete_role', { name });
+    else
+      await ubus(page, 'luci-sso', 'set_role', { name, read, write });
+    await awaitReload(page);
   } finally {
     await page.context().close();
   }
@@ -218,6 +228,15 @@ async function loginPage(browser) {
 }
 
 async function ssoSettings(browser) {
+  await setRole(browser, READONLY_READ, [], 'viewer');
+  try {
+    await ssoSettingsShots(browser);
+  } finally {
+    await setRole(browser, null, null, 'viewer');
+  }
+}
+
+async function ssoSettingsShots(browser) {
   const page = await newPage(browser);
   await mockSSOConfig(page);
   await loginAsRoot(page);
