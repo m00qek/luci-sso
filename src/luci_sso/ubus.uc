@@ -185,6 +185,17 @@ function _session_timeout(deps) {
 }
 
 /**
+ * Destroys a half-initialised session and returns the given error. Every
+ * failure after `session create` goes through here, so a failed login never
+ * leaves a live rpcd session behind.
+ * @private
+ */
+function _abort_session(deps, sid, code) {
+	deps.ubus.call("session", "destroy", { ubus_rpc_session: sid });
+	return Result.err(code);
+}
+
+/**
  * Creates a real LuCI system session via UBUS WITHOUT a password.
  *
  * @param {object} deps - { fs, ubus, uci, log, clock }; uci is optional
@@ -236,8 +247,7 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 	let acl_res = _load_acl_entries(deps);
 	if (!acl_res.ok) {
 		deps.log("error", `Failed to load LuCI ACLs for role [sid: ${crypto.safe_id(deps.native, sid)}]`);
-		deps.ubus.call("session", "destroy", { ubus_rpc_session: sid });
-		return Result.err(UBUS_SESSION_FAILED);
+		return _abort_session(deps, sid, UBUS_SESSION_FAILED);
 	}
 	let entries = acl_res.data.entries;
 
@@ -283,12 +293,12 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 	let res_csrf = crypto.random(deps.native, 32);
 	if (!res_csrf.ok) {
 		deps.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
-		return Result.err(CRYPTO_INIT_FAILED);
+		return _abort_session(deps, sid, CRYPTO_INIT_FAILED);
 	}
 	let csrf_res = encoding.b64url_encode(res_csrf.data);
 	if (!csrf_res.ok) {
 		deps.log("error", "CRITICAL: b64url_encode failure during CSRF token generation");
-		return Result.err(CRYPTO_INIT_FAILED);
+		return _abort_session(deps, sid, CRYPTO_INIT_FAILED);
 	}
 	let csrf_token = csrf_res.data;
 
@@ -307,8 +317,7 @@ export function create_passwordless_session(deps, username, perms, oidc_email, a
 	});
 	if (!res_set.ok) {
 		deps.log("error", `UBUS session set failed [sid: ${crypto.safe_id(deps.native, sid)}]`);
-		deps.ubus.call("session", "destroy", { ubus_rpc_session: sid });
-		return Result.err(UBUS_SESSION_FAILED);
+		return _abort_session(deps, sid, UBUS_SESSION_FAILED);
 	}
 
 	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${username}`);

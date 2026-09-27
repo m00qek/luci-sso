@@ -483,9 +483,14 @@ describe('ubus: create_passwordless_session — full admin', () => {
 });
 
 describe('ubus: create_passwordless_session — CSPRNG failure', () => {
-	it('returns CRYPTO_INIT_FAILED when CSPRNG fails', () => {
+	it('destroys the session and returns CRYPTO_INIT_FAILED when CSPRNG fails', () => {
+		let destroyed = null;
 		mock.inject_all({
-			ubus:   { strict: true, data: { "session:create": { ubus_rpc_session: SID }, "session:grant": UBUS_NO_DATA } },
+			ubus:   { strict: true, data: {
+				"session:create":  { ubus_rpc_session: SID },
+				"session:grant":   UBUS_NO_DATA,
+				"session:destroy": (args) => { destroyed = args.ubus_rpc_session; return UBUS_NO_DATA; },
+			} },
 			native: { strict: true, behavior: { random: () => null } },
 			fs:     ACL_FS,
 		}, (proxies) => {
@@ -493,6 +498,7 @@ describe('ubus: create_passwordless_session — CSPRNG failure', () => {
 				ubus_mod.create_passwordless_session(
 					build_deps(proxies), 'root', PERMS_USER, 'u@e.com', 'at', 'rt', 'it'
 				));
+			assert.match(SID, destroyed, 'a session without a CSRF token must be destroyed');
 		});
 	});
 });
