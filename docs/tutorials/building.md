@@ -2,6 +2,8 @@
 
 In this tutorial, we will build the `luci-sso` packages for an OpenWrt 24.10 router. By the end, we will have the two `.ipk` files the router needs: `luci-sso` itself and one crypto backend.
 
+If the router's architecture is `x86_64`, `aarch64_generic` or `aarch64_cortex-a53`, there is no need to build: the signed package feed already serves it (see [How to Install luci-sso](../how-to/sysadmin/installation.md#3-install-from-the-package-feed)). Building is for other architectures, or for trying changes of our own.
+
 ---
 
 ## Prerequisites

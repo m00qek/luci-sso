@@ -14,7 +14,7 @@ How-to guides are recipes. They take the reader through the steps required to so
 *   [GitHub](providers/github.md) - Not supported: why, and what to use instead.
 
 ## System Administration
-*   [Installation](sysadmin/installation.md) - How to install the package and its dependencies.
+*   [Installation](sysadmin/installation.md) - How to install `luci-sso` from the package feed, or from a package you built.
 *   [Configure in LuCI](sysadmin/configure-in-luci.md) - How to configure the OIDC settings and roles from the LuCI web interface.
 *   [Installing a Private CA Certificate](sysadmin/install-ca-certificate.md) - How to make the router trust a self-signed or private CA certificate.
 *   [Upgrading](sysadmin/upgrade.md) - How to upgrade to a new version and restore the login button after a LuCI upgrade.

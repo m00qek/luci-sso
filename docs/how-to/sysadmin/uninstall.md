@@ -73,6 +73,20 @@ Removal leaves a few files behind:
     rm /etc/config/luci-sso
     ```
 
+- **Package feed** — if you installed from the package feed, remove it and its signing key so the package manager stops using it. On OpenWrt 24.10:
+
+    ```bash
+    sed -i '/packages.ucode.dev/d' /etc/opkg/customfeeds.conf
+    rm -f /etc/opkg/keys/a2288d4745630a38
+    ```
+
+    On OpenWrt 25.12:
+
+    ```bash
+    sed -i '/packages.ucode.dev/d' /etc/apk/repositories.d/customfeeds.list
+    rm -f /etc/apk/keys/packages.ucode.dev.pem
+    ```
+
 - **Leftover key from older versions** — older releases created `/etc/luci-sso/secret.key` on first login. Current versions neither create nor read it. If the directory exists, it is safe to delete:
 
     ```bash

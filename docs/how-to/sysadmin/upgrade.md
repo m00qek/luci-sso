@@ -36,26 +36,42 @@ apk list --installed luci-sso
 
 ---
 
-## Step 2: Upload the new package
+## Step 2: Install the upgrade
 
-Build or obtain the new `luci-sso` package (see [Building from Source](../../tutorials/building.md)), then copy it to the router:
+=== "From the package feed"
 
-```bash
-# OpenWrt 24.10
-scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso_<version>_<arch>.ipk root@192.168.1.1:/tmp/
-# OpenWrt 25.12
-scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso-<version>.apk root@192.168.1.1:/tmp/
-```
+    If you installed from the [package feed](installation.md#3-install-from-the-package-feed), let the package manager fetch the new version. The crypto backend is upgraded with it when the feed has a new version.
 
-If the crypto backend has a new version too, copy that package as well.
+    On OpenWrt 24.10:
 
----
+    ```bash
+    opkg update
+    opkg upgrade luci-sso luci-sso-crypto-mbedtls
+    ```
 
-## Step 3: Install the upgrade
+    On OpenWrt 25.12:
 
-=== "OpenWrt 24.10 (opkg)"
+    ```bash
+    apk update
+    apk upgrade luci-sso luci-sso-crypto-mbedtls
+    ```
 
-    Install the new file. `opkg install` upgrades a package that is already installed; `opkg upgrade` does not accept a file name.
+    Replace `luci-sso-crypto-mbedtls` with the backend you installed.
+
+=== "From a local package"
+
+    Build the new version (see [Building from Source](../../tutorials/building.md)) and copy it to the router:
+
+    ```bash
+    # OpenWrt 24.10
+    scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso_<version>_<arch>.ipk root@192.168.1.1:/tmp/
+    # OpenWrt 25.12
+    scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso-<version>.apk root@192.168.1.1:/tmp/
+    ```
+
+    If the crypto backend has a new version too, copy that package as well.
+
+    On OpenWrt 24.10, install the new file. `opkg install` upgrades a package that is already installed; `opkg upgrade` does not accept a file name.
 
     ```bash
     opkg install /tmp/luci-sso_<version>_<arch>.ipk
@@ -67,9 +83,7 @@ If the crypto backend has a new version too, copy that package as well.
     opkg install /tmp/luci-sso-crypto-mbedtls_<version>_<arch>.ipk
     ```
 
-=== "OpenWrt 25.12 (apk)"
-
-    Add the new file. `apk add` replaces the installed version in place; your changed `/etc/config/luci-sso` stays, and so does the crypto backend. Do not `apk del` first: that is a removal, which logs everyone out.
+    On OpenWrt 25.12, add the new file. `apk add` replaces the installed version in place; your changed `/etc/config/luci-sso` stays, and so does the crypto backend. Do not `apk del` first: that is a removal, which logs everyone out.
 
     ```bash
     apk add --allow-untrusted /tmp/luci-sso-<version>.apk
@@ -81,7 +95,7 @@ If `/etc/config/luci-sso-opkg` (or `luci-sso.apk-new`) appeared, compare it with
 
 ---
 
-## Step 4: Verify
+## Step 3: Verify
 
 Confirm the service reports enabled. On the router:
 
@@ -145,7 +159,7 @@ It exits with status 1 and prints `not patched (no header include found): <file>
 
 ## Rolling back
 
-To go back to a previous version, install the old package file.
+To go back to a previous version, install the old package file. The package feed may list only the latest release, so keep the package files of any version you may want to return to.
 
 On OpenWrt 24.10:
 

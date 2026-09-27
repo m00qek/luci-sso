@@ -28,15 +28,28 @@
 
 ---
 
-## Quick Build
+## Quick Install
 
-If you have Docker and `make`:
+Signed packages are published for OpenWrt 24.10 and 25.12 on `x86_64`, `aarch64_generic` and `aarch64_cortex-a53`. On an OpenWrt 24.10 router:
+
+```bash
+wget -O /tmp/feed.pub https://m00qek.github.io/packages.ucode.dev/24.10/feed.pub
+cp /tmp/feed.pub "/etc/opkg/keys/$(usign -F -p /tmp/feed.pub)"
+echo 'src/gz ucode.dev https://m00qek.github.io/packages.ucode.dev/24.10' >> /etc/opkg/customfeeds.conf
+opkg update && opkg install luci-sso luci-sso-crypto-mbedtls
+```
+
+For OpenWrt 25.12 (`apk`) and the other steps, see [How to Install luci-sso](https://m00qek.github.io/luci-sso/how-to/sysadmin/installation/).
+
+## Build from Source
+
+For other architectures, or to try your own changes, build the packages with Docker and `make`:
 
 ```bash
 make package SDK_ARCH=x86-64
 ```
 
-See [Building from Source](https://m00qek.github.io/luci-sso/tutorials/building/) for other architectures.
+See [Building from Source](https://m00qek.github.io/luci-sso/tutorials/building/).
 
 ---
 
