@@ -75,7 +75,7 @@ Fill in the **Settings** section with the values from Step 1:
 | **Scopes** | `openid profile email` |
 | **Clock Tolerance** | `60` |
 
-The Redirect URI must exactly match what we entered in Google Cloud Console. The shipped configuration has `https://router.lan/cgi-bin/luci-sso/callback` in this field, so we replace it.
+The Redirect URI must exactly match what we entered in Google Cloud Console. The field suggests a callback URL built from the address in our browser; we check that it is exactly `https://router.example.com/cgi-bin/luci-sso/callback`, and correct it if not.
 
 Scroll to the **Users** section and click **Edit** on the `admin` role. In **Email Addresses**, remove the placeholder `admin@example.com`, add our Gmail address, and click **Save**.
 

@@ -39,7 +39,7 @@ If you want to restrict which Pocket ID groups are allowed to authenticate to th
     | **Client Secret** | Your Client Secret from Step 1 |
     | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
 
-    Replace `https://id.example.com` with the actual URL of your Pocket ID instance. The Redirect URI must exactly match the callback URL set in Step 1; the shipped configuration has `https://router.lan/cgi-bin/luci-sso/callback` there.
+    Replace `https://id.example.com` with the actual URL of your Pocket ID instance. The Redirect URI must exactly match the callback URL set in Step 1. The field suggests one built from your browser's address; check it before you save.
 
     Click **Save & Apply**.
 

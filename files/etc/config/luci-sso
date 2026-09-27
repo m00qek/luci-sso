@@ -4,7 +4,9 @@ config oidc 'default'
 	# option internal_issuer_url ''
 	option client_id 'REPLACE_ME'
 	option client_secret 'REPLACE_ME'
-	option redirect_uri 'https://router.lan/cgi-bin/luci-sso/callback'
+	# Set this to https://<the name you open LuCI at>/cgi-bin/luci-sso/callback.
+	# Left unset, the settings page suggests the browser's current host.
+	# option redirect_uri ''
 	option scope 'openid profile email'
 	option clock_tolerance '60'
 

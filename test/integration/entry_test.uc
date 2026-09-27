@@ -164,3 +164,36 @@ describe('entry: run — IdP error on the callback', () => {
 		assert.match(-1, index(out, "cancelled"), "the IdP's error_description must never reach the page");
 	});
 });
+
+describe('entry: run — shipped config without redirect_uri', () => {
+	it('enabling SSO without setting redirect_uri logs which option is missing', () => {
+		// The shipped /etc/config/luci-sso leaves redirect_uri unset so the
+		// settings page can suggest the browser's host. Enabled as-is, it must
+		// fail with a reason that names the option.
+		let shipped = { ...ENABLED_UCI, default: { ...ENABLED_UCI.default } };
+		delete shipped.default.redirect_uri;
+		let wd = web_deps({ PATH_INFO: "/" });
+		let logged = [];
+
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": shipped } }, clock: { data: { now: NOW } } }, (deps) => {
+			deps.log = (l, m) => push(logged, m);
+			entry.run(deps, wd);
+		});
+
+		assert.match(1, length(filter(logged, (m) => m == "Configuration rejected: redirect_uri is mandatory and must use HTTPS")), sprintf("%J", logged));
+		assert.match(truthy(), index(wd.out(), "500") >= 0);
+	});
+
+	it('the shipped, disabled config still answers the probe with enabled=false', () => {
+		let shipped_disabled = { default: { ".type": "oidc", enabled: "0", issuer_url: "https://accounts.google.com",
+			client_id: "REPLACE_ME", client_secret: "REPLACE_ME", scope: "openid profile email", clock_tolerance: "60" } };
+		let wd = web_deps({ PATH_INFO: "/", QUERY_STRING: "action=enabled" });
+
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": shipped_disabled } }, clock: { data: { now: NOW } } }, (deps) => {
+			entry.run(deps, wd);
+		});
+
+		assert.match(truthy(), index(wd.out(), '{"enabled": false}') >= 0);
+	});
+});
+

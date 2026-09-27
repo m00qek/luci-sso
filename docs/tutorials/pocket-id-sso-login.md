@@ -68,7 +68,7 @@ Fill in the **Settings** section with the values from Step 1:
 | **Scopes** | `openid profile email` |
 | **Clock Tolerance** | `60` |
 
-Replace `https://id.example.com` with the actual URL of our Pocket ID instance. The shipped configuration has `https://router.lan/cgi-bin/luci-sso/callback` in the **Redirect URI** field; we replace it with exactly the callback URL we set in Step 1.
+Replace `https://id.example.com` with the actual URL of our Pocket ID instance. The **Redirect URI** field suggests a callback URL built from the address in our browser; we make sure it is exactly the callback URL we set in Step 1.
 
 Scroll to the **Users** section and click **Edit** on the `admin` role. In **Email Addresses**, remove the placeholder `admin@example.com`, add our email address, and click **Save**.
 
