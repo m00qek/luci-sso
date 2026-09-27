@@ -85,9 +85,13 @@ Coverage-guided fuzz testing exercises the bridge's entry points with every back
 
 ## Privilege of an SSO session
 
-A signed-in user must get exactly what their role allows, no more. `luci-sso` creates the LuCI session itself, so it also decides its rights. For every role except full admin, it grants what rpcd would grant a password login with the same `read` and `write` lists, by expanding each access group's ACL file the same way rpcd does. A `*` wildcard only ever matches `luci-*` groups. Only `write '*'` yields unrestricted access.
+A signed-in user must get exactly what their role allows, no more. `luci-sso` creates the LuCI session itself, so it also decides its rights. It grants exactly what `rpcd` would grant a password login with the role's entry in `/etc/config/rpcd`, by expanding each access group's ACL file the same way `rpcd` does. Nothing is added. A role with `*` in both lists gets what `root` gets.
 
-The risk is drift: if a future rpcd combined ACL files differently, SSO sessions could quietly get more or less than intended. A system test compares an SSO session with a real rpcd password login for several role shapes in CI, on each supported OpenWrt release, and fails on any difference.
+Two risks shaped this.
+
+**Drift from rpcd.** If `luci-sso`'s expansion ever differed from `rpcd`'s, SSO sessions could quietly get more or less than intended. And `rpcd` rebuilds every session from its login entry when it reloads, so any difference would also change a session's rights at the next reload. A system test compares an SSO session with a real `rpcd` password login for several role shapes in CI, on each supported OpenWrt release, and fails on any difference. Another checks that an SSO session keeps exactly its rights across a reload.
+
+**Borrowing another login's rights.** `rpcd` matches a session to a login entry by user name alone. An SSO session is therefore named `sso:<role>`, a name no password login uses, and its entry is written only through the `luci-sso` ubus object, which touches `luci_sso_*` sections only. A role named `root` gets a session named `sso:root`, which never receives `root`'s rights. The entries never carry a password, so they cannot be used to log in; an entry that has one is refused at login with `INSECURE_RPCD_LOGIN`. [About Roles and Permissions](roles-and-permissions.md) describes the design.
 
 ---
 

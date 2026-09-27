@@ -2,8 +2,8 @@
 
 This guide covers completely removing `luci-sso` from your router and restoring the standard LuCI password login.
 
-!!! warning "Removal logs everyone out"
-    Removing `luci-sso` restarts `rpcd`, which ends every LuCI session: SSO users, password users, and you, if you are removing it from LuCI. Before you start, make sure you can log in with the `root` password, or use SSH, which is not affected.
+!!! warning "Removal takes every right away from SSO users"
+    Removing `luci-sso` reloads `rpcd`. Password sessions stay logged in, without access to the SSO settings. SSO sessions stay open but lose all their rights, so SSO users can no longer use LuCI. Remove the package from a `root` password session or over SSH, and make sure the `root` password works before you start.
 
 ---
 
@@ -13,8 +13,11 @@ Removing the `luci-sso` package deletes its files, including its override of LuC
 
 - takes the cleanup job out of root's crontab,
 - removes the SSO button from LuCI's login templates, in every theme (`luci-sso-repatch --remove`),
-- deletes the `luci-app-sso` access group and restarts `rpcd`, which ends every LuCI session,
+- copies each role's permissions from its `rpcd` login entry (`luci_sso_<role>`) back onto the role in `/etc/config/luci-sso`, as `list read` and `list write`, then deletes every `luci_sso_*` section from `/etc/config/rpcd`,
+- deletes the `luci-app-sso` access group and the `luci-sso` ubus object, then reloads `rpcd`, which rebuilds every session's rights,
 - clears LuCI's cache.
+
+Because the permissions are kept in `/etc/config/luci-sso`, installing the package again recreates every role's `rpcd` entry, with the same lists, in the order of the roles. That includes `opkg install --force-reinstall`, which runs the removal script. The script logs a warning, tagged `luci-sso`, for any `luci_sso_*` section without a matching role, which it deletes. An upgrade skips all of this.
 
 The crypto backend is a separate package and has to be removed as well. `luci-sso` depends on it, so remove `luci-sso` first, or both in one command.
 
@@ -43,8 +46,8 @@ The crypto backend is a separate package and has to be removed as well. `luci-ss
     1.  **Log in** to your router's LuCI web interface with the `root` password.
     2.  Navigate to **System** -> **Software** and click the **Installed** tab.
     3.  In the **Filter** box, type `luci-sso`.
-    4.  Click **Remove** next to `luci-sso`. LuCI logs you out while the package is removed.
-    5.  Log in again with the `root` password, return to **System** -> **Software**, and click **Remove** next to your crypto backend (for example `luci-sso-crypto-mbedtls`).
+    4.  Click **Remove** next to `luci-sso`.
+    5.  Click **Remove** next to your crypto backend (for example `luci-sso-crypto-mbedtls`).
 
     ![LuCI System > Software page on OpenWrt 24.10 with luci-sso typed in the Filter box and the Installed tab selected. The table lists luci-sso and luci-sso-crypto-mbedtls, version 0.9.1-r1, each with a red Remove… button.](../../assets/screenshots/luci-software-uninstall.png "System > Software, Installed tab, filtered for luci-sso")
 
@@ -66,10 +69,16 @@ rm -rf /tmp/luci-modulecache/ /tmp/luci-indexcache*
 
 Removal leaves a few files behind:
 
-- **Configuration** — if you changed `/etc/config/luci-sso`, the package manager keeps it. An unchanged file is removed with the package. To delete a kept file:
+- **Configuration** — the package manager keeps `/etc/config/luci-sso` when it has changed, which removal itself does when it copies the permissions back. It holds the IdP settings, the client secret and the roles with their permissions, and a later install uses it. To remove `luci-sso` for good, delete it:
 
     ```bash
     rm /etc/config/luci-sso
+    ```
+
+    Check that no role entry is left in `rpcd`; this prints nothing:
+
+    ```bash
+    uci show rpcd | grep luci_sso_
     ```
 
 - **Package feed** — if you installed from the package feed, remove it and its signing key so the package manager stops using it. On OpenWrt 24.10:

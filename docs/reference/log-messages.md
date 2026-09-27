@@ -30,6 +30,7 @@ The error codes are grouped by the step of the login where they occur. Find the 
 | [UserInfo Errors](#userinfo-errors) | While asking the UserInfo endpoint for missing claims |
 | [Authorization Errors](#authorization-errors) | When mapping the user to a role, and at logout |
 | [Session Errors](#session-errors) | When creating the LuCI session through `rpcd` |
+| [Role Lines](#role-lines) | Lines without a code about roles and their `rpcd` login entries, at login, at install, upgrade and removal |
 | [System Errors](#system-errors) | Transport, crypto, rate-limit and input-size failures at any step |
 
 ---
@@ -52,6 +53,8 @@ A request that fails ends with one line that holds the HTTP status sent to the b
 ```
 Sat Sep 26 23:15:06 2026 user.err luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED
 ```
+
+In the same way, `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN` are named in the line before `[500] UBUS_LOGIN_FAILED`.
 
 The examples on this page leave out the date and priority: `luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED`.
 
@@ -80,6 +83,8 @@ Every discovery failure ends as `[502] OIDC_DISCOVERY_FAILED`. The line before i
 luci-sso[1289]: DISCOVERY_ISSUER_MISMATCH: issuer_url is "https://id.example.com" but the discovery document declares "https://id.example.com/application/o/luci/" [id: 8dbb9352769748c6]
 luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED
 ```
+
+In the same way, `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN` are named in the line before `[500] UBUS_LOGIN_FAILED`.
 
 ### Not at all
 
@@ -338,7 +343,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `USER_NOT_AUTHORIZED` | The user's email and groups match no `config role` section, **or** the matching roles have no `read` or `write` entries | The user has no role that grants access (see notes). | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` |
+| `USER_NOT_AUTHORIZED` | The user's email and groups match no `config role` section | The user has no role (see notes). | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` |
 | `TOKEN_REPLAYED` | The access token is already in the local replay-protection registry | A previously used token was submitted again: a replay attack, or an IdP that reissues access tokens. | `[403] TOKEN_REPLAYED`, preceded by `Replay attack detected: access token already registered` |
 | `TOKEN_REGISTRY_ERROR` | The router could not write the access token to the replay-protection registry | Check free space and permissions on `/var/run/luci-sso/tokens/`. | `[500] TOKEN_REGISTRY_ERROR`, preceded by `Access token registry write failed [session_id: …]: <CODE>` naming `INVALID_TOKEN`, `SYSTEM_ERROR` or `CRYPTO_ERROR` |
 | `INVALID_TOKEN` | The access token to register is missing or not a string | The IdP's token response has no usable `access_token`. | In `Access token registry write failed` |
@@ -347,7 +352,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 Notes:
 
-- `USER_NOT_AUTHORIZED`: both triggers log the same line. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
+- `USER_NOT_AUTHORIZED`: a role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
 
 ---
 
@@ -359,12 +364,42 @@ Only `UBUS_LOGIN_FAILED` is logged as the result of the request.
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `UBUS_LOGIN_FAILED` | The session could not be created, granted or labelled | Check that `rpcd` is running and that `/usr/share/rpcd/acl.d/` is readable. | `[500] UBUS_LOGIN_FAILED`, preceded by `UBUS session creation failed`, `Failed to load LuCI ACLs for role`, `UBUS session set failed` or `CRITICAL: CSPRNG failure during CSRF token generation` |
+| `UBUS_LOGIN_FAILED` | The session could not be created, granted or labelled, or the role's `rpcd` login entry is refused | Check the line before it. For the session lines, check that `rpcd` is running and that `/usr/share/rpcd/acl.d/` is readable. | `[500] UBUS_LOGIN_FAILED`, preceded by a `MISSING_RPCD_LOGIN` or `INSECURE_RPCD_LOGIN` line, `UBUS session creation failed`, `Failed to load LuCI ACLs for role`, `UBUS session set failed` or `CRITICAL: CSPRNG failure during CSRF token generation` |
 | `UBUS_CONNECT_FAILED` | The router could not connect to the ubus socket | `ubusd` is not running or the socket is inaccessible. | Not logged by name: `UBUS session creation failed`, then `[500] UBUS_LOGIN_FAILED` |
 | `UBUS_ERROR` | A ubus call reached `rpcd` but was rejected | Usually `rpcd`'s `session` object refused the call. | Not logged by name |
 | `UBUS_SESSION_FAILED` | Creating, granting or labelling the session failed | `rpcd` did not create the session, the ACL files could not be read, or the session variables could not be set. | Not logged by name: one of the lines listed under `UBUS_LOGIN_FAILED` |
-| `MISSING_RPCD_LOGIN` | The matched role has no usable `rpcd` login entry: no section `luci_sso_<role>` of type `login` with `username` `sso:<role>` | The role's permissions are missing, so no session is created. Create the entry from the settings page. | `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`, then `[500] UBUS_LOGIN_FAILED` |
+| `MISSING_RPCD_LOGIN` | The matched role has no usable `rpcd` login entry: no section `luci_sso_<role>` of type `login` with `username` `sso:<role>` | The role's permissions are missing, so no session is created. Save the role's permissions on the settings page, or with `ubus call luci-sso set_role`. | `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`, then `[500] UBUS_LOGIN_FAILED` |
 | `INSECURE_RPCD_LOGIN` | The role's `rpcd` login entry has a `password` option | The entry could be used for a password login, so no session is created. Remove the option. | `INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_<role>' of role '<role>' has a password option; remove it`, then `[500] UBUS_LOGIN_FAILED` |
+
+---
+
+## Role Lines
+
+Lines about roles and their `rpcd` login entries that carry no error code of their own.
+
+### At login and on configuration load
+
+Logged by the CGI script under `luci-sso[<pid>]`.
+
+| Line | Level | When |
+| :--- | :--- | :--- |
+| `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | The user got `<role>`. When other roles matched too, the line reads `mapped to role '<role>', the first match; also matched: <role>, <role>`. |
+| `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. |
+| `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | A plain name in the entry's `read` or `write` list matches no access group. It grants nothing. Globs and negations are not checked. |
+| `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | The role in `/etc/config/luci-sso` still has `read` or `write` options, which grant nothing. |
+| `Ignoring role '<role>': missing email or group list` | warn | The role has neither an `email` nor a `group` value. |
+
+### At install, upgrade and removal
+
+Logged by the package's scripts with `logger -t luci-sso -p user.warn`, so they appear under `luci-sso:` without a process ID, and printed on the package manager's output. The install and upgrade script is `/etc/uci-defaults/20-luci-sso-rpcd`; the removal lines come from the package's pre-removal script.
+
+| Line | When | What to do |
+| :--- | :--- | :--- |
+| `role '<role>' keeps its read/write lists and has no rpcd login entry: <reason>; save its permissions on the settings page` | Install or upgrade. The role's old `read`/`write` lists break the entry's rules: the name is invalid or too long, or a list is invalid or denies `unauthenticated`. | The role's users cannot log in. Fix the role and save its permissions. The line comes back on every upgrade until then. |
+| `role '<role>' has no rpcd login entry: <reason>; its users cannot log in` | Install or upgrade. A role without lists or entry has a name the entry cannot use. | Rename the role (letters, digits and underscores, at most 32). The line comes back on every upgrade until then. |
+| `role '<role>' had no permissions to move: its rpcd login entry grants nothing but 'unauthenticated'; set its permissions on the settings page` | Install or upgrade. The role had no lists and no entry, and is not the untouched shipped `admin` role. | Its users log in and see nothing. Set its permissions. |
+| `rpcd section 'luci_sso_<name>' has no luci-sso role to keep its permissions; deleted` | Removal. An entry has no role in `/etc/config/luci-sso`, or is not a login. | None. Its lists are gone. |
+| `could not write /etc/config/luci-sso: the rpcd login entries are kept` | Removal. The roles' permissions could not be saved back. | The `luci_sso_*` entries stay in `/etc/config/rpcd`. |
 
 ---
 

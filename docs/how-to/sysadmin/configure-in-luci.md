@@ -10,7 +10,7 @@ If you are connecting to a provider for the first time, use the [provider guides
 
 Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading reads **SSO Login**. It has two sections: **Settings** and **Users**.
 
-![The SSO Login page filled in with example values. Settings: Enable SSO ticked, Issuer URL https://auth.example.com, Client ID luci-router, Client Secret masked as dots, Redirect URI starting https://router.example.com/cgi-bin/, Scopes openid profile email groups, Clock Tolerance 60, and an empty Internal Issuer URL showing a placeholder. Users: a table with an admin role (admin@example.com, read and write *) and a viewer role (bob@example.com, group network-viewers, read luci-base, luci-mod-status-* and luci-mod-network-*, no write), each with Edit and Delete buttons, then a name field with an Add button and the Save & Apply, Save and Reset buttons.](../../assets/screenshots/luci-sso-settings.png "Services > Single Sign-On: the Settings and Users sections")
+![The SSO Login page filled in with example values. Settings: Enable SSO ticked, Issuer URL https://auth.example.com, Client ID luci-router, Client Secret masked as dots, Redirect URI starting https://router.example.com/cgi-bin/, Scopes openid profile email groups, Clock Tolerance 60, and an empty Internal Issuer URL showing a placeholder. Users: a line saying a user gets the first role, from the top, whose emails or groups match, and that rows can be dragged to change the order; a line saying read and write access are written when you press Save or Save & Apply, while emails, groups and order take effect with Save & Apply; then a table with Emails, Groups, Read Access and Write Access columns. The admin row has admin@example.com and * for read and write; the viewer row has bob@example.com, group network-viewers, read luci-base, luci-mod-status-* and luci-mod-network-*, and no write. Each row has a drag handle and Edit and Delete buttons. Below are a name field with an Add button and the Save & Apply, Save and Reset buttons.](../../assets/screenshots/luci-sso-settings.png "Services > Single Sign-On: the Settings and Users sections")
 
 ---
 
@@ -27,18 +27,25 @@ Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading r
 
 ## 3. Add or change roles in the Users section
 
-A role says who may log in (by email or group) and which LuCI access groups they get. Every role a user matches applies, and the permissions are merged.
+A role says who may log in (by email or group) and which LuCI access groups they get. Roles are tried from the top of the table, and a user gets the **first** role that matches. Rights from several roles are never merged.
 
 To add a role:
 
-1.  Type a name (letters, digits and underscores; not `default`) and click **Add**.
+1.  Type a name (letters, digits and underscores, at most 32; not `default`) and click **Add**.
 2.  In the role editor, add entries to **Email Addresses**, **Groups**, or both. A role with neither is ignored.
-3.  Add access groups to **Read Access** and **Write Access**. For a full administrator, put `*` in **Write Access**. For a role that may save settings, include `luci-base` in **Write Access**.
-4.  Click **Save** to close the editor.
+3.  Add access groups to **Read Access** and **Write Access**. For a full administrator, put `*` in both. For a role that may save settings, include `luci-base` in **Write Access**. Leave `unauthenticated` out: it is always included.
+4.  Click **Save** to close the editor. As the note in the editor says, the permissions are written only when you click **Save** at the bottom of the page.
 
-![The role editor for a role named viewer, titled "User Role: viewer". Email Addresses holds bob@example.com, Groups holds network-viewers, Read Access holds luci-base, luci-mod-status-* and luci-mod-network-*, and Write Access is empty. Each list has an empty field with a + button for another entry, and the editor has Dismiss and Save buttons.](../../assets/screenshots/luci-sso-role-editor.png "The role editor, opened with Edit on the viewer row")
+![The role editor for a role named viewer, titled "User Role: viewer". Email Addresses holds bob@example.com and Groups holds network-viewers. Below them, the note "Permission changes take effect when you click Save at the bottom of the page." Read Access holds luci-base, luci-mod-status-* and luci-mod-network-*, and Write Access is empty. Each list has an empty field with a + button for another entry, and the editor has Dismiss and Save buttons.](../../assets/screenshots/luci-sso-role-editor.png "The role editor, opened with Edit on the viewer row")
 
 To change a role, click **Edit** in its row. To remove one, click **Delete**; a user who matched only that role gets `USER_NOT_AUTHORIZED` at their next login.
+
+To change the order, drag a row by its handle. Put the most privileged or most specific role at the top.
+
+Check the **Read Access** column for warnings:
+
+- `(none): this role grants no access`: the role's users can log in but see nothing.
+- `Not set: edit and save this role, or its users cannot log in`: the role has no permissions in `rpcd`. Click **Edit**, then **Save**, and save the page.
 
 For which access groups to grant, see [How to Configure Role-Based Access Control](rbac.md).
 
@@ -46,7 +53,12 @@ For which access groups to grant, see [How to Configure Role-Based Access Contro
 
 ## 4. Save and apply
 
-Click **Save & Apply**. There is no service to restart: `luci-sso` reads the configuration on every request, so the change applies from the next login. Sessions that already exist keep the permissions they were given.
+Click **Save & Apply**.
+
+- **Read Access** and **Write Access** go to `rpcd` as soon as the page is saved. The page shows "Saving role permissions; rpcd is reloading to apply them…", then "Role permissions saved and in force." Users already logged in with that role get the new rights at once.
+- Everything else, including emails, groups and the order of the roles, applies from the next login. There is no service to restart: `luci-sso` reads the configuration on every request.
+
+If `rpcd` refuses a role's permissions, the page shows the error and does not apply the rest. Fix the role and save again.
 
 To discard unsaved edits, click **Reset**.
 

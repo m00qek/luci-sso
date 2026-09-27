@@ -69,7 +69,7 @@ Google does not provide a `groups` claim for personal accounts. Map access by em
 
     Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter your Gmail address in **Email Addresses**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter your Gmail address in **Email Addresses**, then click **Save**.
 
     Click **Save & Apply**.
 

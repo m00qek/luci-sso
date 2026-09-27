@@ -31,9 +31,10 @@ The reason this matters: OpenWrt routers can't run network tests. Because the re
 *   **`oidc.uc`** — The OIDC protocol steps. Builds the authorization URL, performs the token exchange and the UserInfo request over `deps.http`, and validates the ID Token claims (issuer, audience, nonce, `azp`, `at_hash`) on top of the signature check in `crypto`.
 *   **`discovery.uc`** — Fetches and caches OIDC metadata from the IdP's `/.well-known/openid-configuration` and the JWK Set. Caches to `/var/run/luci-sso/` (tmpfs) for 24 hours. The cache survives the router staying up but is cleared on every reboot — the first login after a reboot always fetches fresh discovery data. A stale cache is used as a fallback only when the IdP becomes temporarily unreachable while the router is already running.
 *   **`session.uc`** — Manages handshake state files (creation, verification and consumption, and reaping of stale entries). A facade over `session/handshake.uc` and `session/common.uc`. The LuCI session itself lives in `rpcd`; `luci-sso` issues no tokens of its own.
-*   **`ubus.uc`** — The `rpcd` side. Creates the LuCI session, grants it the ACLs of the matched role, stores the user's email and tokens in it, and reads or destroys it at logout. Also keeps the access-token replay registry.
+*   **`ubus.uc`** — The `rpcd` side. Reads the matched role's `rpcd` login entry, creates the LuCI session under the entry's user name, grants it the ACLs the entry grants, stores the user's email and tokens in it, and reads or destroys it at logout. Also keeps the access-token replay registry.
+*   **`rpcd_login.uc`** — The roles' `rpcd` login entries (`luci_sso_<role>`, user name `sso:<role>`) and `rpcd`'s rules for them: names, list checks, how a list grants an access group, the `unauthenticated` baseline, and the move of permissions between `/etc/config/luci-sso` and `/etc/config/rpcd` on install and removal. It takes no `deps`; the code that writes passes it a UCI cursor.
 *   **`ratelimit.uc`** — Per-client request budgets, kept in one small JSON file.
-*   **`config.uc`** — Reads UCI configuration and maps OIDC claims to LuCI roles.
+*   **`config.uc`** — Reads UCI configuration and maps OIDC claims to the first matching role.
 *   **`crypto.uc`** — High-level cryptographic API, a facade over `crypto/*.uc`. Wraps the native C bridge for JWT signature verification, JWK conversion, hashing, PKCE and random bytes, and provides the best-effort constant-time comparison, which is plain ucode.
 *   **`encoding.uc`, `result.uc`, `errors.uc`** — Pure helpers used everywhere: Base64URL, JSON and URL handling, the `Result` type, and the error code constants.
 *   **`deps.uc` and `components/`** — Build the production `deps` object: the HTTPS client, the clock, the ubus and syslog channels.
@@ -54,6 +55,7 @@ graph TD
         session["session.uc<br/>handshake state"]
         ubus["ubus.uc<br/>rpcd session &amp; replay registry"]
         config["config.uc<br/>UCI config &amp; role mapping"]
+        rpcd_login["rpcd_login.uc<br/>role login entries"]
         crypto["crypto.uc<br/>cryptographic API"]
     end
 
@@ -85,11 +87,12 @@ graph TD
     discovery --> crypto
     session --> crypto
     ubus --> crypto
+    ubus --> rpcd_login
     ratelimit --> crypto
     crypto -.->|"deps.native"| native
 ```
 
-**Textual summary:** The CGI script builds `deps` with `deps.uc` (which wires in the HTTP client, the clock and the native crypto bridge) and calls `entry.uc`. `entry.uc` parses the request with `web.uc`, loads the configuration with `config.uc` and passes the request to `router.uc`. The router applies the rate limit from `ratelimit.uc`, then sends a login or callback to `handshake.uc` and handles logout itself with `ubus.uc`, `session.uc` and `discovery.uc`. `handshake.uc` drives the flow through `oidc.uc`, `discovery.uc`, `session.uc`, `ubus.uc` and `config.uc`. Every module that needs cryptography calls `crypto.uc`, which reaches the C bridge only through the `native` object passed down from `deps`. The pure helpers `encoding.uc`, `result.uc` and `errors.uc` are used by almost every module and are left out of the diagram.
+**Textual summary:** The CGI script builds `deps` with `deps.uc` (which wires in the HTTP client, the clock and the native crypto bridge) and calls `entry.uc`. `entry.uc` parses the request with `web.uc`, loads the configuration with `config.uc` and passes the request to `router.uc`. The router applies the rate limit from `ratelimit.uc`, then sends a login or callback to `handshake.uc` and handles logout itself with `ubus.uc`, `session.uc` and `discovery.uc`. `handshake.uc` drives the flow through `oidc.uc`, `discovery.uc`, `session.uc`, `ubus.uc` and `config.uc`; `ubus.uc` reads the role's permissions with the rules in `rpcd_login.uc`. Every module that needs cryptography calls `crypto.uc`, which reaches the C bridge only through the `native` object passed down from `deps`. The pure helpers `encoding.uc`, `result.uc` and `errors.uc` are used by almost every module and are left out of the diagram.
 
 ---
 
@@ -137,10 +140,11 @@ graph LR
 `luci-sso` doesn't create local user accounts. Instead, after a successful OIDC flow, it injects a "Virtual Identity" directly into LuCI's session layer via UBUS.
 
 The injection grants:
-- **ACLs** for the access groups of the matched roles, expanded into concrete permissions the way `rpcd` expands them for a password login
-- **Wildcard grants** for full-admin roles (`write '*'`): unrestricted `ubus`, `uci`, `file` and `cgi-io`, plus every `luci-*` access group found in `/usr/share/rpcd/acl.d/`
+- **ACLs** from the matched role's `rpcd` login entry, `luci_sso_<role>` in `/etc/config/rpcd`, expanded into concrete permissions exactly as `rpcd` expands them for a password login with that entry. The session's user name is the entry's, `sso:<role>`, so `rpcd` rebuilds the same rights when it reloads.
 - **A 256-bit CSRF token** that satisfies LuCI's write protection
 
 The session is created via UBUS with LuCI's own idle timeout, `luci.sauth.sessiontime` (3600 seconds by default), the same one a password login gets. The ID Token's `exp` claim is validated at login time — an already-expired token is rejected — but it does not set the session duration in either direction.
+
+The entries are written by an `rpcd` plugin, `/usr/share/rpcd/ucode/luci-sso.uc`, which runs inside `rpcd` and exposes the `luci-sso` ubus object (`list_roles`, `set_role`, `delete_role`). The settings page calls it instead of editing `/etc/config/rpcd` through UCI, because UCI permissions cover a whole configuration file: a page that could write `rpcd`'s file could also rewrite `root`'s login. After a write, the plugin makes `rpcd` reload, so the change reaches open sessions. [About Roles and Permissions](roles-and-permissions.md) explains the design.
 
 LuCI's own **Log out** entry ends SSO sessions through `luci-sso` by way of a menu override, not a patch. LuCI builds its menu from every file in `/usr/share/luci/menu.d/`, in name order, and a later file that names an existing path replaces only the keys it gives. `luci-sso-logout.json` sorts after LuCI's `luci-base.json` and gives `admin/logout` a new `action` (and the same `depends`), so the entry keeps LuCI's title and position. The action is `luci.controller.sso`'s `action_logout`: for a session carrying `oidc_user` it redirects to `/cgi-bin/luci-sso/logout` with the session's CSRF token, which destroys the session and continues to the IdP's `end_session_endpoint`; for any other session it calls LuCI's own `action_logout` unchanged. Removing the package removes both files, and LuCI's entry is back.

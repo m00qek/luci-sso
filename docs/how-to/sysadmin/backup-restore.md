@@ -8,12 +8,15 @@ This guide covers preserving your `luci-sso` configuration across a router refla
 
 | Item | Location | Backed up by OpenWrt? | Notes |
 | :--- | :--- | :--- | :--- |
-| UCI configuration | `/etc/config/luci-sso` | Yes — included in the standard sysupgrade backup | Contains IdP credentials, role mappings, and all UCI options. |
+| UCI configuration | `/etc/config/luci-sso` | Yes — included in the standard sysupgrade backup | Contains IdP credentials, the roles (who matches each one, and their order), and all UCI options. |
+| Role permissions | The `luci_sso_*` login entries in `/etc/config/rpcd` | Yes — `/etc/config/rpcd` is in the standard sysupgrade backup | Each role's read and write access. `/etc/config/rpcd` also holds the `root` login. |
 | Runtime state | `/var/run/luci-sso/` | No — tmpfs, not persistent | Discovery and JWK Set caches, logins in progress, token registry, rate-limit state. Rebuilt automatically as needed. |
 | Active sessions | UBUS memory | No | Sessions do not survive a reboot regardless. |
 | The `luci-sso` packages | `/usr/share/ucode/luci_sso/`, `/www/cgi-bin/luci-sso` and others | No | A firmware image only contains the packages it was built with. Keep the package files so you can reinstall them. |
 
-The only file you must back up is `/etc/config/luci-sso`. Everything else is either reinstalled, regenerated automatically, or does not survive a reboot anyway.
+Back up `/etc/config/luci-sso` and `/etc/config/rpcd` together. Everything else is either reinstalled, regenerated automatically, or does not survive a reboot anyway.
+
+The two files belong together. Restoring `/etc/config/luci-sso` without the matching `rpcd` entries leaves roles without permissions: their users are refused at login with `MISSING_RPCD_LOGIN`. Restoring the `rpcd` entries without the roles leaves entries that no role uses.
 
 ---
 
@@ -29,10 +32,11 @@ The only file you must back up is `/etc/config/luci-sso`. Everything else is eit
 
 === "Terminal (SSH)"
 
-    Copy the configuration file to your local machine:
+    Copy the two configuration files to your local machine:
 
     ```bash
     scp -O root@192.168.1.1:/etc/config/luci-sso ./luci-sso.backup
+    scp -O root@192.168.1.1:/etc/config/rpcd ./rpcd.backup
     ```
 
     Or include it in a full config backup:
@@ -47,7 +51,7 @@ The only file you must back up is `/etc/config/luci-sso`. Everything else is eit
 
 ### After a sysupgrade (firmware update)
 
-`sysupgrade` preserves `conffiles` — files the package declares as configuration. `/etc/config/luci-sso` is declared as a conffile, so your configuration survives a sysupgrade automatically.
+`sysupgrade` preserves `conffiles` — files the package declares as configuration. `/etc/config/luci-sso` is declared as a conffile, and `/etc/config/rpcd` belongs to the base system, so both survive a sysupgrade automatically.
 
 The package itself does not. The new firmware contains only the packages it was built with, so after the sysupgrade `luci-sso` is gone and the login page has no SSO button. Reinstall `luci-sso` and its crypto backend, built for the new OpenWrt version (see [How to Install luci-sso](installation.md)). The reinstall keeps the preserved `/etc/config/luci-sso` and saves the package's default next to it as `/etc/config/luci-sso-opkg` (`luci-sso.apk-new` on OpenWrt 25.12), which you can delete.
 
@@ -61,22 +65,25 @@ The package itself does not. The new firmware contains only the packages it was 
 
     1. Navigate to **System > Backup / Flash Firmware**.
     2. Click **Restore backup** and upload the `.tar.gz` archive you saved earlier.
-    3. LuCI will extract the archive and restore `/etc/config/luci-sso` along with all other backed-up config files.
+    3. LuCI will extract the archive and restore `/etc/config/luci-sso` and `/etc/config/rpcd` along with all other backed-up config files.
     4. Reboot when prompted.
 
 === "Terminal (SSH)"
 
-    Copy your backup file back to the router:
+    Copy your backup files back to the router:
 
     ```bash
     scp -O luci-sso.backup root@192.168.1.1:/etc/config/luci-sso
+    scp -O rpcd.backup root@192.168.1.1:/etc/config/rpcd
     ```
 
-    Then verify the configuration loaded correctly:
+    Reload `rpcd` so it reads the restored entries, then verify the configuration loaded correctly:
 
     ```bash
-    uci show luci-sso
+    ssh root@192.168.1.1 '/etc/init.d/rpcd reload; uci show luci-sso; ubus call luci-sso list_roles'
     ```
+
+    `list_roles` should list one entry for each role in `/etc/config/luci-sso`. If a role has none, save its permissions on the settings page, or with `ubus call luci-sso set_role`; see [How to Configure Role-Based Access Control](rbac.md).
 
 **Step 3.** Verify the service is working. On the router:
 

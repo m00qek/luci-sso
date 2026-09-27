@@ -11,7 +11,7 @@ This guide covers updating the OIDC client credentials on your router — either
 
 `luci-sso` reads UCI configuration on every request. There is no daemon to restart — changes committed with `uci commit` take effect on the next login attempt. Active LuCI sessions are not affected: UBUS sessions do not carry the client secret, so users who are already logged in stay logged in until they log out or their session times out after a period of inactivity.
 
-A leaked client secret does not by itself let anyone into the router: they would still need to sign in at the IdP with an account that matches one of your roles. If you also want to end existing sessions, see [End a user's sessions now](rbac.md#end-a-users-sessions-now).
+A leaked client secret does not by itself let anyone into the router: they would still need to sign in at the IdP with an account that matches one of your roles. If you also want to end existing sessions, see [End a user's sessions now](rbac.md#change-access-for-users-already-logged-in).
 
 ---
 

@@ -50,7 +50,7 @@ The alternative — checking existence and then deleting in two steps — has a 
 
 ## Zero-knowledge credential model
 
-No local passwords are stored for OIDC users. For them there is nothing to steal, nothing to brute-force, and no credential database to protect. Identity is derived dynamically from OIDC claims on every login, mapped to UCI roles, and expires with the session.
+No local passwords are stored for OIDC users. For them there is nothing to steal, nothing to brute-force, and no credential database to protect. Identity is derived dynamically from OIDC claims on every login, mapped to a role, and expires with the session. The role's `rpcd` login entry holds its permissions but no password, so it cannot be used to log in.
 
 This matters on a router, whose management interface is a common brute-force target. But SSO is an addition, not a replacement: LuCI's password form stays on the same login page, and the `root` account keeps its password. The password attack surface is unchanged, and protecting it — a strong password, and LuCI kept off the WAN — remains a separate task.
 

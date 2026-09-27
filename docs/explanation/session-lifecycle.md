@@ -17,9 +17,9 @@ stateDiagram-v2
 
 ## What a session is
 
-`luci-sso` does not create local user accounts. There is no entry in `/etc/passwd`, no stored password, no local identity record. Instead, after a successful OIDC flow, it calls UBUS to create a **UBUS session** — an in-memory record managed by `rpcd` — and injects the user's ACLs and a CSRF token into it.
+`luci-sso` does not create local user accounts. There is no entry in `/etc/passwd`, no stored password, no local identity record. Instead, after a successful OIDC flow, it calls UBUS to create a **UBUS session** — an in-memory record managed by `rpcd` — and injects the user's ACLs and a CSRF token into it. The session's user name is `sso:` followed by the role's name, and its ACLs are exactly what `rpcd` would grant a password login with that role's entry, `luci_sso_<role>` in `/etc/config/rpcd`. [About Roles and Permissions](roles-and-permissions.md) explains why.
 
-The browser receives a `sysauth_https` cookie (and the legacy `sysauth`) containing the UBUS session ID. Every subsequent LuCI request presents this cookie; `rpcd` looks up the session and enforces the ACLs. From LuCI's perspective, an OIDC-authenticated user is indistinguishable from a password-authenticated one, with one exception on an `rpcd` reload (see [Session storage](#session-storage)).
+The browser receives a `sysauth_https` cookie (and the legacy `sysauth`) containing the UBUS session ID. Every subsequent LuCI request presents this cookie; `rpcd` looks up the session and enforces the ACLs. From LuCI's perspective, an OIDC-authenticated user is indistinguishable from a password-authenticated one.
 
 ---
 
@@ -48,7 +48,7 @@ The tokens themselves are kept. The access, refresh and ID tokens from the login
 
 Nothing, immediately. `luci-sso` validates OIDC claims once, at login. If the IdP revokes a user's account or removes them from a group after they have logged in, the active LuCI session is not affected. The user retains their access until the session expires or they log out.
 
-This is a known, documented residual risk. The mitigation available to administrators is to end the user's sessions on the router, which takes effect immediately: each SSO session is labelled with the user's email, so it can be found and destroyed without touching anyone else's. [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#end-a-users-sessions-now) shows the commands. The idle timeout also bounds the exposure window, but only once the session stops being used: an attacker who keeps using a stolen session keeps it alive.
+This is a known, documented residual risk. The mitigation available to administrators is to end the user's sessions on the router, which takes effect immediately: each SSO session is labelled with the user's email, so it can be found and destroyed without touching anyone else's. [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#change-access-for-users-already-logged-in) shows the commands. The idle timeout also bounds the exposure window, but only once the session stops being used: an attacker who keeps using a stolen session keeps it alive.
 
 ---
 
@@ -72,11 +72,15 @@ A password session never reaches this endpoint: its **Log out** runs LuCI's own 
 
 ## Session storage
 
-UBUS sessions live entirely in `rpcd`'s memory. They are not written to disk and do not survive a reboot or a restart of `rpcd`. Upgrading or downgrading `luci-sso` leaves `rpcd` alone, so sessions survive it; removing the package restarts `rpcd` to revoke its settings ACL at once, which ends every session — see [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md) and [How to Remove luci-sso](../how-to/sysadmin/uninstall.md).
+UBUS sessions live entirely in `rpcd`'s memory. They are not written to disk and do not survive a reboot or a restart of `rpcd`.
 
-A *reload* of `rpcd` is different, and it affects SSO sessions only. On a reload, `rpcd` keeps every session and its values but rebuilds each session's rights from its own login configuration (`/etc/config/rpcd`), keyed by the session's user name. Password sessions get their rights back. SSO sessions have no entry there, so they come back logged in but with no rights at all, and every LuCI page then fails with access errors until the user logs in again. LuCI's own packages reload `rpcd` when they are installed or upgraded, so installing or upgrading any LuCI app has this effect on everyone logged in through SSO.
+A *reload* of `rpcd` keeps them. On a reload, `rpcd` keeps every session and its values, and rebuilds each session's rights from the login entry in `/etc/config/rpcd` whose user name matches the session's. A password session gets its user's rights back. An SSO session, named `sso:<role>`, gets the rights of its role's entry. Reloads happen more often than one might think: some LuCI packages reload `rpcd` when they are installed, and `luci-sso` reloads it itself whenever a role's permissions are saved, so a permission change reaches the role's open sessions within a second or so.
 
-Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and idle timeout. `rpcd` can list every session with its values, and SSO sessions carry the user's email as `oidc_user`, so an administrator can find one user's sessions and destroy just those. Restarting `rpcd` instead evicts every session, password logins included.
+The rebuild has two consequences worth knowing. A session keeps the role it was given at login: changing a role's emails or groups moves nobody until they log in again. And a session whose entry is gone, because its role was deleted or the package removed, comes back with no rights at all.
+
+The `luci-sso` package reloads `rpcd` when it is installed, upgraded or removed; it never restarts it. Sessions created before the upgrade that moved role permissions into `rpcd` are the exception. They carry the bare role name as their user name, which matches no `sso:` entry, so at that upgrade's reload they lose their rights and their users log in again. A role named like an existing login, such as `root`, would instead get that login's rights at the reload, which is one of the problems the move to `sso:` names fixes; ending such sessions before the upgrade avoids it. See [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md) and [How to Remove luci-sso](../how-to/sysadmin/uninstall.md).
+
+Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and idle timeout. `rpcd` can list every session with its values, and SSO sessions carry the user's email as `oidc_user`, so an administrator can find one user's sessions and destroy just those. Restarting `rpcd`, rather than reloading it, evicts every session, password logins included.
 
 ---
 
@@ -90,5 +94,6 @@ Multiple simultaneous sessions are allowed. Each login creates a new independent
 | Mid-session IdP revocation | Session continues until expiry, logout, or an administrator destroys it |
 | Logout scope | Destroys the router session; for SSO sessions, also ends the IdP session if the IdP supports RP-Initiated Logout |
 | Persistence across reboots | No — UBUS sessions are in-memory |
-| Persistence across a `luci-sso` upgrade | Yes — only removal restarts `rpcd` |
-| Effect of an `rpcd` reload (e.g. installing a LuCI app) | SSO sessions stay but lose all rights; users must log in again |
+| Persistence across a `luci-sso` upgrade | Yes — the upgrade reloads `rpcd`, which keeps sessions (except sessions from before role permissions moved to `rpcd`) |
+| Effect of an `rpcd` reload (e.g. installing a LuCI app, saving a role) | Every session stays; its rights are rebuilt from its `rpcd` login entry |
+| Effect of removing `luci-sso` | SSO sessions stay open with no rights; password sessions lose only the SSO settings ACL |

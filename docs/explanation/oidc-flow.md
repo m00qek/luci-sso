@@ -43,8 +43,8 @@ sequenceDiagram
 
     Note over R: Phase 4 — Session injection
     R->>R: Register access_token (replay prevention)
-    R->>R: Match claims to UCI roles
-    R->>R: Inject UBUS session with ACLs
+    R->>R: Match claims to the first UCI role
+    R->>R: Inject UBUS session with the role's rpcd ACLs
     R-->>B: 302 → /cgi-bin/luci/ (with session cookie)
     B->>User: LuCI dashboard
 ```
@@ -57,7 +57,7 @@ The textual summary below explains what happens in each phase.
 
 **Phase 3 — Code exchange:** The router's back-channel takes over. The code is exchanged for tokens, and every security property of the tokens is verified before anything is trusted.
 
-**Phase 4 — Session injection:** The access token is registered so it cannot be used for a second login, the user's identity is mapped to a LuCI role, and a session is created. The browser receives a session cookie and lands on the dashboard.
+**Phase 4 — Session injection:** The access token is registered so it cannot be used for a second login, the user's identity is mapped to the first matching role, and a session is created with the rights of that role's `rpcd` login entry. The browser receives a session cookie and lands on the dashboard.
 
 ---
 

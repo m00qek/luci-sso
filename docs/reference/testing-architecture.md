@@ -63,7 +63,16 @@ See [How to Run Tests](../how-to/developer/testing.md) for the options of each c
 
 ## The `system` bucket
 
-`test/system/rpcd_parity_test.uc` compares SSO sessions with rpcd password logins. For each role shape (read `*`, a specific read group, a specific write group, a mixed role, globs with a negation) it creates a temporary rpcd password login with the same `read`/`write` lists, creates an SSO session through the real code, and requires the two sessions' ACLs to be identical, printing every entry that differs. Full admin is checked for coverage: its raw `*` grants must cover everything an rpcd `*` login gets. CI runs it on every OpenWrt release in the matrix.
+The system bucket drives the container's real `rpcd`. Its files run one at a time, after the other buckets, because its tests make `rpcd` reload, and a reload briefly removes its ubus objects.
+
+| File | Covers |
+| :--- | :--- |
+| `test/system/rpcd_parity_test.uc` | SSO sessions against `rpcd` password logins. For each role shape (read `*`; a specific read group; a specific write group; read `*` with one write group; globs with a negation; read and write `*`; a restricted read list with `unauthenticated`; `unauthenticated` only; a read negation against the write list; single options instead of lists), it creates a password login and a `luci_sso_<role>` entry with the same lists, logs in both ways through the real code, and requires identical ACLs, printing every entry that differs. |
+| `test/system/sso_session_test.uc` | SSO sessions across an `rpcd` reload keep exactly their rights. A session named `sso:root` gets no rights, although a `root` login exists. `luci-sso` refuses to create a session for a role whose entry is missing (`MISSING_RPCD_LOGIN`) or has a password (`INSECURE_RPCD_LOGIN`). |
+| `test/system/rpcd_plugin_test.uc` | The `luci-sso` ubus object inside the real `rpcd`: `set_role`, `list_roles` and `delete_role`; the `unauthenticated` rule; password removal; validation errors; `reload_pending`; existing sessions getting new rights after the reload; the exact method list. Its roles are named `systest_*`. |
+| `test/system/migration_test.uc` | `rpcd_login.migrate()` and `demigrate()` on real UCI files in a scratch configuration directory: an old-style configuration, the shipped `admin` role and edited ones, second runs, interrupted runs, and the migrate, demigrate, migrate round trip, byte for byte. |
+
+CI runs the bucket on every OpenWrt release in the matrix.
 
 ---
 
@@ -119,6 +128,6 @@ Shared fixtures live in `test/fixtures/` (`fixtures.rsa`, `fixtures.oidc`); real
 | Property | Value |
 | :--- | :--- |
 | Process | Each `_test.uc` file runs in its own `ucode` process, so module load and `native_crypto_init()` happen once per file. |
-| Concurrency | One file at a time. `devenv/scripts/test.sh` passes no `-j` and `test/utest.config.uc` sets no `jobs`; utest 1.5.1 defaults to 1. `-j N` or a `jobs` config key runs *N* files in parallel. |
+| Concurrency | One file at a time. `devenv/scripts/test.sh` runs the `system` bucket in a separate `utest` run, after the others, with `-j 1`; the other buckets get no `-j`, and `test/utest.config.uc` sets no `jobs`, so utest 1.5.1 runs them one at a time too. `-j N` or a `jobs` config key runs *N* files in parallel, which the `system` bucket must never do. A `MODULES` selection is split the same way, and the command fails if either run fails. |
 | Timeout | 60 seconds per file (utest default; `timeout` config key). |
 | Bundles | The directories `test.sh` passes to `utest`: `native`, `integration`, `unit/luci_sso`, `unit/luci_sso/components`, `unit/luci_sso/crypto`, `unit/luci_sso/session`, `system`. |

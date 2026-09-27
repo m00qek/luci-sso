@@ -107,10 +107,7 @@ The log shows `[403] USER_NOT_AUTHORIZED`, preceded by:
 luci-sso[1234]: User [sub_id: c775e7b757ede630] matched no roles [session_id: 8e25f313865ad01a]
 ```
 
-The same line covers two cases:
-
-- The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching is case-insensitive; group matching is case-sensitive.
-- A role matches, but no matching role has any `read` or `write` entry. Add at least one permission to the role.
+The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching is case-insensitive; group matching is case-sensitive. A role with neither an email nor a group is ignored.
 
 Claim values are never logged. To see which claims the IdP sent, look for the debug line logged during the callback:
 
@@ -171,22 +168,64 @@ The valid range is `0`–`3600` seconds.
 
 ---
 
+## The login ends in a server error
+
+The log shows `[500] UBUS_LOGIN_FAILED`. The line before it says why:
+
+- `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`: the role has no permissions in `rpcd`, or its entry was edited by hand into something else. The settings page shows `Not set: edit and save this role, or its users cannot log in` in the role's row. Edit the role and save the page, or run `ubus call luci-sso set_role` (see [How to Configure Role-Based Access Control](rbac.md#where-to-change-a-role)). After restoring a backup, restore `/etc/config/rpcd` too.
+- `INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_<role>' of role '<role>' has a password option; remove it`: someone added a `password` option to the entry. Remove it, or save the role again through the settings page, which removes it:
+
+    ```bash
+    uci delete rpcd.luci_sso_<role>.password
+    uci commit rpcd
+    ```
+
+- `UBUS session creation failed`, `Failed to load LuCI ACLs for role '<role>'` or `UBUS session set failed`: `rpcd` refused the session. Check that `rpcd` is running (`ps | grep rpcd`; if not, `/etc/init.d/rpcd start`) and that `/usr/share/rpcd/acl.d/` holds the LuCI ACL files.
+
+---
+
+## The user gets the wrong role
+
+A user gets the **first** role that matches, from the top of the **Users** table; rights are never merged. The login logs which role it chose, and the other roles the user matched:
+
+```
+luci-sso[1234]: User [sub_id: c775e7b757ede630] mapped to role 'viewer', the first match; also matched: admin [session_id: 8e25f313865ad01a]
+```
+
+Drag the intended role above the other on the settings page and click **Save & Apply**, or move it with `uci reorder`. The user gets the new role at their next login.
+
+---
+
 ## Login succeeds but the session has no access
 
-If the login ends in an error page, the log shows `[500] UBUS_LOGIN_FAILED`, preceded by a line such as `UBUS session creation failed`, `Failed to load LuCI ACLs for role` or `UBUS session set failed`.
+The login completes, but pages are missing or refuse access.
 
-If the login completes but pages are missing or refuse access, look in the lines from that login for `UBUS session grant failed [sid: …] [scope: …]`, which means `rpcd` refused part of the rights, or `Role grants unknown access group '<name>'`, which means a role names a group no ACL file defines; see [How to Configure Role-Based Access Control](rbac.md#verify-a-role-is-working).
+- Check the role's permissions as `rpcd` holds them:
 
-- Verify `rpcd` is running: `ps | grep rpcd`. If it is not, start it: `/etc/init.d/rpcd start`.
+    ```bash
+    ubus call luci-sso list_roles
+    ```
+
+    A role whose lists hold only `unauthenticated` grants nothing: its users can log in but see nothing. The settings page shows `(none): this role grants no access`. An upgrade gives such an entry to a role it found without permissions, and logs `role '<role>' had no permissions to move`; see [How to Upgrade luci-sso](upgrade.md).
+
+- Look in the lines from that login for `UBUS session grant failed [sid: …] [scope: …]`, which means `rpcd` refused part of the rights, or `Role '<role>' grants unknown access group '<name>'; no ACL file defines it`, which means a role names a group no ACL file defines; see [How to Configure Role-Based Access Control](rbac.md#verify-a-role-is-working).
 - Verify LuCI ACL files are present: `ls /usr/share/rpcd/acl.d/`. Missing files indicate an incomplete LuCI installation.
 
 ---
 
-## SSO users suddenly get access errors while still logged in
+## LuCI says "Session expired" right after an SSO login
 
-LuCI pages start failing with "Access denied" or permission errors for users who logged in through SSO, while password users are fine. This happens after anything reloads `rpcd`, most often installing or upgrading a LuCI package: `rpcd` keeps the SSO sessions but drops their rights. See [About the Session Lifecycle](../../explanation/session-lifecycle.md#session-storage).
+LuCI treats a session that may call neither `session.access` nor `luci.getFeatures` as expired. Both come from the `unauthenticated` access group, which every role's `read` list must grant. The settings page and the ubus object always add it, so this happens only after a hand edit of `/etc/config/rpcd` that dropped it. Save the role again through the settings page, or with `ubus call luci-sso set_role`, which adds it back.
 
-Log out and log in through SSO again. The new session gets its rights back. If LuCI's **Log out** fails as well, open `https://<router-host>/cgi-bin/luci-sso` to start a new SSO login; the new session cookie replaces the old one.
+---
+
+## SSO users suddenly lose access while still logged in
+
+An `rpcd` reload rebuilds every session's rights from `/etc/config/rpcd`. SSO sessions get their role's current entry, so they keep their rights, or get the new ones if the role was changed. They lose all rights when their role's entry is gone: the role was deleted, or `luci-sso` was removed.
+
+Sessions from before the upgrade that moved role permissions into `rpcd` also lose their rights at that upgrade. See [About the Session Lifecycle](../../explanation/session-lifecycle.md#session-storage).
+
+Log out and log in through SSO again. If LuCI's **Log out** fails as well, open `https://<router-host>/cgi-bin/luci-sso` to start a new SSO login; the new session cookie replaces the old one.
 
 ---
 

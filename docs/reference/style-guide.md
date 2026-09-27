@@ -41,6 +41,7 @@ All I/O and nondeterminism MUST reach a module through the `deps` object: `fs`, 
 
 - A function that needs I/O MUST take `deps` as its first argument and pass it on. The `crypto/*` wrappers take only `native`.
 - Every `deps` object MUST include `log`.
+- `luci_sso.rpcd_login` is the exception: its writing functions take a UCI cursor, because the `rpcd` plugin and the package scripts call them outside the CGI, where there is no `deps`. They MUST stage changes only; the caller commits.
 - Deterministic, pure operations (string handling, Base64URL, JSON, URL normalization) MUST NOT go through `deps`.
 
 ```javascript
@@ -649,6 +650,7 @@ luci-sso/
 │   ├── discovery.uc       # Discovery document and JWKS fetching/caching
 │   ├── config.uc          # UCI loading and role matching
 │   ├── ubus.uc            # rpcd session creation and token replay registry
+│   ├── rpcd_login.uc      # The roles' rpcd login entries and rpcd's rules for them
 │   ├── web.uc             # CGI request parsing and response rendering
 │   ├── encoding.uc        # Base64URL, JSON, URL normalisation
 │   ├── result.uc          # Result object
@@ -663,7 +665,7 @@ luci-sso/
 │   ├── native_api.c       # Input guards
 │   ├── native.h           # Backend interface
 │   └── native_<lib>.c     # mbedtls, wolfssl, openssl backends
-├── files/                 # Installed as-is: CGI script, LuCI view, menu and controller, rpcd ACL, uci-defaults, luci-sso-repatch
+├── files/                 # Installed as-is: CGI script, LuCI view, menu and controller, rpcd ACL and plugin, uci-defaults, luci-sso-repatch
 ├── openwrt/luci-sso/      # OpenWrt package Makefile
 ├── test/
 │   ├── native/            # The compiled crypto module's contract
@@ -861,10 +863,11 @@ EC keys (key type) not ES256 signatures (algorithm).
 |------|------|-------------|
 | **Error Handling** | `die()` for contract bugs, `Result` objects for every runtime failure | Code review |
 | **I/O Abstraction** | All I/O and nondeterminism goes through `deps` (`fs`, `http`, `ubus`, `uci`, `clock`, `native`, `log`) | Code review |
-| **Virtual Identity** | Use OIDC role name as session label, no local passwords | Security review |
+| **Virtual Identity** | Name the session `sso:<role>` and grant exactly its `rpcd` login entry; no local passwords | Security review, `test/system/` |
 | **C Code** | Crypto primitives only, everything else in ucode | Architecture review |
 | **PKCE** | S256 only, no `plain` method support | Security review |
-| **RBAC Merging** | Aggregate role permissions using logical OR with deduplication | Logic review |
+| **First Match** | A user gets the first matching role in config order; never merge the rights of several roles | Logic review |
+| **rpcd Login Entries** | Touch only `luci_sso_*` sections, through `luci_sso.rpcd_login`; never write a `password` option; always store `unauthenticated` in `read` | Security review, `test/system/` |
 | **Indentation** | Tabs (OpenWrt standard) | `make lint` (CI) |
 | **Naming** | snake_case for variables/functions | Style review |
 | **Exports** | Trailing semicolon on `export` statements; none on private functions | `make lint` (CI) |

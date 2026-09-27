@@ -49,9 +49,11 @@ The native module is therefore covered three ways, each reaching a different dep
 
 ## Why there is a system bucket, and why it is small
 
-`luci-sso` creates LuCI sessions itself, so it must grant the same concrete rights rpcd would give a password login with the same role. The group definitions are read from rpcd's own ACL files at every login, but the rules for combining them (write implies read, table and array notation, globs, negations) are a copy of rpcd's C code. A copy can drift. When a new OpenWrt release changes those rules, faked `deps` cannot notice, because the fake encodes the old rules.
+`luci-sso` creates LuCI sessions itself, so it must grant the same concrete rights `rpcd` would give a password login with the role's entry. It must, because `rpcd` rebuilds every session from that entry when it reloads: any difference would change a user's rights at the next reload. The group definitions are read from `rpcd`'s own ACL files at every login, but the rules for combining them (write implies read, table and array notation, globs, negations checked first, lists only) are a copy of `rpcd`'s C code. A copy can drift. When a new OpenWrt release changes those rules, faked `deps` cannot notice, because the fake encodes the old rules.
 
-The system bucket exists to catch exactly that: it compares an SSO session with a real rpcd password login on each OpenWrt release CI tests. It is kept for invariants that need the real daemon. Everything else stays in unit and integration tests, where faked `deps` makes tests fast, deterministic and runnable offline.
+The system bucket exists to catch exactly that, and a few other things only the real daemon can show: that a session survives a reload with the same rights, that a session named `sso:root` never gets `root`'s rights, that the `luci-sso` ubus object works inside `rpcd`, and that the install and removal scripts' migration is exact on real UCI files. It is kept for invariants that need the real daemon. Everything else stays in unit and integration tests, where faked `deps` makes tests fast, deterministic and runnable offline.
+
+Because its tests make `rpcd` reload, and `rpcd` briefly has no ubus objects while it restarts, the system bucket runs one file at a time, after the others.
 
 ---
 

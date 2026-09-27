@@ -15,6 +15,7 @@ For the rationale behind the module boundaries, see [About the Architecture](../
 | [`luci_sso.config`](#luci_ssoconfig) | UCI configuration loader and role mapper. |
 | [`luci_sso.session`](#luci_ssosession) | The handshake state files. |
 | [`luci_sso.ubus`](#luci_ssoubus) | The `rpcd` session and the access-token replay registry. |
+| [`luci_sso.rpcd_login`](#luci_ssorpcd_login) | The roles' `rpcd` login entries and `rpcd`'s rules for them. |
 | [`luci_sso.ratelimit`](#luci_ssoratelimit) | Per-client request budgets. |
 | [`luci_sso.crypto`](#luci_ssocrypto) | Facade over the crypto wrappers. |
 | [`luci_sso.encoding`](#luci_ssoencoding) | Pure encoding and URL helpers. |
@@ -160,8 +161,8 @@ Processes the callback. `deps`: all fields. In order, it:
 6. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
 7. fetches UserInfo when the ID Token has no `email`;
 8. registers the access token against replay;
-9. maps the claims to roles;
-10. creates the `rpcd` session.
+9. maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches;
+10. creates the `rpcd` session from the role's `rpcd` login entry. Any failure there, including `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN`, ends as `UBUS_LOGIN_FAILED` (500).
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
@@ -250,11 +251,11 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `redirect_uri` | string | `luci-sso.default.redirect_uri` |
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
-| `roles` | array | Every `config role` section with an email or group: `{ name, emails, groups, read, write }` |
+| `roles` | array | Every `config role` section with an email or group, in config order: `{ name, emails, groups }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
 
-### `find_roles_for_user(config, claims)` → `Result<{role_name, read, write}>`
+### `find_role_for_user(config, claims)` → `Result<{role_name, also_matched}>`
 
-Matches `claims.email` (case-insensitive) and `claims.groups` (case-sensitive) against every role and merges the `read` and `write` lists of all matches. `role_name` is the first matching role. Fails with `NO_ROLES_MATCHED` when nothing matches or the merged lists are both empty.
+Matches `claims.email` (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
 
 ---
 
@@ -293,17 +294,22 @@ Constants `HANDSHAKE_DURATION` (`300`), `HANDSHAKE_DIR` (`"/var/run/luci-sso"`),
 
 ## `luci_sso.ubus`
 
-The `rpcd` session and the access-token replay registry. `deps: { ubus, fs, native, log }`, plus `uci` when present.
+The `rpcd` session and the access-token replay registry. `deps: { ubus, fs, native, log }`, plus `uci` for `create_passwordless_session`.
 
-### `create_passwordless_session(deps, username, perms, oidc_email, access_token, refresh_token, id_token)` → `Result<string>`
+### `create_passwordless_session(deps, role, oidc_email, access_token, refresh_token, id_token)` → `Result<string>`
 
-Creates an `rpcd` session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`) and grants it the ACLs for `perms` (`{ read, write }`). `write '*'` grants full admin; any other role gets the grants `rpcd` would give a password login with the same lists. Returns the session ID. Fails with `UBUS_SESSION_FAILED` or `CRYPTO_INIT_FAILED`.
+Creates an `rpcd` session for `role` with the rights of its `rpcd` login entry. Before creating anything, it reads `rpcd.luci_sso_<role>` through `deps.uci`:
+
+- a missing entry, one that is not a `login`, or one whose `username` is not `sso:<role>` fails with `MISSING_RPCD_LOGIN`;
+- an entry with a `password` option, whatever its value, fails with `INSECURE_RPCD_LOGIN`.
+
+It then creates the session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`) and grants exactly what `rpcd` grants a password login with the entry's `read` and `write` lists (`rpcd_login.permits` over the ACL files in `/usr/share/rpcd/acl.d/`). Only list options count; nothing is added. A plain group name that no ACL file defines is logged as a warning. Returns the session ID. Other failures: `UBUS_SESSION_FAILED` or `CRYPTO_INIT_FAILED`; a failure after the session is created destroys it. `deps.ubus.call`, `deps.uci` and a non-empty `role` are required (`die()` otherwise).
 
 The session holds these values:
 
 | Value | Content |
 | :--- | :--- |
-| `username` | The `username` argument; `handshake` passes the first matching role's name. |
+| `username` | `sso:<role>`, the entry's user name, from which `rpcd` rebuilds the session's rights on reload. |
 | `oidc_user` | The email. |
 | `oidc_access_token` | The access token. |
 | `oidc_refresh_token` | The refresh token. |
@@ -321,6 +327,75 @@ Destroys the session.
 ### `register_token(deps, access_token)` → `Result`
 
 Creates `/var/run/luci-sso/tokens/<sha256 hex>` with `mkdir`, which succeeds only once per token. Fails with `TOKEN_REPLAYED`, `INVALID_TOKEN`, `SYSTEM_ERROR` or a hashing error.
+
+---
+
+## `luci_sso.rpcd_login`
+
+The roles' `rpcd` login entries (`luci_sso_<role>` in `/etc/config/rpcd`, `username 'sso:<role>'`, never a password) and `rpcd`'s rules for them. Shared by `luci_sso.ubus`, the `luci-sso` ubus object (`files/usr/share/rpcd/ucode/luci-sso.uc`), the install script `20-luci-sso-rpcd` and the package's removal script. No `deps`: functions that write take a UCI cursor, and the caller commits.
+
+| Constant | Value |
+| :--- | :--- |
+| `CONFIG` | `"rpcd"` |
+| `SECTION_PREFIX` | `"luci_sso_"` |
+| `USERNAME_PREFIX` | `"sso:"` |
+| `BASELINE_GROUP` | `"unauthenticated"`: the access group every stored `read` list grants. |
+| `NAME_MAX` | `32`: the longest role name. |
+| `LIST_MAX` | `128`: the most entries in a list. |
+| `ENTRY_MAX` | `128`: the longest list entry. |
+| `DEFAULT_ROLE` | `"admin"`: the role the package ships. |
+| `PLACEHOLDER_EMAIL` | `"admin@example.com"`: the shipped role's only email. |
+
+### `section_name(role)` → `string`
+
+`luci_sso_<role>`.
+
+### `username(role)` → `string`
+
+`sso:<role>`.
+
+### `check_name(name)` → `Result<string>`
+
+1 to `NAME_MAX` letters, digits and underscores. Fails with `INVALID_NAME`.
+
+### `check_list(label, list)` → `Result<array>`
+
+An array of at most `LIST_MAX` non-empty strings of at most `ENTRY_MAX` characters, without control characters. `label` (`"read"` or `"write"`) names the list in the message. Fails with `INVALID_LIST`.
+
+### `permits(lists, perm, group)` → `bool`
+
+Whether an entry with `lists` (`{ read, write }`) has `perm` (`"read"` or `"write"`) on `group`, as `rpcd` decides it: `fnmatch(3)` patterns; a negation in the permission's own list denies before any positive entry allows; a read that the `read` list neither allows nor denies falls back to the `write` list. Only arrays count.
+
+### `with_baseline(read)` → `Result<array>`
+
+The `read` list to store: as given when it already grants `BASELINE_GROUP`, otherwise with it appended. Applying it twice gives the same list. Fails with `INVALID_LIST` when a negation in the list denies the group.
+
+### `entry(name, read, write)` → `Result<{name, section, username, read, write}>`
+
+Checks the name and both lists and returns the entry to store, with `read` from `with_baseline()`. Fails with `INVALID_NAME` or `INVALID_LIST`.
+
+### `stage(uci, e)` → `void`
+
+Stages an entry from `entry()` on a UCI cursor: the section becomes a `login` (a section of another type under the name is replaced), `username` is set, a `password` option is removed, and each list is replaced, or removed when empty. Touches no other section.
+
+### `is_placeholder(s)` → `bool`
+
+Whether a `luci-sso` role section, as `uci.foreach()` passes it, is the shipped role untouched: named `DEFAULT_ROLE`, with `PLACEHOLDER_EMAIL` as its only email and no group. A single option counts as a one-entry list.
+
+### `migrate(uci, warn)` → `{rpcd, luci_sso}`
+
+Moves role permissions from `/etc/config/luci-sso` into `rpcd` login entries. Run by `20-luci-sso-rpcd` on install and upgrade. For each role, in config order:
+
+1. a role with a `read` or `write` option gets its entry created or replaced from them (a single option is a one-entry list), and loses the options; a role whose name or lists `entry()` refuses keeps them, and `warn` is called;
+2. a role without lists that has an entry is left alone;
+3. the shipped role (`is_placeholder()`) without lists or entry gets `read '*'` and `write '*'`;
+4. any other role without lists or entry gets an entry that grants only `BASELINE_GROUP`, and `warn` is called; a role whose name `entry()` refuses gets no entry, and `warn` is called.
+
+Touches only `luci_sso_*` sections of `rpcd`, never reorders roles, and changes nothing when there is nothing to do. Returns whether each configuration changed. The caller commits `rpcd` before `luci-sso`.
+
+### `demigrate(uci, warn)` → `{rpcd, luci_sso}`
+
+The reverse of `migrate()`, for the package's removal. For each `luci_sso_*` section of `rpcd`, in config order: if it is a `login` and `/etc/config/luci-sso` has the role, its `read` and `write` lists replace the role's options, as stored (`BASELINE_GROUP` included; an empty list removes the option). The section is then deleted; a section without a role, or not a login, is deleted with a `warn` call. `migrate()` then recreates the same entries. Returns whether each configuration changed. The caller commits `luci-sso` before `rpcd`.
 
 ---
 
@@ -561,7 +636,8 @@ The tests run on utest (the `ucode-utest` package), which is not part of the ins
 | Path | Purpose |
 | :--- | :--- |
 | `test/utest.config.uc` | Module search paths and the modules utest proxies. |
-| `test/context.uc` | `with_context(cfg, cb)`: builds a full `deps` object from proxies for integration tests. |
+| `test/context.uc` | `with_context(cfg, cb)`: builds a full `deps` object from proxies for integration tests. `rpcd_logins(roles)`: the UCI data of the roles' `rpcd` login entries, for a test whose login must succeed. |
+| `test/lib/rpcd.uc` | System-bucket helpers for the real `rpcd`: login entries, session ACLs, and `await_reload()`, which waits for the reload a write triggers. |
 | `test/proxies/` | Proxies for `clock`, `http_client` and `native`. |
 | `test/fixtures/` | Shared fixtures (`fixtures.oidc`, `fixtures.rsa`). |
 | `test/lib/helpers.uc` | Helpers that produce real signed JWTs. |
