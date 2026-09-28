@@ -173,10 +173,10 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	let pem_res = crypto.jwk_to_pem(deps.native, jwk_res.data);
 	if (!pem_res.ok) return pem_res;
 
-	// The discovery document must describe the issuer we are configured for.
-	let disc_iss_res = encoding.normalize_url(discovery.issuer);
-	let conf_iss_res = encoding.normalize_url(config.issuer_url);
-	if (!disc_iss_res.ok || !conf_iss_res.ok || disc_iss_res.data !== conf_iss_res.data) {
+	// The discovery document must describe the issuer we are configured for,
+	// character for character (OIDC Discovery §4.3). discovery.discover()
+	// already checked this; checking again keeps this function safe on its own.
+	if (type(discovery.issuer) != "string" || discovery.issuer !== config.issuer_url) {
 		return Result.err(DISCOVERY_ISSUER_MISMATCH, `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}`);
 	}
 
@@ -184,7 +184,9 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		alg: header.alg,
 		now: now,
 		clock_tolerance: config.clock_tolerance,
-		iss: config.issuer_url,
+		// OIDC Core §3.1.3.7 (2): iss must exactly match the issuer
+		// identifier obtained through discovery.
+		iss: discovery.issuer,
 		aud: config.client_id,
 		pre_parsed_header: header
 	};

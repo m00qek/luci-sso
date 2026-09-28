@@ -509,6 +509,35 @@ describe('oidc: verify_id_token — claims', () => {
 		});
 	});
 
+	it('checks iss against the discovered issuer exactly (OIDC Core §3.1.3.7 (2))', () => {
+		let at = "mock-at";
+		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		// An Authentik-style issuer with a trailing slash, configured exactly.
+		let issuer = "https://trusted.idp/application/o/luci/";
+		let config = { ...f.MOCK_CONFIG, issuer_url: issuer };
+		let disc = { ...f.MOCK_DISCOVERY, issuer };
+		with_context({}, (deps) => {
+			let verify = (iss) => oidc.verify_id_token(deps,
+				{ id_token: h.generate_id_token({ ...f.MOCK_CLAIMS, iss, at_hash: ah }, PRIVKEY, "RS256"), access_token: at },
+				JWKS.keys, config, { nonce: "n" }, disc, 1516239022);
+			assert.match(contains({ ok: true }), verify(issuer));
+			for (let iss in [ "https://trusted.idp/application/o/luci", "HTTPS://TRUSTED.IDP/application/o/luci/", "https://trusted.idp:443/application/o/luci/" ])
+				assert.match(contains({ ok: false, error: "ISSUER_MISMATCH" }), verify(iss), iss);
+		});
+	});
+
+	it('returns DISCOVERY_ISSUER_MISMATCH when the discovered issuer differs from issuer_url only by normalization', () => {
+		let at = "mock-at";
+		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		let token = h.generate_id_token({ ...f.MOCK_CLAIMS, at_hash: ah }, PRIVKEY, "RS256");
+		with_context({}, (deps) => {
+			for (let declared in [ f.MOCK_CONFIG.issuer_url + "/", "https://TRUSTED.idp", "https://trusted.idp:443" ]) {
+				let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, JWKS.keys, f.MOCK_CONFIG, { nonce: "n" }, { ...f.MOCK_DISCOVERY, issuer: declared }, 1516239022);
+				assert.match(contains({ ok: false, error: "DISCOVERY_ISSUER_MISMATCH" }), res, declared);
+			}
+		});
+	});
+
 	it('accept single-element aud array without azp', () => {
 		let keys = JWKS.keys;
 		let at = "mock-at";

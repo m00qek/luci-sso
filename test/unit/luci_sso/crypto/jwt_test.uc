@@ -293,20 +293,27 @@ describe('crypto.jwt: verify — claims', () => {
 		);
 	}));
 
-	it('normalizes issuer URLs for comparison (trailing slash)', () => with_pass((native) => {
-		// opts.iss and payload.iss differ only by trailing slash — normalize_url should make them equal
-		assert.match(
-			contains({ ok: true }),
-			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, iss: 'https://issuer.example.com/' }), 'pem', BASE_OPTS)
-		);
+	it('returns ISSUER_MISMATCH for an iss that differs only by normalization (OIDC Core §3.1.3.7 (2))', () => with_pass((native) => {
+		// iss must be the exact issuer identifier: no trailing-slash, case or port folding.
+		for (let iss in [ 'https://issuer.example.com/', 'HTTPS://ISSUER.EXAMPLE.COM', 'https://Issuer.example.com', 'https://issuer.example.com:443' ]) {
+			assert.match(
+				contains({ ok: false, error: 'ISSUER_MISMATCH' }),
+				jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, iss }), 'pem', BASE_OPTS),
+				iss
+			);
+		}
 	}));
 
-	it('normalizes issuer scheme and host to lowercase', () => with_pass((native) => {
-		// normalize_url lowercases scheme and host
-		assert.match(
-			contains({ ok: true }),
-			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, iss: 'HTTPS://ISSUER.EXAMPLE.COM' }), 'pem', BASE_OPTS)
-		);
+	it('returns ISSUER_MISMATCH for a missing or non-string iss', () => with_pass((native) => {
+		for (let iss in [ null, 42, [ BASE_OPTS.iss ], { v: BASE_OPTS.iss } ]) {
+			let payload = { ...VALID_PAYLOAD, iss };
+			if (iss == null) delete payload.iss;
+			assert.match(
+				contains({ ok: false, error: 'ISSUER_MISMATCH' }),
+				jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, payload), 'pem', BASE_OPTS),
+				sprintf('%J', iss)
+			);
+		}
 	}));
 
 	it('returns AUDIENCE_MISMATCH when aud string does not match', () => with_pass((native) => {

@@ -130,9 +130,10 @@ export function verify(native, token, pubkey, options) {
 	if (payload.iat > (now + clock_tolerance))
 		return Result.err(TOKEN_ISSUED_IN_FUTURE);
 
-	let p_iss = encoding.normalize_url(payload.iss);
-	let o_iss = encoding.normalize_url(options.iss);
-	if (!p_iss.ok || !o_iss.ok || p_iss.data !== o_iss.data)
+	// OIDC Core §3.1.3.7 (2): iss MUST exactly match the issuer identifier.
+	// No URL normalization: a trailing slash or a letter-case change names a
+	// different issuer.
+	if (type(payload.iss) != "string" || payload.iss !== options.iss)
 		return Result.err(ISSUER_MISMATCH);
 
 	// OIDC Core §3.1.3.7 (3): aud MUST list our client_id, and the token MUST
