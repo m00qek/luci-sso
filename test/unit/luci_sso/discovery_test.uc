@@ -77,29 +77,66 @@ describe('discovery: find_jwk', () => {
 // ─── discover — success & caching ──────────────────────────────────────────────
 
 describe('discovery: discover — success & caching', () => {
-	it('normalizes the issuer for comparison (trailing slash) (W2)', () => {
+	it('rejects an issuer_url that differs from the declared issuer only by a trailing slash (Discovery §4.3)', () => {
 		let doc = { ...f.MOCK_DISCOVERY, issuer: ISSUER };
 		with_context({
 			fs:          { data: {} },
 			http_client: { data: { [`${ISSUER}/.well-known/openid-configuration`]: { status: 200, body: doc } } },
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
-			let res = discovery.discover(deps, ISSUER + "/");
-			assert.match(truthy(), res.ok, "Should succeed with normalized comparison");
-			assert.match(ISSUER, res.data.issuer);
+			assert.match(contains({ ok: false, error: "DISCOVERY_ISSUER_MISMATCH" }), discovery.discover(deps, ISSUER + "/"));
 		});
 	});
 
-	it('serves a normalized cache hit on a case-different issuer without refetching (W6)', () => {
+	it('rejects an issuer the IdP declares with a trailing slash when issuer_url has none (Authentik style)', () => {
+		let declared = "https://auth.example.com/application/o/luci/";
+		let configured = "https://auth.example.com/application/o/luci";
+		with_context({
+			fs:          { data: {} },
+			http_client: { data: { [`${configured}/.well-known/openid-configuration`]: { status: 200, body: { ...f.MOCK_DISCOVERY, issuer: declared } } } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			assert.match(contains({ ok: false, error: "DISCOVERY_ISSUER_MISMATCH" }), discovery.discover(deps, configured));
+		});
+	});
+
+	it('does not serve a cached document to an issuer_url that differs only in case', () => {
 		let doc = { ...f.MOCK_DISCOVERY, issuer: ISSUER };
 		with_context({
 			fs:          { data: {} },
-			http_client: { data: { [`${ISSUER}/.well-known/openid-configuration`]: { status: 200, body: doc } } },
+			http_client: { data: {
+				[`${ISSUER}/.well-known/openid-configuration`]: { status: 200, body: doc },
+				["HTTPS://TRUSTED.IDP/.well-known/openid-configuration"]: { status: 200, body: doc }
+			} },
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
 			assert.match(truthy(), discovery.discover(deps, ISSUER).ok);
-			assert.match(truthy(), discovery.discover(deps, "HTTPS://TRUSTED.IDP").ok, "Should hit cache using normalized comparison (W6)");
-			assert.match(1, length(spy(deps.http).calls.get), "Should fetch exactly once");
+			assert.match(contains({ ok: false, error: "DISCOVERY_ISSUER_MISMATCH" }), discovery.discover(deps, "HTTPS://TRUSTED.IDP"));
+			assert.match(2, length(spy(deps.http).calls.get), "the second issuer_url must not hit the first one's cache");
+		});
+	});
+
+	it('ignores a cached document whose issuer is not identical, even at its cache path (upgrade from normalized compare)', () => {
+		// An earlier version cached documents after a normalized compare, so
+		// a cache file can hold "https://trusted.idp/" for issuer_url
+		// "https://trusted.idp". It must neither be served, fresh or stale,
+		// nor stop a correct document from being fetched.
+		let cache_path = "/var/run/luci-sso/oidc-discovery-upgrade.json";
+		let old_doc = { ...f.MOCK_DISCOVERY, issuer: ISSUER + "/", cached_at: 1516239000 };
+		let fetch_ok = true;
+		with_context({
+			fs:          { data: { [cache_path]: sprintf("%J", old_doc) } },
+			http_client: { behavior: { get: (url, opts) => fetch_ok
+				? { ok: true, data: { status: 200, body: sprintf("%J", { ...f.MOCK_DISCOVERY, issuer: ISSUER }) } }
+				: Result.err("HTTP_REQUEST_FAILED", "TIMEOUT") } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			fetch_ok = false;
+			assert.match(contains({ ok: false, error: "DISCOVERY_NETWORK_ERROR" }), discovery.discover(deps, ISSUER, { cache_path }),
+				"a non-identical stale document must not be served");
+			fetch_ok = true;
+			assert.match(contains({ ok: true, data: contains({ issuer: ISSUER }) }), discovery.discover(deps, ISSUER, { cache_path }),
+				"the fresh, identical document replaces it");
 		});
 	});
 
@@ -566,6 +603,24 @@ describe('discovery: discover — validation failures name themselves in the log
 		});
 		return { res, logs };
 	}
+
+	it('names a near miss (trailing slash, case, default port) and says to copy the declared value', () => {
+		for (let declared in [ ISSUER + "/", "https://Trusted.IDP", "https://trusted.idp:443" ]) {
+			let r = discover_logging({ ...f.MOCK_DISCOVERY, issuer: declared });
+			assert.match("DISCOVERY_ISSUER_MISMATCH", r.res.error, declared);
+			let line = filter(r.logs, (m) => index(m, "DISCOVERY_ISSUER_MISMATCH: ") == 0);
+			assert.match(1, length(line), declared);
+			assert.match(truthy(), index(line[0], `issuer_url is "${ISSUER}" but the discovery document declares "${declared}"`) > 0, line[0]);
+			assert.match(truthy(), index(line[0], "differ only in a trailing slash, letter case or default port: set issuer_url to exactly the declared value") > 0, line[0]);
+		}
+	});
+
+	it('gives no near-miss hint when the issuers really differ', () => {
+		let r = discover_logging({ ...f.MOCK_DISCOVERY, issuer: "https://other.idp" });
+		let line = filter(r.logs, (m) => index(m, "DISCOVERY_ISSUER_MISMATCH: ") == 0);
+		assert.match(1, length(line));
+		assert.match(-1, index(line[0], "differ only"), line[0]);
+	});
 
 	it('logs DISCOVERY_ISSUER_MISMATCH with both issuers, sanitised', () => {
 		let r = discover_logging({ ...f.MOCK_DISCOVERY, issuer: "https://evil.idp\r\nforged line" });

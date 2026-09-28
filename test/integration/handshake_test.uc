@@ -1087,11 +1087,12 @@ describe('handshake: split-horizon', () => {
 	});
 
 	it('handles trailing slash in issuer_url (Audit W3)', () => {
+		// issuer_url must be the declared issuer exactly, slash included.
 		let issuer_url = "https://idp.com/";
 		let internal_issuer_url = "https://internal.lan";
 
 		let discovery_doc = {
-			issuer: "https://idp.com",
+			issuer: "https://idp.com/",
 			authorization_endpoint: "https://idp.com/auth",
 			token_endpoint: "https://idp.com/token",
 			jwks_uri: "https://idp.com/jwks"

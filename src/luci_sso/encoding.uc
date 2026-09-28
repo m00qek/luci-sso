@@ -159,9 +159,12 @@ export function safe_json(data) {
 };
 
 /**
- * Normalizes a URL for comparison.
- * Lowercases the scheme/host and removes trailing slashes.
- * Per RFC 3986, the path component is case-sensitive.
+ * Normalizes a URL: lowercases the scheme and host, drops the default port
+ * and removes trailing slashes. Per RFC 3986, the path is case-sensitive.
+ *
+ * Never use it to compare an issuer identifier: OIDC compares issuers as
+ * exact strings (Core §3.1.3.7, Discovery §4.3). It only builds cache keys
+ * and diagnostic hints.
  * 
  * @param {string} url - The URL to normalize
  * @returns {object} - Result Object {ok, data/error}

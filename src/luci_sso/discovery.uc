@@ -83,19 +83,18 @@ export function discover(deps, issuer, options) {
 	if (!encoding.is_https(issuer)) return Result.err(INSECURE_ISSUER_URL);
 
 	options = options || {};
-	let normalized_issuer_res = encoding.normalize_url(issuer);
-	if (!normalized_issuer_res.ok) return normalized_issuer_res;
-	let normalized_issuer = normalized_issuer_res.data;
 
-	let cache_path = options.cache_path || get_cache_path(deps.native, normalized_issuer_res, "discovery");
+	// OIDC Discovery §4.3: the document's issuer MUST be identical to the
+	// issuer URL we are configured with. The cache is keyed on, and every
+	// cached document is checked against, that exact string, so a document
+	// cached by an earlier version that compared normalized URLs is ignored
+	// (and refetched) unless its issuer is identical too.
+	let cache_path = options.cache_path || get_cache_path(deps.native, Result.ok(issuer), "discovery");
 	let ttl = options.ttl || 86400; // 24 hours default (production standard)
 
 	let cached = _read_cache(deps, cache_path, ttl);
-	if (cached && cached.issuer) {
-		let cached_issuer_res = encoding.normalize_url(cached.issuer);
-		if (cached_issuer_res.ok && cached_issuer_res.data === normalized_issuer) {
-			return Result.ok(cached);
-		}
+	if (cached && cached.issuer === issuer) {
+		return Result.ok(cached);
 	}
 
 	// Split-horizon: fetch from the internal origin, keeping the issuer's path
@@ -116,17 +115,14 @@ export function discover(deps, issuer, options) {
 	fetch_url += ".well-known/openid-configuration";
 
 	let res_http = deps.http.get(fetch_url, { verify: true });
-	let issuer_id = crypto.safe_id(deps.native, normalized_issuer);
+	let issuer_id = crypto.safe_id(deps.native, issuer);
 
 	if (!res_http.ok || res_http.data.status != 200) {
 		// If the IdP is unreachable, serve a stale cached document rather than fail the login.
 		let stale = _read_cache(deps, cache_path, ttl, true);
-		if (stale && stale.issuer) {
-			let stale_issuer_res = encoding.normalize_url(stale.issuer);
-			if (stale_issuer_res.ok && stale_issuer_res.data === normalized_issuer) {
-				deps.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
-				return Result.ok(stale);
-			}
+		if (stale && stale.issuer === issuer) {
+			deps.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
+			return Result.ok(stale);
 		}
 
 		if (!res_http.ok) {
@@ -153,12 +149,17 @@ export function discover(deps, issuer, options) {
 		return Result.err(DISCOVERY_MISSING_ISSUER);
 	}
 
-	let config_issuer_res = encoding.normalize_url(config.issuer);
-	if (!config_issuer_res.ok || config_issuer_res.data !== normalized_issuer) {
+	if (config.issuer !== issuer) {
 		// The issuer is configuration, not a secret: log both values so the
 		// admin can see exactly what to copy into issuer_url.
 		let doc_issuer = (type(config.issuer) == "string") ? `"${encoding.log_safe(config.issuer)}"` : `(${type(config.issuer)})`;
-		deps.log("error", `DISCOVERY_ISSUER_MISMATCH: issuer_url is "${encoding.log_safe(issuer)}" but the discovery document declares ${doc_issuer} [id: ${issuer_id}]`);
+		// A near miss (trailing slash, letter case, default port) is the
+		// usual upgrade trap: say so, since the two can look identical.
+		let hint = "";
+		let conf_norm = encoding.normalize_url(issuer), doc_norm = encoding.normalize_url(config.issuer);
+		if (conf_norm.ok && doc_norm.ok && conf_norm.data === doc_norm.data)
+			hint = "; they differ only in a trailing slash, letter case or default port: set issuer_url to exactly the declared value";
+		deps.log("error", `DISCOVERY_ISSUER_MISMATCH: issuer_url is "${encoding.log_safe(issuer)}" but the discovery document declares ${doc_issuer}${hint} [id: ${issuer_id}]`);
 		return Result.err(DISCOVERY_ISSUER_MISMATCH,
 			 `Expected issuer_id ${issuer_id}` );
 	}
