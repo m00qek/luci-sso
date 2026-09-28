@@ -22,12 +22,12 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | Target | Stack | Description |
 | :--- | :--- | :--- |
 | `up` | CI | Start the CI stack (mock IdP + simulated router). Required before running tests. |
-| `down` | CI | Stop and remove CI stack containers. |
+| `down` | CI | Stop and remove CI stack containers, their networks and their anonymous volumes. |
 | `ps` | CI | List running CI containers and their status. |
 | `shell` | CI | Open an interactive shell in the `openwrt` container. |
 | `run` | CI | Run a one-shot interactive shell (container is removed on exit). |
 | `local-up` | Local | Start the local stack with ports exposed at `localhost:8443`. |
-| `local-down` | Local | Stop and remove local stack containers. |
+| `local-down` | Local | Stop and remove local stack containers, their networks and their anonymous volumes. |
 | `local-ps` | Local | List running local containers and their status. |
 | `local-shell` | Local | Open an interactive shell in the local `openwrt` container. |
 | `local-run` | Local | Run a one-shot interactive shell in the local stack. |
@@ -57,8 +57,8 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 
 | Target | Stack | Description |
 | :--- | :--- | :--- |
-| `compile` | — | Compile native C components for the target architecture. Skipped if the sentinel file is current. Runs a one-shot `sdk` container; needs no running stack. |
-| `package` | — | Build the `luci-sso` and `luci-sso-crypto-*` packages for `SDK_ARCH`/`SDK_VERSION` into `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `.ipk` for 24.10, `.apk` for 25.12. Replaces the previous build's `luci-sso` packages there. Runs a one-shot `sdk` container; needs no running stack. |
+| `compile` | — | Compile native C components for the target architecture. Skipped if the sentinel file is current. Runs a one-shot `sdk` container; needs no running stack. Leaves no Docker volume behind. |
+| `package` | — | Build the `luci-sso` and `luci-sso-crypto-*` packages for `SDK_ARCH`/`SDK_VERSION` into `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `.ipk` for 24.10, `.apk` for 25.12. Replaces the previous build's `luci-sso` packages there. Runs a one-shot `sdk` container; needs no running stack. Leaves no Docker volume behind. |
 
 ### Utilities
 

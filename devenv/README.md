@@ -52,3 +52,11 @@ make down && sudo rm -rf bin && make compile && make up
 ```
 
 **`native.so` is a directory** — Same root cause. Same fix as above.
+
+**Disk fills up with unnamed Docker volumes of about 1.3 GB each** — The OpenWrt SDK image declares `VOLUME /builder`. Before the `sdk` service mounted a `tmpfs` over `/builder`, every `sdk` container got an anonymous volume that `make down` did not remove. The build no longer creates them, and `make down` and `make local-down` now remove the anonymous volumes of the stack's containers. To reclaim space from older runs, list the dangling volumes, check that they are yours, and remove them one by one:
+```bash
+docker volume ls -f dangling=true
+docker system df -v             # sizes, under "Local Volumes space usage"
+docker volume rm <volume-name>
+```
+`docker volume prune` also removes the dangling volumes of every other project on the host.

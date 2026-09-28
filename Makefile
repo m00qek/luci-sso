@@ -219,8 +219,11 @@ SCREENSHOTS_DIR := $(PROJECT_ROOT)/docs/assets/screenshots
 	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) build
 	docker compose $(COMPOSE_FLAGS) up --remove-orphans -d
 
+# -v also removes the anonymous volumes of the suite's containers, so an
+# image VOLUME cannot outlive them. The compose files declare no named
+# volumes, so -v deletes nothing that is meant to persist.
 .down:
-	docker compose $(COMPOSE_FLAGS) down --remove-orphans
+	docker compose $(COMPOSE_FLAGS) down --remove-orphans -v
 
 .ps:
 	@docker compose $(COMPOSE_FLAGS) ps

@@ -28,6 +28,18 @@ The packages land in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`. See [How to B
 
 Native C compilation is guarded by a sentinel file, `bin/lib/<SDK_ARCH>/<SDK_VERSION>/.built-<CRYPTO_LIB>`. When a file in `mod/` (`*.c`, `*.h` or `CMakeLists.txt`) is newer than the sentinel, the next `make compile` rebuilds the C components for that architecture, version and backend.
 
+Each `make compile` and `make package` runs in a throwaway `sdk` container and leaves no Docker volume behind. The SDK images themselves take about 4.5 GB each for 24.10 and 25.12. Stop a stack with `make down` or `make local-down`, which also removes its containers' anonymous volumes.
+
+Older versions of the devenv left an unnamed volume of about 1.3 GB after most `sdk` runs. To reclaim that space, list the dangling volumes, check that they are yours, and remove them one by one:
+
+```bash
+docker volume ls -f dangling=true
+docker system df -v             # sizes, under "Local Volumes space usage"
+docker volume rm <volume-name>
+```
+
+`docker volume prune` also removes the dangling volumes of every other project on the host.
+
 ---
 
 ## Test
