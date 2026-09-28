@@ -253,20 +253,6 @@ export function rebase_origin(url, from, to) {
 };
 
 /**
- * Normalizes a 'sub' claim for comparison.
- * Normalizing to lowercase ensures interoperability.
- * 
- * @param {string} sub - The sub claim to normalize
- * @returns {object} - Result Object {ok, data/error}
- */
-export function normalize_sub(sub) {
-	if (type(sub) != "string")
-		return Result.err(INVALID_ARGUMENT, "normalize_sub expects string");
-
-	return Result.ok(lc(sub));
-};
-
-/**
  * Checks if a URL uses the HTTPS scheme (case-insensitive).
  * Per RFC 3986 §3.1, schemes are case-insensitive.
  * 

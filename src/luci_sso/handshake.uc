@@ -130,13 +130,13 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 	if (!user_data.email && discovery_doc.userinfo_endpoint) {
 		let ui_res = oidc.fetch_userinfo(deps, discovery_doc.userinfo_endpoint, tokens.access_token);
 		if (ui_res.ok) {
-			// UserInfo sub MUST match the ID token sub (OIDC Core §5.3.2), or the
-			// claims could belong to a different user. Normalise case first, since
-			// some IdPs are inconsistent about it.
-			let res_norm_ui = encoding.normalize_sub(ui_res.data.sub);
-			let res_norm_id = encoding.normalize_sub(user_data.sub);
+			// UserInfo sub MUST exactly match the ID token sub (OIDC Core
+			// §5.3.2), or the claims could belong to a different user. sub is
+			// case-sensitive, so the comparison is exact.
+			let ui_sub = ui_res.data.sub;
+			let id_sub = user_data.sub;
 
-			if (!res_norm_ui.ok || !res_norm_id.ok || res_norm_ui.data !== res_norm_id.data) {
+			if (type(ui_sub) != "string" || type(id_sub) != "string" || ui_sub !== id_sub) {
 				deps.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
 				return Result.err(IDENTITY_MISMATCH, { http_status: 403 });
 			}

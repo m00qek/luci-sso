@@ -428,7 +428,9 @@ describe('handshake: userinfo', () => {
 		});
 	});
 
-	it('userinfo fallback succeeds after sub normalization (case-insensitive)', () => {
+	// Runs a full callback where the ID token carries id_sub and no email, so
+	// the handshake falls back to UserInfo, which answers with userinfo_sub.
+	let run_userinfo_sub = (id_sub, userinfo_sub) => {
 		let issuer_url = f.MOCK_CONFIG.issuer_url;
 		let discovery_doc = {
 			...f.MOCK_DISCOVERY,
@@ -445,6 +447,7 @@ describe('handshake: userinfo', () => {
 		};
 
 		let nonce_captured = null;
+		let res = null;
 
 		with_context({
 			fs:    { data: {} },
@@ -454,14 +457,13 @@ describe('handshake: userinfo', () => {
 				data: {
 					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
 					[discovery_doc.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
-					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: "USER-123", email: "user@example.com", email_verified: true } }
+					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: userinfo_sub, email: "user@example.com", email_verified: true } }
 				},
 				behavior: {
 					post: (url, opts) => {
 						let access_token = "at-123";
 						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
-						// ID Token has lowercase sub; UserInfo returns UPPERCASE sub — normalization must reconcile
-						let payload = { ...f.MOCK_CLAIMS, sub: "user-123", email: null, nonce: nonce_captured, at_hash };
+						let payload = { ...f.MOCK_CLAIMS, sub: id_sub, email: null, nonce: nonce_captured, at_hash };
 						let id_token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
 						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token }) } };
 					}
@@ -480,10 +482,27 @@ describe('handshake: userinfo', () => {
 				cookies: { "__Host-luci_sso_state": s_res.data.token }
 			};
 
-			let res = handshake.authenticate(deps, test_config, request);
-			assert.match(truthy(), res.ok, "Should SUCCEED after sub normalization fix");
-			assert.match("user@example.com", res.data.email);
+			res = handshake.authenticate(deps, test_config, request);
 		});
+		return res;
+	};
+
+	it('accepts a UserInfo sub that is byte-for-byte the ID token sub', () => {
+		let res = run_userinfo_sub("user-123", "user-123");
+		assert.match(truthy(), res.ok, `Handshake should succeed. Error: ${res.error}`);
+		assert.match("user@example.com", res.data.email);
+	});
+
+	it('rejects a UserInfo sub that differs only in case (sub is case-sensitive, OIDC Core §5.3.2)', () => {
+		let res = run_userinfo_sub("user-123", "USER-123");
+		assert.match(falsy(), res.ok, "A sub differing only in case is a different subject");
+		assert.match("IDENTITY_MISMATCH", res.error);
+	});
+
+	it('rejects a non-string UserInfo sub', () => {
+		let res = run_userinfo_sub("123", 123);
+		assert.match(falsy(), res.ok, "A numeric sub must not match its string form");
+		assert.match("IDENTITY_MISMATCH", res.error);
 	});
 });
 

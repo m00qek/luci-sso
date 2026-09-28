@@ -257,40 +257,6 @@ describe('encoding: normalize_url', () => {
 	});
 });
 
-// ─── normalize_sub ───────────────────────────────────────────────────────────
-
-describe('encoding: normalize_sub', () => {
-	it('returns INVALID_ARGUMENT for non-string input', () => {
-		assert.match(contains({ ok: false, error: 'INVALID_ARGUMENT' }), encoding.normalize_sub(null));
-		assert.match(contains({ ok: false, error: 'INVALID_ARGUMENT' }), encoding.normalize_sub(42));
-	});
-
-	it('lowercases the sub claim', () => {
-		assert.match(contains({ ok: true, data: 'user@example.com' }), encoding.normalize_sub('User@Example.COM'));
-	});
-
-	it('leaves already-lowercase input unchanged', () => {
-		assert.match(contains({ ok: true, data: 'alice' }), encoding.normalize_sub('alice'));
-	});
-
-	it('handles an empty string', () => {
-		assert.match(contains({ ok: true, data: '' }), encoding.normalize_sub(''));
-	});
-
-	prop('result is always lowercase', gen.string({ max_len: 100 }), (s, ctx) => {
-		ctx.classify('empty', length(s) === 0);
-		let res = encoding.normalize_sub(s);
-		assert.match(contains({ ok: true }), res);
-		assert.match(lc(s), res.data);
-	});
-
-	prop('is idempotent', gen.string({ max_len: 100 }), (s) => {
-		let once = encoding.normalize_sub(s);
-		assert.match(contains({ ok: true }), once);
-		assert.match(once.data, encoding.normalize_sub(once.data).data);
-	});
-});
-
 // ─── is_https ────────────────────────────────────────────────────────────────
 
 describe('encoding: is_https', () => {
