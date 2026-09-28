@@ -499,10 +499,14 @@ describe('handshake: userinfo', () => {
 		assert.match("IDENTITY_MISMATCH", res.error);
 	});
 
-	it('rejects a non-string UserInfo sub', () => {
-		let res = run_userinfo_sub("123", 123);
-		assert.match(falsy(), res.ok, "A numeric sub must not match its string form");
-		assert.match("IDENTITY_MISMATCH", res.error);
+	it('does not use a UserInfo response whose sub is not a non-empty string', () => {
+		// fetch_userinfo refuses it (MISSING_SUB_CLAIM), so its email never
+		// reaches role matching and the login finds no role (OIDC Core §5.3.2).
+		for (let ui_sub in [ 123, "" ]) {
+			let res = run_userinfo_sub("123", ui_sub);
+			assert.match(falsy(), res.ok, sprintf("UserInfo sub %J", ui_sub));
+			assert.match("USER_NOT_AUTHORIZED", res.error, sprintf("UserInfo sub %J", ui_sub));
+		}
 	});
 });
 

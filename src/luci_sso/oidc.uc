@@ -203,8 +203,9 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	}
 	deps.log("debug", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
 
-	// 3. OIDC Mandatory Claims Check
-	if (!payload.sub) {
+	// 3. OIDC Mandatory Claims Check. sub is a non-empty, case-sensitive
+	// string (OIDC Core §2); a number, "" or null is not a subject.
+	if (type(payload.sub) != "string" || length(payload.sub) == 0) {
 		return Result.err(MISSING_SUB_CLAIM);
 	}
 
@@ -313,8 +314,8 @@ export function fetch_userinfo(deps, endpoint, access_token) {
 	}
 	deps.log("debug", `UserInfo claims received: ${join(", ", claim_names)}`);
 
-	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2)
-	if (!payload.sub) {
+	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2): a non-empty string.
+	if (type(payload.sub) != "string" || length(payload.sub) == 0) {
 		deps.log("error", "UserInfo response missing mandatory 'sub' claim");
 		return Result.err(MISSING_SUB_CLAIM);
 	}

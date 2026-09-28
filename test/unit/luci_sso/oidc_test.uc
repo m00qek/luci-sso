@@ -509,6 +509,20 @@ describe('oidc: verify_id_token — claims', () => {
 		});
 	});
 
+	it('requires sub to be a non-empty string (OIDC Core §2)', () => {
+		let at = "mock-at";
+		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		with_context({}, (deps) => {
+			for (let sub in [ null, "", 123, 0, true, [ "u" ], { id: "u" } ]) {
+				let payload = { ...f.MOCK_CLAIMS, sub, at_hash: ah };
+				if (sub == null) delete payload.sub;
+				let token = h.generate_id_token(payload, PRIVKEY, "RS256");
+				let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, JWKS.keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1516239022);
+				assert.match(contains({ ok: false, error: "MISSING_SUB_CLAIM" }), res, sprintf("sub %J", sub));
+			}
+		});
+	});
+
 	it('checks iss against the discovered issuer exactly (OIDC Core §3.1.3.7 (2))', () => {
 		let at = "mock-at";
 		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
@@ -752,6 +766,17 @@ describe('oidc: fetch_userinfo', () => {
 			assert.match(falsy(), res.ok);
 			assert.match("MISSING_SUB_CLAIM", res.error);
 		});
+	});
+
+	it('rejects a UserInfo sub that is not a non-empty string', () => {
+		let endpoint = "https://trusted.idp/userinfo";
+		for (let sub in [ "", 123, true, [ "u" ] ]) {
+			with_context({
+				http_client: { data: { [endpoint]: { status: 200, body: { sub, email: "x@example.com" } } } }
+			}, (deps) => {
+				assert.match(contains({ ok: false, error: "MISSING_SUB_CLAIM" }), oidc.fetch_userinfo(deps, endpoint, "at"), sprintf("sub %J", sub));
+			});
+		}
 	});
 
 	it('returns the sub verbatim (caller enforces binding)', () => {
