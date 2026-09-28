@@ -48,6 +48,8 @@ The grant types, the parameters of the authorization and token requests, and the
 | Token error: `invalid_grant` handling | OIDC Core §3.1.3.4 | ✅ Implemented | Logged as `OIDC_INVALID_GRANT`. |
 | Refresh tokens | OIDC Core §12 | ❌ Not implemented | Stored but never used. See [notes](#authorization-code-flow-notes). |
 | UserInfo endpoint (fallback) | OIDC Core §5.3 | ✅ Implemented | Fetched when `email` claim is absent from the ID Token. |
+| UserInfo `sub` must match the ID Token `sub` | OIDC Core §5.3.2 | ✅ Implemented | Exact, case-sensitive string comparison. A mismatch, or a non-string `sub`, triggers `IDENTITY_MISMATCH`. |
+| `email_verified` claim | OIDC Core §5.1 | ✅ Implemented | Only the JSON boolean `true` counts as verified, and only from the response that carried the email. See [UCI Configuration](uci-config.md#oidc-section-notes). |
 | RP-Initiated Logout | [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) §2 | ✅ Implemented | See [notes](#authorization-code-flow-notes). |
 
 ### Authorization Code Flow notes

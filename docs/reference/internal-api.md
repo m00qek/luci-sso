@@ -260,7 +260,7 @@ Matches the email `matchable_email` returns (case-insensitive) and `claims.group
 
 ### `email_is_verified(claims)` → `bool`
 
-`true` when `claims.email_verified` is `true` or the string `"true"`.
+`true` when `claims.email_verified` is the boolean `true`. Any other value, including the string `"true"`, gives `false`.
 
 ### `matchable_email(config, claims)` → `string` or `null`
 
@@ -504,7 +504,6 @@ Pure helpers.
 | `split_origin(url)` | `Result<{origin, rest}>` | The normalized origin and the untouched path, query and fragment. Refuses URLs with userinfo. |
 | `is_origin(url)` | `bool` | `true` for `scheme://host[:port]` with at most a trailing `/`. |
 | `rebase_origin(url, from, to)` | `string` | Moves `url` from `from`'s origin to `to`'s, keeping its path; otherwise returns it unchanged. |
-| `normalize_sub(sub)` | `Result<string>` | Lower-cases a `sub` claim. |
 | `is_https(url)` | `bool` | `true` if `url` starts with `https://`, in any case. |
 | `log_safe(value, max)` | `string` | Replaces every byte outside printable ASCII with `?` and cuts the result to `max` bytes (default `200`), adding `...`. A non-string gives `""`. For untrusted values in log lines. |
 

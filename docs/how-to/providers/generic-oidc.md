@@ -122,7 +122,7 @@ After a successful login, `luci-sso` maps the user's OIDC claims to a LuCI role.
     uci commit luci-sso
     ```
 
-An email matches only if the IdP marks it as verified: `email_verified` is `true` (or the string `"true"`) in the same response as the email, the ID Token or UserInfo. Many IdPs send `false` for an address an administrator entered, or leave the claim out. Check the IdP's settings for a per-user "email verified" flag, or a claim mapping that adds `email_verified`. If the IdP cannot send `true`, map by group instead, or turn the check off:
+An email matches only if the IdP marks it as verified: `email_verified` is the JSON boolean `true`, not the string `"true"`, in the same response as the email, the ID Token or UserInfo. Many IdPs send `false` for an address an administrator entered, or leave the claim out. Check the IdP's settings for a per-user "email verified" flag, or a claim mapping that adds `email_verified`. If the IdP cannot send `true`, map by group instead, or turn the check off:
 
 --8<-- "email-verified-off.md"
 

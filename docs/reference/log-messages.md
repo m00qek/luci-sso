@@ -331,7 +331,7 @@ A failure here does not stop the login. It is logged as a warning, and the login
 | `USERINFO_FETCH_FAILED` | The UserInfo endpoint returned a status other than 200 | The IdP rejected the request. Usually a scope or permission issue. | In `UserInfo fallback failed`, preceded by `UserInfo fetch HTTP <status>` |
 | `USERINFO_NETWORK_ERROR` | The UserInfo request did not complete | Transport failure before any HTTP response. | In `UserInfo fallback failed`, preceded by `UserInfo fetch network error: HTTP_REQUEST_FAILED (<cause>)` |
 | `USERINFO_INVALID_JSON` | The UserInfo response is not valid JSON | The IdP returned a malformed UserInfo response. | In `UserInfo fallback failed`, preceded by `UserInfo JSON parse error: …` |
-| `IDENTITY_MISMATCH` | The UserInfo `sub` differs from the ID Token `sub` | The IdP returned claims for a different subject. The login is refused. | `[403] IDENTITY_MISMATCH`, preceded by `UserInfo 'sub' mismatch` |
+| `IDENTITY_MISMATCH` | The UserInfo `sub` differs from the ID Token `sub`, even only in case | The IdP returned claims for a different subject. The login is refused. | `[403] IDENTITY_MISMATCH`, preceded by `UserInfo 'sub' mismatch` |
 
 ---
 

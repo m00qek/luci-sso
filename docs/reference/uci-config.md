@@ -19,7 +19,7 @@ The connection to the IdP. A missing or invalid required option makes every requ
 | `client_secret` | string | Required. The Client Secret registered with your IdP. Stored in plain text in `/etc/config/luci-sso` — restrict shell and physical access to the router accordingly. |
 | `redirect_uri` | string (URL) | The callback URL registered with the IdP: `https://<router-host>/cgi-bin/luci-sso/callback`. Must use `https://` and exactly match what the IdP client is configured to accept. Unset in the shipped configuration; the LuCI settings page then suggests one from the browser's host name, without port. Enabling SSO without it fails with `CONFIG_ERROR` (`redirect_uri is mandatory and must use HTTPS`). |
 | `scope` | string | Optional. Space-separated list of OIDC scopes to request. Default: `openid profile email`. Add `groups` if the IdP supports group claims and role mapping by group is required. |
-| `require_email_verified` | boolean | Optional. Default: `1`, also when the option is absent. While on, an `email` rule matches only if the IdP's `email_verified` claim is `true` or the string `"true"`. `0`, `no`, `off` or `false` turns it off. See [notes](#oidc-section-notes). |
+| `require_email_verified` | boolean | Optional. Default: `1`, also when the option is absent. While on, an `email` rule matches only if the IdP's `email_verified` claim is the JSON boolean `true`. `0`, `no`, `off` or `false` turns it off. See [notes](#oidc-section-notes). |
 | `clock_tolerance` | integer | Required. Allowed clock skew in seconds, applied to the ID Token's `exp`, `iat` and `nbf` checks and to the login handshake's expiry. Valid range: `0`–`3600`. See [notes](#oidc-section-notes). |
 
 ### OIDC section notes
@@ -32,7 +32,7 @@ The connection to the IdP. A missing or invalid required option makes every requ
     - See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md).
 - **`require_email_verified`** affects role matching only.
     - The claim is read from the response the email came from: the ID Token, or UserInfo when the ID Token has no `email`. The two are never mixed.
-    - The string `"true"` is accepted because some IdPs send the claim as a string. Any other value, or no claim, is not verified.
+    - Only the JSON boolean `true` counts, as OIDC Core §5.1 defines the claim. Any other value, including the string `"true"`, or no claim, is not verified.
     - An unverified email is ignored for matching, and the log says `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified)`. `group` rules still match. A user who matches no role is refused with `USER_NOT_AUTHORIZED`.
     - The email is still stored in the session as `oidc_user`.
     - What each IdP sends: [Provider Compatibility](provider-compatibility.md#verified-email). Why: [About Roles and Permissions](../explanation/roles-and-permissions.md#verified-email-addresses).

@@ -127,6 +127,7 @@ Releases up to 0.9.1 kept a role's permissions as `read` and `write` lists on th
 - **Permissions take effect at Save.** On the settings page, read and write access are written to `rpcd` when you click **Save** (or **Save & Apply**), and are in force about a second later, once `rpcd` has reloaded. Emails, groups and role order still take effect with **Save & Apply**. The role editor shows a note saying so.
 - **SSO sessions survive `rpcd` reloads.** Installing a LuCI package that reloads `rpcd` no longer strips SSO users of their rights.
 - **An ID Token without `at_hash` is accepted.** OIDC Core makes it optional in the authorization code flow, and `luci-sso` now follows it, so IdPs that never send it, such as Authentik, work. A present `at_hash` is still checked, and a wrong one is refused with `AT_HASH_MISMATCH`. The `MISSING_AT_HASH` code is gone.
+- **The UserInfo `sub` must match exactly.** When the router fetches UserInfo, the `sub` it returns must equal the ID Token's `sub` exactly, as OIDC Core §5.3.2 requires. Earlier releases ignored differences of case. A `sub` that differs only in case now fails the login with `IDENTITY_MISMATCH`.
 - **An email rule needs a verified email.** The new `require_email_verified` option, on by default, makes an `email` rule match only when the IdP marks the address as verified. See [Email rules need a verified email](#email-rules-need-a-verified-email).
 - **Removal keeps the permissions.** Removing the package copies each entry's lists back onto its role, then deletes the entries. Installing again moves them back. See [How to Remove luci-sso](uninstall.md).
 - **Internal:** the `luci-sso` ubus object has no `move_role` method. Role order is the order of `/etc/config/luci-sso`, which the settings page changes by drag and drop.
@@ -170,7 +171,7 @@ If a role has the same name as an `rpcd` login, such as `root`, its open session
 
 ### Email rules need a verified email
 
-A role's `email` rule now matches only if the IdP sends `email_verified: true` with the address, in the same response. Before, any address matched. The check stops users who can set their own address at the IdP from claiming someone else's; [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses) explains it. The option that controls it, `require_email_verified`, is on even though an existing `/etc/config/luci-sso` does not mention it.
+A role's `email` rule now matches only if the IdP sends `email_verified: true` with the address, in the same response. The value must be the JSON boolean `true`; the string `"true"` does not count. Before, any address matched. The check stops users who can set their own address at the IdP from claiming someone else's; [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses) explains it. The option that controls it, `require_email_verified`, is on even though an existing `/etc/config/luci-sso` does not mention it.
 
 A user who matches a role only by email, at an IdP that does not send `true`, can no longer log in. The log shows:
 
