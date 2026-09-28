@@ -128,18 +128,16 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 
 	// If the ID token carries no email, try the UserInfo endpoint (OIDC Core §5.3).
 	if (!user_data.email && discovery_doc.userinfo_endpoint) {
-		let ui_res = oidc.fetch_userinfo(deps, discovery_doc.userinfo_endpoint, tokens.access_token);
+		// fetch_userinfo returns the claims only when the UserInfo sub is
+		// exactly the ID token's (OIDC Core §5.3.2); any other sub refuses the
+		// login. A failed fetch is not about the sub: the login goes on with
+		// the ID token's claims alone.
+		let ui_res = oidc.fetch_userinfo(deps, discovery_doc.userinfo_endpoint, tokens.access_token, user_data.sub);
+		if (!ui_res.ok && ui_res.error == IDENTITY_MISMATCH) {
+			deps.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
+			return ui_res;
+		}
 		if (ui_res.ok) {
-			// UserInfo sub MUST exactly match the ID token sub (OIDC Core
-			// §5.3.2), or the claims could belong to a different user. sub is
-			// case-sensitive, so the comparison is exact.
-			let ui_sub = ui_res.data.sub;
-			let id_sub = user_data.sub;
-
-			if (type(ui_sub) != "string" || type(id_sub) != "string" || ui_sub !== id_sub) {
-				deps.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
-				return Result.err(IDENTITY_MISMATCH, { http_status: 403 });
-			}
 			// The email and its email_verified flag come from the same
 			// response, never one from the ID token and one from UserInfo.
 			user_data.email = ui_res.data.email;

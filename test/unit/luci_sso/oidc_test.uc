@@ -197,7 +197,7 @@ describe('oidc: back-channel failures map to 502 Bad Gateway', () => {
 		let res, logs = [];
 		with_context({ http_client: { data: { [endpoint]: { status: 401, body: {} } } } }, (deps) => {
 			deps.log = (l, m) => push(logs, m);
-			res = oidc.fetch_userinfo(deps, endpoint, "at");
+			res = oidc.fetch_userinfo(deps, endpoint, "at", "user-123");
 		});
 		assert.match(contains({ ok: false, error: 'USERINFO_FETCH_FAILED' }), res);
 		assert.match({ http_status: 502 }, res.details);
@@ -742,56 +742,66 @@ describe('oidc: encoding', () => {
 // ─── fetch_userinfo ─────────────────────────────────────────────────────────────
 
 describe('oidc: fetch_userinfo', () => {
-	it('successful fetch', () => {
-		let endpoint = "https://trusted.idp/userinfo";
-		let at = "access-token-123";
-		let mock_res = { sub: "user-123", email: "user@example.com" };
+	let endpoint = "https://trusted.idp/userinfo";
 
+	// Calls fetch_userinfo against a UserInfo endpoint answering 200 with body.
+	let fetch = (body, expected_sub) => {
+		let res;
 		with_context({
-			http_client: { data: { [endpoint]: { status: 200, body: mock_res } } }
+			http_client: { data: { [endpoint]: { status: 200, body } } }
 		}, (deps) => {
-			let res = oidc.fetch_userinfo(deps, endpoint, at);
-			assert.match(truthy(), res.ok);
-			assert.match("user@example.com", res.data.email);
+			res = oidc.fetch_userinfo(deps, endpoint, "access-token-123", expected_sub);
 		});
+		return res;
+	};
+
+	it('returns the claims when the sub is exactly the expected sub', () => {
+		let res = fetch({ sub: "user-123", email: "user@example.com" }, "user-123");
+		assert.match(contains({ ok: true }), res);
+		assert.match("user-123", res.data.sub);
+		assert.match("user@example.com", res.data.email);
 	});
 
-	it('reject missing sub claim', () => {
-		let endpoint = "https://trusted.idp/userinfo";
-
-		with_context({
-			http_client: { data: { [endpoint]: { status: 200, body: { email: "no-sub@example.com" } } } }
-		}, (deps) => {
-			let res = oidc.fetch_userinfo(deps, endpoint, "at");
-			assert.match(falsy(), res.ok);
-			assert.match("MISSING_SUB_CLAIM", res.error);
-		});
-	});
-
-	it('rejects a UserInfo sub that is not a non-empty string', () => {
-		let endpoint = "https://trusted.idp/userinfo";
-		for (let sub in [ "", 123, true, [ "u" ] ]) {
-			with_context({
-				http_client: { data: { [endpoint]: { status: 200, body: { sub, email: "x@example.com" } } } }
-			}, (deps) => {
-				assert.match(contains({ ok: false, error: "MISSING_SUB_CLAIM" }), oidc.fetch_userinfo(deps, endpoint, "at"), sprintf("sub %J", sub));
-			});
+	it('refuses a missing, non-string, empty or different sub with IDENTITY_MISMATCH (403, OIDC Core §5.3.2)', () => {
+		let bodies = [
+			{ email: "x@example.com" },
+			{ sub: null, email: "x@example.com" },
+			{ sub: 123, email: "x@example.com" },
+			{ sub: true, email: "x@example.com" },
+			{ sub: [ "user-123" ], email: "x@example.com" },
+			{ sub: "", email: "x@example.com" },
+			{ sub: "USER-123", email: "x@example.com" },
+			{ sub: "user-123 ", email: "x@example.com" },
+			{ sub: "EVIL-USER", email: "victim@example.com" }
+		];
+		for (let body in bodies) {
+			let res = fetch(body, "user-123");
+			assert.match(contains({ ok: false, error: "IDENTITY_MISMATCH" }), res, sprintf("body %J", body));
+			assert.match({ http_status: 403 }, res.details, sprintf("body %J", body));
 		}
 	});
 
-	it('returns the sub verbatim (caller enforces binding)', () => {
-		let endpoint = "https://trusted.idp/userinfo";
-		let at = "access-token-123";
-		let mock_res = { sub: "EVIL-USER", email: "victim@example.com" };
+	it('refuses a JSON response that is not an object with IDENTITY_MISMATCH', () => {
+		for (let body in [ [ "user-123" ], 123, "user-123" ]) {
+			let res = fetch(sprintf("%J", body), "user-123");
+			assert.match(contains({ ok: false, error: "IDENTITY_MISMATCH" }), res, sprintf("body %J", body));
+		}
+	});
 
-		with_context({
-			http_client: { data: { [endpoint]: { status: 200, body: mock_res } } }
-		}, (deps) => {
-			let res = oidc.fetch_userinfo(deps, endpoint, at);
-			assert.match(truthy(), Result.is(res));
-			assert.match(truthy(), res.ok);
-			assert.match("EVIL-USER", res.data.sub);
-		});
+	it('a sub matches only itself, byte for byte', () => {
+		// Every pair of subs, including case variants of each other.
+		let subs = [ "a", "A", "user-123", "User-123", "0", "x@example.com", "X@example.com" ];
+		for (let expected in subs) {
+			for (let got in subs) {
+				let res = fetch({ sub: got, email: "x@example.com" }, expected);
+				assert.match(got === expected, res.ok, sprintf("expected %J, got %J", expected, got));
+			}
+		}
+	});
+
+	it('dies with CONTRACT_VIOLATION when the expected sub is not a non-empty string', () => {
+		for (let expected in [ null, "", 123 ])
+			assert.throws(() => fetch({ sub: "", email: "x@example.com" }, expected), /CONTRACT_VIOLATION/);
 	});
 });
 
@@ -817,7 +827,7 @@ describe('oidc: HTTP failure causes are logged', () => {
 			http_client: { data: { [endpoint]: { error: "CONNECTION_FAILED" } } }
 		}, (deps) => {
 			deps.log = (l, m) => push(logs, m);
-			assert.match(contains({ ok: false, error: 'USERINFO_NETWORK_ERROR' }), oidc.fetch_userinfo(deps, endpoint, "at"));
+			assert.match(contains({ ok: false, error: 'USERINFO_NETWORK_ERROR' }), oidc.fetch_userinfo(deps, endpoint, "at", "user-123"));
 		});
 		assert.match(1, length(filter(logs, (m) => m == "UserInfo fetch network error: HTTP_REQUEST_FAILED (CONNECTION_FAILED)")));
 	});

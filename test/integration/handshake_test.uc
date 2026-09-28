@@ -430,7 +430,8 @@ describe('handshake: userinfo', () => {
 
 	// Runs a full callback where the ID token carries id_sub and no email, so
 	// the handshake falls back to UserInfo, which answers with userinfo_sub.
-	let run_userinfo_sub = (id_sub, userinfo_sub) => {
+	// ui_entry, when given, replaces the UserInfo endpoint's whole mock entry.
+	let run_userinfo_sub = (id_sub, userinfo_sub, ui_entry, logs) => {
 		let issuer_url = f.MOCK_CONFIG.issuer_url;
 		let discovery_doc = {
 			...f.MOCK_DISCOVERY,
@@ -457,7 +458,7 @@ describe('handshake: userinfo', () => {
 				data: {
 					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
 					[discovery_doc.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
-					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: userinfo_sub, email: "user@example.com", email_verified: true } }
+					[discovery_doc.userinfo_endpoint]: ui_entry ?? { status: 200, body: { sub: userinfo_sub, email: "user@example.com", email_verified: true } }
 				},
 				behavior: {
 					post: (url, opts) => {
@@ -471,6 +472,7 @@ describe('handshake: userinfo', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
+			if (logs) deps.log = (l, m) => push(logs, [ l, m ]);
 			let s_res = handshake.initiate(deps, test_config);
 			assert.match(truthy(), s_res.ok, `initiate failed: ${s_res.error}`);
 
@@ -497,15 +499,40 @@ describe('handshake: userinfo', () => {
 		let res = run_userinfo_sub("user-123", "USER-123");
 		assert.match(falsy(), res.ok, "A sub differing only in case is a different subject");
 		assert.match("IDENTITY_MISMATCH", res.error);
+		assert.match({ http_status: 403 }, res.details);
 	});
 
-	it('does not use a UserInfo response whose sub is not a non-empty string', () => {
-		// fetch_userinfo refuses it (MISSING_SUB_CLAIM), so its email never
-		// reaches role matching and the login finds no role (OIDC Core §5.3.2).
-		for (let ui_sub in [ 123, "" ]) {
-			let res = run_userinfo_sub("123", ui_sub);
-			assert.match(falsy(), res.ok, sprintf("UserInfo sub %J", ui_sub));
-			assert.match("USER_NOT_AUTHORIZED", res.error, sprintf("UserInfo sub %J", ui_sub));
+	it('refuses the login with IDENTITY_MISMATCH (403) when the UserInfo sub is missing, a number or empty (OIDC Core §5.3.2)', () => {
+		let email = "user@example.com";
+		let entries = {
+			"missing": { status: 200, body: { email, email_verified: true } },
+			"null":    { status: 200, body: { sub: null, email, email_verified: true } },
+			"number":  { status: 200, body: { sub: 123, email, email_verified: true } },
+			"empty":   { status: 200, body: { sub: "", email, email_verified: true } },
+			"array":   { status: 200, body: "[\"123\"]" }
+		};
+		for (let name, entry in entries) {
+			let logs = [];
+			let res = run_userinfo_sub("123", null, entry, logs);
+			assert.match(contains({ ok: false, error: "IDENTITY_MISMATCH" }), res, `UserInfo sub ${name}`);
+			assert.match({ http_status: 403 }, res.details, `UserInfo sub ${name}`);
+			assert.match(1, length(filter(logs, (e) => e[0] == "error" && index(e[1], "UserInfo 'sub' mismatch [session_id: ") == 0)), `UserInfo sub ${name}: ${sprintf("%J", logs)}`);
+		}
+	});
+
+	it('a failed UserInfo fetch is logged as a warning and the login goes on with the ID token claims', () => {
+		// No email from either source, so the login ends at role matching,
+		// not at IDENTITY_MISMATCH.
+		let entries = {
+			"USERINFO_NETWORK_ERROR": { error: "CONNECTION_FAILED" },
+			"USERINFO_FETCH_FAILED":  { status: 401, body: { sub: "123" } },
+			"USERINFO_INVALID_JSON":  { status: 200, body: "not json" }
+		};
+		for (let code, entry in entries) {
+			let logs = [];
+			let res = run_userinfo_sub("123", null, entry, logs);
+			assert.match(contains({ ok: false, error: "USER_NOT_AUTHORIZED" }), res, code);
+			assert.match(1, length(filter(logs, (e) => e[0] == "warn" && index(e[1], "UserInfo fallback failed [session_id: ") == 0 && index(e[1], `]: ${code}`) > 0)), `${code}: ${sprintf("%J", logs)}`);
 		}
 	});
 });

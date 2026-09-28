@@ -5,7 +5,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import { find_jwk } from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
-import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, AZP_MISMATCH, MISSING_ACCESS_TOKEN, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON, INVALID_JWT_HEADER } from 'luci_sso.errors';
+import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, AZP_MISMATCH, MISSING_ACCESS_TOKEN, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON, INVALID_JWT_HEADER, IDENTITY_MISMATCH } from 'luci_sso.errors';
 
 /**
  * ID token signature algorithms this module accepts. Fixed in code rather than
@@ -21,6 +21,9 @@ const ALLOWED_ALGS = ["RS256", "ES256"];
  * endpoint means the router's client credentials failed, not the browser's.
  */
 const BAD_GATEWAY = 502;
+
+/** Status for a UserInfo response about a different subject (IDENTITY_MISMATCH). */
+const FORBIDDEN = 403;
 
 /**
  * Generates the authorization URL.
@@ -272,13 +275,21 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 
 /**
  * Fetches user claims from the UserInfo endpoint.
- * 
- * @param {object} io - I/O provider
+ *
+ * The claims are returned only when the response's sub is exactly
+ * expected_sub (OIDC Core §5.3.2). A response whose sub is missing, not a
+ * string, empty or different fails with IDENTITY_MISMATCH (403), so no caller
+ * can use claims that are not bound to the ID Token's subject.
+ *
+ * @param {object} deps - { http, log }
  * @param {string} endpoint - UserInfo URL
  * @param {string} access_token - OAuth2 Access Token
+ * @param {string} expected_sub - The verified ID Token's sub
  * @returns {object} - Result Object {ok, data: {sub, email, ...}}
  */
-export function fetch_userinfo(deps, endpoint, access_token) {
+export function fetch_userinfo(deps, endpoint, access_token, expected_sub) {
+	if (type(expected_sub) != "string" || !length(expected_sub))
+		die("CONTRACT_VIOLATION: oidc.fetch_userinfo requires the ID Token's sub");
 	if (!encoding.is_https(endpoint)) return Result.err(INSECURE_USERINFO_ENDPOINT);
 	if (!access_token) return Result.err(MISSING_ACCESS_TOKEN);
 
@@ -314,10 +325,12 @@ export function fetch_userinfo(deps, endpoint, access_token) {
 	}
 	deps.log("debug", `UserInfo claims received: ${join(", ", claim_names)}`);
 
-	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2): a non-empty string.
-	if (type(payload.sub) != "string" || length(payload.sub) == 0) {
-		deps.log("error", "UserInfo response missing mandatory 'sub' claim");
-		return Result.err(MISSING_SUB_CLAIM);
+	// The sub MUST exactly match the ID Token's sub (OIDC Core §5.3.2), or the
+	// claims could belong to a different user. sub is case-sensitive, so the
+	// comparison is exact. A missing, non-string or empty sub cannot match.
+	let sub = (type(payload) == "object") ? payload.sub : null;
+	if (type(sub) != "string" || sub !== expected_sub) {
+		return Result.err(IDENTITY_MISMATCH, { http_status: FORBIDDEN });
 	}
 
 	return Result.ok(payload);

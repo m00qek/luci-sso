@@ -233,7 +233,7 @@ These occur while validating the ID Token returned by the IdP. Only `ID_TOKEN_VE
 | `MISSING_ID_TOKEN` | The token response has no `id_token` | The IdP did not issue an ID Token. Plain OAuth 2.0 services, such as GitHub, do this. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `UNSUPPORTED_ALGORITHM` | The ID Token `alg` is not `RS256` or `ES256` | Configure the IdP to sign with RS256 or ES256. Symmetric algorithms (HS256) are rejected on purpose. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `INVALID_SIGNATURE` | The signature does not verify | See notes. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
-| `MISSING_SUB_CLAIM` | The ID Token's `sub` claim is missing or is not a non-empty string (`""`, a number, `null`) | The user identifier is missing. Required by OIDC Core §2. In the UserInfo fallback, the UserInfo response is ignored. | Detail of `ID_TOKEN_VERIFICATION_FAILED`, or in `UserInfo fallback failed` |
+| `MISSING_SUB_CLAIM` | The ID Token's `sub` claim is missing or is not a non-empty string (`""`, a number, `null`) | The user identifier is missing. Required by OIDC Core §2. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_EXP_CLAIM` | The ID Token has no `exp` claim | Required by OIDC Core. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_IAT_CLAIM` | The ID Token has no `iat` claim | Required by OIDC Core. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_NONCE` | The ID Token has no `nonce` claim, or the handshake has no nonce | Replay protection requires a nonce. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
@@ -328,7 +328,7 @@ The token was issued by or for someone else, or the access token needed to check
 
 These occur only when the ID Token has no `email` claim. The router then asks the IdP's UserInfo endpoint for the email, and for `name` and `groups` if the ID Token lacks them.
 
-A failure here does not stop the login. It is logged as a warning, and the login continues with the ID Token's claims alone. When roles match by email, that usually ends in `USER_NOT_AUTHORIZED`. `IDENTITY_MISMATCH` is the exception: it refuses the login.
+A failure here does not stop the login. It is logged as a warning, and the login continues with the ID Token's claims alone. When roles match by email, that usually ends in `USER_NOT_AUTHORIZED`. `IDENTITY_MISMATCH` is the exception: a response did arrive, but it is not about the ID Token's user, so the login is refused.
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
@@ -336,7 +336,7 @@ A failure here does not stop the login. It is logged as a warning, and the login
 | `USERINFO_FETCH_FAILED` | The UserInfo endpoint returned a status other than 200 | The IdP rejected the request. Usually a scope or permission issue. | In `UserInfo fallback failed`, preceded by `UserInfo fetch HTTP <status>` |
 | `USERINFO_NETWORK_ERROR` | The UserInfo request did not complete | Transport failure before any HTTP response. | In `UserInfo fallback failed`, preceded by `UserInfo fetch network error: HTTP_REQUEST_FAILED (<cause>)` |
 | `USERINFO_INVALID_JSON` | The UserInfo response is not valid JSON | The IdP returned a malformed UserInfo response. | In `UserInfo fallback failed`, preceded by `UserInfo JSON parse error: …` |
-| `IDENTITY_MISMATCH` | The UserInfo `sub` differs from the ID Token `sub`, even only in case | The IdP returned claims for a different subject. The login is refused. | `[403] IDENTITY_MISMATCH`, preceded by `UserInfo 'sub' mismatch` |
+| `IDENTITY_MISMATCH` | The UserInfo response's `sub` is not exactly the ID Token's `sub`: it differs, even only in case, or it is missing, not a string or empty | The claims cannot be tied to the user of the ID Token (OIDC Core §5.3.2). None of them are used, and the login is refused. | `[403] IDENTITY_MISMATCH`, preceded by `UserInfo 'sub' mismatch` |
 
 ---
 

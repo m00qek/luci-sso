@@ -48,7 +48,7 @@ The grant types, the parameters of the authorization and token requests, and the
 | Token error: `invalid_grant` handling | OIDC Core §3.1.3.4 | ✅ Implemented | Logged as `OIDC_INVALID_GRANT`. |
 | Refresh tokens | OIDC Core §12 | ❌ Not implemented | Stored but never used. See [notes](#authorization-code-flow-notes). |
 | UserInfo endpoint (fallback) | OIDC Core §5.3 | ✅ Implemented | Fetched when `email` claim is absent from the ID Token. |
-| UserInfo `sub` must match the ID Token `sub` | OIDC Core §5.3.2 | ✅ Implemented | Exact, case-sensitive string comparison. A mismatch triggers `IDENTITY_MISMATCH`. A UserInfo response whose `sub` is missing or not a non-empty string is not used (`MISSING_SUB_CLAIM`, logged as a warning). |
+| UserInfo `sub` must match the ID Token `sub` | OIDC Core §5.3.2 | ✅ Implemented | Exact, case-sensitive string comparison. A UserInfo response whose `sub` is not exactly the ID Token's, including one whose `sub` is missing, not a string or empty, refuses the login with `[403] IDENTITY_MISMATCH`, and none of its claims are used. A failed UserInfo request (network error, HTTP error, invalid JSON) is not a `sub` problem: it is logged as a warning and the login continues with the ID Token's claims. |
 | `email_verified` claim | OIDC Core §5.1 | ✅ Implemented | Only the JSON boolean `true` counts as verified, and only from the response that carried the email. See [UCI Configuration](uci-config.md#oidc-section-notes). |
 | RP-Initiated Logout | [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) §2 | ✅ Implemented | See [notes](#authorization-code-flow-notes). |
 
@@ -93,7 +93,7 @@ The claims checked in every ID Token before a session is created. The error code
 | `azp` claim validation | OIDC Core §2, §3.1.3.7 (5) | ✅ Implemented | Optional and never required. When the claim is present, whatever its value, it must be the string `client_id`: `""`, a number or `null` fails with `AZP_MISMATCH`. |
 | `exp` claim validation | OIDC Core §3.1.3.7 (9) | ✅ Implemented | Clock skew tolerance applied via `clock_tolerance` UCI option. |
 | `iat` claim validation | OIDC Core §3.1.3.7 (10) | ✅ Implemented | Required. Rejected only if it is in the future by more than `clock_tolerance`; there is no maximum age. |
-| `sub` claim required | OIDC Core §2 | ✅ Implemented | Must be a non-empty string. A missing `sub`, `""`, a number or `null` triggers `MISSING_SUB_CLAIM`. The same rule applies to the UserInfo response's `sub`, whose response is then not used. |
+| `sub` claim required | OIDC Core §2 | ✅ Implemented | Must be a non-empty string. A missing `sub`, `""`, a number or `null` triggers `MISSING_SUB_CLAIM`. For the UserInfo response's `sub`, see §5.3.2 above. |
 | `nonce` claim validation | OIDC Core §3.1.3.7 (11) | ✅ Implemented | Constant-time comparison against stored nonce. |
 | `at_hash` validation | OIDC Core §3.1.3.6, §3.1.3.8 | ✅ Implemented | Optional in the code flow (§3.1.3.6): an ID Token without `at_hash` is accepted. When present, it must equal the Base64URL-encoded left half of the access token's SHA-256, compared in constant time (`AT_HASH_MISMATCH`). |
 

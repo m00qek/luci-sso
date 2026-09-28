@@ -200,9 +200,9 @@ Validates `tokens.id_token`: algorithm (`RS256` or `ES256` only, fixed in code),
 
 On success, `email` and `name` are `null` unless they are strings in the token, and `groups` is `[]` unless it is an array.
 
-### `fetch_userinfo(deps, endpoint, access_token)` → `Result<object>`
+### `fetch_userinfo(deps, endpoint, access_token, expected_sub)` → `Result<object>`
 
-GETs the UserInfo endpoint with the access token as a Bearer token and returns the claims. Fails with `INSECURE_USERINFO_ENDPOINT`, `MISSING_ACCESS_TOKEN`, `USERINFO_NETWORK_ERROR`, `USERINFO_FETCH_FAILED`, `USERINFO_INVALID_JSON` or `MISSING_SUB_CLAIM`.
+GETs the UserInfo endpoint with the access token as a Bearer token and returns the claims, only if the response's `sub` is exactly `expected_sub`, the verified ID Token's `sub` (OIDC Core §5.3.2). A response whose `sub` is missing, not a string, empty or different, or that is not a JSON object, fails with `IDENTITY_MISMATCH` and `http_status: 403`. The request itself fails with `INSECURE_USERINFO_ENDPOINT`, `MISSING_ACCESS_TOKEN`, `USERINFO_NETWORK_ERROR`, `USERINFO_FETCH_FAILED` or `USERINFO_INVALID_JSON`; the handshake logs these and continues without the claims.
 
 ---
 
