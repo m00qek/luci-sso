@@ -60,6 +60,7 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | Requirement | Check | Failure |
 | :--- | :--- | :--- |
 | `email` or `groups` | Roles match on the `email` claim (case-insensitive) or on values of the `groups` claim (case-sensitive). `groups` must be a JSON array; any other type is ignored. When the ID Token has no `email`, the UserInfo endpoint is asked for `email`, and for `name` and `groups` if the ID Token lacks them. | `[403] USER_NOT_AUTHORIZED` |
+| `email_verified` | With `require_email_verified` on (the default), the email counts for role matching only if `email_verified` is `true` or the string `"true"`, taken from the same response as the email: the ID Token, or UserInfo when the email came from there. Otherwise the email is ignored for matching and groups still match. See [Verified email](#verified-email). | `Ignoring the unverified email of user [sub_id: …] for role matching …`, then `[403] USER_NOT_AUTHORIZED` if no group matches |
 | UserInfo response | HTTP 200 with a plain JSON object, not a signed JWT. Its `sub` matches the ID Token's `sub`. | `[403] IDENTITY_MISMATCH` for a different `sub`. Other UserInfo failures are logged as warnings and the login continues with the ID Token's claims. |
 
 ### Logout
@@ -82,6 +83,20 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | Pocket ID | Supported | [How to Configure Pocket ID](../how-to/providers/pocket-id.md) | A new client allows no user until **Allowed User Groups** is set or unrestricted. Pocket ID creates no client secret until one is added on the **Credentials** tab. The `groups` claim holds each group's name as it is. |
 | Other OIDC providers | Depends on the provider | [How to Configure a Generic OIDC Provider](../how-to/providers/generic-oidc.md) | Must meet every requirement above. |
 | GitHub | **Not supported** | None | See [GitHub](#github). |
+
+### Verified email
+
+What each provider sends as `email_verified` for a user whose address an administrator entered, and what makes it `true`. Until it is `true`, an `email` rule does not match that user while `require_email_verified` is on; a `group` rule still does.
+
+| Provider | ID Token | UserInfo | To send `true` |
+| :--- | :--- | :--- | :--- |
+| Google | `true` once Google has verified the address ([Google docs](https://developers.google.com/identity/openid-connect/openid-connect#an-id-tokens-payload)), as it has for Gmail and Workspace accounts | Same | Nothing to do. |
+| Authelia 4.39.28 | Absent, unless the claims policy lists `email_verified` | `true` | Authelia sends `true` for every user, from the file or LDAP backend, without checking the address. With the `luci_sso` claims policy, list `email_verified` next to `email`; see [How to Configure Authelia](../how-to/providers/authelia.md#map-by-email). |
+| Keycloak 26.7.4 | The user's **Email verified** setting, `false` by default for users an administrator creates | Same | Turn on **Email verified** on the user, or have Keycloak verify addresses by email; see [How to Configure Keycloak](../how-to/providers/keycloak.md#map-by-email). |
+| Authentik 2026.8.3 | `false`, always, from the default `email` scope mapping (since 2025.10) | Same | Replace the default `email` scope mapping with one that returns `true`; see [How to Configure Authentik](../how-to/providers/authentik.md#map-by-email). |
+| Pocket ID 2.16.0 | The user's verified flag, `false` by default | Same | Mark the user's email as verified, or turn on **Emails verified by default** for new addresses; see [How to Configure Pocket ID](../how-to/providers/pocket-id.md#map-by-email). |
+
+Checked by signing in to Keycloak and Authelia, and in the Authentik and Pocket ID sources ([Authentik](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/#email-scope-verification), [Pocket ID](https://github.com/pocket-id/pocket-id/blob/v2.16.0/backend/internal/oidc/claims_service.go)). Earlier logins with Authentik and Pocket ID showed `false` in both places.
 
 ### GitHub
 

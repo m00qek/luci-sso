@@ -19,6 +19,7 @@ The connection to the IdP. A missing or invalid required option makes every requ
 | `client_secret` | string | Required. The Client Secret registered with your IdP. Stored in plain text in `/etc/config/luci-sso` — restrict shell and physical access to the router accordingly. |
 | `redirect_uri` | string (URL) | The callback URL registered with the IdP: `https://<router-host>/cgi-bin/luci-sso/callback`. Must use `https://` and exactly match what the IdP client is configured to accept. Unset in the shipped configuration; the LuCI settings page then suggests one from the browser's host name, without port. Enabling SSO without it fails with `CONFIG_ERROR` (`redirect_uri is mandatory and must use HTTPS`). |
 | `scope` | string | Optional. Space-separated list of OIDC scopes to request. Default: `openid profile email`. Add `groups` if the IdP supports group claims and role mapping by group is required. |
+| `require_email_verified` | boolean | Optional. Default: `1`, also when the option is absent. While on, an `email` rule matches only if the IdP's `email_verified` claim is `true` or the string `"true"`. `0`, `no`, `off` or `false` turns it off. See [notes](#oidc-section-notes). |
 | `clock_tolerance` | integer | Required. Allowed clock skew in seconds, applied to the ID Token's `exp`, `iat` and `nbf` checks and to the login handshake's expiry. Valid range: `0`–`3600`. See [notes](#oidc-section-notes). |
 
 ### OIDC section notes
@@ -29,6 +30,12 @@ The connection to the IdP. A missing or invalid required option makes every requ
     - A value that does not use `https://`, or has a path, query or fragment, is rejected with `CONFIG_ERROR`.
     - The `iss` claim is still validated against `issuer_url`.
     - See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md).
+- **`require_email_verified`** affects role matching only.
+    - The claim is read from the response the email came from: the ID Token, or UserInfo when the ID Token has no `email`. The two are never mixed.
+    - The string `"true"` is accepted because some IdPs send the claim as a string. Any other value, or no claim, is not verified.
+    - An unverified email is ignored for matching, and the log says `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified)`. `group` rules still match. A user who matches no role is refused with `USER_NOT_AUTHORIZED`.
+    - The email is still stored in the session as `oidc_user`.
+    - What each IdP sends: [Provider Compatibility](provider-compatibility.md#verified-email). Why: [About Roles and Permissions](../explanation/roles-and-permissions.md#verified-email-addresses).
 - **`clock_tolerance`** has no built-in code default: if it is absent, the service reports `CONFIG_ERROR`. The shipped UCI configuration sets it to `60`.
 
 ---
@@ -41,7 +48,7 @@ A role matches a user if ANY of its `email` or `group` values matches. Roles are
 
 | Option | Type | Description |
 | :--- | :--- | :--- |
-| `email` | list (string) | Match by OIDC `email` claim. Case-insensitive. |
+| `email` | list (string) | Match by OIDC `email` claim. Case-insensitive. Only a verified email matches while `require_email_verified` is on (the default). |
 | `group` | list (string) | Match by a value of the OIDC `groups` claim, which must be a JSON array. Case-sensitive. |
 
 ### Role mapping notes
@@ -139,6 +146,7 @@ Edits `config oidc 'default'`.
 | **Client Secret** | `client_secret` | Required. Masked password field. |
 | **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host name in the browser's address bar without its port; when it is set, the saved value. |
 | **Scopes** | `scope` | Optional. Placeholder: `openid profile email`, which is also what the login requests when the option is empty. |
+| **Require Verified Email** | `require_email_verified` | Checkbox; saved as `1` or `0`. Ticked when the option is unset, and then saved as `1`. |
 | **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
 | **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
 
@@ -179,6 +187,7 @@ config oidc 'default'
     option redirect_uri 'https://192.168.1.1/cgi-bin/luci-sso/callback'
     option scope 'openid profile email'
     option clock_tolerance '60'
+    option require_email_verified '1'
 
 config role 'admin'
     list email 'admin@example.com'

@@ -122,6 +122,12 @@ After a successful login, `luci-sso` maps the user's OIDC claims to a LuCI role.
     uci commit luci-sso
     ```
 
+An email matches only if the IdP marks it as verified: `email_verified` is `true` (or the string `"true"`) in the same response as the email, the ID Token or UserInfo. Many IdPs send `false` for an address an administrator entered, or leave the claim out. Check the IdP's settings for a per-user "email verified" flag, or a claim mapping that adds `email_verified`. If the IdP cannot send `true`, map by group instead, or turn the check off:
+
+--8<-- "email-verified-off.md"
+
+With the check off, an email rule matches any address the IdP sends, verified or not. Do this only if users cannot set their own address at the IdP; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
+
 ### Map by group
 
 If your IdP returns a `groups` claim (requires the `groups` scope and IdP-side group claim mapping):
@@ -170,6 +176,7 @@ Common errors and their meaning are listed in the [Log Messages Reference](../..
 - **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_ISSUER_MISMATCH` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. The line shows both values; set `issuer_url` to the one the document declares.
 - **`[401] ID_TOKEN_VERIFICATION_FAILED`** — The `OAuth flow failed` line before it names the failed check. `UNSUPPORTED_ALGORITHM` means the IdP signs tokens with HS256 or another algorithm: configure the client to use RS256 or ES256. `AT_HASH_MISMATCH` means the ID Token's `at_hash` does not match the access token the IdP returned.
 - **`[403] USER_NOT_AUTHORIZED` after `User [sub_id: …] matched no roles`** — Authentication succeeded but no UCI role matched the user's email or groups. Email matching ignores case; group matching does not. Add the user's email with `uci add_list luci-sso.admin.email='...'`.
+- **`[403] USER_NOT_AUTHORIZED` after `Ignoring the unverified email of user [sub_id: …] for role matching`** — The IdP sent the email without `email_verified: true`, so it did not count. See [Map by email](#map-by-email).
 - **`[500] UBUS_LOGIN_FAILED` after a `MISSING_RPCD_LOGIN` line** — The matched role has no `rpcd` login entry, so it has no permissions. Save the role's permissions on the settings page, or with `ubus call luci-sso set_role`; see [How to Configure Role-Based Access Control](../sysadmin/rbac.md).
 - **`[502] OIDC_DISCOVERY_FAILED` after `Discovery fetch failed for [id: …]: …`** — The router cannot reach the IdP. The end of the line names the cause, such as `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`. Check DNS resolution and firewall rules from the router (not just from your laptop).
 - **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_MISSING_ENDPOINT` or `INSECURE_ENDPOINT` line** — The discovery document lacks `authorization_endpoint`, `token_endpoint` or `jwks_uri`, or one of them is not HTTPS. The line names the field.

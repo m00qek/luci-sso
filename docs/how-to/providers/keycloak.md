@@ -122,6 +122,18 @@ A role says which users it matches, by email or by group. What the role may do o
     uci commit luci-sso
     ```
 
+An email matches only if Keycloak marks it as verified (`email_verified: true`). Keycloak sends each user's **Email verified** setting, which is off for a user an administrator creates. For each user you map by email, do one of the following:
+
+- Open **Users**, select the user, turn on **Email verified** on the **Details** tab, and click **Save**.
+- To have users confirm their address, turn on **Verify email** in **Realm settings > Login**. Keycloak then emails a link at the next sign-in, which needs an SMTP server in **Realm settings > Email**.
+- For users from LDAP or another identity provider, turn on **Trust Email** in that provider's settings.
+
+Otherwise the login fails with `[403] USER_NOT_AUTHORIZED` unless a group matches. If you cannot mark the addresses verified, map by group instead, or turn the check off:
+
+--8<-- "email-verified-off.md"
+
+With the check off, an email rule matches any address the IdP sends, verified or not. Do this only if users cannot set their own address at Keycloak; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
+
 ### Map by group
 
 Keycloak sends group membership only when the client has a mapper for it. In the Keycloak admin console:
@@ -179,6 +191,7 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. |
 | Keycloak shows `Invalid parameter: redirect_uri` instead of its login screen | The router's `redirect_uri` is not in the client's **Valid redirect URIs**. The router logs no `OIDC callback received` line. |
 | `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Keycloak rejected the client credentials. Copy the **Client Secret** again from the client's **Credentials** tab, or click **Regenerate** there and update the router. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `Ignoring the unverified email of user [sub_id: …] for role matching` | The user's **Email verified** setting is off, so the email did not count. Turn it on, or see [Map by email](#map-by-email) for the other ways. |
 | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | Group mapping is missing or the mapper has **Full group path** enabled, so the claim contains `/my-group` instead of `my-group`. Either disable Full group path in the mapper or update the role config to match the full path. |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Keycloak's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
 | Keycloak shows `Invalid redirect uri` after LuCI's **Log out**, and the Keycloak session stays open | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/` is not in the client's **Valid post logout redirect URIs**. Add it. |

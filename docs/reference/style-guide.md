@@ -897,3 +897,4 @@ Every fallible encoding and crypto function returns a `Result`. The exceptions r
 - **Predicates** return booleans: `encoding.is_https`, `encoding.is_origin`, `crypto.constant_time_eq`.
 - **`encoding.rebase_origin`** returns a string: `url` unchanged when it cannot be rebased.
 - **`crypto.safe_id`** returns a string for log lines: a 16-character hex prefix, or `[INVALID]` / `[ERROR]`.
+- **`config.email_is_verified`** returns a boolean, and **`config.matchable_email`** the email or `null`: both only read claims already verified.

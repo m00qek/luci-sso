@@ -78,6 +78,16 @@ Earlier versions merged the rights of every matching role instead, which made ro
 
 ---
 
+## Verified email addresses
+
+An `email` rule trusts the address the IdP sends. But the IdP only vouches for the account. Some IdPs let users type in their own address, and do not check that the user owns it. On such an IdP, anyone could set their address to an administrator's and match the administrator's role. The `email_verified` claim is how an IdP says it has checked the address, or that an administrator entered it.
+
+So by default an email counts for role matching only if the same response marks it as verified: `email_verified` is `true`. The string `"true"` counts too, because some IdPs send the claim as a string. Otherwise the address is set aside, the system log says so, and the user can still match a role by group. If nothing else matches, the login is refused like any other user without a role. The email and its flag always come from the same place, the ID Token or UserInfo, so one response cannot vouch for an address from the other.
+
+Not every IdP sends `true` by default, even for addresses an administrator typed in. [Provider Compatibility](../reference/provider-compatibility.md#verified-email) lists what each one sends, and its guide shows how to make it send `true`. The `require_email_verified` option turns the check off, which is safe only when every address at the IdP is set by an administrator, or matching is by group alone.
+
+---
+
 ## Why the entries have no password
 
 An `sso:` entry exists so that `rpcd` can rebuild a session's rights. It must never let anyone log in with a password.

@@ -159,9 +159,9 @@ Processes the callback. `deps`: all fields. In order, it:
 4. exchanges the code;
 5. fetches the JWK Set;
 6. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
-7. fetches UserInfo when the ID Token has no `email`;
+7. fetches UserInfo when the ID Token has no `email`, and then takes `email` and `email_verified` both from UserInfo;
 8. registers the access token against replay;
-9. maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches;
+9. logs a warning when `config.matchable_email` sets an unverified email aside, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches;
 10. creates the `rpcd` session from the role's `rpcd` login entry. Any failure there, including `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN`, ends as `UBUS_LOGIN_FAILED` (500).
 
 | Field | Type | Description |
@@ -185,7 +185,7 @@ Builds the authorization URL with `response_type=code`, `client_id`, `redirect_u
 
 POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the client credentials to `discovery.token_endpoint`. Returns the parsed token response. `session_id` only correlates log lines. Fails with `INSECURE_TOKEN_ENDPOINT`, `INVALID_PKCE_VERIFIER`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `OIDC_INVALID_GRANT`, `TOKEN_EXCHANGE_FAILED` or `TOKEN_RESPONSE_INVALID_JSON`. The last four are failures of the IdP and carry `details.http_status` `502`; the token endpoint's own status is only logged.
 
-### `verify_id_token(deps, tokens, keys, config, handshake, discovery, now)` → `Result<{sub, email, name, groups}>`
+### `verify_id_token(deps, tokens, keys, config, handshake, discovery, now)` → `Result<{sub, email, email_verified, name, groups}>`
 
 Validates `tokens.id_token`: algorithm (`RS256` or `ES256` only, fixed in code), key lookup by `kid`, signature, `iss`, `aud`, `exp`, `nbf`, `iat` (through `crypto.jwt_verify`), then `sub`, `exp` and `iat` presence, `nonce`, `azp`, the access token's presence, and `at_hash` when the token has one (an ID Token without it is accepted).
 
@@ -251,11 +251,20 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `redirect_uri` | string | `luci-sso.default.redirect_uri` |
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
+| `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
 | `roles` | array | Every `config role` section with an email or group, in config order: `{ name, emails, groups }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
 
 ### `find_role_for_user(config, claims)` → `Result<{role_name, also_matched}>`
 
-Matches `claims.email` (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+Matches the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+
+### `email_is_verified(claims)` → `bool`
+
+`true` when `claims.email_verified` is `true` or the string `"true"`.
+
+### `matchable_email(config, claims)` → `string` or `null`
+
+`claims.email` when it is a non-empty string and either `config.require_email_verified` is `false` or `email_is_verified(claims)`. Otherwise `null`. A `config` without `require_email_verified` counts as on.
 
 ---
 

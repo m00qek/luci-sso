@@ -109,6 +109,14 @@ luci-sso[1234]: User [sub_id: c775e7b757ede630] matched no roles [session_id: 8e
 
 The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching is case-insensitive; group matching is case-sensitive. A role with neither an email nor a group is ignored.
 
+If the lines before it include:
+
+```
+luci-sso[1234]: Ignoring the unverified email of user [sub_id: c775e7b757ede630] for role matching: email_verified is not true (require_email_verified) [session_id: 8e25f313865ad01a]
+```
+
+the IdP sent the email without `email_verified: true`, so only the user's groups were matched. Make the IdP mark the address as verified; [Provider Compatibility](../../reference/provider-compatibility.md#verified-email) says how for each provider. The `require_email_verified` option turns the check off; see [UCI Configuration](../../reference/uci-config.md#oidc-section-notes).
+
 Claim values are never logged. To see which claims the IdP sent, look for the debug line logged during the callback:
 
 ```

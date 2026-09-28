@@ -80,7 +80,7 @@ identity_providers:
       - key: {{ secret "/config/jwks.pem" | mindent 10 "|" | msquote }}
     claims_policies:
       luci_sso:
-        id_token: ['email', 'name', 'groups']
+        id_token: ['email', 'email_verified', 'name', 'groups']
     clients:
       - client_id: luci-router
         client_name: OpenWrt Router

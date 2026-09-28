@@ -57,6 +57,8 @@ Open the **Credentials** tab and click **Add client secret**. Copy the secret it
 
 Open the **Allowed User Groups** tab and click **Unrestrict**, then confirm. A new client lets no one sign in until we do this. The router's `admin` role, set up in the next step, decides who gets in.
 
+The router matches us by our email address, and it trusts only an address Pocket ID marks as verified. Pocket ID does not mark addresses an administrator entered. Open **Administration > Users** and edit our user. Next to **Email** is an envelope button, yellow while the address is unverified. Click it (**Mark as verified**) so that it turns green, then save the user.
+
 ---
 
 ## Step 2: Configure luci-sso

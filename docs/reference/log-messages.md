@@ -350,7 +350,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 Notes:
 
-- `USER_NOT_AUTHORIZED`: a role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
+- `USER_NOT_AUTHORIZED`: an email without `email_verified: true` does not count while `require_email_verified` is on; an `Ignoring the unverified email` line says so. A role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
 
 ---
 
@@ -381,6 +381,7 @@ Logged by the CGI script under `luci-sso[<pid>]`.
 
 | Line | Level | When |
 | :--- | :--- | :--- |
+| `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | `require_email_verified` is on and the email arrived without `email_verified: true`, so only the user's groups were matched. Followed by `matched no roles` when no group matched. See [Provider Compatibility](provider-compatibility.md#verified-email). |
 | `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | The user got `<role>`. When other roles matched too, the line reads `mapped to role '<role>', the first match; also matched: <role>, <role>`. |
 | `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. |
 | `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | A plain name in the entry's `read` or `write` list matches no access group. It grants nothing. Globs and negations are not checked. |

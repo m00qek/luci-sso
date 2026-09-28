@@ -134,6 +134,27 @@ A role says which users it matches, by email or by group. What the role may do o
     uci commit luci-sso
     ```
 
+An email matches only if Authentik marks it as verified (`email_verified: true`). Since 2025.10, Authentik's default `email` scope mapping always sends `false`, so the login fails with `[403] USER_NOT_AUTHORIZED` unless a group matches. To send `true`, replace that mapping with your own:
+
+1. Open **Customization > Property Mappings**, click **Create**, select **Scope Mapping**, and click **Next**.
+2. Set **Name** to `luci-sso email`, **Scope name** to `email`, and **Expression** to:
+
+    ```python
+    return {"email": request.user.email, "email_verified": True}
+    ```
+
+    Click **Finish**.
+
+3. Open the `luci-router` provider, click **Edit**, and open **Advanced protocol settings**. Under **Scopes**, move **authentik default OAuth Mapping: OpenID 'email'** out of **Selected Scopes** and move `luci-sso email` in. Click **Update**.
+
+This mapping vouches for every address, as Authentik's own [documentation](https://docs.goauthentik.io/add-secure-apps/providers/oauth2/#email-scope-verification) warns: Authentik has no record of which addresses were checked. It is right when only administrators set addresses, for example when enrollment flows and user settings do not let users change their email. The same documentation suggests keeping a verified flag in a user attribute and returning `request.user.attributes.get("email_verified", False)` instead.
+
+If you would rather not add the mapping, map by group instead, or turn the check off:
+
+--8<-- "email-verified-off.md"
+
+With the check off, an email rule matches any address the IdP sends, verified or not. Do this only if users cannot set their own address at Authentik; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
+
 ### Map by group
 
 Authentik puts the user's group names in the `groups` claim of the ID Token through the **authentik default OAuth Mapping: OpenID 'profile'** scope mapping. It is selected by default; check that it is still under **Selected Scopes** in the provider's **Advanced protocol settings > Scopes**. Each value is the group's **Name** exactly as shown in **Directory > Groups** (case-sensitive).
@@ -182,6 +203,7 @@ To check logout, sign in with SSO and click **Log out** in LuCI. The browser pas
 | `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 400` | Authentik rejected the client secret. Copy it again from the provider (**Edit**, then **Modify** next to **Client Secret**). |
 | Authentik shows "Redirect URI Error" | The router's `redirect_uri` does not exactly match the provider's **Authorization** redirect URI. |
 | After LuCI's **Log out**, Authentik shows "Bad Request" or "You've logged out of LuCI Router" instead of returning to the router | No **Post Logout** redirect URI matches `https://<YOUR_ROUTER_IP_OR_DOMAIN>/`, trailing slash included. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `Ignoring the unverified email of user [sub_id: …] for role matching` | Authentik's default `email` scope mapping sends `email_verified: false`. Replace it as described in [Map by email](#map-by-email). |
 | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | The `groups` claim is empty. In the Authentik provider settings, confirm the **profile** scope is selected under **Advanced protocol settings > Scopes**, and that the user belongs to the mapped group. |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)` | The router does not trust Authentik's TLS certificate. See [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
 

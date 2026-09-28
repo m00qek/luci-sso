@@ -5,6 +5,9 @@ This guide walks through upgrading an existing `luci-sso` installation to a new 
 !!! warning "Upgrading from 0.9.1 or earlier: role permissions move to rpcd"
     Releases up to 0.9.1 kept each role's permissions in `/etc/config/luci-sso`. Later releases keep them in `/etc/config/rpcd`, and a user gets only the **first** matching role. The upgrade moves the permissions for you, but read [Upgrading from 0.9.1 or earlier](#upgrading-from-091-or-earlier) before you start.
 
+!!! warning "Upgrading from 0.9.1 or earlier: email rules need a verified email"
+    From the next release, an `email` rule matches only if the IdP marks the address as verified (`email_verified: true`). Keycloak, Authentik and Pocket ID send `false` by default for addresses an administrator entered, and so does Authelia's ID Token under a claims policy that lists `email` alone. Users who match only by email then cannot log in. Read [Email rules need a verified email](#email-rules-need-a-verified-email) before you upgrade.
+
 !!! note "Sessions survive an upgrade"
     Installing a newer or older `luci-sso` package over the installed one keeps every LuCI session. The install script reloads `rpcd`, which keeps each session and rebuilds its rights from its login entry. The one exception is the upgrade from 0.9.1 or earlier: SSO sessions opened before it lose their rights at that reload, and their users log in again.
 
@@ -124,6 +127,7 @@ Releases up to 0.9.1 kept a role's permissions as `read` and `write` lists on th
 - **Permissions take effect at Save.** On the settings page, read and write access are written to `rpcd` when you click **Save** (or **Save & Apply**), and are in force about a second later, once `rpcd` has reloaded. Emails, groups and role order still take effect with **Save & Apply**. The role editor shows a note saying so.
 - **SSO sessions survive `rpcd` reloads.** Installing a LuCI package that reloads `rpcd` no longer strips SSO users of their rights.
 - **An ID Token without `at_hash` is accepted.** OIDC Core makes it optional in the authorization code flow, and `luci-sso` now follows it, so IdPs that never send it, such as Authentik, work. A present `at_hash` is still checked, and a wrong one is refused with `AT_HASH_MISMATCH`. The `MISSING_AT_HASH` code is gone.
+- **An email rule needs a verified email.** The new `require_email_verified` option, on by default, makes an `email` rule match only when the IdP marks the address as verified. See [Email rules need a verified email](#email-rules-need-a-verified-email).
 - **Removal keeps the permissions.** Removing the package copies each entry's lists back onto its role, then deletes the entries. Installing again moves them back. See [How to Remove luci-sso](uninstall.md).
 - **Internal:** the `luci-sso` ubus object has no `move_role` method. Role order is the order of `/etc/config/luci-sso`, which the settings page changes by drag and drop.
 
@@ -163,6 +167,35 @@ If a role has the same name as an `rpcd` login, such as `root`, its open session
 4.  Check the order of the roles. If a user matches several, only the first counts. Drag the most privileged or most specific role to the top, then click **Save & Apply**. A user who used to combine two roles needs one role that grants both; see [How to Configure Role-Based Access Control](rbac.md).
 
 5.  If a role had `read '*'`, it can now read every access group, not only LuCI's. If it should stay limited to LuCI, list the LuCI groups it needs instead.
+
+### Email rules need a verified email
+
+A role's `email` rule now matches only if the IdP sends `email_verified: true` with the address, in the same response. Before, any address matched. The check stops users who can set their own address at the IdP from claiming someone else's; [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses) explains it. The option that controls it, `require_email_verified`, is on even though an existing `/etc/config/luci-sso` does not mention it.
+
+A user who matches a role only by email, at an IdP that does not send `true`, can no longer log in. The log shows:
+
+```text
+luci-sso[1234]: Ignoring the unverified email of user [sub_id: c775e7b757ede630] for role matching: email_verified is not true (require_email_verified) [session_id: 8e25f313865ad01a]
+luci-sso[1234]: User [sub_id: c775e7b757ede630] matched no roles [session_id: 8e25f313865ad01a]
+```
+
+Users who match by group are not affected, and neither are open sessions.
+
+| IdP | Sends `true` by default? | Fix |
+| :--- | :--- | :--- |
+| Google | Yes, for a verified Google account | None |
+| Authelia | In UserInfo, yes. In the ID Token only if the claims policy lists `email_verified`. | Add `'email_verified'` to the claims policy's `id_token` list; see [How to Configure Authelia](../providers/authelia.md#map-by-email). |
+| Keycloak | No, for users an administrator creates | Turn on **Email verified** on each user; see [How to Configure Keycloak](../providers/keycloak.md#map-by-email). |
+| Authentik | No, never (since Authentik 2025.10) | Replace the default `email` scope mapping; see [How to Configure Authentik](../providers/authentik.md#map-by-email). |
+| Pocket ID | No, for users an administrator creates | Mark each user's email as verified; see [How to Configure Pocket ID](../providers/pocket-id.md#map-by-email). |
+
+Before you upgrade, make the IdP send `true`: the change is harmless to the release you run now, which ignores the claim. Or move the users to `group` rules.
+
+If neither is possible, turn the check off. The upgrade then keeps the old behaviour:
+
+--8<-- "email-verified-off.md"
+
+With the check off, an email rule matches any address the IdP sends. Do this only if users cannot set their own address at the IdP.
 
 ## Leftover secret key from older versions
 

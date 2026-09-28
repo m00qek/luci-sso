@@ -11,7 +11,7 @@ A role has two halves:
 - **Who it matches.** A `config role '<name>'` section in `/etc/config/luci-sso`, with `email` and `group` rules. A role with neither is ignored.
 - **What it grants.** The role's `rpcd` login entry, `luci_sso_<name>` in `/etc/config/rpcd`, with `read` and `write` lists of access groups. `rpcd` is the OpenWrt daemon that holds LuCI sessions and their rights.
 
-When a user logs in, `luci-sso` checks their email and groups against the roles **in order**, from the top. The user gets the **first** role that matches, and only that one: roles are not merged. The session gets exactly the rights of that role's entry.
+When a user logs in, `luci-sso` checks their email and groups against the roles **in order**, from the top. The user gets the **first** role that matches, and only that one: roles are not merged. The session gets exactly the rights of that role's entry. An email counts only if the IdP marks it as verified (`email_verified`); see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
 
 A fresh install ships one role, `admin`. It matches the placeholder `admin@example.com`, and its entry grants full access (`*` in both lists). Replace the placeholder with a real address before you enable SSO.
 
@@ -250,7 +250,7 @@ Then log in as the user and confirm the LuCI menus match what you expect. Each l
 luci-sso[1234]: User [sub_id: c775e7b757ede630] mapped to role 'viewer' [session_id: 8e25f313865ad01a]
 ```
 
-- **`[403] USER_NOT_AUTHORIZED`**, after `matched no roles`: the user's email or groups match no role. Check the exact values the IdP sends. Email matching ignores case, but must otherwise be exact; group matching is case-sensitive.
+- **`[403] USER_NOT_AUTHORIZED`**, after `matched no roles`: the user's email or groups match no role. Check the exact values the IdP sends. Email matching ignores case, but must otherwise be exact; group matching is case-sensitive. An `Ignoring the unverified email` line before it means the IdP did not mark the email as verified, so it was not matched; see [Provider Compatibility](../../reference/provider-compatibility.md#verified-email).
 - **`[500] UBUS_LOGIN_FAILED`**, after a `MISSING_RPCD_LOGIN` line: the role has no `rpcd` entry. Save its permissions on the settings page, or with `set_role`.
 - **The wrong role**: the line says `the first match; also matched: …`. Move the role you expect higher up.
 

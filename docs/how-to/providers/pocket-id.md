@@ -94,6 +94,20 @@ A role says which users it matches, by email or by group. What the role may do o
     uci commit luci-sso
     ```
 
+An email matches only if Pocket ID marks it as verified (`email_verified: true`). Pocket ID keeps a verified flag on each user, which is off for a user an administrator creates, so the login fails with `[403] USER_NOT_AUTHORIZED` unless a group matches. For each user you map by email, do one of the following:
+
+- Open **Administration > Users** and edit the user. The envelope button next to **Email** is yellow while the address is unverified; click it (**Mark as verified**) so that it turns green, then save the user.
+- To mark new addresses verified from the start, turn on **Emails verified by default** in **Administration > Application Configuration**, on the **Email** tab. It applies to addresses added or changed from then on, not to existing users.
+- To have users confirm their address, turn on **Email Verification** on the same tab. Pocket ID then emails them a link, which needs an SMTP server.
+
+Users synced from LDAP are always marked verified. Changing a user's email resets the flag to the **Emails verified by default** setting.
+
+If you cannot mark the addresses verified, map by group instead, or turn the check off:
+
+--8<-- "email-verified-off.md"
+
+With the check off, an email rule matches any address the IdP sends, verified or not. Do this only if users cannot set their own address at Pocket ID; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
+
 ### Map by group
 
 Pocket ID sends a user's groups in the `groups` claim of the ID Token when the `groups` scope is requested. Each value is the group's **Name**, exactly as set in **Administration > User Groups**, not its **Friendly Name**. When you type a Friendly Name such as `Router Admins`, Pocket ID fills in `router_admins` as the Name, so check the Name before you use it in a role.
@@ -139,6 +153,7 @@ Open the LuCI login page at the host name used in the Redirect URI; the login fa
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path. It must use the host name Pocket ID is configured with, not an IP address or another alias. Pocket ID's issuer is its `APP_URL` setting. |
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with the `uci set luci-sso.default.redirect_uri=…` command from Step 2. |
 | `[401] MISSING_HANDSHAKE_COOKIE` | The login started at a different host name than the one in the Redirect URI. Open LuCI at the Redirect URI's host and try again. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `Ignoring the unverified email of user [sub_id: …] for role matching` | The user's email is not marked as verified in Pocket ID. Mark it as described in [Map by email](#map-by-email). |
 | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | Authentication succeeded but no role matched. If using group mapping, check that **Scopes** includes `groups` and that the role uses the group's **Name** exactly as Pocket ID shows it; group matching is case-sensitive. |
 | `[400] IDP_ERROR`, preceded by `IDP_ERROR: the IdP returned error=<error> (<description>)` | Pocket ID refused the authorization request and sent the reason back to the router. The line gives Pocket ID's reason. |
 | `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Pocket ID rejected the client secret. Check `client_secret`, or add a new secret on the client's **Credentials** tab if the old one expired or was deleted. |

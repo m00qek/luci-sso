@@ -23,7 +23,7 @@ identity_providers:
   oidc:
     claims_policies:
       luci_sso:
-        id_token: ['email', 'name', 'groups']
+        id_token: ['email', 'email_verified', 'name', 'groups']
     clients:
       - client_id: luci-router
         client_name: OpenWrt Router
@@ -44,7 +44,7 @@ identity_providers:
 
 `luci-sso` sends the client secret in the token request body (`client_secret_post`). Keep the `token_endpoint_auth_method` line: without it, Authelia accepts only `client_secret_basic` and rejects the router's token request with HTTP 401.
 
-By default Authelia leaves `email` and `groups` out of the ID Token and returns them only from its UserInfo endpoint. `luci-sso` then fetches UserInfo on every login, which works while `userinfo_signed_response_alg` is `none` (the default). The `luci_sso` claims policy puts them in the ID Token, so no UserInfo request is needed.
+By default Authelia leaves `email` and `groups` out of the ID Token and returns them only from its UserInfo endpoint. `luci-sso` then fetches UserInfo on every login, which works while `userinfo_signed_response_alg` is `none` (the default). The `luci_sso` claims policy puts them in the ID Token, so no UserInfo request is needed. Keep `email_verified` in its list: an email in the ID Token counts for role matching only with the ID Token's own `email_verified` claim (see [Map by email](#map-by-email)).
 
 Optional settings for the client:
 
@@ -122,6 +122,8 @@ A role says which users it matches, by email or by group. What the role may do o
     uci commit luci-sso
     ```
 
+An email matches only if Authelia marks it as verified, with `email_verified: true` next to it. Authelia does so for every user, but only where it sends the email: in UserInfo, or in the ID Token when the claims policy lists `email_verified`. With a claims policy that lists `email` without `email_verified`, the login fails with `[403] USER_NOT_AUTHORIZED` unless a group matches. Authelia does not check addresses itself, so `true` means the address in its user database, which an administrator controls.
+
 ### Map by group
 
 Authelia returns the user's groups from its authentication backend (file or LDAP) in the `groups` claim: in the ID Token with the `luci_sso` claims policy from Step 1, otherwise through UserInfo. The group name must exactly match the name as Authelia returns it (case-sensitive).
@@ -168,6 +170,7 @@ Authelia has no end-session endpoint, so LuCI's **Log out** ends the router sess
 | Authelia shows "An error occurred processing the request" with the hint "The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'" | The `redirect_uri` in UCI does not exactly match a `redirect_uris` entry in Authelia's client config. The router logs no `OIDC callback received` line. |
 | `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Authelia rejected the client credentials: the client secret is wrong (UCI needs the plaintext, Authelia the hash), or the client config has no `token_endpoint_auth_method: client_secret_post` line (Authelia logs `… is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'`). |
 | `UserInfo fallback failed [session_id: …]: USERINFO_INVALID_JSON`, then `[403] USER_NOT_AUTHORIZED` | Authelia returned a signed UserInfo response, which `luci-sso` cannot read, so the email and groups it carries are lost. Set `userinfo_signed_response_alg: none` on the client, or add the `luci_sso` claims policy from Step 1 so that UserInfo is not needed, and restart Authelia. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `Ignoring the unverified email of user [sub_id: …] for role matching` | The claims policy puts `email` in the ID Token without `email_verified`. Add `'email_verified'` to its `id_token` list, as in Step 1, and restart Authelia. |
 | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | The user's email or group does not match any configured role. Email matching ignores case; group matching is case-sensitive, so check the group name exactly. |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).
