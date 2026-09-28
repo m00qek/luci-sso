@@ -165,6 +165,8 @@ Check that the service is active. On the router:
 
 Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to your Authentik login screen. With the explicit-consent flow, Authentik then asks the user to confirm once before it returns to the router.
 
+To check logout, sign in with SSO and click **Log out** in LuCI. The browser passes through Authentik and returns to `https://<YOUR_ROUTER_IP_OR_DOMAIN>/`. If you set **Invalidation Flow** to `default-invalidation-flow` in step 1, the next **Login with SSO** asks for the password again. With the default flow, Authentik keeps its session and signs the user straight back in.
+
 ---
 
 ## Troubleshooting
