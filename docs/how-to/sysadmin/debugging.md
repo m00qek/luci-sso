@@ -107,7 +107,7 @@ The log shows `[403] USER_NOT_AUTHORIZED`, preceded by:
 luci-sso[1234]: User [sub_id: c775e7b757ede630] matched no roles [session_id: 8e25f313865ad01a]
 ```
 
-The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching is case-insensitive; group matching is case-sensitive. A role with neither an email nor a group is ignored.
+The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching ignores letter case; group matching is case-sensitive. A role with neither an email nor a group is ignored.
 
 If the lines before it include:
 

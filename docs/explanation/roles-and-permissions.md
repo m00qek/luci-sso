@@ -86,6 +86,8 @@ So by default an email counts for role matching only if the same response marks 
 
 Not every IdP sends `true` by default, even for addresses an administrator typed in. [Provider Compatibility](../reference/provider-compatibility.md#verified-email) lists what each one sends, and its guide shows how to make it send `true`. The `require_email_verified` option turns the check off, which is safe only when every address at the IdP is set by an administrator, or matching is by group alone.
 
+An `email` rule ignores letter case in the whole address, local part included. That is `luci-sso`'s own matching policy, not a rule of a standard: RFC 5321 §2.4 lets a mail server treat the local part as case-sensitive, but discourages relying on it, and mail providers treat `Alice@` and `alice@` as the same mailbox. Matching exactly would lock users out over a capital letter.
+
 Even a verified email is a weaker identifier than the account itself. OIDC Core §5.7 says that only the pair of `iss` and `sub` identifies a user reliably, and that claims such as `email` "MUST NOT be used as unique identifiers". An address can be reassigned: when someone leaves, their address may later go to someone else. A role that matches by email therefore trusts the IdP never to hand an address to a different person. Requiring `email_verified` narrows that risk, because the IdP vouches for the address today, but it does not remove it. Group matching avoids it: membership of a group is managed at the IdP, not inferred from an address.
 
 ---

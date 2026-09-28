@@ -150,6 +150,11 @@ export function matchable_email(config, claims) {
 /**
  * Returns true when the claims match a role, by email (case-insensitive) or
  * by group (exact).
+ *
+ * Ignoring case in the whole email address is luci-sso's own matching
+ * policy, not a standard's rule: RFC 5321 §2.4 lets the local part be
+ * case-sensitive, but discourages relying on that, and in practice mail
+ * providers treat it as case-insensitive.
  * @private
  */
 function _role_matches(role, email, groups) {

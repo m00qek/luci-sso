@@ -48,12 +48,13 @@ A role matches a user if ANY of its `email` or `group` values matches. Roles are
 
 | Option | Type | Description |
 | :--- | :--- | :--- |
-| `email` | list (string) | Match by OIDC `email` claim. Case-insensitive. Only a verified email matches while `require_email_verified` is on (the default). |
+| `email` | list (string) | Match by OIDC `email` claim, ignoring letter case in the whole address. Only a verified email matches while `require_email_verified` is on (the default). See [notes](#role-mapping-notes). |
 | `group` | list (string) | Match by a value of the OIDC `groups` claim, which must be a JSON array. Case-sensitive. |
 
 ### Role mapping notes
 
 - **Section name.** The role's name. `default` is taken by the OIDC section. The role's `rpcd` entry needs a name of 1–32 letters, digits and underscores; a role with a longer name can exist in UCI, but it cannot get permissions, and its users cannot log in.
+- **Email case.** `Alice@Example.com` and `alice@example.com` match the same rule. Ignoring case in the local part too is `luci-sso`'s policy, not a standard's rule; see [About Roles and Permissions](../explanation/roles-and-permissions.md#verified-email-addresses).
 - **No match.** A user who matches no role is refused with `USER_NOT_AUTHORIZED`.
 - **Several matches.** Rights are never merged. The login's log line names the role chosen and the other matches.
 - **Invalid roles.** A role that has neither an `email` nor a `group` entry is ignored, and the log says `Ignoring role '<name>': missing email or group list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).

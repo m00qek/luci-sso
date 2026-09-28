@@ -59,7 +59,7 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 
 | Requirement | Check | Failure |
 | :--- | :--- | :--- |
-| `email` or `groups` | Roles match on the `email` claim (case-insensitive) or on values of the `groups` claim (case-sensitive). `groups` must be a JSON array; any other type is ignored. When the ID Token has no `email`, the UserInfo endpoint is asked for `email`, and for `name` and `groups` if the ID Token lacks them. | `[403] USER_NOT_AUTHORIZED` |
+| `email` or `groups` | Roles match on the `email` claim, ignoring letter case (a `luci-sso` policy), or on values of the `groups` claim (case-sensitive). `groups` must be a JSON array; any other type is ignored. When the ID Token has no `email`, the UserInfo endpoint is asked for `email`, and for `name` and `groups` if the ID Token lacks them. | `[403] USER_NOT_AUTHORIZED` |
 | `email_verified` | With `require_email_verified` on (the default), the email counts for role matching only if `email_verified` is the JSON boolean `true` (not the string `"true"`), taken from the same response as the email: the ID Token, or UserInfo when the email came from there. Otherwise the email is ignored for matching and groups still match. See [Verified email](#verified-email). | `Ignoring the unverified email of user [sub_id: …] for role matching …`, then `[403] USER_NOT_AUTHORIZED` if no group matches |
 | UserInfo response | HTTP 200 with a plain JSON object, not a signed JWT. Its `sub` matches the ID Token's `sub` exactly, including case. | `[403] IDENTITY_MISMATCH` for a different `sub`. Other UserInfo failures are logged as warnings and the login continues with the ID Token's claims. |
 
