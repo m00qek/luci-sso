@@ -69,7 +69,6 @@ export const MISSING_EXP_CLAIM         = "MISSING_EXP_CLAIM";
 export const MISSING_IAT_CLAIM         = "MISSING_IAT_CLAIM";
 export const MISSING_NONCE             = "MISSING_NONCE";
 export const NONCE_MISMATCH            = "NONCE_MISMATCH";
-export const MISSING_AZP_CLAIM         = "MISSING_AZP_CLAIM";
 export const AZP_MISMATCH              = "AZP_MISMATCH";
 export const MISSING_ACCESS_TOKEN      = "MISSING_ACCESS_TOKEN";
 export const AT_HASH_MISMATCH          = "AT_HASH_MISMATCH";

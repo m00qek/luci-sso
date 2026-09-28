@@ -135,8 +135,12 @@ export function verify(native, token, pubkey, options) {
 	if (!p_iss.ok || !o_iss.ok || p_iss.data !== o_iss.data)
 		return Result.err(ISSUER_MISMATCH);
 
+	// OIDC Core §3.1.3.7 (3): aud MUST list our client_id, and the token MUST
+	// be rejected if it lists additional audiences not trusted by the Client.
+	// luci-sso trusts no other audience, so aud is accepted only as the string
+	// client_id or the one-entry array [client_id] (RFC 7519 §4.1.3 allows
+	// both forms). Every array entry is type-checked before the comparison.
 	let aud = payload.aud;
-	let found = false;
 	if (type(aud) == "array") {
 		if (length(aud) == 0)
 			return Result.err(INVALID_AUDIENCE);
@@ -144,17 +148,11 @@ export function verify(native, token, pubkey, options) {
 		for (let a in aud) {
 			if (type(a) != "string")
 				return Result.err(MALFORMED_AUDIENCE);
-
-			if (a === options.aud) {
-				found = true;
-				break;
-			}
 		}
-	} else {
-		found = (aud === options.aud);
-	}
 
-	if (!found) {
+		if (length(aud) != 1 || aud[0] !== options.aud)
+			return Result.err(AUDIENCE_MISMATCH);
+	} else if (aud !== options.aud) {
 		return Result.err(AUDIENCE_MISMATCH);
 	}
 

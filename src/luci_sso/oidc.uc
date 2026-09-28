@@ -5,7 +5,7 @@ import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import { find_jwk } from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
-import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, MISSING_AZP_CLAIM, AZP_MISMATCH, MISSING_ACCESS_TOKEN, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON, INVALID_JWT_HEADER } from 'luci_sso.errors';
+import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, AZP_MISMATCH, MISSING_ACCESS_TOKEN, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON, INVALID_JWT_HEADER } from 'luci_sso.errors';
 
 /**
  * ID token signature algorithms this module accepts. Fixed in code rather than
@@ -223,13 +223,15 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		return Result.err(NONCE_MISMATCH);
 	}
 
-	// 3.2 Authorized Party Check (OIDC Core 1.0 §3.1.3.7 items 4-5)
-	// azp is required only when the ID Token has MULTIPLE audiences.
-	if (type(payload.aud) == "array" && length(payload.aud) > 1 && !payload.azp) {
-		return Result.err(MISSING_AZP_CLAIM);
-	}
-	if (payload.azp && payload.azp !== config.client_id) {
-		return Result.err(AZP_MISMATCH, `Expected ${config.client_id}, got ${payload.azp}`);
+	// 3.2 Authorized Party Check (OIDC Core §3.1.3.7 (5)): when azp is
+	// present, it must be our client_id. azp is OPTIONAL (§2) and never
+	// required, not even with several audiences: that rule came from errata
+	// set 1 and errata set 2 removed it. An ID token with several audiences
+	// is refused by the aud check anyway. "in" catches azp: "" and azp: 0,
+	// which a truthiness test would let through.
+	if ("azp" in payload && payload.azp !== config.client_id) {
+		let got = (type(payload.azp) == "string") ? encoding.log_safe(payload.azp) : `(${type(payload.azp)})`;
+		return Result.err(AZP_MISMATCH, `Expected ${config.client_id}, got ${got}`);
 	}
 
 	// 3.3 Access Token Hash Check (OIDC Core 1.0 §3.1.3.8). In the code flow

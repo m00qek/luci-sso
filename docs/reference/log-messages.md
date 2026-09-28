@@ -232,8 +232,7 @@ These occur while validating the ID Token returned by the IdP. Only `ID_TOKEN_VE
 | `MISSING_IAT_CLAIM` | The ID Token has no `iat` claim | Required by OIDC Core. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_NONCE` | The ID Token has no `nonce` claim, or the handshake has no nonce | Replay protection requires a nonce. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `NONCE_MISMATCH` | The `nonce` claim does not match the handshake | The token was not issued for this login. Possible replay or token substitution. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
-| `MISSING_AZP_CLAIM` | The ID Token has several `aud` values but no `azp` | OIDC Core requires `azp` in that case. An IdP configuration issue. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
-| `AZP_MISMATCH` | `azp` does not equal the configured `client_id` | The token was issued for a different client. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
+| `AZP_MISMATCH` | The ID Token has an `azp` claim that is not the string `client_id`, including `""`, a number or `null` | The token was issued for a different client. An ID Token without `azp` is accepted. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_ACCESS_TOKEN` | The token response has no `access_token` | `luci-sso` needs the access token to check `at_hash` when present and to register the login against replay. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `AT_HASH_MISMATCH` | The ID Token has an `at_hash` that does not match the access token, or is empty or not a string | The access token was substituted, or the IdP computed `at_hash` wrongly. An ID Token without `at_hash` is accepted. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 

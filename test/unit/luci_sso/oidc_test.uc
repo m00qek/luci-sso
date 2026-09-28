@@ -314,7 +314,7 @@ describe('oidc: exchange_code — flow', () => {
 // ─── verify_id_token — claims validation ────────────────────────────────────────
 
 describe('oidc: verify_id_token — claims', () => {
-	it('support multi-audience arrays', () => {
+	it('rejects an aud array with an additional untrusted audience, even with azp = client_id (OIDC Core §3.1.3.7 (3))', () => {
 		let keys = JWKS.keys;
 		let at = "mock-at";
 		let full_hash = crypto.hash_sha256(native, at).data;
@@ -324,7 +324,15 @@ describe('oidc: verify_id_token — claims', () => {
 		let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], azp: f.MOCK_CONFIG.client_id, at_hash: ah };
 		let token = h.generate_id_token(payload, PRIVKEY, "RS256");
 		with_context({}, (deps) => {
-			assert.match(truthy(), oidc.verify_id_token(deps, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, time).ok);
+			let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, time);
+			assert.match(contains({ ok: false, error: "AUDIENCE_MISMATCH" }), res);
+		});
+
+		payload.aud = [ f.MOCK_CONFIG.client_id, 42 ];
+		token = h.generate_id_token(payload, PRIVKEY, "RS256");
+		with_context({}, (deps) => {
+			let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, time);
+			assert.match("MALFORMED_AUDIENCE", res.error, "a later non-string entry is still type-checked");
 		});
 
 		payload.aud = [ "wrong-app-1", "wrong-app-2" ];
@@ -347,7 +355,7 @@ describe('oidc: verify_id_token — claims', () => {
 		let at = "mock-at";
 		let full_hash = crypto.hash_sha256(native, at).data;
 		let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
-		let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id, "other" ], at_hash: ah };
+		let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id ], at_hash: ah };
 		let time = 1516239022;
 
 		with_context({}, (deps) => {
@@ -463,23 +471,41 @@ describe('oidc: verify_id_token — claims', () => {
 		});
 	});
 
-	it('require azp when aud has multiple audiences', () => {
-		let keys = JWKS.keys;
+	it('rejects azp that is present but not the client_id string: "", a number, null (OIDC Core §3.1.3.7 (5))', () => {
 		let at = "mock-at";
-		let full_hash = crypto.hash_sha256(native, at).data;
-		let ah = encoding.b64url_encode(substr(full_hash, 0, 16)).data;
-		let payload = {
-			...f.MOCK_CLAIMS,
-			aud: [ f.MOCK_CONFIG.client_id, "other-service" ],
-			at_hash: ah
-		};
+		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		with_context({}, (deps) => {
+			for (let azp in [ "", 123, 0, false, null, [ f.MOCK_CONFIG.client_id ] ]) {
+				let token = h.generate_id_token({ ...f.MOCK_CLAIMS, aud: f.MOCK_CONFIG.client_id, azp, at_hash: ah }, PRIVKEY, "RS256");
+				let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, JWKS.keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1516239022);
+				assert.match(contains({ ok: false, error: "AZP_MISMATCH" }), res, sprintf("azp %J", azp));
+			}
+		});
+	});
+
+	it('accepts the Pocket ID shape: aud ["<client_id>"] and no azp (issue #1)', () => {
+		let at = "mock-at";
+		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		let payload = { ...f.MOCK_CLAIMS, aud: [ f.MOCK_CONFIG.client_id ], at_hash: ah };
 		delete payload.azp;
 		let token = h.generate_id_token(payload, PRIVKEY, "RS256");
-
 		with_context({}, (deps) => {
-			let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1516239022);
-			assert.match(falsy(), res.ok, "Verification MUST fail when aud has multiple audiences but azp is missing");
-			assert.match("MISSING_AZP_CLAIM", res.error);
+			let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, JWKS.keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1516239022);
+			assert.match(contains({ ok: true, data: contains({ sub: f.MOCK_CLAIMS.sub }) }), res, `${res.error}`);
+		});
+	});
+
+	it('accepts the Keycloak/Authentik shape: aud "<client_id>", with or without azp = client_id', () => {
+		let at = "mock-at";
+		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		with_context({}, (deps) => {
+			for (let with_azp in [ true, false ]) {
+				let payload = { ...f.MOCK_CLAIMS, aud: f.MOCK_CONFIG.client_id, at_hash: ah };
+				if (with_azp) payload.azp = f.MOCK_CONFIG.client_id; else delete payload.azp;
+				let token = h.generate_id_token(payload, PRIVKEY, "RS256");
+				let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, JWKS.keys, f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1516239022);
+				assert.match(contains({ ok: true }), res, `azp ${with_azp}: ${res.error}`);
+			}
 		});
 	});
 
