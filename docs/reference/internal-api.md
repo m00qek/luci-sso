@@ -187,7 +187,7 @@ POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the 
 
 ### `verify_id_token(deps, tokens, keys, config, handshake, discovery, now)` → `Result<{sub, email, email_verified, name, groups}>`
 
-Validates `tokens.id_token`: algorithm (`RS256` or `ES256` only, fixed in code), key lookup by `kid`, signature, `iss`, `aud`, `exp`, `nbf`, `iat` (through `crypto.jwt_verify`), then `sub`, `exp` and `iat` presence, `nonce`, `azp`, the access token's presence, and `at_hash` when the token has one (an ID Token without it is accepted).
+Validates `tokens.id_token`: algorithm (`RS256` or `ES256` only, fixed in code), key lookup by `kid`, signature, `iss`, `aud`, `exp`, `nbf`, `iat` (through `crypto.jwt_verify`), then `sub` (a non-empty string), `exp` and `iat` presence, `nonce`, `azp` (when present, equal to `client_id`), the access token's presence, and `at_hash` when the token has one (an ID Token without it is accepted).
 
 | Parameter | Type | Description |
 | :--- | :--- | :--- |
@@ -195,7 +195,7 @@ Validates `tokens.id_token`: algorithm (`RS256` or `ES256` only, fixed in code),
 | `keys` | array | JWK objects from `discovery.fetch_jwks()`. |
 | `config` | object | Provides `issuer_url`, `client_id` and `clock_tolerance`. |
 | `handshake` | object | Provides the expected `nonce`. |
-| `discovery` | object | Its `issuer` must match `config.issuer_url`. |
+| `discovery` | object | Its `issuer` must be identical to `config.issuer_url`; the ID Token's `iss` is checked against it. |
 | `now` | int | Current Unix time, from `deps.clock.time()`. |
 
 On success, `email` and `name` are `null` unless they are strings in the token, and `groups` is `[]` unless it is an array.
@@ -212,7 +212,7 @@ Discovery document and JWK Set fetching, with a 24-hour cache in `/var/run/luci-
 
 ### `discover(deps, issuer, options)` → `Result<discovery_doc>`
 
-Fetches `<issuer>/.well-known/openid-configuration`, checks that its `issuer` equals `issuer` after normalization, and that `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. Drops a non-HTTPS `userinfo_endpoint` or `end_session_endpoint`.
+Fetches `<issuer>/.well-known/openid-configuration`, checks that its `issuer` is identical to `issuer`, and that `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. Drops a non-HTTPS `userinfo_endpoint` or `end_session_endpoint`.
 
 | Option | Description |
 | :--- | :--- |
@@ -462,8 +462,8 @@ Verifies a compact JWT with a PEM public key and returns the decoded payload.
 | Option | Description |
 | :--- | :--- |
 | `alg` | `"RS256"` or `"ES256"`. The header must match. |
-| `iss` | Expected issuer (compared after URL normalization). Required. |
-| `aud` | Expected audience. Required. |
+| `iss` | Expected issuer, compared as an exact string. Required. |
+| `aud` | Expected audience. Required. The payload's `aud` must be this string, or a one-entry array holding it. |
 | `now` | Current Unix time. Required integer. |
 | `clock_tolerance` | Allowed skew in seconds. Required integer. |
 | `pre_parsed_header` | Optional already-decoded header. |
@@ -500,7 +500,7 @@ Pure helpers.
 | `b64url_encode(str)` | `Result<string>` | Raw bytes to unpadded Base64URL. |
 | `binary_truncate(data, len)` | `Result<string>` | The first `len` bytes. |
 | `safe_json(data)` | `Result<any>` | Parses JSON from a string, a Result holding one, or an object with `read()`. |
-| `normalize_url(url)` | `Result<string>` | Lower-case scheme and host, default port removed, trailing slashes removed. |
+| `normalize_url(url)` | `Result<string>` | Lower-case scheme and host, default port removed, trailing slashes removed. Only for the JWKS cache key and the near-miss hint of `DISCOVERY_ISSUER_MISMATCH`; issuers are compared exactly. |
 | `split_origin(url)` | `Result<{origin, rest}>` | The normalized origin and the untouched path, query and fragment. Refuses URLs with userinfo. |
 | `is_origin(url)` | `bool` | `true` for `scheme://host[:port]` with at most a trailing `/`. |
 | `rebase_origin(url, from, to)` | `string` | Moves `url` from `from`'s origin to `to`'s, keeping its path; otherwise returns it unchanged. |

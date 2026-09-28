@@ -24,7 +24,7 @@ The connection to the IdP. A missing or invalid required option makes every requ
 
 ### OIDC section notes
 
-- **`issuer_url`** must match the `issuer` value the IdP declares in its discovery document. The comparison ignores a trailing slash, the letter case of scheme and host, and an explicit `:443`.
+- **`issuer_url`** must be identical to the `issuer` value the IdP declares in its discovery document (OIDC Discovery §4.3). The comparison is exact: a trailing slash, letter case and an explicit `:443` all count. [Provider Compatibility](provider-compatibility.md#issuer-identifiers) lists each provider's format.
 - **`internal_issuer_url`** applies to the router's back-channel HTTP requests: discovery, token exchange, JWKS fetch and UserInfo.
     - Back-channel URLs on `issuer_url`'s origin get this origin instead. Their paths are kept. With `issuer_url` `https://kc.example.com/realms/home` and `internal_issuer_url` `https://10.0.0.5:8443`, discovery is fetched from `https://10.0.0.5:8443/realms/home/.well-known/openid-configuration`.
     - A value that does not use `https://`, or has a path, query or fragment, is rejected with `CONFIG_ERROR`.

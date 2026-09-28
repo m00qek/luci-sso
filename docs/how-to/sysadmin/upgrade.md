@@ -128,6 +128,8 @@ Releases up to 0.9.1 kept a role's permissions as `read` and `write` lists on th
 - **SSO sessions survive `rpcd` reloads.** Installing a LuCI package that reloads `rpcd` no longer strips SSO users of their rights.
 - **An ID Token without `at_hash` is accepted.** OIDC Core makes it optional in the authorization code flow, and `luci-sso` now follows it, so IdPs that never send it, such as Authentik, work. A present `at_hash` is still checked, and a wrong one is refused with `AT_HASH_MISMATCH`. The `MISSING_AT_HASH` code is gone.
 - **The UserInfo `sub` must match exactly.** When the router fetches UserInfo, the `sub` it returns must equal the ID Token's `sub` exactly, as OIDC Core §5.3.2 requires. Earlier releases ignored differences of case. A `sub` that differs only in case now fails the login with `IDENTITY_MISMATCH`.
+- **`issuer_url` must match the IdP's issuer exactly.** It must equal the `issuer` the IdP declares in its discovery document character for character, as OIDC Discovery §4.3 requires, including a trailing slash. Earlier releases ignored a trailing slash, letter case in the host and `:443`. See [Set issuer_url to the exact issuer](#set-issuer_url-to-the-exact-issuer).
+- **An ID Token with more than one audience is refused.** Its `aud` must be `client_id` alone, as a string or as a one-entry array. An ID Token that also lists another audience now fails with `AUDIENCE_MISMATCH`, even with `azp` set to `client_id`, because `luci-sso` trusts no other audience (OIDC Core §3.1.3.7). The `MISSING_AZP_CLAIM` code is gone: `azp` is never required, and when present it must be `client_id`.
 - **An email rule needs a verified email.** The new `require_email_verified` option, on by default, makes an `email` rule match only when the IdP marks the address as verified. See [Email rules need a verified email](#email-rules-need-a-verified-email).
 - **Removal keeps the permissions.** Removing the package copies each entry's lists back onto its role, then deletes the entries. Installing again moves them back. See [How to Remove luci-sso](uninstall.md).
 - **Internal:** the `luci-sso` ubus object has no `move_role` method. Role order is the order of `/etc/config/luci-sso`, which the settings page changes by drag and drop.
@@ -168,6 +170,33 @@ If a role has the same name as an `rpcd` login, such as `root`, its open session
 4.  Check the order of the roles. If a user matches several, only the first counts. Drag the most privileged or most specific role to the top, then click **Save & Apply**. A user who used to combine two roles needs one role that grants both; see [How to Configure Role-Based Access Control](rbac.md).
 
 5.  If a role had `read '*'`, it can now read every access group, not only LuCI's. If it should stay limited to LuCI, list the LuCI groups it needs instead.
+
+### Set issuer_url to the exact issuer
+
+The upgrade does not change `issuer_url`. If it differs from the IdP's issuer by a trailing slash, letter case or `:443`, logins fail after the upgrade with `[502] OIDC_DISCOVERY_FAILED`. The line before it names both values:
+
+```text
+luci-sso[1234]: DISCOVERY_ISSUER_MISMATCH: issuer_url is "https://auth.example.com/application/o/luci-router" but the discovery document declares "https://auth.example.com/application/o/luci-router/"; they differ only in a trailing slash, letter case or default port: set issuer_url to exactly the declared value [id: 3c0b5bbd1e0f8f60]
+```
+
+Authentik's issuer ends with `/`; Keycloak's, Authelia's, Pocket ID's and Google's do not. The table in [Provider Compatibility](../../reference/provider-compatibility.md#issuer-identifiers) gives each format.
+
+1.  Read the issuer the IdP declares, from any machine that reaches it:
+
+    ```bash
+    curl -s https://auth.example.com/application/o/luci-router/.well-known/openid-configuration | jq -r .issuer
+    ```
+
+    Without `jq`, find the `"issuer"` field in the JSON.
+
+2.  On the router, set `issuer_url` to that value, exactly:
+
+    ```bash
+    uci set luci-sso.default.issuer_url='https://auth.example.com/application/o/luci-router/'
+    uci commit luci-sso
+    ```
+
+The next login fetches the discovery document again; there is no cache to clear.
 
 ### Email rules need a verified email
 

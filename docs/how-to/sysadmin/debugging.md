@@ -50,7 +50,7 @@ If the probe returns `{"enabled": true}` but the button is still missing, clear 
 The router could not start the login, so the browser never reached the IdP.
 
 - **Log shows `[502] OIDC_DISCOVERY_FAILED`**: the router could not use the IdP's discovery document. The line before it names the cause:
-    - `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`: `issuer_url` is not the issuer the IdP declares. The line shows both values; set `issuer_url` to the declared one. They only have to match apart from a trailing slash, host letter case and `:443`.
+    - `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`: `issuer_url` is not the issuer the IdP declares. The line shows both values; set `issuer_url` to the declared one, exactly. They must match character for character, including a trailing slash; the line says so when that, letter case or `:443` is the only difference.
 
     - `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)`: the router could not connect. See [A back-channel request to the IdP failed](#a-back-channel-request-to-the-idp-failed).
     - `Discovery fetch HTTP <status> from [id: …]`: the IdP answered with an error, usually `404` for a wrong path in `issuer_url`.

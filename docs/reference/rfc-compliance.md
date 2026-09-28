@@ -48,7 +48,7 @@ The grant types, the parameters of the authorization and token requests, and the
 | Token error: `invalid_grant` handling | OIDC Core §3.1.3.4 | ✅ Implemented | Logged as `OIDC_INVALID_GRANT`. |
 | Refresh tokens | OIDC Core §12 | ❌ Not implemented | Stored but never used. See [notes](#authorization-code-flow-notes). |
 | UserInfo endpoint (fallback) | OIDC Core §5.3 | ✅ Implemented | Fetched when `email` claim is absent from the ID Token. |
-| UserInfo `sub` must match the ID Token `sub` | OIDC Core §5.3.2 | ✅ Implemented | Exact, case-sensitive string comparison. A mismatch, or a non-string `sub`, triggers `IDENTITY_MISMATCH`. |
+| UserInfo `sub` must match the ID Token `sub` | OIDC Core §5.3.2 | ✅ Implemented | Exact, case-sensitive string comparison. A mismatch triggers `IDENTITY_MISMATCH`. A UserInfo response whose `sub` is missing or not a non-empty string is not used (`MISSING_SUB_CLAIM`, logged as a warning). |
 | `email_verified` claim | OIDC Core §5.1 | ✅ Implemented | Only the JSON boolean `true` counts as verified, and only from the response that carried the email. See [UCI Configuration](uci-config.md#oidc-section-notes). |
 | RP-Initiated Logout | [RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html) §2 | ✅ Implemented | See [notes](#authorization-code-flow-notes). |
 
@@ -66,7 +66,7 @@ How the router fetches and checks the IdP's discovery document. IdP (identity pr
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
 | Discovery document fetch from `<issuer>/.well-known/openid-configuration` | Discovery §4 | ✅ Implemented | Cached in `/var/run/luci-sso/` (tmpfs) for 24 hours. |
-| `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must match `issuer_url` after normalization (host case, default port and trailing slashes ignored). See [notes](#oidc-discovery-notes). |
+| `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must be identical to `issuer_url`: an exact string comparison, so a trailing slash, letter case or an explicit default port counts as a difference. See [notes](#oidc-discovery-notes). |
 | `authorization_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
 | `token_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
 | `jwks_uri` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
@@ -75,7 +75,7 @@ How the router fetches and checks the IdP's discovery document. IdP (identity pr
 
 ### OIDC Discovery notes
 
-- **`issuer` field validation.** A mismatch fails discovery: `DISCOVERY_ISSUER_MISMATCH: …`, naming both issuers, then `[502] OIDC_DISCOVERY_FAILED`.
+- **`issuer` field validation.** A mismatch fails discovery: `DISCOVERY_ISSUER_MISMATCH: …`, naming both issuers, then `[502] OIDC_DISCOVERY_FAILED`. When the two differ only in a trailing slash, letter case or default port, the line says so. A cached discovery document is used only if its `issuer` is identical to `issuer_url` too.
 - **HTTPS endpoints.** A non-HTTPS `authorization_endpoint`, `token_endpoint` or `jwks_uri` triggers `INSECURE_ENDPOINT`, logged with the field name and its (capped) URL. A non-HTTPS `userinfo_endpoint` or `end_session_endpoint` is dropped with a warning.
 - **`issuer` and the fetch URL.** When `internal_issuer_url` is set (split-horizon), the discovery document is fetched from the internal address but `issuer` is validated against the public `issuer_url`. See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md).
 
@@ -87,12 +87,13 @@ The claims checked in every ID Token before a session is created. The error code
 
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
-| `iss` claim validation | OIDC Core §3.1.3.7 (2) | ✅ Implemented | Must match `issuer_url` after URL normalization. |
-| `aud` claim validation | OIDC Core §3.1.3.7 (3) | ✅ Implemented | Must include `client_id`. |
-| `azp` claim validation | OIDC Core §3.1.3.7 (4), (5) | ✅ Implemented | Required when `aud` has several values; must equal `client_id` when present. |
+| `iss` claim validation | OIDC Core §3.1.3.7 (2) | ✅ Implemented | Must exactly match the discovery document's `issuer`, which is itself identical to `issuer_url`. A non-string `iss` fails. `ISSUER_MISMATCH`. |
+| `aud` claim validation | OIDC Core §3.1.3.7 (3), RFC 7519 §4.1.3 | ✅ Implemented | Must be the string `client_id` or the one-entry array `[client_id]`. `AUDIENCE_MISMATCH` otherwise; an empty array is `INVALID_AUDIENCE` and a non-string entry anywhere in the array is `MALFORMED_AUDIENCE`. |
+| Additional audiences not trusted by the Client | OIDC Core §3.1.3.7 (3) | ✅ Implemented | `luci-sso` trusts no audience but its own `client_id`, so an ID Token that lists any other audience is rejected with `AUDIENCE_MISMATCH`, whatever its `azp`. |
+| `azp` claim validation | OIDC Core §2, §3.1.3.7 (5) | ✅ Implemented | Optional and never required. When the claim is present, whatever its value, it must be the string `client_id`: `""`, a number or `null` fails with `AZP_MISMATCH`. |
 | `exp` claim validation | OIDC Core §3.1.3.7 (9) | ✅ Implemented | Clock skew tolerance applied via `clock_tolerance` UCI option. |
 | `iat` claim validation | OIDC Core §3.1.3.7 (10) | ✅ Implemented | Required. Rejected only if it is in the future by more than `clock_tolerance`; there is no maximum age. |
-| `sub` claim required | OIDC Core §2 | ✅ Implemented | Missing `sub` triggers `MISSING_SUB_CLAIM`. |
+| `sub` claim required | OIDC Core §2 | ✅ Implemented | Must be a non-empty string. A missing `sub`, `""`, a number or `null` triggers `MISSING_SUB_CLAIM`. The same rule applies to the UserInfo response's `sub`, whose response is then not used. |
 | `nonce` claim validation | OIDC Core §3.1.3.7 (11) | ✅ Implemented | Constant-time comparison against stored nonce. |
 | `at_hash` validation | OIDC Core §3.1.3.6, §3.1.3.8 | ✅ Implemented | Optional in the code flow (§3.1.3.6): an ID Token without `at_hash` is accepted. When present, it must equal the Base64URL-encoded left half of the access token's SHA-256, compared in constant time (`AT_HASH_MISMATCH`). |
 

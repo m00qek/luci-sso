@@ -62,7 +62,7 @@ This also works when `issuer_url` has a path, as with Keycloak realms or Authent
 !!! warning "The internal address must serve the same paths"
     `internal_issuer_url` with a path, query or fragment (for example `https://10.0.0.5/realms/home`) is rejected with `CONFIG_ERROR`. Give only the origin; the path comes from `issuer_url`. A reverse proxy that exposes the IdP under a *different* path internally than publicly is not supported.
 
-The IdP's discovery document must still declare the public `issuer_url` as its `iss`. `luci-sso` validates the issuer claim against the public address regardless of the internal URL.
+The IdP's discovery document must still declare exactly the public `issuer_url` as its `issuer`. `luci-sso` validates the issuer claim against the public address regardless of the internal URL.
 
 ---
 

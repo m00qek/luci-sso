@@ -97,7 +97,7 @@ Values that come from the IdP or the browser, such as the declared issuer or the
 
 ### `[id: …]` values
 
-In discovery and JWKS lines, `[id: …]` is the first 16 hex characters of the SHA-256 of the normalized URL: scheme and host in lower case, no `:443`, no trailing slash. In rate-limit lines, `[id: …]` is the same kind of hash of the client key, so no address is logged.
+In discovery lines, `[id: …]` is the first 16 hex characters of the SHA-256 of `issuer_url`, exactly as configured. In JWKS lines, it is the same hash of the normalized `jwks_uri`: scheme and host in lower case, no `:443`, no trailing slash. In rate-limit lines, `[id: …]` is the same kind of hash of the client key, so no address is logged.
 
 To check which URL an id belongs to, hash the candidate on the router:
 
@@ -142,7 +142,7 @@ A cached copy (24 hours) is used when present. When the IdP is unreachable, an e
 | `DISCOVERY_NETWORK_ERROR` | The discovery request did not complete | Transport failure before any HTTP response. The cause is in parentheses. | Not logged by name: `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)` |
 | `INVALID_DISCOVERY_DOC` | The discovery response is not valid JSON | The IdP returned a malformed discovery document, or the URL serves something else. | Not logged by name: `Discovery JSON parse error: …` |
 | `DISCOVERY_MISSING_ISSUER` | The discovery document has no `issuer` field | The IdP's discovery document is not OIDC compliant. | Not logged by name: `Discovery document missing issuer field from [id: …]` |
-| `DISCOVERY_ISSUER_MISMATCH` | The document's `issuer` differs from the configured `issuer_url` after normalization | `issuer_url` is not the IdP's exact issuer identifier (see notes). | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "<configured>" but the discovery document declares "<declared>" [id: …]`, then `[502] OIDC_DISCOVERY_FAILED` |
+| `DISCOVERY_ISSUER_MISMATCH` | The document's `issuer` is not identical to the configured `issuer_url` | `issuer_url` is not the IdP's exact issuer identifier (see notes). | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "<configured>" but the discovery document declares "<declared>" [id: …]`, then `[502] OIDC_DISCOVERY_FAILED`. See notes for a near miss. |
 | `DISCOVERY_MISSING_ENDPOINT` | The document lacks `authorization_endpoint`, `token_endpoint` or `jwks_uri` | The IdP's discovery document is incomplete. | `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field> [id: …]`, then `[502] OIDC_DISCOVERY_FAILED` |
 | `INSECURE_ENDPOINT` | One of those three endpoints is not HTTPS | The IdP advertises a plain-HTTP endpoint. `luci-sso` refuses to use it. | `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "<url>" [id: …]`, then `[502] OIDC_DISCOVERY_FAILED` |
 | `JWKS_FETCH_FAILED` | Any JWK Set failure during the callback; also the JWKS endpoint returning a status other than 200 | The router could not get the IdP's signing keys. | `[502] JWKS_FETCH_FAILED`, preceded by a JWKS line naming the cause, such as `JWKS fetch HTTP <status> from [id: …]` |
@@ -152,7 +152,13 @@ A cached copy (24 hours) is used when present. When the IdP is unreachable, an e
 
 Notes:
 
-- `DISCOVERY_ISSUER_MISMATCH`: the comparison ignores trailing slashes, letter case in the host and `:443`. It does not ignore path differences. The code can also appear as the detail of `ID_TOKEN_VERIFICATION_FAILED`.
+- `DISCOVERY_ISSUER_MISMATCH`: the comparison is exact (OIDC Discovery §4.3). A trailing slash, a letter-case difference or an explicit `:443` is a mismatch. When that is the only difference, the line adds a hint before `[id: …]`:
+
+    ```
+    DISCOVERY_ISSUER_MISMATCH: issuer_url is "https://id.example.com/" but the discovery document declares "https://id.example.com"; they differ only in a trailing slash, letter case or default port: set issuer_url to exactly the declared value [id: …]
+    ```
+
+    Copy the declared value into `issuer_url`. The code can also appear as the detail of `ID_TOKEN_VERIFICATION_FAILED`.
 
 ---
 
@@ -227,7 +233,7 @@ These occur while validating the ID Token returned by the IdP. Only `ID_TOKEN_VE
 | `MISSING_ID_TOKEN` | The token response has no `id_token` | The IdP did not issue an ID Token. Plain OAuth 2.0 services, such as GitHub, do this. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `UNSUPPORTED_ALGORITHM` | The ID Token `alg` is not `RS256` or `ES256` | Configure the IdP to sign with RS256 or ES256. Symmetric algorithms (HS256) are rejected on purpose. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `INVALID_SIGNATURE` | The signature does not verify | See notes. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
-| `MISSING_SUB_CLAIM` | The ID Token has no `sub` claim | The user identifier is missing. Required by OIDC Core. | Detail of `ID_TOKEN_VERIFICATION_FAILED`, or in `UserInfo fallback failed` |
+| `MISSING_SUB_CLAIM` | The ID Token's `sub` claim is missing or is not a non-empty string (`""`, a number, `null`) | The user identifier is missing. Required by OIDC Core §2. In the UserInfo fallback, the UserInfo response is ignored. | Detail of `ID_TOKEN_VERIFICATION_FAILED`, or in `UserInfo fallback failed` |
 | `MISSING_EXP_CLAIM` | The ID Token has no `exp` claim | Required by OIDC Core. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_IAT_CLAIM` | The ID Token has no `iat` claim | Required by OIDC Core. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
 | `MISSING_NONCE` | The ID Token has no `nonce` claim, or the handshake has no nonce | Replay protection requires a nonce. | Detail of `ID_TOKEN_VERIFICATION_FAILED` |
@@ -310,10 +316,10 @@ The token was issued by or for someone else, or the access token needed to check
 
 | Code | Trigger | What it means |
 | :--- | :--- | :--- |
-| `ISSUER_MISMATCH` | The token's `iss` claim does not match the configured `issuer_url` | The token was issued by a different issuer. Verify `issuer_url` matches the IdP's issuer identifier exactly. |
+| `ISSUER_MISMATCH` | The token's `iss` claim is not identical to the discovery document's `issuer` (and so to `issuer_url`) | The token was issued by a different issuer, or the IdP puts a different string in `iss` than in its discovery document, such as with or without a trailing slash. |
 | `INVALID_AUDIENCE` | `aud` is an empty array | The IdP issued a non-compliant token. |
-| `MALFORMED_AUDIENCE` | An element of the `aud` array is not a string | The IdP issued a non-compliant token. |
-| `AUDIENCE_MISMATCH` | No `aud` value equals the configured `client_id` | The token was issued for a different client. Check `client_id`. |
+| `MALFORMED_AUDIENCE` | Any element of the `aud` array is not a string | The IdP issued a non-compliant token. |
+| `AUDIENCE_MISMATCH` | `aud` is neither the string `client_id` nor the one-entry array `[client_id]` | The token was issued for a different client, or also for other audiences, which `luci-sso` does not trust (OIDC Core §3.1.3.7). Check `client_id`, and that the IdP does not add audiences to the ID Token. |
 | `INVALID_ARGUMENT` | The ID Token has `at_hash`, and the access token in the token response is not a string, so the hash cannot be computed | The IdP returned a malformed token response. |
 
 ---

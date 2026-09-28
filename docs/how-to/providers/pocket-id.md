@@ -53,7 +53,7 @@ Open the **Allowed User Groups** tab and choose who may sign in. A new client al
     | **Client Secret** | Your Client Secret from Step 1 |
     | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
 
-    Replace `https://id.example.com` with the actual URL of your Pocket ID instance. The Redirect URI must exactly match the callback URL set in Step 1. The field suggests one built from your browser's address; check it before you save.
+    Replace `https://id.example.com` with Pocket ID's `APP_URL` setting, exactly as set there and with no trailing slash. The Redirect URI must exactly match the callback URL set in Step 1. The field suggests one built from your browser's address; check it before you save.
 
     Click **Save & Apply**.
 
@@ -68,7 +68,7 @@ Open the **Allowed User Groups** tab and choose who may sign in. A new client al
     uci commit luci-sso
     ```
 
-    Replace `https://id.example.com` with the actual URL of your Pocket ID instance. The `redirect_uri` must exactly match the callback URL set in Step 1.
+    Replace `https://id.example.com` with Pocket ID's `APP_URL` setting, exactly as set there and with no trailing slash. The `redirect_uri` must exactly match the callback URL set in Step 1.
 
 ---
 
@@ -150,7 +150,7 @@ Open the LuCI login page at the host name used in the Redirect URI; the login fa
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path. It must use the host name Pocket ID is configured with, not an IP address or another alias. Pocket ID's issuer is its `APP_URL` setting. |
+| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` must be the base URL of your Pocket ID instance (`https://id.example.com`), with no path and no trailing slash. It must use the host name Pocket ID is configured with, not an IP address or another alias. Pocket ID's issuer is its `APP_URL` setting; copy it exactly. |
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with the `uci set luci-sso.default.redirect_uri=…` command from Step 2. |
 | `[401] MISSING_HANDSHAKE_COOKIE` | The login started at a different host name than the one in the Redirect URI. Open LuCI at the Redirect URI's host and try again. |
 | `[403] USER_NOT_AUTHORIZED`, preceded by `Ignoring the unverified email of user [sub_id: …] for role matching` | The user's email is not marked as verified in Pocket ID. Mark it as described in [Map by email](#map-by-email). |

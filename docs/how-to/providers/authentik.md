@@ -57,7 +57,7 @@ Click **Create Application**. The slug becomes part of the issuer URL.
 
 ## 3. Find your issuer URL
 
-The issuer URL for Authentik includes the application slug. Authentik declares it with a trailing slash; `luci-sso` ignores trailing slashes when it compares issuers, so either form works:
+The issuer URL for Authentik includes the application slug and ends with a trailing slash. `issuer_url` must match it exactly, slash included:
 
 ```
 https://<YOUR_AUTHENTIK_HOST>/application/o/<APPLICATION_SLUG>/
@@ -196,7 +196,7 @@ To check logout, sign in with SSO and click **Log out** in LuCI. The browser pas
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | Authentik declares a different issuer than `issuer_url`. If the declared issuer has no `/application/o/<slug>/` path, the provider's **Issuer mode** is "Same identifier is used for all providers": set it back to "Each provider has a different issuer, based on the application slug". If only the host name differs, the router reached Authentik under another name (for example through `internal_issuer_url`); Authentik builds its issuer from the host name in the request. A trailing slash makes no difference. |
+| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | Authentik declares a different issuer than `issuer_url`. If the declared issuer has no `/application/o/<slug>/` path, the provider's **Issuer mode** is "Same identifier is used for all providers": set it back to "Each provider has a different issuer, based on the application slug". If only the host name differs, the router reached Authentik under another name (for example through `internal_issuer_url`); Authentik builds its issuer from the host name in the request. If the two differ only in the trailing slash, add it: Authentik's issuer ends with `/`. |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch HTTP 404 from [id: …]` | The application slug in the URL is wrong, or the Application was not created (only the Provider). Verify both the Provider and Application exist in Authentik. Authentik fills the slug in from the application name (`LuCI Router` becomes `lu-ci-router`). |
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. |
 | `[502] JWKS_FETCH_FAILED`, preceded by `JWKS JSON parse error: Invalid structure` | The provider has no **Signing Key**, so Authentik publishes no keys and signs ID Tokens with `HS256`. Select `authentik Self-signed Certificate` as the **Signing Key**. If the router cached the old keys, the error is `ID_TOKEN_VERIFICATION_FAILED` with `UNSUPPORTED_ALGORITHM` instead, with the same fix. |

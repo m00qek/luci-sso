@@ -38,7 +38,7 @@ Verify the router can fetch the discovery document before proceeding. On the rou
 uclient-fetch -q -O - '<issuer_url>/.well-known/openid-configuration' | jsonfilter -e '@.issuer' -e '@.authorization_endpoint' -e '@.token_endpoint' -e '@.jwks_uri'
 ```
 
-The command should print four HTTPS URLs. The first is the issuer: your `issuer_url` must match it, apart from a trailing slash. A certificate error means the router does not trust the IdP's certificate; see [How to Install a Private CA Certificate](../../how-to/sysadmin/install-ca-certificate.md).
+The command should print four HTTPS URLs. The first is the issuer: your `issuer_url` must match it exactly, character for character, including any trailing slash. A certificate error means the router does not trust the IdP's certificate; see [How to Install a Private CA Certificate](../../how-to/sysadmin/install-ca-certificate.md).
 
 ---
 
@@ -173,7 +173,7 @@ If the login fails, check the system log:
 
 Common errors and their meaning are listed in the [Log Messages Reference](../../reference/log-messages.md). The most frequent issues with new providers are:
 
-- **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_ISSUER_MISMATCH` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. The line shows both values; set `issuer_url` to the one the document declares.
+- **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_ISSUER_MISMATCH` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. The line shows both values; set `issuer_url` to the one the document declares, exactly. The line says so when a trailing slash, letter case or `:443` is the only difference.
 - **`[401] ID_TOKEN_VERIFICATION_FAILED`** — The `OAuth flow failed` line before it names the failed check. `UNSUPPORTED_ALGORITHM` means the IdP signs tokens with HS256 or another algorithm: configure the client to use RS256 or ES256. `AT_HASH_MISMATCH` means the ID Token's `at_hash` does not match the access token the IdP returned.
 - **`[403] USER_NOT_AUTHORIZED` after `User [sub_id: …] matched no roles`** — Authentication succeeded but no UCI role matched the user's email or groups. Email matching ignores case; group matching does not. Add the user's email with `uci add_list luci-sso.admin.email='...'`.
 - **`[403] USER_NOT_AUTHORIZED` after `Ignoring the unverified email of user [sub_id: …] for role matching`** — The IdP sent the email without `email_verified: true`, so it did not count. See [Map by email](#map-by-email).

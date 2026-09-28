@@ -55,7 +55,7 @@ The issuer URL includes the realm name. In the Keycloak admin console, navigate 
 https://<YOUR_KEYCLOAK_HOST>/realms/<YOUR_REALM_NAME>
 ```
 
-Keycloak 17 and later has no `/auth` prefix. Realm names are case-sensitive.
+Keycloak's issuer has no trailing slash. Copy it exactly: `issuer_url` must match it character for character. Keycloak 17 and later has no `/auth` prefix. Realm names are case-sensitive.
 
 Verify the router can fetch the discovery document before proceeding. On the router:
 
@@ -186,7 +186,7 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 | Symptom | Likely cause |
 | :--- | :--- |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch HTTP 404 from [id: …]` | The realm path in `issuer_url` is wrong. Realm names are case-sensitive, and Keycloak 17 and later has no `/auth` prefix. |
-| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | Keycloak builds its issuer from its configured host name (the realm's **Frontend URL**, or the server's `hostname` option), which differs from the host in `issuer_url`. Copy the `issuer` field from the realm's `/.well-known/openid-configuration` document. |
+| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | Keycloak builds its issuer from its configured host name (the realm's **Frontend URL**, or the server's `hostname` option), which differs from the host in `issuer_url`, or `issuer_url` has a trailing slash that Keycloak's issuer lacks. Copy the `issuer` field from the realm's `/.well-known/openid-configuration` document exactly. |
 | `[400] IDP_ERROR`, preceded by `IDP_ERROR: the IdP returned error=invalid_scope (Invalid scopes: …)` | The router's **Scopes** include a scope Keycloak does not have, usually `groups`. Remove it, or create a client scope with that name and add it to the client. |
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` | A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved: set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. |
 | Keycloak shows `Invalid parameter: redirect_uri` instead of its login screen | The router's `redirect_uri` is not in the client's **Valid redirect URIs**. The router logs no `OIDC callback received` line. |

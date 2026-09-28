@@ -96,7 +96,7 @@ The **Client Secret** is the **plaintext** secret — Authelia stores the hash, 
 
     The `redirect_uri` must exactly match the value in the Authelia client config.
 
-The **Issuer URL** is the `authelia_url` of the session cookie that covers Authelia's domain in `configuration.yml`, exactly: same host and port, no path. Authelia answers discovery requests for other host names with HTTP 400.
+The **Issuer URL** is the `authelia_url` of the session cookie that covers Authelia's domain in `configuration.yml`, exactly: same host and port, no path and no trailing slash. Authelia answers discovery requests for other host names with HTTP 400.
 
 ---
 
@@ -165,7 +165,7 @@ Authelia has no end-session endpoint, so LuCI's **Log out** ends the router sess
 | :--- | :--- |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: …` | The router cannot reach `auth.example.com`; the end of the line names the cause. Test from the router with `uclient-fetch -q -O - 'https://auth.example.com/.well-known/openid-configuration'`. If the line ends in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, the router does not trust Authelia's certificate; see [How to Install a Private CA Certificate](../sysadmin/install-ca-certificate.md). |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch HTTP 400 from [id: …]` | `issuer_url` is not the `authelia_url` of any session cookie in Authelia's configuration (a different host name, a port, or an IP address). Authelia logs `no session cookie configuration matches url '…'`. Set `issuer_url` to the `authelia_url` exactly. |
-| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` differs from the issuer Authelia declares. Copy the declared value into `issuer_url`. |
+| `[502] OIDC_DISCOVERY_FAILED`, preceded by `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"` | `issuer_url` differs from the issuer Authelia declares, even if only by a trailing slash or letter case. Copy the declared value into `issuer_url` exactly. |
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: redirect_uri is mandatory and must use HTTPS` | `redirect_uri` was never saved. Set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. Other `Configuration rejected` reasons name the option to fix. |
 | Authelia shows "An error occurred processing the request" with the hint "The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'" | The `redirect_uri` in UCI does not exactly match a `redirect_uris` entry in Authelia's client config. The router logs no `OIDC callback received` line. |
 | `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Authelia rejected the client credentials: the client secret is wrong (UCI needs the plaintext, Authelia the hash), or the client config has no `token_endpoint_auth_method: client_secret_post` line (Authelia logs `… is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'`). |

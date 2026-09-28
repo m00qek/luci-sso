@@ -12,7 +12,7 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | :--- | :--- | :--- |
 | HTTPS issuer | `issuer_url` starts with `https://` | `CONFIG_ERROR` |
 | Discovery document | `<issuer_url>/.well-known/openid-configuration` returns HTTP 200 with a JSON object | `[502] OIDC_DISCOVERY_FAILED` |
-| Matching issuer | The document's `issuer` equals `issuer_url`. Scheme and host case, the default port and trailing slashes are ignored. | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`, then `[502] OIDC_DISCOVERY_FAILED` |
+| Matching issuer | The document's `issuer` is identical to `issuer_url`, character for character: a trailing slash, letter case and an explicit default port all count. See [Issuer identifiers](#issuer-identifiers). | `DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"`, then `[502] OIDC_DISCOVERY_FAILED` |
 | Endpoints | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS | A `DISCOVERY_MISSING_ENDPOINT` or `INSECURE_ENDPOINT` line naming the field, then `[502] OIDC_DISCOVERY_FAILED` |
 | Authorization endpoint | Contains no `#` fragment (RFC 6749 §3.1) | `[500] INVALID_AUTH_ENDPOINT` |
 | Optional endpoints | `userinfo_endpoint` and `end_session_endpoint` are used only when HTTPS. A plain-HTTP value is ignored with a warning. | None |
@@ -45,14 +45,14 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 
 | Claim | Check | Failure (detail of `ID_TOKEN_VERIFICATION_FAILED`) |
 | :--- | :--- | :--- |
-| `iss` | Equals `issuer_url`, normalized as for discovery | `ISSUER_MISMATCH` |
-| `aud` | Equals `client_id`, or is a non-empty array of strings that contains it | `AUDIENCE_MISMATCH`, `INVALID_AUDIENCE`, `MALFORMED_AUDIENCE` |
+| `iss` | Identical to the discovery document's `issuer` | `ISSUER_MISMATCH` |
+| `aud` | The string `client_id`, or the one-entry array `[client_id]`. An ID Token that also lists another audience is refused. | `AUDIENCE_MISMATCH`, `INVALID_AUDIENCE`, `MALFORMED_AUDIENCE` |
 | `exp` | Present, an integer, and not in the past by more than `clock_tolerance` | `MISSING_EXP_CLAIM`, `INVALID_EXP_CLAIM`, `TOKEN_EXPIRED` |
 | `iat` | Present, an integer, and not in the future by more than `clock_tolerance` | `MISSING_IAT_CLAIM`, `INVALID_IAT_CLAIM`, `TOKEN_ISSUED_IN_FUTURE` |
 | `nbf` | Optional. When present, an integer not in the future by more than `clock_tolerance`. | `INVALID_NBF_CLAIM`, `TOKEN_NOT_YET_VALID` |
-| `sub` | Present | `MISSING_SUB_CLAIM` |
+| `sub` | A non-empty string | `MISSING_SUB_CLAIM` |
 | `nonce` | Present and equal to the nonce sent in the authorization request | `MISSING_NONCE`, `NONCE_MISMATCH` |
-| `azp` | Required when `aud` has more than one value. When present, equals `client_id`. | `MISSING_AZP_CLAIM`, `AZP_MISMATCH` |
+| `azp` | Optional. When present, the string `client_id`. | `AZP_MISMATCH` |
 | `at_hash` | Optional. When present, equal to the Base64URL-encoded left half of the access token's SHA-256. | `AT_HASH_MISMATCH` |
 
 ### Identity for role mapping
@@ -61,7 +61,7 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | :--- | :--- | :--- |
 | `email` or `groups` | Roles match on the `email` claim, ignoring letter case (a `luci-sso` policy), or on values of the `groups` claim (case-sensitive). `groups` must be a JSON array; any other type is ignored. When the ID Token has no `email`, the UserInfo endpoint is asked for `email`, and for `name` and `groups` if the ID Token lacks them. | `[403] USER_NOT_AUTHORIZED` |
 | `email_verified` | With `require_email_verified` on (the default), the email counts for role matching only if `email_verified` is the JSON boolean `true` (not the string `"true"`), taken from the same response as the email: the ID Token, or UserInfo when the email came from there. Otherwise the email is ignored for matching and groups still match. See [Verified email](#verified-email). | `Ignoring the unverified email of user [sub_id: …] for role matching …`, then `[403] USER_NOT_AUTHORIZED` if no group matches |
-| UserInfo response | HTTP 200 with a plain JSON object, not a signed JWT. Its `sub` matches the ID Token's `sub` exactly, including case. | `[403] IDENTITY_MISMATCH` for a different `sub`. Other UserInfo failures are logged as warnings and the login continues with the ID Token's claims. |
+| UserInfo response | HTTP 200 with a plain JSON object, not a signed JWT. Its `sub` is a non-empty string that matches the ID Token's `sub` exactly, including case. | `[403] IDENTITY_MISMATCH` for a different `sub`. Other UserInfo failures, including a missing or non-string `sub`, are logged as warnings and the login continues with the ID Token's claims. |
 
 ### Logout
 
@@ -83,6 +83,24 @@ The requirements `luci-sso` enforces on an identity provider (IdP), and the stat
 | Pocket ID | Supported | [How to Configure Pocket ID](../how-to/providers/pocket-id.md) | A new client allows no user until **Allowed User Groups** is set or unrestricted. Pocket ID creates no client secret until one is added on the **Credentials** tab. The `groups` claim holds each group's name as it is. |
 | Other OIDC providers | Depends on the provider | [How to Configure a Generic OIDC Provider](../how-to/providers/generic-oidc.md) | Must meet every requirement above. |
 | GitHub | **Not supported** | None | See [GitHub](#github). |
+
+### Issuer identifiers
+
+The exact `issuer` each provider declares, which `issuer_url` must copy character for character. To read it, fetch the discovery document and take its `issuer` field:
+
+```bash
+curl -s https://<issuer>/.well-known/openid-configuration | jq -r .issuer
+```
+
+| Provider | Issuer | Trailing slash |
+| :--- | :--- | :--- |
+| Google | `https://accounts.google.com` | No |
+| Authelia | The `authelia_url` of the session cookie, for example `https://auth.example.com` | No |
+| Keycloak | `https://<host>/realms/<realm>`, with the host name Keycloak is configured with (the realm's **Frontend URL** or the server's `hostname`), and its port if not 443 | No |
+| Authentik | `https://<host>/application/o/<slug>/`, with the host name the request used | **Yes** |
+| Pocket ID | Its `APP_URL` setting, for example `https://id.example.com` | No |
+
+Checked against Keycloak 26.7.4, Authelia 4.39.28, Authentik 2026.8.3 and Pocket ID 2.16.0.
 
 ### Verified email
 
