@@ -611,6 +611,21 @@ describe('oidc: verify_id_token — claims', () => {
 			assert.match(groups, res.data.groups, "Groups claim SHOULD match original");
 		});
 	});
+
+	it('passes the email_verified claim to user_data as sent, or null when absent', () => {
+		let at = "mock-at";
+		let ah = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		for (let v in [ true, false, "true", null ]) {
+			let payload = { ...f.MOCK_CLAIMS, at_hash: ah, email: "a@b.c", email_verified: v };
+			if (v == null) delete payload.email_verified;
+			let token = h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256");
+			with_context({}, (deps) => {
+				let res = oidc.verify_id_token(deps, { id_token: token, access_token: at }, [ f.MOCK_JWK ], f.MOCK_CONFIG, { nonce: "n" }, f.MOCK_DISCOVERY, 1516239022);
+				assert.match(contains({ ok: true, data: contains({ email: "a@b.c" }) }), res, `${v}`);
+				assert.match(v, res.data.email_verified, `${v}`);
+			});
+		}
+	});
 });
 
 // ─── parameter encoding ─────────────────────────────────────────────────────────

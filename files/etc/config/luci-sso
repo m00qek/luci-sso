@@ -9,6 +9,9 @@ config oidc 'default'
 	# option redirect_uri ''
 	option scope 'openid profile email'
 	option clock_tolerance '60'
+	# A role matches by email only if the IdP marks the address as verified
+	# (email_verified). Unset means on; '0' also matches unverified addresses.
+	option require_email_verified '1'
 
 # A role's permissions are its rpcd login entry, luci_sso_<role> in
 # /etc/config/rpcd, which the settings page edits. On install, this role gets

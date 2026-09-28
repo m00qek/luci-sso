@@ -21,6 +21,8 @@ export const MOCK_CLAIMS = {
     iss: "https://trusted.idp",
     aud: "luci-app",
     sub: "user-123",
+    // Role matching ignores an email that is not verified (require_email_verified).
+    email_verified: true,
     nonce: "n",
     iat: 1000,
     exp: 2000000000

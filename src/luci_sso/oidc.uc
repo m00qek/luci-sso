@@ -256,6 +256,8 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	let user_data = {
 		sub: payload.sub,
 		email: (type(payload.email) == "string") ? payload.email : null,
+		// Kept as sent; config.email_is_verified decides what counts as true.
+		email_verified: payload.email_verified,
 		name: (type(payload.name) == "string") ? payload.name : null,
 		groups: (type(payload.groups) == "array") ? payload.groups : []
 	};

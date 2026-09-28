@@ -117,8 +117,35 @@ export function load(deps) {
 		redirect_uri: oidc_cfg.redirect_uri,
 		scope: oidc_cfg.scope,
 		clock_tolerance: clock_tolerance,
+		// On unless explicitly turned off, so a config written before the
+		// option existed gets the safe behaviour.
+		require_email_verified: !(oidc_cfg.require_email_verified in [ "0", "no", "off", "false" ]),
 		roles: roles
 	});
+};
+
+/**
+ * Returns true when the claims say the email was verified. The claim is a
+ * JSON boolean (OIDC Core 1.0 §5.1), but some IdPs send the string "true",
+ * which is accepted too. Anything else, including a missing claim, is false.
+ */
+export function email_is_verified(claims) {
+	let v = claims.email_verified;
+	return v === true || v === "true";
+};
+
+/**
+ * Returns the email that role matching may use, or null. With
+ * require_email_verified on (the default, also when the config object does
+ * not carry it), an email whose email_verified claim is not true is ignored:
+ * an IdP that lets users set their own address unverified could otherwise
+ * let anyone claim an admin's email. Groups are not affected.
+ */
+export function matchable_email(config, claims) {
+	let email = claims.email;
+	if (type(email) != "string" || email == "") return null;
+	if (config.require_email_verified !== false && !email_is_verified(claims)) return null;
+	return email;
 };
 
 /**
@@ -143,8 +170,9 @@ function _role_matches(role, email, groups) {
 
 /**
  * Finds the role a user gets: the FIRST role, in config order, whose emails
- * or groups match the claims. A session carries one role's rights, because
- * rpcd rebuilds it from a single login entry; roles are not merged.
+ * or groups match the claims (matchable_email says when the email counts).
+ * A session carries one role's rights, because rpcd rebuilds it from a
+ * single login entry; roles are not merged.
  *
  * @param {object} config - The loaded config
  * @param {object} claims - OIDC ID Token claims (email, groups, etc)
@@ -152,7 +180,7 @@ function _role_matches(role, email, groups) {
  *   where also_matched lists the other matching roles, in order
  */
 export function find_role_for_user(config, claims) {
-	let email = claims.email;
+	let email = matchable_email(config, claims);
 	let groups = (type(claims.groups) == "array") ? claims.groups : [];
 	let matched = [];
 

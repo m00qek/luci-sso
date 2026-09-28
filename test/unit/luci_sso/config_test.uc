@@ -62,12 +62,12 @@ describe('config: find_role_for_user', () => {
 	});
 
 	it('matches by email and returns the role name only', () => {
-		let res = config.find_role_for_user({ roles: [ROLE_READERS] }, { email: 'alice@example.com' });
+		let res = config.find_role_for_user({ roles: [ROLE_READERS] }, { email: 'alice@example.com', email_verified: true });
 		assert.match({ ok: true, data: { role_name: 'readers', also_matched: [] } }, res);
 	});
 
 	it('email matching is case-insensitive', () => {
-		let res = config.find_role_for_user({ roles: [ROLE_READERS] }, { email: 'ALICE@EXAMPLE.COM' });
+		let res = config.find_role_for_user({ roles: [ROLE_READERS] }, { email: 'ALICE@EXAMPLE.COM', email_verified: true });
 		assert.match(contains({ ok: true, data: { role_name: 'readers' } }), res);
 	});
 
@@ -82,7 +82,7 @@ describe('config: find_role_for_user', () => {
 	});
 
 	it('the first matching role in config order wins, and the others are listed in order', () => {
-		let claims = { email: 'alice@example.com', groups: ['developers', 'admins'] };
+		let claims = { email: 'alice@example.com', email_verified: true, groups: ['developers', 'admins'] };
 		assert.match({ ok: true, data: { role_name: 'readers', also_matched: [ 'writers', 'admin' ] } },
 			config.find_role_for_user({ roles: [ROLE_READERS, ROLE_WRITERS, ROLE_ADMIN] }, claims));
 		assert.match({ ok: true, data: { role_name: 'admin', also_matched: [ 'writers', 'readers' ] } },
@@ -90,7 +90,7 @@ describe('config: find_role_for_user', () => {
 	});
 
 	it('roles that do not match are neither chosen nor listed', () => {
-		let res = config.find_role_for_user({ roles: [ROLE_ADMIN, ROLE_WRITERS, ROLE_READERS] }, { email: 'alice@example.com' });
+		let res = config.find_role_for_user({ roles: [ROLE_ADMIN, ROLE_WRITERS, ROLE_READERS] }, { email: 'alice@example.com', email_verified: true });
 		assert.match({ ok: true, data: { role_name: 'readers', also_matched: [] } }, res);
 	});
 
@@ -100,7 +100,7 @@ describe('config: find_role_for_user', () => {
 	});
 
 	it('email match succeeds even when the claims group does not match the role', () => {
-		let res = config.find_role_for_user({ roles: [ROLE_ADMIN] }, { email: 'admin@example.com', groups: ['not-admins'] });
+		let res = config.find_role_for_user({ roles: [ROLE_ADMIN] }, { email: 'admin@example.com', email_verified: true, groups: ['not-admins'] });
 		assert.match(contains({ ok: true, data: { role_name: 'admin' } }), res);
 	});
 
@@ -120,13 +120,96 @@ describe('config: find_role_for_user', () => {
 			let expected = [];
 			for (let i = 0; i < length(matches); i++) if (matches[i]) push(expected, `r${i}`);
 
-			let res = config.find_role_for_user({ roles }, { email: 'alice@example.com' });
+			let res = config.find_role_for_user({ roles }, { email: 'alice@example.com', email_verified: true });
 			if (!length(expected))
 				assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), res);
 			else
 				assert.match({ ok: true, data: { role_name: expected[0], also_matched: slice(expected, 1) } }, res);
 		}
 	);
+});
+
+// ─── find_role_for_user: email_verified (require_email_verified) ─────────────
+
+describe('config: find_role_for_user — email_verified', () => {
+	const ON = { roles: [ROLE_READERS] };
+	const OFF = { roles: [ROLE_READERS], require_email_verified: false };
+	let by_email = (cfg, verified) => config.find_role_for_user(cfg, { email: 'alice@example.com', email_verified: verified });
+
+	it('an email with email_verified true matches', () => {
+		assert.match(contains({ ok: true, data: { role_name: 'readers' } }), by_email(ON, true));
+	});
+
+	it('an email with email_verified false does not match', () => {
+		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), by_email(ON, false));
+	});
+
+	it('an email without an email_verified claim does not match', () => {
+		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
+			config.find_role_for_user(ON, { email: 'alice@example.com' }));
+	});
+
+	it('the string "true" counts as verified, since some IdPs send the claim as a string', () => {
+		assert.match(contains({ ok: true, data: { role_name: 'readers' } }), by_email(ON, 'true'));
+	});
+
+	it('any other value is not verified', () => {
+		for (let v in [ 'false', 'TRUE', 'yes', '1', 1, [ true ], { v: true }, null ])
+			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), by_email(ON, v), `${v}`);
+	});
+
+	it('is on when the config does not say (the default), and off only when require_email_verified is false', () => {
+		assert.match(false, by_email({ roles: [ROLE_READERS] }, false).ok);
+		assert.match(false, by_email({ roles: [ROLE_READERS], require_email_verified: true }, false).ok);
+		assert.match(true, by_email(OFF, false).ok);
+	});
+
+	it('with the option off, an email matches whatever email_verified says, as before', () => {
+		for (let v in [ true, false, 'true', null ])
+			assert.match(contains({ ok: true, data: { role_name: 'readers' } }), by_email(OFF, v), `${v}`);
+		assert.match(contains({ ok: true, data: { role_name: 'readers' } }),
+			config.find_role_for_user(OFF, { email: 'alice@example.com' }));
+	});
+
+	it('a group still matches while the email is not verified', () => {
+		let cfg = { roles: [ROLE_READERS, ROLE_WRITERS] };
+		let res = config.find_role_for_user(cfg, { email: 'alice@example.com', email_verified: false, groups: ['developers'] });
+		assert.match({ ok: true, data: { role_name: 'writers', also_matched: [] } }, res);
+	});
+
+	it('an unverified email that would match an earlier role does not skip ahead of a group match', () => {
+		// readers matches alice by email only; admin matches by group. With
+		// the email unverified, readers is not even listed.
+		let res = config.find_role_for_user({ roles: [ROLE_READERS, ROLE_ADMIN] },
+			{ email: 'alice@example.com', email_verified: 'false', groups: ['admins'] });
+		assert.match({ ok: true, data: { role_name: 'admin', also_matched: [] } }, res);
+	});
+
+	prop('with the option on, an email matches iff email_verified is true or "true"',
+		gen.oneof(gen.bool(), gen.elements('true', 'false', 'True', '1', ''), gen.string({ max_len: 6 }), gen.int(-2, 2)),
+		(v, ctx) => {
+			let verified = (v === true || v === 'true');
+			ctx.classify('verified', verified);
+			assert.match(verified, by_email(ON, v).ok);
+			assert.match(true, by_email(OFF, v).ok);
+		}
+	);
+});
+
+describe('config: matchable_email', () => {
+	it('returns the email when it is verified, or when the option is off', () => {
+		assert.match('a@b.c', config.matchable_email({}, { email: 'a@b.c', email_verified: true }));
+		assert.match('a@b.c', config.matchable_email({ require_email_verified: false }, { email: 'a@b.c' }));
+	});
+
+	it('returns null for an unverified, empty, missing or non-string email', () => {
+		assert.match(null, config.matchable_email({}, { email: 'a@b.c', email_verified: false }));
+		for (let e in [ '', null, 42, [ 'a@b.c' ] ]) {
+			assert.match(null, config.matchable_email({}, { email: e, email_verified: true }), `${e}`);
+			assert.match(null, config.matchable_email({ require_email_verified: false }, { email: e }), `${e}`);
+		}
+		assert.match(null, config.matchable_email({}, {}));
+	});
 });
 
 // ─── load — success & normalization ────────────────────────────────────────────
@@ -183,6 +266,14 @@ describe('config: load — success', () => {
 			[ 'warn', "Ignoring read/write on role 'old': its permissions are the rpcd login entry 'luci_sso_old'" ],
 			[ 'warn', "Ignoring read/write on role 'half': its permissions are the rpcd login entry 'luci_sso_half'" ],
 		], warns);
+	});
+
+	it('require_email_verified is on by default and off only for a UCI false value', () => {
+		assert.match(true, load_sections({ default: { ...OIDC }, r1: { ...ROLE } }).data.require_email_verified, 'unset');
+		for (let v in [ '1', 'yes', 'on', 'true', '' ])
+			assert.match(true, load_sections({ default: { ...OIDC, require_email_verified: v }, r1: { ...ROLE } }).data.require_email_verified, `'${v}'`);
+		for (let v in [ '0', 'no', 'off', 'false' ])
+			assert.match(false, load_sections({ default: { ...OIDC, require_email_verified: v }, r1: { ...ROLE } }).data.require_email_verified, `'${v}'`);
 	});
 
 	it('loads a custom scope and leaves it undefined when absent', () => {

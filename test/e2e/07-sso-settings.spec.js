@@ -134,6 +134,26 @@ test.describe('SSO Settings: Admin Panel', () => {
         await expect(modal.locator('label:has-text("Write Access")')).toBeVisible();
     });
 
+    // A config from before the option existed has no require_email_verified,
+    // which the backend reads as on. The form must show it ticked, and a Save
+    // must write '1', not '0'.
+    test('Field: Require Verified Email is ticked while the option is unset, and saved as 1', async ({ page }) => {
+        await loginAsRoot(page);
+        const get = async () => (await ubus(page, 'uci', 'get', { config: 'luci-sso', section: 'default', option: 'require_email_verified' })).data?.value;
+
+        await ubus(page, 'uci', 'delete', { config: 'luci-sso', section: 'default', option: 'require_email_verified' });
+        await ubus(page, 'uci', 'apply', { rollback: false });
+        expect(await get()).toBeFalsy();
+
+        await gotoSSOSettings(page);
+        await expect(page.locator('[id="cbid.luci-sso.default.require_email_verified"] input[type="checkbox"]')).toBeChecked();
+
+        await page.locator('.cbi-button-save').click();
+        await expect(page.locator('.cbi-button-save')).toBeEnabled({ timeout: 10000 });
+        await ubus(page, 'uci', 'apply', { rollback: false });
+        await expect.poll(get, { timeout: 10000 }).toBe('1');
+    });
+
     test('Form: Reset reverts unsaved changes', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);

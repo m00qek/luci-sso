@@ -140,7 +140,10 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 				deps.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
 				return Result.err(IDENTITY_MISMATCH, { http_status: 403 });
 			}
+			// The email and its email_verified flag come from the same
+			// response, never one from the ID token and one from UserInfo.
 			user_data.email = ui_res.data.email;
+			user_data.email_verified = ui_res.data.email_verified;
 
 			if (!user_data.name && ui_res.data.name) {
 				user_data.name = ui_res.data.name;
@@ -246,6 +249,13 @@ export function authenticate(deps, config, request) {
 	}
 
 	let user_data = oauth_res.data.data;
+
+	// An unverified email is left out of role matching (require_email_verified);
+	// groups still match. Say so, since it can be why no role matched.
+	if (type(user_data.email) == "string" && length(user_data.email) && !config_mod.matchable_email(config, user_data)) {
+		deps.log("warn", `Ignoring the unverified email of user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] for role matching: email_verified is not true (require_email_verified) [session_id: ${session_id}]`);
+	}
+
 	let res_role = config_mod.find_role_for_user(config, user_data);
 
 	if (!res_role.ok) {

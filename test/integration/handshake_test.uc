@@ -349,7 +349,7 @@ describe('handshake: userinfo', () => {
 				data: {
 					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
 					[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
-					[f.MOCK_DISCOVERY.userinfo_endpoint]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "user@example.com" } }
+					[f.MOCK_DISCOVERY.userinfo_endpoint]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "user@example.com", email_verified: true } }
 				},
 				behavior: {
 					post: (url, opts) => {
@@ -454,7 +454,7 @@ describe('handshake: userinfo', () => {
 				data: {
 					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
 					[discovery_doc.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
-					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: "USER-123", email: "user@example.com" } }
+					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: "USER-123", email: "user@example.com", email_verified: true } }
 				},
 				behavior: {
 					post: (url, opts) => {
@@ -702,6 +702,152 @@ describe('handshake: role selection', () => {
 	});
 });
 
+// ─── authenticate: email_verified and require_email_verified ─────────────────
+
+describe('handshake: email_verified', () => {
+	// Runs a full callback. `id` is merged over the fixture claims (whose
+	// email_verified is true); a key set to null is left out of the ID token.
+	// `userinfo` is the UserInfo body (null: the endpoint is not mocked, so a
+	// fetch fails). Returns the result, whether a session was created, the
+	// session's username, the log lines and the URLs fetched.
+	function login(id, userinfo, over) {
+		let out = { result: null, created: false, username: null, logs: [], fetched: [] };
+		let http = {
+			[DISCOVERY_URL]:             { status: 200, body: f.MOCK_DISCOVERY },
+			[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+		};
+		if (userinfo) http[f.MOCK_DISCOVERY.userinfo_endpoint] = { status: 200, body: { sub: f.MOCK_CLAIMS.sub, ...userinfo } };
+		with_context({
+			fs:   { data: {} },
+			uci:  { data: rpcd_logins({ admin: { read: [ "*" ], write: [ "*" ] }, staff: { read: [ "*" ] } }) },
+			ubus: { data: {
+				"session:create": () => { out.created = true; return { ubus_rpc_session: "s-ev" }; },
+				"session:grant":  UBUS_NO_DATA,
+				"session:set":    (args) => { out.username = args.values.username; return UBUS_NO_DATA; },
+			} },
+			http_client: {
+				data: http,
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-email-verified";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let payload = { ...f.MOCK_CLAIMS, ...id, nonce: "test-nonce", at_hash };
+						for (let k in keys(payload)) if (payload[k] == null) delete payload[k];
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token: h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256") }) } };
+					}
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			deps.log = (l, m) => push(out.logs, [ l, m ]);
+			let get = deps.http.get;
+			deps.http.get = (url, opts) => { push(out.fetched, url); return get(url, opts); };
+			let hs = session.create_state(deps, 0).data;
+			let path = "/var/run/luci-sso/handshake_" + hs.token + ".json";
+			let raw = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw));
+			let roles = [
+				{ name: "admin", emails: [ "admin@example.com" ], groups: [] },
+				{ name: "staff", emails: [], groups: [ "staff" ] },
+			];
+			out.result = handshake.authenticate(deps, base_config({ roles, ...(over || {}) }),
+				{ query: { code: "c", state: raw.state }, cookies: { "__Host-luci_sso_state": hs.token } });
+		});
+		return out;
+	}
+
+	let warned = (r) => filter(r.logs, (l) => l[0] == "warn" && index(l[1], "Ignoring the unverified email of user [sub_id: ") == 0);
+	let userinfo_fetched = (r) => index(r.fetched, f.MOCK_DISCOVERY.userinfo_endpoint) >= 0;
+	let refused = (r) => {
+		assert.match(contains({ ok: false, error: "USER_NOT_AUTHORIZED", details: { http_status: 403 } }), r.result);
+		assert.match(false, r.created, "no session");
+	};
+
+	it('ID token: a verified email matches its role, with no warning', () => {
+		let r = login({ email: "admin@example.com", email_verified: true });
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:admin", r.username);
+		assert.match(0, length(warned(r)));
+	});
+
+	it('ID token: the string "true" counts as verified', () => {
+		let r = login({ email: "admin@example.com", email_verified: "true" });
+		assert.match("sso:admin", r.username);
+	});
+
+	it('ID token: an unverified or unflagged email is refused through the no-role path, with a warning that never names the email', () => {
+		for (let v in [ false, "false", null ]) {
+			let r = login({ email: "admin@example.com", email_verified: v });
+			refused(r);
+			let w = warned(r);
+			assert.match(1, length(w), `${v}`);
+			assert.match(true, match(w[0][1], /\[session_id: [0-9a-f]+\]$/) != null, "carries the session id");
+			assert.match(1, length(filter(r.logs, (l) => index(l[1], "matched no roles") >= 0)), "the existing no-role log follows");
+			for (let l in r.logs)
+				assert.match(-1, index(l[1], "admin@example.com"), `the email is never logged: ${l[1]}`);
+		}
+	});
+
+	it('ID token: a group still matches while the email is unverified', () => {
+		let r = login({ email: "admin@example.com", email_verified: false, groups: [ "staff" ] });
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:staff", r.username, "the group's role, not the email's");
+		assert.match(1, length(warned(r)));
+	});
+
+	it('ID token: with require_email_verified off, an unverified email matches as before, with no warning', () => {
+		let r = login({ email: "admin@example.com", email_verified: false }, null, { require_email_verified: false });
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:admin", r.username);
+		assert.match(0, length(warned(r)));
+	});
+
+	it('ID token: an unverified email is not replaced by UserInfo, whose flag is never borrowed', () => {
+		let r = login({ email: "admin@example.com", email_verified: false }, { email: "admin@example.com", email_verified: true });
+		refused(r);
+		assert.match(false, userinfo_fetched(r), "UserInfo is only fetched when the ID token has no email");
+	});
+
+	it('UserInfo: an email verified in the UserInfo response matches its role', () => {
+		for (let v in [ true, "true" ]) {
+			let r = login({ email: null, email_verified: null }, { email: "admin@example.com", email_verified: v });
+			assert.match(true, userinfo_fetched(r));
+			assert.match(contains({ ok: true }), r.result, `${v}: ${r.result.error}`);
+			assert.match("sso:admin", r.username);
+		}
+	});
+
+	it('UserInfo: an unverified or unflagged UserInfo email is refused, with a warning', () => {
+		for (let v in [ false, null ]) {
+			let ui = { email: "admin@example.com" };
+			if (v != null) ui.email_verified = v;
+			let r = login({ email: null, email_verified: null }, ui);
+			assert.match(true, userinfo_fetched(r));
+			refused(r);
+			assert.match(1, length(warned(r)), `${v}`);
+		}
+	});
+
+	it("UserInfo: the ID token's email_verified never vouches for the UserInfo email", () => {
+		// The ID token says true but carries no email; UserInfo's email has no flag.
+		let r = login({ email: null, email_verified: true }, { email: "admin@example.com" });
+		assert.match(true, userinfo_fetched(r));
+		refused(r);
+	});
+
+	it("UserInfo: the ID token's false does not taint a UserInfo email verified there", () => {
+		let r = login({ email: null, email_verified: false }, { email: "admin@example.com", email_verified: true });
+		assert.match("sso:admin", r.username);
+	});
+
+	it('UserInfo: with require_email_verified off, an unflagged UserInfo email matches as before', () => {
+		let r = login({ email: null, email_verified: null }, { email: "admin@example.com" }, { require_email_verified: false });
+		assert.match("sso:admin", r.username);
+		assert.match(0, length(warned(r)));
+	});
+});
+
 describe('handshake: split-horizon', () => {
 	// Full callback with a pathful issuer behind split-horizon. The ID token
 	// carries no email, so UserInfo is fetched too. Every back-channel request
@@ -737,7 +883,7 @@ describe('handshake: split-horizon', () => {
 				data: {
 					[priv(issuer_path + "/.well-known/openid-configuration")]: { status: 200, body: discovery_doc },
 					[priv(paths.jwks)]:     { status: 200, body: { keys: [ f.MOCK_JWK ] } },
-					[priv(paths.userinfo)]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "admin@example.com" } },
+					[priv(paths.userinfo)]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "admin@example.com", email_verified: true } },
 				},
 				behavior: {
 					post: (url, opts) => {
@@ -1271,7 +1417,7 @@ describe('handshake: reproduction', () => {
 				data: {
 					[issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: discovery_doc },
 					[discovery_doc.jwks_uri]:          { status: 200, body: { keys: [ f.MOCK_JWK ] } },
-					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "user@example.com", groups: groups } }
+					[discovery_doc.userinfo_endpoint]: { status: 200, body: { sub: f.MOCK_CLAIMS.sub, email: "user@example.com", email_verified: true, groups: groups } }
 				},
 				behavior: {
 					post: (url, opts) => {

@@ -264,6 +264,14 @@ return view.extend({
 		o.placeholder = 'openid profile email';
 		o.rmempty = true;
 
+		o = s.option(form.Flag, 'require_email_verified', _('Require Verified Email'),
+		        _('Match a user by email address only if the provider marks it as verified (<code>email_verified</code>). ' +
+		          'Group matching is not affected. ' +
+		          'See <a href="https://m00qek.github.io/luci-sso/explanation/roles-and-permissions/#verified-email-addresses" target="_blank">verified email addresses</a>.'));
+		/* On when the option is unset, as the backend treats it. */
+		o.default = o.enabled;
+		o.rmempty = false;
+
 		o = s.option(form.Value, 'clock_tolerance', _('Clock Tolerance'),
 		        _('Allowed clock skew in seconds applied to JWT validation (0–3600).'));
 		o.datatype = 'range(0,3600)';
