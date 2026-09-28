@@ -159,7 +159,7 @@ Check that the service is active. On the router:
 
 Then open the LuCI login page in a browser.
 
-![LuCI login page: an Authorization Required box with Username and Password fields and a green Log in button, followed by "— or —" and a green Login with SSO button](../../assets/screenshots/luci-login-sso-button.png "The LuCI login page with the Login with SSO button")
+![LuCI login page: an Authorization Required box with Username and Password fields and a green Log in button, followed by "— or —" and a blue Login with SSO button](../../assets/screenshots/luci-login-sso-button.png "The LuCI login page with the Login with SSO button")
 
 The **Login with SSO** button should appear. Clicking it redirects to your IdP's login screen. After authenticating, you should be redirected back to the LuCI dashboard.
 
@@ -173,6 +173,7 @@ If the login fails, check the system log:
 
 Common errors and their meaning are listed in the [Log Messages Reference](../../reference/log-messages.md). The most frequent issues with new providers are:
 
+- **The Login with SSO button says "The identity provider is not responding"** — The browser cannot reach the IdP; the router has no error to log. Open `<issuer_url>/.well-known/openid-configuration` in the same browser, on the same device. See [The SSO button says the identity provider is not responding](../sysadmin/debugging.md#the-sso-button-says-the-identity-provider-is-not-responding).
 - **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_ISSUER_MISMATCH` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. The line shows both values; set `issuer_url` to the one the document declares, exactly. The line says so when a trailing slash, letter case or `:443` is the only difference.
 - **`[401] ID_TOKEN_VERIFICATION_FAILED`** — The `OAuth flow failed` line before it names the failed check. `UNSUPPORTED_ALGORITHM` means the IdP signs tokens with HS256 or another algorithm: configure the client to use RS256 or ES256. `AT_HASH_MISMATCH` means the ID Token's `at_hash` does not match the access token the IdP returned.
 - **`[403] USER_NOT_AUTHORIZED` after `User [sub_id: …] matched no roles`** — Authentication succeeded but no UCI role matched the user's email or groups. Email matching ignores case; group matching does not. Add the user's email with `uci add_list luci-sso.admin.email='...'`.

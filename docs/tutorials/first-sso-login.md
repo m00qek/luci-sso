@@ -116,7 +116,7 @@ Navigate to `https://router.example.com/cgi-bin/luci/`. The login page should sh
 !!! warning "Use the same host name as the Redirect URI"
     Open LuCI at `router.example.com`, the host in the Redirect URI, not at its IP address or another name. The login starts at whatever address the browser shows, and its cookie is only sent back to that exact host, so a login started at `192.168.1.1` fails when Google returns to `router.example.com`.
 
-![LuCI login page: an Authorization Required box with Username and Password fields and a green Log in button, followed by "— or —" and a green Login with SSO button](../assets/screenshots/luci-login-sso-button.png "The LuCI login page with the Login with SSO button")
+![LuCI login page: an Authorization Required box with Username and Password fields and a green Log in button, followed by "— or —" and a blue Login with SSO button](../assets/screenshots/luci-login-sso-button.png "The LuCI login page with the Login with SSO button")
 
 If the button is not there, clear the browser cache and reload. If it still does not appear, check the system log:
 

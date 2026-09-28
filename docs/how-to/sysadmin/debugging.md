@@ -45,6 +45,22 @@ If the probe returns `{"enabled": true}` but the button is still missing, clear 
 
 ---
 
+## The SSO button says the identity provider is not responding
+
+After a click on **Login with SSO**, the button shows `Redirecting...`. If the page is still there 15 seconds later, the button comes back with the message `The identity provider is not responding. Check that this device can reach it, then try again.`
+
+The router started the login and sent the browser to the IdP, but the browser cannot reach the IdP. The log shows `Initiating OIDC login flow`, no `OIDC callback received` line and no error. The problem is between the browser's device and the IdP, not on the router.
+
+Open the discovery document in a new tab of the same browser, on the same device:
+
+```
+<issuer_url>/.well-known/openid-configuration
+```
+
+If it does not load, fix what stands between this device and the IdP: DNS, a VPN, a firewall, or the IdP itself being down. If it loads, open the `authorization_endpoint` it lists the same way: the browser is sent there. Password login keeps working in the meantime.
+
+---
+
 ## Clicking the button shows an error page
 
 The router could not start the login, so the browser never reached the IdP.

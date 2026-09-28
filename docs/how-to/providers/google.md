@@ -100,6 +100,7 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 
 | Symptom | Likely cause |
 | :--- | :--- |
+| The **Login with SSO** button says "The identity provider is not responding" | The browser cannot reach the IdP; the router has no error to log. Open `https://accounts.google.com/.well-known/openid-configuration` in the same browser, on the same device. See [The SSO button says the identity provider is not responding](../sysadmin/debugging.md#the-sso-button-says-the-identity-provider-is-not-responding). |
 | `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: …` | The router cannot reach `accounts.google.com`; the end of the line names the cause. Check DNS and firewall rules from the router, not just from your laptop. |
 | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: redirect_uri is mandatory and must use HTTPS` | `redirect_uri` was never saved. Set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. Other `Configuration rejected` reasons name the option to fix. |
 | `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Google rejected the client credentials. Check that `client_id` and `client_secret` are the pair from Step 1. |
