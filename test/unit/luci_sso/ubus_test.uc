@@ -377,6 +377,52 @@ describe('ubus: create_passwordless_session — session values', () => {
 	});
 });
 
+describe('ubus: create_passwordless_session — call order across an rpcd reload', () => {
+	// rpcd keeps a session's values over a reload but rebuilds its rights only
+	// from the login entry of the saved username, so the username must be in
+	// place before the first grant (the system bucket reloads between calls).
+	it('sets the username, in one session set, before any grant', () => {
+		let order = [];
+		mock.inject_all({
+			ubus: { strict: true, data: {
+				"session:create": () => { push(order, 'create'); return { ubus_rpc_session: SID }; },
+				"session:set":    (args) => { push(order, `set ${args.values.username}`); return UBUS_NO_DATA; },
+				"session:grant":  () => { push(order, 'grant'); return UBUS_NO_DATA; },
+			} },
+			fs: ACL_FS,
+			uci: USER_UCI,
+		}, (proxies) => {
+			assert.match(contains({ ok: true, data: SID }),
+				ubus_mod.create_passwordless_session(build_deps(proxies), 'guest', 'u@e.com', 'at', 'rt', 'it'));
+		});
+		assert.match([ 'create', 'set sso:guest' ], slice(order, 0, 2), sprintf("%J", order));
+		assert.match(true, length(order) > 2, "then the grants");
+		assert.match([], filter(slice(order, 2), (c) => c != 'grant'), sprintf("%J", order));
+	});
+
+	it('destroys the session and returns UBUS_SESSION_FAILED when a grant fails, instead of leaving part of the rights', () => {
+		let destroyed = null, grants = 0, logs = [];
+		mock.inject_all({
+			ubus: { strict: true, data: {
+				"session:create":  { ubus_rpc_session: SID },
+				"session:set":     UBUS_NO_DATA,
+				"session:grant":   () => (++grants == 2) ? null : UBUS_NO_DATA,
+				"session:destroy": (args) => { destroyed = args.ubus_rpc_session; return UBUS_NO_DATA; },
+			} },
+			fs: ACL_FS,
+			uci: USER_UCI,
+		}, (proxies) => {
+			let deps = build_deps(proxies);
+			deps.log = (l, m) => push(logs, [ l, m ]);
+			assert.match(contains({ ok: false, error: 'UBUS_SESSION_FAILED' }),
+				ubus_mod.create_passwordless_session(deps, 'guest', 'u@e.com', 'at', 'rt', 'it'));
+		});
+		assert.match(2, grants, 'no grant is attempted after the failed one');
+		assert.match(SID, destroyed, 'the partly granted session must be destroyed');
+		assert.match(1, length(filter(logs, (e) => e[0] == 'error' && index(e[1], 'UBUS session grant failed [sid: ') == 0)), sprintf("%J", logs));
+	});
+});
+
 // Captures the timeout passed to `session create`; the rest of the flow succeeds.
 function created_timeout(sessiontime) {
 	let seen = null;

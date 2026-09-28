@@ -40,8 +40,13 @@ var callDeleteRole = rpc.declare({
  * page neither shows it nor lets it be removed. */
 var BASELINE = 'unauthenticated';
 
-/* How long to wait for rpcd to reload after a write. */
-var RELOAD_TIMEOUT_MS = 30000;
+/* How long to wait for rpcd to reload after a write. The reload takes about
+ * two seconds, but uhttpd checks each /ubus/ call's session with a
+ * synchronous call to rpcd, for up to half its script timeout (60 s by
+ * default), and serves nothing meanwhile. A check that reaches rpcd just as it
+ * re-executes itself is never answered, so uhttpd can stall for 30 s; the wait
+ * outlasts that rather than report a reload that did finish as failed. */
+var RELOAD_TIMEOUT_MS = 45000;
 var RELOAD_POLL_MS = 500;
 
 function renderList(items) {

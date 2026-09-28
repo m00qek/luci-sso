@@ -188,7 +188,7 @@ The log shows `[500] UBUS_LOGIN_FAILED`. The line before it says why:
     uci commit rpcd
     ```
 
-- `UBUS session creation failed`, `Failed to load LuCI ACLs for role '<role>'` or `UBUS session set failed`: `rpcd` refused the session. Check that `rpcd` is running (`ps | grep rpcd`; if not, `/etc/init.d/rpcd start`) and that `/usr/share/rpcd/acl.d/` holds the LuCI ACL files.
+- `UBUS session creation failed`, `Failed to load LuCI ACLs for role '<role>'`, `UBUS session set failed` or `UBUS session grant failed [sid: …] [scope: …]`: `rpcd` refused the session, or part of its rights, so the login was refused. Check that `rpcd` is running (`ps | grep rpcd`; if not, `/etc/init.d/rpcd start`) and that `/usr/share/rpcd/acl.d/` holds the LuCI ACL files.
 
 ---
 
@@ -216,7 +216,7 @@ The login completes, but pages are missing or refuse access.
 
     A role whose lists hold only `unauthenticated` grants nothing: its users can log in but see nothing. The settings page shows `(none): this role grants no access`. An upgrade gives such an entry to a role it found without permissions, and logs `role '<role>' had no permissions to move`; see [How to Upgrade luci-sso](upgrade.md).
 
-- Look in the lines from that login for `UBUS session grant failed [sid: …] [scope: …]`, which means `rpcd` refused part of the rights, or `Role '<role>' grants unknown access group '<name>'; no ACL file defines it`, which means a role names a group no ACL file defines; see [How to Configure Role-Based Access Control](rbac.md#verify-a-role-is-working).
+- Look in the lines from that login for `Role '<role>' grants unknown access group '<name>'; no ACL file defines it`, which means a role names a group no ACL file defines; see [How to Configure Role-Based Access Control](rbac.md#verify-a-role-is-working).
 - Verify LuCI ACL files are present: `ls /usr/share/rpcd/acl.d/`. Missing files indicate an incomplete LuCI installation.
 
 ---

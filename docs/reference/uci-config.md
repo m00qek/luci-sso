@@ -125,7 +125,7 @@ Errors come back as a reply `{ "error": "<CODE>", "message": "<text>" }`. `rpcd`
 | `NOT_FOUND` | `delete_role`: the role has no entry. |
 | `COMMIT_FAILED` | `/etc/config/rpcd` could not be written. |
 
-After a successful write, the plugin makes `rpcd` reload one second after the reply, as `/etc/init.d/rpcd reload` does. Writes in that second share the reload. `list_roles` reports `"reload_pending": true` from the write until `rpcd` has restarted.
+After a successful write, the plugin makes `rpcd` reload one second after the reply, as `/etc/init.d/rpcd reload` does. Writes in that second share the reload. `list_roles` reports `"reload_pending": true` from the write until `rpcd` has restarted. While `rpcd` restarts, a `/ubus/` request that reaches it at the moment it re-executes itself is never answered: `uhttpd` waits for its session check up to half its script timeout (30 s by default) and serves no page meanwhile. Every `rpcd` reload can do this, whatever triggers it. The settings page waits up to 45 seconds for the reload.
 
 Access through LuCI needs the `luci-app-sso` access group: its `read` section grants `list_roles`, its `write` section `set_role` and `delete_role`. It grants no UCI access to `rpcd`.
 

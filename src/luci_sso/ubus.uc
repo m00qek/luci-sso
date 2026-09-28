@@ -97,7 +97,8 @@ function _expand_role(entries, perms) {
 	return grants;
 }
 
-// Issues grants with one session.grant call per scope.
+// Issues grants with one session.grant call per scope. Returns false when a
+// call fails: the session would then hold only part of the role's rights.
 function _grant_all(deps, sid, grants) {
 	let by_scope = {};
 	for (let g in grants) {
@@ -106,9 +107,12 @@ function _grant_all(deps, sid, grants) {
 	}
 	for (let scope, objects in by_scope) {
 		let res = deps.ubus.call("session", "grant", { ubus_rpc_session: sid, scope, objects });
-		if (!res.ok)
-			deps.log("warn", `UBUS session grant failed [sid: ${crypto.safe_id(deps.native, sid)}] [scope: ${scope}] [objects: ${length(objects)}]`);
+		if (!res.ok) {
+			deps.log("error", `UBUS session grant failed [sid: ${crypto.safe_id(deps.native, sid)}] [scope: ${scope}] [objects: ${length(objects)}]`);
+			return false;
+		}
 	}
+	return true;
 }
 
 // rpcd reads only list options: a single `option read` grants nothing.
@@ -235,13 +239,7 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 
 	let sid = res_create.data.ubus_rpc_session;
 
-	// 3. Grant what rpcd grants a password login with the entry. Granting only
-	// the access-group names is not enough: rpcd checks ubus and uci calls
-	// against the concrete scopes, which it expands only at login. Nothing is
-	// added to the lists: rpcd rebuilds the session from them alone on reload.
-	_grant_all(deps, sid, _expand_role(acl_res.data.entries, perms));
-
-	// 4. Generate CSRF token
+	// 3. Generate CSRF token
 	let res_csrf = crypto.random(deps.native, 32);
 	if (!res_csrf.ok) {
 		deps.log("error", "CRITICAL: CSPRNG failure during CSRF token generation");
@@ -254,8 +252,13 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 	}
 	let csrf_token = csrf_res.data;
 
-	// 5. Set session variables. Without them the session has no CSRF token and
-	// no username, so a failure here must not hand back a usable session.
+	// 4. Set the session variables BEFORE granting anything. On a reload rpcd
+	// keeps a session's values but not its rights, which it rebuilds from the
+	// login entry of the saved username. With the username set first, a reload
+	// between any two of these calls leaves the session with the role's full
+	// rights: rebuilt from the entry, or granted by the calls after it.
+	// Without the variables the session has no CSRF token and no username, so
+	// a failure here must not hand back a usable session.
 	let res_set = deps.ubus.call("session", "set", {
 		ubus_rpc_session: sid,
 		values: {
@@ -271,6 +274,14 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 		deps.log("error", `UBUS session set failed [sid: ${crypto.safe_id(deps.native, sid)}]`);
 		return _abort_session(deps, sid, UBUS_SESSION_FAILED);
 	}
+
+	// 5. Grant what rpcd grants a password login with the entry. Granting only
+	// the access-group names is not enough: rpcd checks ubus and uci calls
+	// against the concrete scopes, which it expands only at login. Nothing is
+	// added to the lists: rpcd rebuilds the session from them alone on reload.
+	// A failed grant fails the login rather than leave part of the rights.
+	if (!_grant_all(deps, sid, _expand_role(acl_res.data.entries, perms)))
+		return _abort_session(deps, sid, UBUS_SESSION_FAILED);
 
 	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${rpcd_login.username(role)}`);
 

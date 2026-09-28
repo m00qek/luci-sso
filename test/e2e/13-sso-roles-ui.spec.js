@@ -1,6 +1,6 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles } = require('./helpers');
+const { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles, RELOAD_WAIT_MS } = require('./helpers');
 
 // The Users section of the SSO settings page against the real rpcd: matching
 // rules and order in /etc/config/luci-sso (UCI), permissions in each role's
@@ -51,7 +51,7 @@ async function addRole(page, name, { emails = [], read = [], write = [] }) {
 async function saveAndApply(page, { access = true } = {}) {
     await page.locator('.cbi-page-actions .cbi-button-apply').first().click();
     if (access)
-        await expect(page.locator('.alert-message', { hasText: 'Role permissions saved and in force.' })).toBeVisible({ timeout: 30000 });
+        await expect(page.locator('.alert-message', { hasText: 'Role permissions saved and in force.' })).toBeVisible({ timeout: RELOAD_WAIT_MS });
     const applied = page.getByText('Configuration changes applied.');
     const none = page.getByText('There are no changes to apply');
     await expect(applied.or(none)).toBeVisible({ timeout: 60000 });
@@ -83,11 +83,12 @@ async function cleanup(browser) {
     }
 }
 
-test.describe.configure({ mode: 'serial' });
+// A save waits for an rpcd reload, which may take RELOAD_WAIT_MS.
+test.describe.configure({ mode: 'serial', timeout: RELOAD_WAIT_MS + 30000 });
 
 test.describe('SSO settings: roles and their rpcd permissions', () => {
-    test.beforeAll(async ({ browser }) => { await cleanup(browser); });
-    test.afterAll(async ({ browser }) => { await cleanup(browser); });
+    test.beforeAll(async ({ browser }) => { test.setTimeout(RELOAD_WAIT_MS + 30000); await cleanup(browser); });
+    test.afterAll(async ({ browser }) => { test.setTimeout(RELOAD_WAIT_MS + 30000); await cleanup(browser); });
 
     test('creating a role writes the luci-sso role and its rpcd entry, with unauthenticated', async ({ page }) => {
         await loginAsRoot(page);

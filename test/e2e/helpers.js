@@ -1,5 +1,15 @@
 'use strict';
 
+// How long to wait for an rpcd reload (a luci-sso write) to finish. The
+// reload itself takes about two seconds: one second until the plugin signals
+// rpcd, then rpcd's restart. The rest covers a stall of uhttpd: it checks
+// every /ubus/ call's session with a synchronous call to rpcd, waiting up to
+// half its script timeout (60 s by default, so 30 s), and serves nothing
+// meanwhile. A check that reaches rpcd just as it re-executes itself is never
+// answered, so one unlucky poll freezes uhttpd for those 30 s. The wait still
+// ends on an exact condition: list_roles, answered, with reload_pending false.
+const RELOAD_WAIT_MS = 45000;
+
 async function loginAsRoot(page) {
     await page.goto('/');
     await page.fill('input[name="luci_username"]', 'root');
@@ -53,17 +63,14 @@ async function ubus(page, obj, method, params) {
 // The luci-sso ubus object's roles (rpcd login entries), by name, once no
 // rpcd reload is pending.
 async function listRoles(page) {
-    let roles = null;
-    for (let waited = 0; waited <= 15000; waited += 250) {
+    const deadline = Date.now() + RELOAD_WAIT_MS;
+    for (;;) {
         const r = await ubus(page, 'luci-sso', 'list_roles', {});
-        if (r.status === 0 && r.data.reload_pending === false) {
-            roles = Object.fromEntries(r.data.roles.map(x => [x.name, { read: x.read, write: x.write }]));
-            break;
-        }
+        if (r.status === 0 && r.data.reload_pending === false)
+            return Object.fromEntries(r.data.roles.map(x => [x.name, { read: x.read, write: x.write }]));
+        if (Date.now() > deadline) throw new Error('rpcd did not finish reloading');
         await page.waitForTimeout(250);
     }
-    if (!roles) throw new Error('rpcd did not finish reloading');
-    return roles;
 }
 
-module.exports = { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles };
+module.exports = { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles, RELOAD_WAIT_MS };

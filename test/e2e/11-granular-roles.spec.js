@@ -1,6 +1,6 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { loginAsRoot } = require('./helpers');
+const { loginAsRoot, RELOAD_WAIT_MS } = require('./helpers');
 
 // Granular SSO roles against the real rpcd.
 //
@@ -48,12 +48,14 @@ async function ubus(page, obj, method, params) {
 }
 
 // Waits until the reload a luci-sso write scheduled is over: list_roles
-// reports reload_pending until rpcd has re-executed itself.
+// reports reload_pending until rpcd has re-executed itself, and the new rpcd
+// answers only once it has restored the sessions. A poll can freeze uhttpd
+// for up to 30 s (see RELOAD_WAIT_MS), which the wait allows for.
 async function awaitReload(page) {
   await expect.poll(async () => {
     const r = await ubus(page, 'luci-sso', 'list_roles', {});
     return r.status === 0 && r.data.reload_pending === false;
-  }, { timeout: 15000 }).toBe(true);
+  }, { timeout: RELOAD_WAIT_MS }).toBe(true);
 }
 
 // Sets the read/write lists of the devenv admin role's rpcd login entry, as
@@ -80,7 +82,11 @@ async function loginViaSSO(page) {
 }
 
 test.describe('SSO roles: access groups work like a password login', () => {
+  // Each test and the hook wait for one reload, which may take RELOAD_WAIT_MS.
+  test.describe.configure({ timeout: RELOAD_WAIT_MS + 30000 });
+
   test.afterAll(async ({ browser }) => {
+    test.setTimeout(RELOAD_WAIT_MS + 30000);
     await setRole(browser, ['*'], ['*']);
   });
 

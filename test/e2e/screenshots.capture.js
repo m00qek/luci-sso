@@ -32,7 +32,7 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('@playwright/test');
-const { loginAsRoot, gotoSSOSettings, loginViaSSO } = require('./helpers');
+const { loginAsRoot, gotoSSOSettings, loginViaSSO, RELOAD_WAIT_MS } = require('./helpers');
 
 const BASE_URL = process.env.BASE_URL;
 const OUT_DIR = process.env.OUT_DIR || '/tmp/luci-sso-screenshots';
@@ -107,10 +107,11 @@ async function ubus(page, obj, method, params) {
 
 // Waits for the rpcd reload a luci-sso write triggers (as 11-granular-roles).
 async function awaitReload(page) {
-  for (let waited = 0; ; waited += 250) {
+  const deadline = Date.now() + RELOAD_WAIT_MS;
+  for (;;) {
     const done = await ubus(page, 'luci-sso', 'list_roles', {}).then(r => r.reload_pending === false, () => false);
     if (done) return;
-    if (waited > 15000) throw new Error('rpcd did not reload');
+    if (Date.now() > deadline) throw new Error('rpcd did not reload');
     await page.waitForTimeout(250);
   }
 }

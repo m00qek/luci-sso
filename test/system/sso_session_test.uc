@@ -89,6 +89,47 @@ describe('system: SSO sessions across an rpcd reload', () => {
 	});
 });
 
+// rpcd saves a session's values on reload but not its rights, and rebuilds
+// the rights only from the login entry of the username it saved. A login is
+// several ubus calls (create, grant, set), so a reload can fall between any
+// two of them: each order below must end with the rights of a login that no
+// reload interrupted.
+describe('system: a login while rpcd reloads', () => {
+	it('ends with the full rights of its role, whichever call the reload comes before', () => {
+		with_rpcd((conn) => {
+			r.put_login(r.ENTRY_PREFIX + ROLE, {
+				username: `sso:${ROLE}`, read: [ "luci-base", "luci-mod-status-*" ], write: [ "luci-mod-system-config" ]
+			});
+
+			let login = (deps) => {
+				let res = ubus_mod.create_passwordless_session(deps, ROLE, "race@test", "at", "rt", "it");
+				assert.match(true, res.ok, `SSO session: ${res.error}`);
+				let acls = r.acls_of(conn, res.data);
+				conn.call("session", "destroy", { ubus_rpc_session: res.data });
+				return sort(keys(acls));
+			};
+
+			let calls = [];
+			let expected = login(recording_deps(calls));
+			assert.match(true, length(expected) > 0, "an uninterrupted login has rights");
+			assert.match(true, length(calls) >= 3, sprintf("a login is several ubus calls: %J", calls));
+
+			let short = [];
+			for (let k = 0; k < length(calls); k++) {
+				let deps = create(), real = deps.ubus, n = 0;
+				deps.ubus = { call: (o, m, a) => {
+					if (n++ == k) reload(conn);
+					return real.call(o, m, a);
+				} };
+				let got = login(deps);
+				if (sprintf("%J", got) != sprintf("%J", expected))
+					push(short, `a reload before call ${k} (${calls[k]}): ${length(got)} of ${length(expected)} rights`);
+			}
+			assert.match([], short, sprintf("every interrupted login has the full rights: %J", short));
+		});
+	});
+});
+
 describe('system: luci-sso refuses to create a session', () => {
 	it("for a role named root, whose entry is missing, instead of using the root login", () => {
 		with_rpcd((conn) => {
