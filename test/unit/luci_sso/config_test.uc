@@ -149,8 +149,8 @@ describe('config: find_role_for_user — email_verified', () => {
 			config.find_role_for_user(ON, { email: 'alice@example.com' }));
 	});
 
-	it('the string "true" counts as verified, since some IdPs send the claim as a string', () => {
-		assert.match(contains({ ok: true, data: { role_name: 'readers' } }), by_email(ON, 'true'));
+	it('the string "true" is not verified: the claim is a JSON boolean (OIDC Core §5.1)', () => {
+		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), by_email(ON, 'true'));
 	});
 
 	it('any other value is not verified', () => {
@@ -185,10 +185,10 @@ describe('config: find_role_for_user — email_verified', () => {
 		assert.match({ ok: true, data: { role_name: 'admin', also_matched: [] } }, res);
 	});
 
-	prop('with the option on, an email matches iff email_verified is true or "true"',
+	prop('with the option on, an email matches iff email_verified is the boolean true',
 		gen.oneof(gen.bool(), gen.elements('true', 'false', 'True', '1', ''), gen.string({ max_len: 6 }), gen.int(-2, 2)),
 		(v, ctx) => {
-			let verified = (v === true || v === 'true');
+			let verified = (v === true);
 			ctx.classify('verified', verified);
 			assert.match(verified, by_email(ON, v).ok);
 			assert.match(true, by_email(OFF, v).ok);

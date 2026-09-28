@@ -790,13 +790,8 @@ describe('handshake: email_verified', () => {
 		assert.match(0, length(warned(r)));
 	});
 
-	it('ID token: the string "true" counts as verified', () => {
-		let r = login({ email: "admin@example.com", email_verified: "true" });
-		assert.match("sso:admin", r.username);
-	});
-
-	it('ID token: an unverified or unflagged email is refused through the no-role path, with a warning that never names the email', () => {
-		for (let v in [ false, "false", null ]) {
+	it('ID token: an unverified or unflagged email, or the string "true", is refused through the no-role path, with a warning that never names the email', () => {
+		for (let v in [ false, "false", "true", null ]) {
 			let r = login({ email: "admin@example.com", email_verified: v });
 			refused(r);
 			let w = warned(r);
@@ -829,16 +824,14 @@ describe('handshake: email_verified', () => {
 	});
 
 	it('UserInfo: an email verified in the UserInfo response matches its role', () => {
-		for (let v in [ true, "true" ]) {
-			let r = login({ email: null, email_verified: null }, { email: "admin@example.com", email_verified: v });
-			assert.match(true, userinfo_fetched(r));
-			assert.match(contains({ ok: true }), r.result, `${v}: ${r.result.error}`);
-			assert.match("sso:admin", r.username);
-		}
+		let r = login({ email: null, email_verified: null }, { email: "admin@example.com", email_verified: true });
+		assert.match(true, userinfo_fetched(r));
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:admin", r.username);
 	});
 
-	it('UserInfo: an unverified or unflagged UserInfo email is refused, with a warning', () => {
-		for (let v in [ false, null ]) {
+	it('UserInfo: an unverified or unflagged UserInfo email, or the string "true", is refused, with a warning', () => {
+		for (let v in [ false, "true", null ]) {
 			let ui = { email: "admin@example.com" };
 			if (v != null) ui.email_verified = v;
 			let r = login({ email: null, email_verified: null }, ui);

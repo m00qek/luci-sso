@@ -126,12 +126,11 @@ export function load(deps) {
 
 /**
  * Returns true when the claims say the email was verified. The claim is a
- * JSON boolean (OIDC Core 1.0 §5.1), but some IdPs send the string "true",
- * which is accepted too. Anything else, including a missing claim, is false.
+ * JSON boolean (OIDC Core 1.0 §5.1), so only the boolean true counts.
+ * Anything else, including the string "true" and a missing claim, is false.
  */
 export function email_is_verified(claims) {
-	let v = claims.email_verified;
-	return v === true || v === "true";
+	return claims.email_verified === true;
 };
 
 /**
