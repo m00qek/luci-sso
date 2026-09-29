@@ -66,7 +66,7 @@ COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_D
 SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
 
 # --- 3. PUBLIC INTERFACE ---
-.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint fuzzer-test sanitizer-test screenshots idp-screenshots
+.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint fuzzer-test sanitizer-test screenshots idp-screenshots feed-makefile
 .PHONY: local-up local-down local-ps local-shell local-run
 
 # Sentinel file tracks the last successful build for a specific arch/version/crypto combo
@@ -137,6 +137,16 @@ lint:
 	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
 	@bash $(DEVENV_DIR)/scripts/check-code-style.sh
 	@bash $(DEVENV_DIR)/scripts/check-docs-links.sh
+
+# The luci-sso Makefile for the packages.ucode.dev feed, built from the
+# v$(VERSION) release tarball: it downloads the tarball unless TARBALL=<path>
+# or HASH=<sha256> is given. Writes to OUT, or to standard output.
+feed-makefile:
+	@sh $(DEVENV_DIR)/scripts/gen-feed-makefile.sh \
+		$(if $(TARBALL),--tarball '$(TARBALL)') \
+		$(if $(HASH),--hash '$(HASH)') \
+		$(if $(OUT),-o '$(OUT)') \
+		'$(VERSION)'
 
 pull: DOCKER_SUITE = ci
 pull: .pull
