@@ -77,7 +77,7 @@ Destroys the active LuCI session and redirects the browser. If the IdP advertise
 | **Clears cookies** | `sysauth_https`, `sysauth`, at both `Path=/` and `Path=/cgi-bin/luci` (Max-Age=0) |
 | **Error on missing/invalid `stoken`** | `403` — CSRF check failure |
 
-If no active session is found (cookie absent or session already expired), the endpoint returns `302 /` without error.
+If no active session is found (cookie absent or session already expired), the endpoint returns `302 /` without error. An ended session is logged as `Logout for [sub_id: …] (role=<role>)`; see [Log Messages](log-messages.md#logout).
 
 !!! note "LuCI's Log out entry uses this endpoint for SSO sessions"
     `luci-sso` overrides the action of LuCI's `admin/logout` menu entry (`/usr/share/luci/menu.d/luci-sso-logout.json`, handled by `luci.controller.sso`). For a session whose username is `sso:<role>` and that has a CSRF token it redirects to `/cgi-bin/luci-sso/logout?stoken=<session token>`; for any other session it runs LuCI's own logout unchanged.

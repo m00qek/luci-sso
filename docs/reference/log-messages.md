@@ -578,8 +578,10 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | Line | Level | Meaning |
 | :--- | :--- | :--- |
 | `Logout attempt with invalid or missing CSRF token` | warn | Before `[403] CSRF_CHECK_FAILED`. See [Authorization Errors](#authorization-errors). |
+| `Logout for [sub_id: …] (role=<role>)` | info | An SSO session was ended on the router. `[sub_id: …]` is read from the session's ID Token, so it matches the user's login lines. The browser then goes to the IdP's `end_session_endpoint`, if it has one. |
+| `Logout for [sub_id: …] (not an SSO session)` | info | A session whose username is not `sso:<role>` was sent to `/cgi-bin/luci-sso/logout` directly and ended. LuCI's **Log out** never sends one there. |
 
-A successful logout is not logged.
+A logout that goes through LuCI's own logout, as it does for a password session, is not logged by `luci-sso`.
 
 ### Package scripts
 

@@ -369,7 +369,7 @@ The roles' `rpcd` login entries (`luci_sso_<role>` in `/etc/config/rpcd`, `usern
 
 ### `role_of(name)` → `string | null`
 
-The role of the username `sso:<role>` when `<role>` passes `check_name`; `null` for any other value. A session is an SSO session exactly when its `username` gives a role here. `luci.controller.sso` uses it; the `oidc_user` value is never the test.
+The role of the username `sso:<role>` when `<role>` passes `check_name`; `null` for any other value. A session is an SSO session exactly when its `username` gives a role here. `luci.controller.sso` and the `/logout` log line use it; the `oidc_user` value is never the test.
 
 ### `check_list(label, list)` → `Result<array>`
 

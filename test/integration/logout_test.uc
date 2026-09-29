@@ -3,6 +3,8 @@ import * as router from 'luci_sso.router';
 import { with_context, UBUS_NO_DATA } from 'context';
 import * as f from 'fixtures.oidc';
 import * as encoding from 'luci_sso.encoding';
+import * as crypto from 'luci_sso.crypto';
+import * as real_native from 'luci_sso.native';
 
 // Integration bucket — the logout flow, entered at router.handle(deps, config,
 // request) with a full deps graph (with_context). Covers RP-initiated logout,
@@ -112,16 +114,17 @@ describe('logout: RP-initiated', () => {
 	});
 });
 
-// ─── SSO sessions without an email ────────────────────────────────────────────
+// ─── SSO sessions without an email, and the log line ──────────────────────────
 
-// An ID Token as the session stores it; the logout never verifies it again,
-// so the signature is not needed.
+// An ID Token as the session stores it. The logout never verifies it again,
+// and reads only its `sub` for the log line, so the signature is not needed.
 function stored_id_token(claims) {
 	let part = (v) => encoding.b64url_encode(sprintf("%J", v)).data;
 	return `${part({ alg: "RS256", typ: "JWT" })}.${part(claims)}.c2ln`;
 }
 
 function logout_with(values) {
+	let logs = [];
 	let res;
 	let DISC_WITH_LOGOUT = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
 
@@ -139,9 +142,10 @@ function logout_with(values) {
 		clock: { data: { now: 1516239022 } },
 		native: {}
 	}, (deps) => {
+		deps.log = (level, msg) => push(logs, [ level, msg ]);
 		res = router.handle(deps, MOCK_CONFIG, mock_request("/logout", { stoken: "csrf-789" }, { "sysauth_https": "session-789" }));
 	});
-	return { res };
+	return { res, logs };
 }
 
 describe('logout: an SSO session without an email', () => {
@@ -152,6 +156,35 @@ describe('logout: an SSO session without an email', () => {
 		assert.match(truthy(), r.res.ok);
 		assert.match(302, r.res.data.status);
 		assert.match(0, index(r.res.data.headers["Location"], "https://idp.com/logout?id_token_hint="), "Should reach the IdP end_session_endpoint");
+	});
+});
+
+describe('logout: the log line', () => {
+	it('names the user by sub_id, as the login lines do, and the role', () => {
+		let id_token = stored_id_token({ sub: "alice-sub", iss: "https://idp.com" });
+		let r = logout_with({ username: "sso:viewer", oidc_user: "alice@example.com", oidc_id_token: id_token });
+		let sub_id = crypto.safe_id(real_native, "alice-sub");
+
+		assert.match(truthy(), r.res.ok);
+		assert.match([ [ "info", `Logout for [sub_id: ${sub_id}] (role=viewer)` ] ],
+			filter(r.logs, (l) => index(l[1], "Logout") == 0));
+	});
+
+	it('never logs the email, the sub or a token', () => {
+		let id_token = stored_id_token({ sub: "alice-sub", iss: "https://idp.com" });
+		let r = logout_with({ username: "sso:viewer", oidc_user: "alice@example.com", oidc_id_token: id_token });
+
+		for (let l in r.logs)
+			for (let secret in [ "alice@example.com", "alice-sub", id_token, "csrf-789", "session-789" ])
+				assert.match(-1, index(l[1], secret), `log line leaks ${secret}: ${l[1]}`);
+	});
+
+	it('says when the session was not an SSO session, and when its ID Token cannot be read', () => {
+		let r = logout_with({ username: "root", oidc_id_token: "not-a-jwt" });
+
+		assert.match(truthy(), r.res.ok);
+		assert.match([ [ "info", "Logout for [sub_id: [INVALID]] (not an SSO session)" ] ],
+			filter(r.logs, (l) => index(l[1], "Logout") == 0));
 	});
 });
 

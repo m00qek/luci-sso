@@ -10,6 +10,7 @@ import * as config_mod from 'luci_sso.config';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as ratelimit from 'luci_sso.ratelimit';
+import * as rpcd_login from 'luci_sso.rpcd_login';
 import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'luci_sso.errors';
 
 /**
@@ -94,6 +95,19 @@ function handle_callback(deps, config, request) {
 }
 
 /**
+ * The `sub` of the ID Token stored in the session, for the logout log line,
+ * so it names the user the way the login lines do. The token was verified at
+ * login; here it is only read, never trusted. null when it cannot be read.
+ * @private
+ */
+function id_token_sub(id_token) {
+	let parts = (type(id_token) == "string") ? split(id_token, ".") : [];
+	if (length(parts) != 3 || !length(parts[1])) return null;
+	let claims = encoding.safe_json(encoding.b64url_decode(parts[1]));
+	return (claims.ok && type(claims.data) == "object") ? claims.data.sub : null;
+}
+
+/**
  * Handles the logout request.
  * @private
  */
@@ -122,6 +136,10 @@ function handle_logout(deps, config, request) {
 	}
 	id_token_hint = session_res.data.oidc_id_token;
 	ubus.destroy_session(deps, sid);
+
+	let role = rpcd_login.role_of(session_res.data.username);
+	deps.log("info", `Logout for [sub_id: ${crypto.safe_id(deps.native, id_token_sub(id_token_hint))}] ` +
+		(role != null ? `(role=${role})` : "(not an SSO session)"));
 
 	let logout_url = "/";
 
