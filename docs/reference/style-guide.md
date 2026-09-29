@@ -886,6 +886,7 @@ EC keys (key type) not ES256 signatures (algorithm).
 | **Quotes** | Double quotes for strings; single quotes for import specifiers and strings containing `"` | `make lint` (CI) |
 | **Testing** | Every function, every error path, security attacks | Test coverage review |
 | **Error codes, limits, cookies** | Match the reference pages | `make lint` (CI) |
+| **Feed Makefile** | Generated from `openwrt/luci-sso/Makefile` with `make feed-makefile`, never edited by hand | `make lint` (CI), the feed's drift check |
 
 When a rule conflicts with common sense, use judgment and record the decision in the commit message or under [Technical Debt & Known Exceptions](#technical-debt-known-exceptions).
 

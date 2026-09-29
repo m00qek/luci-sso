@@ -44,7 +44,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | `watch-tests` | CI | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. Requires `inotify-tools` on the host. |
 | `fuzzer-test` | CI | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. Needs no running stack. |
 | `sanitizer-test` | CI | Run `test/native` and `test/unit/luci_sso/crypto` against the native module built with AddressSanitizer + UndefinedBehaviorSanitizer, in an interpreter built the same way. Fails on any sanitizer report, including leaks found at process exit. Needs no running stack. |
-| `lint` | — | Run the lint checks: the three documentation checks (error codes, request limits, cookies), the code style check (indentation, function endings and quotes; see [Style Guide](style-guide.md#enforcement)) and the docs link check (every link to the published docs names the right version; see [Style Guide](style-guide.md#4-links-to-the-published-docs)). No stack required. |
+| `lint` | — | Run the lint checks: the three documentation checks (error codes, request limits, cookies), the code style check (indentation, function endings and quotes; see [Style Guide](style-guide.md#enforcement)), the docs link check (every link to the published docs names the right version; see [Style Guide](style-guide.md#4-links-to-the-published-docs)) and the feed Makefile generator check (`devenv/scripts/check-feed-makefile.sh`: the generator reproduces the published 0.10.0 feed Makefile, accepts `openwrt/luci-sso/Makefile`, and refuses a broken one). No stack required; no network. |
 
 ### Documentation
 
@@ -58,6 +58,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | Target | Stack | Description |
 | :--- | :--- | :--- |
 | `compile` | — | Compile native C components for the target architecture. Skipped if the sentinel file is current. Runs a one-shot `sdk` container; needs no running stack. Leaves no Docker volume behind. |
+| `feed-makefile` | — | Generate the `luci-sso` Makefile for the [package feed](https://github.com/m00qek/packages.ucode.dev) from the `v$VERSION` release tarball: `openwrt/luci-sso/Makefile` from the tarball, with `PKG_SOURCE`, `PKG_HASH` (the tarball's SHA-256) and the tarball paths. Downloads the tarball unless `TARBALL` or `HASH` is given. Writes nothing if the tag does not exist or the Makefile is not in the shape it expects. Needs `VERSION`. See [How to Release a New Version](../how-to/developer/releasing.md). |
 | `package` | — | Build the `luci-sso` and `luci-sso-crypto-*` packages for `SDK_ARCH`/`SDK_VERSION` into `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `.ipk` for 24.10, `.apk` for 25.12. Replaces the previous build's `luci-sso` packages there. Runs a one-shot `sdk` container; needs no running stack. Leaves no Docker volume behind. |
 
 ### Utilities
@@ -111,6 +112,15 @@ Common `SDK_ARCH` values:
 | :--- | :--- | :--- |
 | `IDP` | *(all)* | `idp-screenshots` only. `keycloak`, `authelia`, `pocket-id` or `authentik`, or a space-separated list, to capture only those IdPs. |
 
+### Feed Makefile
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `VERSION` | *(required)* | `feed-makefile` only. The release to generate for, without the leading `v`, such as `0.10.0`. Must equal `PKG_VERSION` in the Makefile it transforms. |
+| `OUT` | *(standard output)* | `feed-makefile` only. The file to write. It is replaced only when generation succeeds. |
+| `TARBALL` | *(download)* | `feed-makefile` only. Path to the `v$VERSION` tarball on disk, instead of downloading it. |
+| `HASH` | *(download)* | `feed-makefile` only. Use this SHA-256 as `PKG_HASH` and transform `openwrt/luci-sso/Makefile` from the working tree, without the tarball. Nothing checks that either matches the tag. |
+
 ### Container
 
 | Variable | Default | Description |
@@ -156,6 +166,9 @@ make screenshots
 # Retake the identity provider screenshots, or only Pocket ID's
 make idp-screenshots
 make idp-screenshots IDP=pocket-id
+
+# Generate the feed Makefile for 0.10.0 into a packages.ucode.dev clone
+make feed-makefile VERSION=0.10.0 OUT=../packages.ucode.dev/luci-sso/Makefile
 
 # Open a shell in the running openwrt container
 make shell
