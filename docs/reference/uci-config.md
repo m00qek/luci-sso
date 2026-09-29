@@ -106,7 +106,7 @@ The `luci-sso` ubus object, an `rpcd` plugin at `/usr/share/rpcd/ucode/luci-sso.
 
 | Method | Arguments | Reply |
 | :--- | :--- | :--- |
-| `list_roles` | none | `{ "roles": [ { "name", "read", "write" } ], "reload_pending": <bool> }`: every `luci_sso_*` login entry, in file order. |
+| `list_roles` | none | `{ "roles": [ { "name", "read", "write" } ], "reload_pending": <bool> }`: every `luci_sso_*` login entry with a valid role name, in file order. |
 | `set_role` | `name` (string), `read` (array), `write` (array) | `{ "role": { "name", "read", "write" } }`, with the lists as stored. Creates or replaces the entry, and removes any `password` option. |
 | `delete_role` | `name` (string) | `{ "result": true }` |
 
@@ -160,8 +160,8 @@ The table's **Emails** and **Groups** columns list the role's values, or `(none)
 | Cell | Meaning |
 | :--- | :--- |
 | `(none)` | The list is empty. |
-| `(none): this role grants no access` | Both lists are empty apart from `unauthenticated`. The role's users can log in but see nothing. |
-| `Not set: edit and save this role, or its users cannot log in` | The role has no entry. |
+| `(none): this role grants no access` | Both lists are empty apart from `unauthenticated`. The role's users can log in but see nothing. Shown in both cells. |
+| `Not set: edit and save this role, or its users cannot log in` | The role has no entry. Shown in both cells. |
 | `(unavailable)` | `list_roles` failed. The access fields are read-only, and nothing is written to `rpcd`. |
 
 | Field (role editor) | Stored in | Form behaviour |

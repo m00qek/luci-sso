@@ -142,7 +142,7 @@ OpenWrt 25.12 uses `apk` packages instead, built with `SDK_VERSION=25.12.3` and 
 
 ## 5. After installing
 
-Installing runs the package's setup scripts once: they create `/var/run/luci-sso/`, add a daily cleanup job to root's crontab, and add the SSO button to LuCI's login page templates with `luci-sso-repatch`. Run that command again whenever a LuCI upgrade removes the button; see [How to Upgrade luci-sso](upgrade.md#restore-the-login-button-after-a-luci-upgrade).
+Installing runs the package's setup scripts once: they create `/var/run/luci-sso/`, add a daily cleanup job to root's crontab, create the shipped `admin` role's `rpcd` login entry, `luci_sso_admin`, and reload `rpcd`, and add the SSO button to LuCI's login page templates with `luci-sso-repatch`. Run that command again whenever a LuCI upgrade removes the button; see [How to Upgrade luci-sso](upgrade.md#restore-the-login-button-after-a-luci-upgrade).
 
 ### Switch to a different backend later
 

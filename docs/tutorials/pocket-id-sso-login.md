@@ -47,9 +47,9 @@ Log in to Pocket ID as an administrator and open **Administration > OIDC Clients
 | **Callback URLs** | Click **Add**, then enter `https://192.168.1.1/cgi-bin/luci-sso/callback` |
 | **Logout Callback URLs** | Click **Add**, then enter `https://192.168.1.1/` |
 
-Replace `192.168.1.1` with your router's actual LAN IP or hostname. Leave the switches below them off.
+Replace `192.168.1.1` with your router's actual LAN IP or hostname; the screenshot below uses the host name `router.example.com`. Leave the switches below them off.
 
-![Pocket ID Create OIDC Client form. Name is luci-router. Callback URLs holds a callback URL ending in /cgi-bin/luci-sso/callback and Logout Callback URLs holds the router's address, each added with the Add button. The Public Client, PKCE, Requires Re-Authentication and Skip Consent Screen switches are off.](../assets/screenshots/idp/pocket-id-client-form.png "Create OIDC Client with both callback URLs added")
+![Pocket ID Create OIDC Client form. Name is luci-router. Callback URLs holds https://router.example.com/cgi-bin/luci-sso/callback and Logout Callback URLs holds https://router.example.com/, each added with the Add button. The Public Client, PKCE, Requires Re-Authentication and Skip Consent Screen switches are off.](../assets/screenshots/idp/pocket-id-client-form.png "Create OIDC Client with both callback URLs added")
 
 Click **Save**. Pocket ID opens the client's page. Copy the **Client ID** shown at the top.
 

@@ -24,7 +24,7 @@ This guide covers a proxy **on the router itself**, forwarding over the loopback
 ## Prerequisites
 
 - `luci-sso` installed; see [How to Install luci-sso](installation.md).
-- nginx with TLS support installed on the router (on OpenWrt 25.12, `apk add nginx-ssl`).
+- nginx with TLS support installed on the router: `opkg install nginx-ssl` on OpenWrt 24.10, `apk add nginx-ssl` on OpenWrt 25.12.
 - A public host name for the router, for example `router.example.com`, that resolves to the router for every browser that will use it.
 - A certificate for that host name, and its key, on the router. Browsers must trust it.
 - **Console or SSH access to the router.** Once `uhttpd` moves to the loopback interface, LuCI is reachable only through nginx. If nginx does not start, SSH is the way back in.
@@ -100,6 +100,12 @@ nginx refuses two `default_server` blocks on the same port, and `nginx -t` says 
 !!! warning "Keep a way back in"
     Run these commands from an SSH session or the serial console, and keep it open until [Verify](#4-verify) passes. From here until nginx runs, LuCI cannot be reached from the network.
 
+Note the current value of `redirect_https`, so you can restore it if you go back:
+
+```bash
+uci get uhttpd.main.redirect_https
+```
+
 Make `uhttpd` listen on `127.0.0.1:8081` over plain HTTP only, and stop it redirecting to HTTPS:
 
 ```bash
@@ -127,9 +133,12 @@ uci add_list uhttpd.main.listen_http='0.0.0.0:80'
 uci add_list uhttpd.main.listen_http='[::]:80'
 uci add_list uhttpd.main.listen_https='0.0.0.0:443'
 uci add_list uhttpd.main.listen_https='[::]:443'
+uci set uhttpd.main.redirect_https='<the value you noted>'
 uci commit uhttpd
 service uhttpd restart
 ```
+
+If `uci get` answered `Entry not found`, run `uci delete uhttpd.main.redirect_https` instead of setting it.
 
 ---
 

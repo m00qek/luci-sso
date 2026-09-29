@@ -103,11 +103,11 @@ nav:
       - Overview: explanation/index.md
       - About LuCI SSO: explanation/about.md
       - About the Design Philosophy: explanation/design-philosophy.md
+      - About the Architecture: explanation/architecture.md
+      - About Crypto Backends: explanation/crypto-backends.md
+      - About the Test Architecture: explanation/test-architecture.md
       - About the OIDC Login Flow: explanation/oidc-flow.md
       - About the Session Lifecycle: explanation/session-lifecycle.md
       - About Roles and Permissions: explanation/roles-and-permissions.md
-      - About Crypto Backends: explanation/crypto-backends.md
-      - About the Test Architecture: explanation/test-architecture.md
       - About the Security Model: explanation/security-model.md
-      - About the Architecture: explanation/architecture.md
       - About the Threat Model: explanation/threat-model.md

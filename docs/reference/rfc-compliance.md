@@ -65,7 +65,7 @@ How the router fetches and checks the IdP's discovery document. IdP (identity pr
 
 | Requirement | Reference | Status | Notes |
 | :--- | :--- | :--- | :--- |
-| Discovery document fetch from `<issuer>/.well-known/openid-configuration` | Discovery §4 | ✅ Implemented | Cached in `/var/run/luci-sso/` (tmpfs) for 24 hours. |
+| Discovery document fetch from `<issuer>/.well-known/openid-configuration` | Discovery §4 | ✅ Implemented | Cached in `/var/run/luci-sso/` (tmpfs) for 24 hours; an expired copy is used while the IdP is unreachable. |
 | `issuer` field validation | Discovery §4.3 | ✅ Implemented | Must be identical to `issuer_url`: an exact string comparison, so a trailing slash, letter case or an explicit default port counts as a difference. See [notes](#oidc-discovery-notes). |
 | `authorization_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
 | `token_endpoint` required | Discovery §3 | ✅ Implemented | Missing field triggers `DISCOVERY_MISSING_ENDPOINT`, logged with the field name. |
@@ -75,7 +75,7 @@ How the router fetches and checks the IdP's discovery document. IdP (identity pr
 
 ### OIDC Discovery notes
 
-- **`issuer` field validation.** A mismatch fails discovery: `DISCOVERY_ISSUER_MISMATCH: …`, naming both issuers, then `[502] OIDC_DISCOVERY_FAILED`. When the two differ only in a trailing slash, letter case or default port, the line says so. A cached discovery document is used only if its `issuer` is identical to `issuer_url` too.
+- **`issuer` field validation.** A mismatch fails discovery: `DISCOVERY_ISSUER_MISMATCH: …`, naming both issuers, then `[502] OIDC_DISCOVERY_FAILED`. When the two differ only in a trailing slash, letter case in the scheme or host, or the default port, the line says so; a case difference in the path gets no hint. A cached discovery document is used only if its `issuer` is identical to `issuer_url` too.
 - **HTTPS endpoints.** A non-HTTPS `authorization_endpoint`, `token_endpoint` or `jwks_uri` triggers `INSECURE_ENDPOINT`, logged with the field name and its (capped) URL. A non-HTTPS `userinfo_endpoint` or `end_session_endpoint` is dropped with a warning.
 - **`issuer` and the fetch URL.** When `internal_issuer_url` is set (split-horizon), the discovery document is fetched from the internal address but `issuer` is validated against the public `issuer_url`. See [How to Configure Split-Horizon Networking](../how-to/sysadmin/split-horizon.md).
 

@@ -136,7 +136,7 @@ In the browser, the same field is **Internal Issuer URL** on **Services > Single
 
 **Step 4.** Verify with a fresh login. A login that was already under way when you saved the change will fail once; start it again.
 
-Active sessions issued by the old IdP keep working until they log out or time out — they are UBUS sessions and the router does not re-validate them against the IdP after creation.
+Active sessions issued by the old IdP keep working until they log out or time out — they are UBUS sessions and the router does not re-validate them against the IdP after creation. When such a user logs out, the browser goes to the **new** IdP's `end_session_endpoint` with the old IdP's ID Token as `id_token_hint`, and the new IdP may show an error page. The router session is ended either way.
 
 ---
 

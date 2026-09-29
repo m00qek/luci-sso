@@ -12,6 +12,8 @@ https://<router>/cgi-bin/luci-sso
 
 All paths below are relative to this base. The script does not check the scheme itself, but every cookie it sets is `Secure`, so the flow works only when the browser uses HTTPS. `uhttpd` should not serve this path to browsers over HTTP; it may serve it over HTTP to a reverse proxy that terminates TLS. The script does not read the `Host` header: it builds its redirects from `redirect_uri` or as relative paths. See [How to Run LuCI Behind a Reverse Proxy](../how-to/sysadmin/reverse-proxy.md).
 
+The endpoints are listed as `GET`, the method the browser uses. The script does not check the request method.
+
 ---
 
 ## Endpoints
@@ -42,12 +44,14 @@ The three paths the CGI script answers. Each entry lists whether the endpoint is
 
 ### `GET /callback` — Handle IdP redirect
 
-Called automatically by the browser after the user authenticates at the IdP. The IdP appends `code` and `state` to the URL.
+Called automatically by the browser after the user authenticates at the IdP. The IdP appends `code` and `state` to the URL, or `error` when it refused the request.
 
 | Query parameter | Description |
 | :--- | :--- |
 | `code` | Authorization code issued by the IdP. Single-use, short-lived. |
 | `state` | Must match the `state` stored on the router in the handshake that the `__Host-luci_sso_state` cookie points to. |
+| `error` | Set by the IdP instead of `code` when it refused the authorization request (RFC 6749 §4.1.2.1), for example `access_denied`. Checked first: the request fails with `[400] IDP_ERROR`. |
+| `error_description` | Optional text from the IdP that explains `error`. Logged, sanitized, with `error`; never shown on the page. |
 
 | | |
 | :--- | :--- |
@@ -103,7 +107,7 @@ Carries an opaque handle to the handshake during the OIDC flow. The handshake it
 
 ### `sysauth_https`
 
-The LuCI session cookie for HTTPS connections. Its value is the `rpcd` session ID. `sysauth_http`, which LuCI reads over plain HTTP, is never set.
+The LuCI session cookie for HTTPS connections. Its value is the `rpcd` session ID. `sysauth_http`, which LuCI's password login sets over plain HTTP, is never set.
 
 LuCI's own password login sets its cookies at `Path=/cgi-bin/luci`. Because a cookie with a longer path is sent first and would shadow this one, the callback and `/logout` also expire any `sysauth_https` and `sysauth` at that path.
 

@@ -24,7 +24,7 @@ The third is only reduced. `luci-sso` adds a sign-in option next to the password
 
 ## Why not an existing solution?
 
-The obvious answer — run an OIDC reverse proxy in front of LuCI — requires a separate machine, adds a proxy to the path for every page load, and does not integrate with LuCI's native session model. The result is a brittle dependency on external infrastructure for every management action, including diagnosing the network failure that took the proxy offline.
+The obvious answer — run an authenticating proxy, such as oauth2-proxy, in front of LuCI — requires a separate machine, adds a proxy to the path for every page load, and does not integrate with LuCI's native session model. The result is a brittle dependency on external infrastructure for every management action, including diagnosing the network failure that took the proxy offline.
 
 `luci-sso` is a native OpenWrt package. It runs directly on the router, uses LuCI's existing UBUS session injection, and depends only on OpenWrt packages: ucode modules, `liblucihttp-ucode`, `luci-base` and one crypto library, which a LuCI router usually already carries. If the IdP is unreachable, the standard password login still works at `/cgi-bin/luci/admin/` — SSO is additive, not a replacement.
 
@@ -42,12 +42,7 @@ The same embedded constraints make testing difficult: you cannot run an integrat
 
 ## Current status
 
-`luci-sso` is in **Beta**. It is functional and deployed in home lab and self-hosted environments, but the API surface — UCI configuration options, log message codes, internal module interfaces — may change between versions. Compatibility is not guaranteed across minor versions until a stable release is tagged.
-
-Specifically:
-
-- The UCI configuration schema (`/etc/config/luci-sso`) is stable for the options documented in the [UCI Configuration Reference](../reference/uci-config.md).
-- The crypto backend interface (`mod/native.h`) is stable for the functions documented in the [Internal API Reference](../reference/internal-api.md).
+`luci-sso` is in **Beta**. It is functional and deployed in home lab and self-hosted environments, but the API surface — UCI configuration options, log message codes, internal module interfaces — may change between versions. Compatibility is not guaranteed across minor versions until a stable release is tagged. Changes that need action are listed in [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md) and in the project's [changelog](https://github.com/m00qek/luci-sso/blob/main/CHANGELOG.md).
 
 The project targets **OpenWrt 24.10** and **25.12**.
 
