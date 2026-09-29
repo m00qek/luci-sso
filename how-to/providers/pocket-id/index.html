@@ -1,0 +1,2273 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.">
+      
+      
+      
+        <link rel="canonical" href="https://m00qek.github.io/luci-sso/how-to/providers/pocket-id/">
+      
+      
+        <link rel="prev" href="../authentik/">
+      
+      
+        <link rel="next" href="../../sysadmin/installation/">
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Pocket ID - LuCI SSO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#how-to-configure-pocket-id" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+              <button class="md-banner__button md-icon" aria-label="Don't show this again">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+              </button>
+            
+            
+  <strong>Beta:</strong> This project and its documentation are under active development. APIs and configuration options may change before the 1.0 release.
+
+          </div>
+          
+            <script>var content,el=document.querySelector("[data-md-component=announce]");el&&(content=el.querySelector(".md-typeset"),__md_hash(content.innerHTML)===__md_get("__announce")&&(el.hidden=!0))</script>
+          
+        </aside>
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="LuCI SSO" class="md-header__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LuCI SSO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Pocket ID
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+    
+  
+  Welcome
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../tutorials/" class="md-tabs__link">
+          
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../" class="md-tabs__link">
+          
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../explanation/" class="md-tabs__link">
+          
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="LuCI SSO" class="md-nav__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    LuCI SSO
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Welcome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/first-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Public IdP)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/pocket-id-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Self-hosted)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/dev-onboarding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Developer Onboarding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How-to Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            How-to Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Providers
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            Providers
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../generic-oidc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Generic OIDC Provider
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../google/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Google
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authelia/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authelia
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../keycloak/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keycloak
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authentik/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authentik
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Pocket ID
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Pocket ID
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-create-an-oidc-client-in-pocket-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Create an OIDC client in Pocket ID
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-configure-the-router" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Configure the router
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-configure-role-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Configure role mapping
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Configure role mapping">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#map-by-email" class="md-nav__link">
+    <span class="md-ellipsis">
+      Map by email
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#map-by-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      Map by group
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Verify
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Troubleshooting
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Sysadmin
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Sysadmin
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/build-from-source/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building from Source
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/configure-in-luci/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuring in LuCI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/install-ca-certificate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing a Private CA Certificate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrading
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/rotate-credentials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Rotating Credentials
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/rbac/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Role-Based Access Control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/split-horizon/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Split-Horizon Networking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/reverse-proxy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running Behind a Reverse Proxy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/backup-restore/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Backing Up and Restoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/uninstall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Removing luci-sso
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Developer
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            Developer
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/development-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Development Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/adding-crypto-backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a New Crypto Backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running Tests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/fuzzing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running the Fuzzer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/documentation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Writing Documentation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/adding-documented-interfaces/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding Error Codes, Limits, and Cookies
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/log-messages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Log Messages
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/http-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HTTP API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/uci-config/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UCI Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/provider-compatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Provider Compatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/internal-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Internal API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/style-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Style Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/testing-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/rfc-compliance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RFC Compliance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/devenv-targets/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Makefile Targets
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Explanation
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Explanation
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/about/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About LuCI SSO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/design-philosophy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Design Philosophy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/crypto-backends/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About Crypto Backends
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/test-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Test Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/oidc-flow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the OIDC Login Flow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/session-lifecycle/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Session Lifecycle
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/roles-and-permissions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About Roles and Permissions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/security-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Security Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Threat Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-create-an-oidc-client-in-pocket-id" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Create an OIDC client in Pocket ID
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-configure-the-router" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Configure the router
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-configure-role-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Configure role mapping
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Configure role mapping">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#map-by-email" class="md-nav__link">
+    <span class="md-ellipsis">
+      Map by email
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#map-by-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      Map by group
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Verify
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Troubleshooting
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<h1 id="how-to-configure-pocket-id">How to Configure Pocket ID<a class="headerlink" href="#how-to-configure-pocket-id" title="Permanent link">&para;</a></h1>
+<p>This guide describes how to connect <code>luci-sso</code> to a <a href="https://pocket-id.org/">Pocket ID</a> instance.</p>
+<p>Pocket ID is a self-hosted OIDC provider built around passkeys — users authenticate with biometrics or hardware security keys instead of passwords. Users must have a passkey enrolled in Pocket ID before they can complete an SSO login on your router.</p>
+<p>The steps and screenshots were checked against Pocket ID 2.16.0. Labels can differ in other releases.</p>
+<hr />
+<h2 id="1-create-an-oidc-client-in-pocket-id">1. Create an OIDC client in Pocket ID<a class="headerlink" href="#1-create-an-oidc-client-in-pocket-id" title="Permanent link">&para;</a></h2>
+<p>Log in to Pocket ID as an administrator and open <strong>Administration &gt; OIDC Clients</strong>. Click <strong>Add OIDC Client</strong> and fill in:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Name</strong></td>
+<td style="text-align: left;"><code>luci-router</code> (or any label you prefer)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Callback URLs</strong></td>
+<td style="text-align: left;">Click <strong>Add</strong>, then enter <code>https://&lt;YOUR_ROUTER_IP_OR_DOMAIN&gt;/cgi-bin/luci-sso/callback</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Logout Callback URLs</strong></td>
+<td style="text-align: left;">Click <strong>Add</strong>, then enter <code>https://&lt;YOUR_ROUTER_IP_OR_DOMAIN&gt;/</code> (where LuCI's <strong>Log out</strong> returns after ending the Pocket ID session)</td>
+</tr>
+</tbody>
+</table>
+<p>Leave <strong>Public Client</strong> off: <code>luci-sso</code> is a confidential client and authenticates with a client secret. Turning on <strong>PKCE</strong> is optional; <code>luci-sso</code> always sends a PKCE challenge.</p>
+<p><img alt="Pocket ID Create OIDC Client form. Name is luci-router. Callback URLs holds https://router.example.com/cgi-bin/luci-sso/callback and Logout Callback URLs holds https://router.example.com/, each with a remove button and an Add another button below it. The Public Client, PKCE, Requires Re-Authentication and Skip Consent Screen switches are off." src="../../../assets/screenshots/idp/pocket-id-client-form.png" title="Create OIDC Client with both callback URLs added" /></p>
+<p>Click <strong>Save</strong>. Pocket ID opens the client's page, which shows the <strong>Client ID</strong>. Copy it.</p>
+<p>Pocket ID does not create a client secret on its own. Open the <strong>Credentials</strong> tab and click <strong>Add client secret</strong>. Copy the secret now: Pocket ID shows it in full only until you leave the page.</p>
+<p><img alt="Pocket ID client page, Credentials tab. The Client secrets card says This app has no client secrets yet, with an expiry list set to No expiration and an Add client secret button." src="../../../assets/screenshots/idp/pocket-id-credentials.png" title="The Credentials tab of a new client" /></p>
+<p>Open the <strong>Allowed User Groups</strong> tab and choose who may sign in. A new client allows no group, so every login fails with "You are not allowed to access this service." until you do one of the following:</p>
+<ul>
+<li>Tick the groups whose members may sign in, then click <strong>Save</strong>.</li>
+<li>Click <strong>Unrestrict</strong> to let every Pocket ID user sign in, and control access with the router's role mapping (Step 3) instead.</li>
+</ul>
+<p><img alt="Pocket ID client page, Allowed User Groups tab, with a warning icon on the tab. The table lists the group Router Admins, name router-admins, with an unticked checkbox, and an Unrestrict button sits below it." src="../../../assets/screenshots/idp/pocket-id-allowed-groups.png" title="Allowed User Groups on a new client: no group allowed" /></p>
+<hr />
+<h2 id="2-configure-the-router">2. Configure the router<a class="headerlink" href="#2-configure-the-router" title="Permanent link">&para;</a></h2>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Browser (LuCI)</label><label for="__tabbed_1_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Services &gt; Single Sign-On</strong>.</p>
+<p>Fill in the <strong>Settings</strong> section:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Enable SSO</strong></td>
+<td style="text-align: left;">On</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Issuer URL</strong></td>
+<td style="text-align: left;"><code>https://id.example.com</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Client ID</strong></td>
+<td style="text-align: left;">Your Client ID from Step 1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Client Secret</strong></td>
+<td style="text-align: left;">Your Client Secret from Step 1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Redirect URI</strong></td>
+<td style="text-align: left;"><code>https://&lt;YOUR_ROUTER_IP_OR_DOMAIN&gt;/cgi-bin/luci-sso/callback</code></td>
+</tr>
+</tbody>
+</table>
+<p>Replace <code>https://id.example.com</code> with Pocket ID's <code>APP_URL</code> setting, exactly as set there and with no trailing slash. The Redirect URI must exactly match the callback URL set in Step 1. The field suggests one built from your browser's address; check it before you save.</p>
+<p>Click <strong>Save &amp; Apply</strong>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.issuer_url<span class="o">=</span><span class="s1">'https://id.example.com'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.client_id<span class="o">=</span><span class="s1">'&lt;YOUR_CLIENT_ID&gt;'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.client_secret<span class="o">=</span><span class="s1">'&lt;YOUR_CLIENT_SECRET&gt;'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.redirect_uri<span class="o">=</span><span class="s1">'https://&lt;YOUR_ROUTER_IP_OR_DOMAIN&gt;/cgi-bin/luci-sso/callback'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.enabled<span class="o">=</span><span class="s1">'1'</span>
+uci<span class="w"> </span>commit<span class="w"> </span>luci-sso
+</code></pre></div>
+<p>Replace <code>https://id.example.com</code> with Pocket ID's <code>APP_URL</code> setting, exactly as set there and with no trailing slash. The <code>redirect_uri</code> must exactly match the callback URL set in Step 1.</p>
+</div>
+</div>
+</div>
+<hr />
+<h2 id="3-configure-role-mapping">3. Configure role mapping<a class="headerlink" href="#3-configure-role-mapping" title="Permanent link">&para;</a></h2>
+<p>A role says which users it matches, by email or by group. What the role may do on the router is its <code>rpcd</code> login entry. On a fresh install, the shipped <code>admin</code> role grants full access. To give some users less, add a role with its own <strong>Read Access</strong> and <strong>Write Access</strong>, as described in <a href="../../sysadmin/rbac/">How to Configure Role-Based Access Control</a>. A user gets the first role that matches, from the top.</p>
+<h3 id="map-by-email">Map by email<a class="headerlink" href="#map-by-email" title="Permanent link">&para;</a></h3>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Browser (LuCI)</label><label for="__tabbed_2_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Services &gt; Single Sign-On</strong> and scroll to the <strong>Users</strong> section.</p>
+<p>Click <strong>Edit</strong> in the <code>admin</code> row. In <strong>Email Addresses</strong>, replace the placeholder <code>admin@example.com</code> with the user's email address, then click <strong>Save</strong> in the editor.</p>
+<p>Click <strong>Save &amp; Apply</strong>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>uci<span class="w"> </span>-q<span class="w"> </span>del_list<span class="w"> </span>luci-sso.admin.email<span class="o">=</span><span class="s1">'admin@example.com'</span>
+uci<span class="w"> </span>add_list<span class="w"> </span>luci-sso.admin.email<span class="o">=</span><span class="s1">'user@example.com'</span>
+uci<span class="w"> </span>commit<span class="w"> </span>luci-sso
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>An email matches only if Pocket ID marks it as verified (<code>email_verified: true</code>). Pocket ID keeps a verified flag on each user, which is off for a user an administrator creates, so the login fails with <code>[403] USER_NOT_AUTHORIZED</code> unless a group matches. For each user you map by email, do one of the following:</p>
+<ul>
+<li>Open <strong>Administration &gt; Users</strong> and edit the user. The envelope button next to <strong>Email</strong> is yellow while the address is unverified; click it (<strong>Mark as verified</strong>) so that it turns green, then save the user.</li>
+<li>To mark new addresses verified from the start, turn on <strong>Emails verified by default</strong> in <strong>Administration &gt; Application Configuration</strong>, on the <strong>Email</strong> tab. It applies to addresses added or changed from then on, not to existing users.</li>
+<li>To have users confirm their address, turn on <strong>Email Verification</strong> on the same tab. Pocket ID then emails them a link, which needs an SMTP server.</li>
+</ul>
+<p>Users synced from LDAP are always marked verified. Changing a user's email resets the flag to the <strong>Emails verified by default</strong> setting.</p>
+<p>If you cannot mark the addresses verified, map by group instead, or turn the check off:</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Browser (LuCI)</label><label for="__tabbed_3_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Services &gt; Single Sign-On</strong>, clear <strong>Require Verified Email</strong>, and click <strong>Save &amp; Apply</strong>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.require_email_verified<span class="o">=</span><span class="s1">'0'</span>
+uci<span class="w"> </span>commit<span class="w"> </span>luci-sso
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>With the check off, an email rule matches any address the IdP sends, verified or not. Do this only if users cannot set their own address at Pocket ID; see <a href="../../../explanation/roles-and-permissions/#verified-email-addresses">About Roles and Permissions</a>.</p>
+<h3 id="map-by-group">Map by group<a class="headerlink" href="#map-by-group" title="Permanent link">&para;</a></h3>
+<p>Pocket ID sends a user's groups in the <code>groups</code> claim of the ID Token when the <code>groups</code> scope is requested. Each value is the group's <strong>Name</strong>, exactly as set in <strong>Administration &gt; User Groups</strong>, not its <strong>Friendly Name</strong>. When you type a Friendly Name such as <code>Router Admins</code>, Pocket ID fills in <code>router_admins</code> as the Name, so check the Name before you use it in a role.</p>
+<p><img alt="Pocket ID Create User Group form. Friendly Name, described as the name displayed in the UI, is Router Admins. Name, described as the name that will be in the groups claim, is router-admins." src="../../../assets/screenshots/idp/pocket-id-add-group.png" title="A group's Name is what the groups claim carries" /></p>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Browser (LuCI)</label><label for="__tabbed_4_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Services &gt; Single Sign-On</strong>.</p>
+<p>In <strong>Settings</strong>, update <strong>Scopes</strong> to <code>openid profile email groups</code> and click <strong>Save &amp; Apply</strong>.</p>
+<p>Scroll to <strong>Users</strong> and click <strong>Edit</strong> in the <code>admin</code> row. In <strong>Groups</strong>, enter the group's Name (for example <code>router-admins</code>), then click <strong>Save</strong> in the editor.</p>
+<p>Click <strong>Save &amp; Apply</strong>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.scope<span class="o">=</span><span class="s1">'openid profile email groups'</span>
+uci<span class="w"> </span>add_list<span class="w"> </span>luci-sso.admin.group<span class="o">=</span><span class="s1">'router-admins'</span>
+uci<span class="w"> </span>commit<span class="w"> </span>luci-sso
+</code></pre></div>
+</div>
+</div>
+</div>
+<hr />
+<h2 id="4-verify">4. Verify<a class="headerlink" href="#4-verify" title="Permanent link">&para;</a></h2>
+<p>Check that the service is active. On the router:</p>
+<div class="highlight"><pre><span></span><code>uclient-fetch<span class="w"> </span>-q<span class="w"> </span>-O<span class="w"> </span>-<span class="w"> </span>--no-check-certificate<span class="w"> </span><span class="s1">'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'</span>
+<span class="c1"># Expected: {"enabled": true}</span>
+</code></pre></div>
+<p><code>{"enabled": false}</code> means SSO is turned off. An HTTP 500 error instead of JSON means SSO is turned on but the configuration was rejected; the log line <code>Configuration rejected: …</code> before <code>[500] CONFIG_ERROR</code> names the option.</p>
+<p>Open the LuCI login page at the host name used in the Redirect URI; the login fails with <code>MISSING_HANDSHAKE_COOKIE</code> if it starts at a different address. The <strong>Login with SSO</strong> button should appear. Clicking it opens Pocket ID's "Sign in to luci-router" page. Click <strong>Sign in</strong> and use your passkey. The first time, Pocket ID asks the user to approve the information the router requests (email, profile and, for group mapping, groups). It remembers the answer. To skip this approval, turn on <strong>Skip Consent Screen</strong> on the client.</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<div class="tabbed-set tabbed-alternate" data-tabs="5:2"><input checked="checked" id="__tabbed_5_1" name="__tabbed_5" type="radio" /><input id="__tabbed_5_2" name="__tabbed_5" type="radio" /><div class="tabbed-labels"><label for="__tabbed_5_1">Browser (LuCI)</label><label for="__tabbed_5_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Status &gt; System Log</strong> and filter for <code>luci-sso</code>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>logread<span class="w"> </span>-e<span class="w"> </span>luci-sso<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-30
+</code></pre></div>
+</div>
+</div>
+</div>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Symptom</th>
+<th style="text-align: left;">Likely cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">A message under <strong>Login with SSO</strong> says "The identity provider is not responding"</td>
+<td style="text-align: left;">The browser cannot reach the IdP; the router has no error to log. Open <code>https://id.example.com/.well-known/openid-configuration</code> in the same browser, on the same device. See <a href="../../sysadmin/debugging/#the-sso-button-says-the-identity-provider-is-not-responding">The SSO button says the identity provider is not responding</a>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[502] OIDC_DISCOVERY_FAILED</code>, preceded by <code>DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"</code></td>
+<td style="text-align: left;"><code>issuer_url</code> must be the base URL of your Pocket ID instance (<code>https://id.example.com</code>), with no path and no trailing slash. It must use the host name Pocket ID is configured with, not an IP address or another alias. Pocket ID's issuer is its <code>APP_URL</code> setting; copy it exactly.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[500] CONFIG_ERROR</code>, preceded by <code>Configuration rejected: &lt;reason&gt;</code></td>
+<td style="text-align: left;">A required option is missing or invalid; the reason names it. <code>redirect_uri is mandatory and must use HTTPS</code> means <code>redirect_uri</code> was never saved: set it with the <code>uci set luci-sso.default.redirect_uri=…</code> command from Step 2.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[401] MISSING_HANDSHAKE_COOKIE</code></td>
+<td style="text-align: left;">The login started at a different host name than the one in the Redirect URI. Open LuCI at the Redirect URI's host and try again.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[403] USER_NOT_AUTHORIZED</code>, preceded by <code>Ignoring the unverified email of user [sub_id: …] for role matching</code></td>
+<td style="text-align: left;">The user's email is not marked as verified in Pocket ID. Mark it as described in <a href="#map-by-email">Map by email</a>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[403] USER_NOT_AUTHORIZED</code>, preceded by <code>User [sub_id: …] matched no roles</code></td>
+<td style="text-align: left;">Authentication succeeded but no role matched. If using group mapping, check that <strong>Scopes</strong> includes <code>groups</code> and that the role uses the group's <strong>Name</strong> exactly as Pocket ID shows it; group matching is case-sensitive.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[400] IDP_ERROR</code>, preceded by <code>IDP_ERROR: the IdP returned error=&lt;error&gt; (&lt;description&gt;)</code></td>
+<td style="text-align: left;">Pocket ID refused the authorization request and sent the reason back to the router. The line gives Pocket ID's reason.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[502] TOKEN_EXCHANGE_FAILED</code>, preceded by <code>Token exchange HTTP 401</code></td>
+<td style="text-align: left;">Pocket ID rejected the client secret. Check <code>client_secret</code>, or add a new secret on the client's <strong>Credentials</strong> tab if the old one expired or was deleted.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[502] OIDC_DISCOVERY_FAILED</code>, preceded by <code>Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (CERT_UNTRUSTED)</code></td>
+<td style="text-align: left;">The router does not trust Pocket ID's TLS certificate. See <a href="../../sysadmin/install-ca-certificate/">How to Install a Private CA Certificate</a>.</td>
+</tr>
+<tr>
+<td style="text-align: left;">Pocket ID shows "You are not allowed to access this service."</td>
+<td style="text-align: left;">The client's <strong>Allowed User Groups</strong> does not include any of the user's groups. A new client allows no group at all. Add the user's group, or click <strong>Unrestrict</strong>. The router logs no <code>OIDC callback received</code> line.</td>
+</tr>
+<tr>
+<td style="text-align: left;">Pocket ID shows "The redirect_uri '…' is not registered for this client."</td>
+<td style="text-align: left;">The router's <code>redirect_uri</code> does not exactly match an entry in the client's <strong>Callback URLs</strong>.</td>
+</tr>
+<tr>
+<td style="text-align: left;">The login stops at Pocket ID with "The passkey prompt was canceled or timed out"</td>
+<td style="text-align: left;">The user has no passkey registered in Pocket ID on this device. The router logs no <code>OIDC callback received</code> line.</td>
+</tr>
+</tbody>
+</table>
+<p>For a full list of error codes, see the <a href="../../../reference/log-messages/">Log Messages Reference</a>. For every check <code>luci-sso</code> makes of an identity provider, and the error each failure logs, see <a href="../../../reference/provider-compatibility/">Provider Compatibility</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../../..", "features": ["announce.dismiss", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>

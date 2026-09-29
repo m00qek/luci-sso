@@ -1,0 +1,2256 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.">
+      
+      
+      
+        <link rel="canonical" href="https://m00qek.github.io/luci-sso/how-to/providers/authelia/">
+      
+      
+        <link rel="prev" href="../google/">
+      
+      
+        <link rel="next" href="../keycloak/">
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.5.3, mkdocs-material-9.5.17">
+    
+    
+      
+        <title>Authelia - LuCI SSO</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.bcfcd587.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.06af60db.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce((e,_)=>(e<<5)-e+_.charCodeAt(0),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#how-to-configure-authelia" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+        <aside class="md-banner">
+          <div class="md-banner__inner md-grid md-typeset">
+            
+              <button class="md-banner__button md-icon" aria-label="Don't show this again">
+                
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+              </button>
+            
+            
+  <strong>Beta:</strong> This project and its documentation are under active development. APIs and configuration options may change before the 1.0 release.
+
+          </div>
+          
+            <script>var content,el=document.querySelector("[data-md-component=announce]");el&&(content=el.querySelector(".md-typeset"),__md_hash(content.innerHTML)===__md_get("__announce")&&(el.hidden=!0))</script>
+          
+        </aside>
+      
+    </div>
+    
+    
+      
+
+<header class="md-header" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="LuCI SSO" class="md-header__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3V6m0 5h18v2H3v-2m0 5h18v2H3v-2Z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            LuCI SSO
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Authelia
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12c0-2.42-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12 20 8.69Z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var media,input,key,value,palette=__md_get("__palette");if(palette&&palette.color){"(prefers-color-scheme)"===palette.color.media&&(media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']"),palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent"));for([key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      <label class="md-header__button md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+      </label>
+      <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.516 6.516 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5Z"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11h12Z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+    
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+            
+<nav class="md-tabs" aria-label="Tabs" data-md-component="tabs">
+  <div class="md-grid">
+    <ul class="md-tabs__list">
+      
+        
+  
+  
+  
+    <li class="md-tabs__item">
+      <a href="../../.." class="md-tabs__link">
+        
+  
+    
+  
+  Welcome
+
+      </a>
+    </li>
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../tutorials/" class="md-tabs__link">
+          
+  
+  Tutorials
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+    
+  
+  
+    
+    
+      <li class="md-tabs__item md-tabs__item--active">
+        <a href="../../" class="md-tabs__link">
+          
+  
+  How-to Guides
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../reference/" class="md-tabs__link">
+          
+  
+  Reference
+
+        </a>
+      </li>
+    
+  
+
+      
+        
+  
+  
+  
+    
+    
+      <li class="md-tabs__item">
+        <a href="../../../explanation/" class="md-tabs__link">
+          
+  
+  Explanation
+
+        </a>
+      </li>
+    
+  
+
+      
+    </ul>
+  </div>
+</nav>
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+  
+
+
+<nav class="md-nav md-nav--primary md-nav--lifted" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="LuCI SSO" class="md-nav__button md-logo" aria-label="LuCI SSO" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54Z"/></svg>
+
+    </a>
+    LuCI SSO
+  </label>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Welcome
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Tutorials
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            Tutorials
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/first-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Public IdP)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/pocket-id-sso-login/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    First SSO Login (Self-hosted)
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../tutorials/dev-onboarding/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Developer Onboarding
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+        
+        
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    How-to Guides
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            How-to Guides
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3_2" id="__nav_3_2_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Providers
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3_2">
+            <span class="md-nav__icon md-icon"></span>
+            Providers
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../generic-oidc/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Generic OIDC Provider
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../google/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Google
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  <span class="md-ellipsis">
+    Authelia
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  <span class="md-ellipsis">
+    Authelia
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-register-an-oidc-client-in-authelia" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Register an OIDC client in Authelia
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-configure-the-router" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Configure the router
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-configure-role-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Configure role mapping
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Configure role mapping">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#map-by-email" class="md-nav__link">
+    <span class="md-ellipsis">
+      Map by email
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#map-by-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      Map by group
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Verify
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Troubleshooting
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../keycloak/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Keycloak
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../authentik/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Authentik
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../pocket-id/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Pocket ID
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_3" id="__nav_3_3_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Sysadmin
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_3">
+            <span class="md-nav__icon md-icon"></span>
+            Sysadmin
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/installation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/build-from-source/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Building from Source
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/configure-in-luci/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Configuring in LuCI
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/install-ca-certificate/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Installing a Private CA Certificate
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/upgrade/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Upgrading
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/rotate-credentials/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Rotating Credentials
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/rbac/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Role-Based Access Control
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/split-horizon/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Split-Horizon Networking
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/reverse-proxy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running Behind a Reverse Proxy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/debugging/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Debugging
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/backup-restore/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Backing Up and Restoring
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../sysadmin/uninstall/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Removing luci-sso
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+          
+          
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_3_4" id="__nav_3_4_label" tabindex="">
+            
+  
+  <span class="md-ellipsis">
+    Developer
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_3_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3_4">
+            <span class="md-nav__icon md-icon"></span>
+            Developer
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/development-workflow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Development Workflow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/adding-crypto-backend/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding a New Crypto Backend
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/testing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running Tests
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/fuzzing/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Running the Fuzzer
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/documentation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Writing Documentation
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../developer/adding-documented-interfaces/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Adding Error Codes, Limits, and Cookies
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Reference
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            Reference
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/log-messages/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Log Messages
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/http-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    HTTP API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/uci-config/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    UCI Configuration
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/provider-compatibility/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Provider Compatibility
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/internal-api/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Internal API
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/style-guide/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Style Guide
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/testing-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Testing Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/rfc-compliance/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    RFC Compliance
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../reference/devenv-targets/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Makefile Targets
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+      
+      
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  <span class="md-ellipsis">
+    Explanation
+  </span>
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            Explanation
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    Overview
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/about/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About LuCI SSO
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/design-philosophy/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Design Philosophy
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/crypto-backends/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About Crypto Backends
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/test-architecture/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Test Architecture
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/oidc-flow/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the OIDC Login Flow
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/session-lifecycle/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Session Lifecycle
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/roles-and-permissions/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About Roles and Permissions
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/security-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Security Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../explanation/threat-model/" class="md-nav__link">
+        
+  
+  <span class="md-ellipsis">
+    About the Threat Model
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-register-an-oidc-client-in-authelia" class="md-nav__link">
+    <span class="md-ellipsis">
+      1. Register an OIDC client in Authelia
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-configure-the-router" class="md-nav__link">
+    <span class="md-ellipsis">
+      2. Configure the router
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-configure-role-mapping" class="md-nav__link">
+    <span class="md-ellipsis">
+      3. Configure role mapping
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Configure role mapping">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#map-by-email" class="md-nav__link">
+    <span class="md-ellipsis">
+      Map by email
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#map-by-group" class="md-nav__link">
+    <span class="md-ellipsis">
+      Map by group
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      4. Verify
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      Troubleshooting
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+<h1 id="how-to-configure-authelia">How to Configure Authelia<a class="headerlink" href="#how-to-configure-authelia" title="Permanent link">&para;</a></h1>
+<p>This guide describes how to connect <code>luci-sso</code> to an <a href="https://www.authelia.com/">Authelia</a> instance.</p>
+<p>The configuration and screenshot were checked against Authelia 4.39.28. Key names can differ in other releases.</p>
+<hr />
+<h2 id="1-register-an-oidc-client-in-authelia">1. Register an OIDC client in Authelia<a class="headerlink" href="#1-register-an-oidc-client-in-authelia" title="Permanent link">&para;</a></h2>
+<p>Generate a client secret and its hash:</p>
+<div class="highlight"><pre><span></span><code>authelia<span class="w"> </span>crypto<span class="w"> </span><span class="nb">hash</span><span class="w"> </span>generate<span class="w"> </span>pbkdf2<span class="w"> </span>--variant<span class="w"> </span>sha512<span class="w"> </span>--random<span class="w"> </span>--random.length<span class="w"> </span><span class="m">72</span><span class="w"> </span>--random.charset<span class="w"> </span>rfc3986
+</code></pre></div>
+<p>The command prints a <code>Random Password</code> (the plaintext secret, for the router) and a <code>Digest</code> (the hash, for Authelia). To hash a secret you already have, use <code>--password '&lt;your-secret&gt;'</code> in place of the three <code>--random</code> options. If Authelia runs in Docker, prefix the command with <code>docker run --rm authelia/authelia:latest</code>.</p>
+<p>Add the client to your Authelia <code>configuration.yml</code>, with the digest as <code>client_secret</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">identity_providers</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">oidc</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">claims_policies</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">luci_sso</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">id_token</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">'email'</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">'email_verified'</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">'name'</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">'groups'</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">clients</span><span class="p">:</span>
+<span class="w">      </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">client_id</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">luci-router</span>
+<span class="w">        </span><span class="nt">client_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OpenWrt Router</span>
+<span class="w">        </span><span class="nt">client_secret</span><span class="p">:</span><span class="w"> </span><span class="s">'$pbkdf2-sha512$310000$...'</span><span class="w">  </span><span class="c1"># the Digest, not the plaintext</span>
+<span class="w">        </span><span class="nt">public</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">        </span><span class="nt">authorization_policy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">one_factor</span>
+<span class="w">        </span><span class="nt">redirect_uris</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://&lt;YOUR_ROUTER_IP_OR_DOMAIN&gt;/cgi-bin/luci-sso/callback</span>
+<span class="w">        </span><span class="nt">scopes</span><span class="p">:</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openid</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">profile</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">email</span>
+<span class="w">          </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">groups</span>
+<span class="w">        </span><span class="nt">userinfo_signed_response_alg</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">none</span>
+<span class="w">        </span><span class="nt">token_endpoint_auth_method</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">client_secret_post</span>
+<span class="w">        </span><span class="nt">claims_policy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">luci_sso</span>
+</code></pre></div>
+<p><code>luci-sso</code> sends the client secret in the token request body (<code>client_secret_post</code>). Keep the <code>token_endpoint_auth_method</code> line: without it, Authelia accepts only <code>client_secret_basic</code> and rejects the router's token request with HTTP 401.</p>
+<p>By default Authelia leaves <code>email</code> and <code>groups</code> out of the ID Token and returns them only from its UserInfo endpoint. <code>luci-sso</code> then fetches UserInfo on every login, which works while <code>userinfo_signed_response_alg</code> is <code>none</code> (the default). The <code>luci_sso</code> claims policy puts them in the ID Token, so no UserInfo request is needed. Keep <code>email_verified</code> in its list: an email in the ID Token counts for role matching only with the ID Token's own <code>email_verified</code> claim (see <a href="#map-by-email">Map by email</a>).</p>
+<p>Optional settings for the client:</p>
+<ul>
+<li><code>require_pkce: true</code> and <code>pkce_challenge_method: S256</code> make Authelia refuse any login without PKCE. <code>luci-sso</code> always sends an S256 challenge.</li>
+<li>Authelia asks the user to consent on every login. To let users tick <strong>Remember Consent</strong>, add <code>consent_mode: pre-configured</code> and <code>pre_configured_consent_duration: 1y</code> (any duration).</li>
+</ul>
+<p><img alt="Authelia consent page for Alice Example. The OpenWrt Router client, luci-router, requests the openid, profile, email and groups scopes. Below are a Remember Consent switch, which appears with consent_mode pre-configured, and the Accept and Deny buttons." src="../../../assets/screenshots/idp/authelia-consent.png" title="The consent page on the first SSO login" /></p>
+<p>Restart Authelia after saving the configuration: it reads the file only at start.</p>
+<hr />
+<h2 id="2-configure-the-router">2. Configure the router<a class="headerlink" href="#2-configure-the-router" title="Permanent link">&para;</a></h2>
+<p>The <strong>Client Secret</strong> is the <strong>plaintext</strong> secret — Authelia stores the hash, but the router presents the plaintext during token exchange.</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="1:2"><input checked="checked" id="__tabbed_1_1" name="__tabbed_1" type="radio" /><input id="__tabbed_1_2" name="__tabbed_1" type="radio" /><div class="tabbed-labels"><label for="__tabbed_1_1">Browser (LuCI)</label><label for="__tabbed_1_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Services &gt; Single Sign-On</strong>.</p>
+<p>Fill in the <strong>Settings</strong> section:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Field</th>
+<th style="text-align: left;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><strong>Enable SSO</strong></td>
+<td style="text-align: left;">On</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Issuer URL</strong></td>
+<td style="text-align: left;"><code>https://auth.example.com</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Client ID</strong></td>
+<td style="text-align: left;"><code>luci-router</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Client Secret</strong></td>
+<td style="text-align: left;">Your plaintext secret</td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Redirect URI</strong></td>
+<td style="text-align: left;"><code>https://&lt;YOUR_ROUTER_IP_OR_DOMAIN&gt;/cgi-bin/luci-sso/callback</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Scopes</strong></td>
+<td style="text-align: left;"><code>openid profile email groups</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><strong>Clock Tolerance</strong></td>
+<td style="text-align: left;"><code>60</code></td>
+</tr>
+</tbody>
+</table>
+<p>The Redirect URI must exactly match the value in the Authelia client config.</p>
+<p>Click <strong>Save &amp; Apply</strong>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.issuer_url<span class="o">=</span><span class="s1">'https://auth.example.com'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.client_id<span class="o">=</span><span class="s1">'luci-router'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.client_secret<span class="o">=</span><span class="s1">'&lt;YOUR_PLAINTEXT_SECRET&gt;'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.redirect_uri<span class="o">=</span><span class="s1">'https://&lt;YOUR_ROUTER_IP_OR_DOMAIN&gt;/cgi-bin/luci-sso/callback'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.scope<span class="o">=</span><span class="s1">'openid profile email groups'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.clock_tolerance<span class="o">=</span><span class="s1">'60'</span>
+uci<span class="w"> </span><span class="nb">set</span><span class="w"> </span>luci-sso.default.enabled<span class="o">=</span><span class="s1">'1'</span>
+uci<span class="w"> </span>commit<span class="w"> </span>luci-sso
+</code></pre></div>
+<p>The <code>redirect_uri</code> must exactly match the value in the Authelia client config.</p>
+</div>
+</div>
+</div>
+<p>The <strong>Issuer URL</strong> is the <code>authelia_url</code> of the session cookie that covers Authelia's domain in <code>configuration.yml</code>, exactly: same host and port, no path and no trailing slash. Authelia answers discovery requests for other host names with HTTP 400.</p>
+<hr />
+<h2 id="3-configure-role-mapping">3. Configure role mapping<a class="headerlink" href="#3-configure-role-mapping" title="Permanent link">&para;</a></h2>
+<p>A role says which users it matches, by email or by group. What the role may do on the router is its <code>rpcd</code> login entry. On a fresh install, the shipped <code>admin</code> role grants full access. To give some users less, add a role with its own <strong>Read Access</strong> and <strong>Write Access</strong>, as described in <a href="../../sysadmin/rbac/">How to Configure Role-Based Access Control</a>. A user gets the first role that matches, from the top.</p>
+<h3 id="map-by-email">Map by email<a class="headerlink" href="#map-by-email" title="Permanent link">&para;</a></h3>
+<div class="tabbed-set tabbed-alternate" data-tabs="2:2"><input checked="checked" id="__tabbed_2_1" name="__tabbed_2" type="radio" /><input id="__tabbed_2_2" name="__tabbed_2" type="radio" /><div class="tabbed-labels"><label for="__tabbed_2_1">Browser (LuCI)</label><label for="__tabbed_2_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Services &gt; Single Sign-On</strong> and scroll to the <strong>Users</strong> section.</p>
+<p>Click <strong>Edit</strong> in the <code>admin</code> row. In <strong>Email Addresses</strong>, replace the placeholder <code>admin@example.com</code> with the user's email address, then click <strong>Save</strong> in the editor.</p>
+<p>Click <strong>Save &amp; Apply</strong>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>uci<span class="w"> </span>-q<span class="w"> </span>del_list<span class="w"> </span>luci-sso.admin.email<span class="o">=</span><span class="s1">'admin@example.com'</span>
+uci<span class="w"> </span>add_list<span class="w"> </span>luci-sso.admin.email<span class="o">=</span><span class="s1">'user@example.com'</span>
+uci<span class="w"> </span>commit<span class="w"> </span>luci-sso
+</code></pre></div>
+</div>
+</div>
+</div>
+<p>An email matches only if Authelia marks it as verified, with <code>email_verified: true</code> next to it. Authelia does so for every user, but only where it sends the email: in UserInfo, or in the ID Token when the claims policy lists <code>email_verified</code>. With a claims policy that lists <code>email</code> without <code>email_verified</code>, the login fails with <code>[403] USER_NOT_AUTHORIZED</code> unless a group matches. Authelia does not check addresses itself, so <code>true</code> means the address in its user database, which an administrator controls.</p>
+<h3 id="map-by-group">Map by group<a class="headerlink" href="#map-by-group" title="Permanent link">&para;</a></h3>
+<p>Authelia returns the user's groups from its authentication backend (file or LDAP) in the <code>groups</code> claim: in the ID Token with the <code>luci_sso</code> claims policy from Step 1, otherwise through UserInfo. The group name must exactly match the name as Authelia returns it (case-sensitive).</p>
+<div class="tabbed-set tabbed-alternate" data-tabs="3:2"><input checked="checked" id="__tabbed_3_1" name="__tabbed_3" type="radio" /><input id="__tabbed_3_2" name="__tabbed_3" type="radio" /><div class="tabbed-labels"><label for="__tabbed_3_1">Browser (LuCI)</label><label for="__tabbed_3_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Services &gt; Single Sign-On</strong> and scroll to the <strong>Users</strong> section.</p>
+<p>Click <strong>Edit</strong> in the <code>admin</code> row. In <strong>Groups</strong>, enter the group name, then click <strong>Save</strong> in the editor.</p>
+<p>Click <strong>Save &amp; Apply</strong>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>uci<span class="w"> </span>add_list<span class="w"> </span>luci-sso.admin.group<span class="o">=</span><span class="s1">'router-admins'</span>
+uci<span class="w"> </span>commit<span class="w"> </span>luci-sso
+</code></pre></div>
+</div>
+</div>
+</div>
+<hr />
+<h2 id="4-verify">4. Verify<a class="headerlink" href="#4-verify" title="Permanent link">&para;</a></h2>
+<p>Check that the service is active. On the router:</p>
+<div class="highlight"><pre><span></span><code>uclient-fetch<span class="w"> </span>-q<span class="w"> </span>-O<span class="w"> </span>-<span class="w"> </span>--no-check-certificate<span class="w"> </span><span class="s1">'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'</span>
+<span class="c1"># Expected: {"enabled": true}</span>
+</code></pre></div>
+<p><code>{"enabled": false}</code> means SSO is turned off. An HTTP 500 error instead of JSON means SSO is turned on but the configuration was rejected; the log line <code>Configuration rejected: …</code> before <code>[500] CONFIG_ERROR</code> names the option.</p>
+<p>Navigate to the LuCI login page. The <strong>Login with SSO</strong> button should appear. Clicking it redirects to your Authelia instance. After the user signs in, Authelia shows the consent page from Step 1, then returns to the router.</p>
+<p>Authelia has no end-session endpoint, so LuCI's <strong>Log out</strong> ends the router session only. The Authelia session stays, and the next <strong>Login with SSO</strong> does not ask for a password. To end the Authelia session too, open <code>https://auth.example.com/logout</code>.</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<div class="tabbed-set tabbed-alternate" data-tabs="4:2"><input checked="checked" id="__tabbed_4_1" name="__tabbed_4" type="radio" /><input id="__tabbed_4_2" name="__tabbed_4" type="radio" /><div class="tabbed-labels"><label for="__tabbed_4_1">Browser (LuCI)</label><label for="__tabbed_4_2">Terminal (SSH)</label></div>
+<div class="tabbed-content">
+<div class="tabbed-block">
+<p>Navigate to <strong>Status &gt; System Log</strong> and filter for <code>luci-sso</code>.</p>
+</div>
+<div class="tabbed-block">
+<div class="highlight"><pre><span></span><code>logread<span class="w"> </span>-e<span class="w"> </span>luci-sso<span class="w"> </span><span class="p">|</span><span class="w"> </span>tail<span class="w"> </span>-30
+</code></pre></div>
+</div>
+</div>
+</div>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">Symptom</th>
+<th style="text-align: left;">Likely cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">A message under <strong>Login with SSO</strong> says "The identity provider is not responding"</td>
+<td style="text-align: left;">The browser cannot reach the IdP; the router has no error to log. Open <code>https://auth.example.com/.well-known/openid-configuration</code> in the same browser, on the same device. See <a href="../../sysadmin/debugging/#the-sso-button-says-the-identity-provider-is-not-responding">The SSO button says the identity provider is not responding</a>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[502] OIDC_DISCOVERY_FAILED</code>, preceded by <code>Discovery fetch failed for [id: …]: …</code></td>
+<td style="text-align: left;">The router cannot reach <code>auth.example.com</code>; the end of the line names the cause. Test from the router with <code>uclient-fetch -q -O - 'https://auth.example.com/.well-known/openid-configuration'</code>. If the line ends in <code>HTTP_REQUEST_FAILED (CERT_UNTRUSTED)</code>, the router does not trust Authelia's certificate; see <a href="../../sysadmin/install-ca-certificate/">How to Install a Private CA Certificate</a>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[502] OIDC_DISCOVERY_FAILED</code>, preceded by <code>Discovery fetch HTTP 400 from [id: …]</code></td>
+<td style="text-align: left;"><code>issuer_url</code> is not the <code>authelia_url</code> of any session cookie in Authelia's configuration (a different host name, a port, or an IP address). Authelia logs <code>no session cookie configuration matches url '…'</code>. Set <code>issuer_url</code> to the <code>authelia_url</code> exactly.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[502] OIDC_DISCOVERY_FAILED</code>, preceded by <code>DISCOVERY_ISSUER_MISMATCH: issuer_url is "…" but the discovery document declares "…"</code></td>
+<td style="text-align: left;"><code>issuer_url</code> differs from the issuer Authelia declares, even if only by a trailing slash or letter case. Copy the declared value into <code>issuer_url</code> exactly.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[500] CONFIG_ERROR</code>, preceded by <code>Configuration rejected: redirect_uri is mandatory and must use HTTPS</code></td>
+<td style="text-align: left;"><code>redirect_uri</code> was never saved. Set it with <code>uci set luci-sso.default.redirect_uri='https://&lt;YOUR_ROUTER_IP_OR_DOMAIN&gt;/cgi-bin/luci-sso/callback'</code> and <code>uci commit luci-sso</code>. Other <code>Configuration rejected</code> reasons name the option to fix.</td>
+</tr>
+<tr>
+<td style="text-align: left;">Authelia shows "An error occurred processing the request" with the hint "The 'redirect_uri' parameter does not match any of the OAuth 2.0 Client's pre-registered 'redirect_uris'"</td>
+<td style="text-align: left;">The <code>redirect_uri</code> in UCI does not exactly match a <code>redirect_uris</code> entry in Authelia's client config. The router logs no <code>OIDC callback received</code> line.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[502] TOKEN_EXCHANGE_FAILED</code>, preceded by <code>Token exchange HTTP 401</code></td>
+<td style="text-align: left;">Authelia rejected the client credentials: the client secret is wrong (UCI needs the plaintext, Authelia the hash), or the client config has no <code>token_endpoint_auth_method: client_secret_post</code> line (Authelia logs <code>… is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'</code>).</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>UserInfo fallback failed [session_id: …]: USERINFO_INVALID_JSON</code>, then <code>[403] USER_NOT_AUTHORIZED</code></td>
+<td style="text-align: left;">Authelia returned a signed UserInfo response, which <code>luci-sso</code> cannot read, so the email and groups it carries are lost. Set <code>userinfo_signed_response_alg: none</code> on the client, or add the <code>luci_sso</code> claims policy from Step 1 so that UserInfo is not needed, and restart Authelia.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[403] USER_NOT_AUTHORIZED</code>, preceded by <code>Ignoring the unverified email of user [sub_id: …] for role matching</code></td>
+<td style="text-align: left;">The claims policy puts <code>email</code> in the ID Token without <code>email_verified</code>. Add <code>'email_verified'</code> to its <code>id_token</code> list, as in Step 1, and restart Authelia.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[403] USER_NOT_AUTHORIZED</code>, preceded by <code>User [sub_id: …] matched no roles</code></td>
+<td style="text-align: left;">The user's email or group does not match any configured role. Email matching ignores case; group matching is case-sensitive, so check the group name exactly.</td>
+</tr>
+</tbody>
+</table>
+<p>For a full list of error codes, see the <a href="../../../reference/log-messages/">Log Messages Reference</a>. For every check <code>luci-sso</code> makes of an identity provider, and the error each failure logs, see <a href="../../../reference/provider-compatibility/">Provider Compatibility</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12Z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    <script id="__config" type="application/json">{"base": "../../..", "features": ["announce.dismiss", "navigation.tabs", "navigation.sections", "navigation.top", "search.suggest", "search.highlight", "content.code.copy"], "search": "../../../assets/javascripts/workers/search.b8dbb3d2.min.js", "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.1e8ae164.min.js"></script>
+      
+    
+  </body>
+</html>
