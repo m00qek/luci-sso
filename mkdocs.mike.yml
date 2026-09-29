@@ -1,0 +1,21 @@
+# Configuration for the published, versioned site. mike builds with this file
+# (mike deploy -F mkdocs.mike.yml); everything else comes from mkdocs.yml.
+#
+# mkdocs.yml itself stays free of the mike plugin, so `make -C docs build` and
+# `make -C docs serve` run on the stock mkdocs-material image, without mike.
+INHERIT: mkdocs.yml
+
+plugins:
+  search: {}
+  mike:
+    # Every version names its /latest/ page as canonical, for search engines.
+    canonical_version: latest
+
+extra:
+  version:
+    # Material's version selector, which reads versions.json. It stays on
+    # while the mike plugin's version_selector is left at true.
+    provider: mike
+    # Pages of any other version show the "outdated" banner from
+    # docs/overrides/main.html.
+    default: latest

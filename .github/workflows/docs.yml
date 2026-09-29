@@ -1,11 +1,23 @@
 name: Publish Docs
+
+# The site has one version per minor release, published by mike to gh-pages:
+# https://m00qek.github.io/luci-sso/<X.Y>/, with /latest/ on the newest.
+#
+#   pull request, push to main   strict build only; nothing is published
+#   tag vX.Y.Z                   publishes the tag's docs as X.Y
+#   manual run                   publishes the docs of an existing tag again
+#
+# GitHub does not apply the paths filter to tag pushes: every tag publishes.
 on:
   push:
     branches:
       - main
+    tags:
+      - 'v*.*.*'
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'mkdocs.mike.yml'
       - '.github/workflows/docs.yml'
   pull_request:
     branches:
@@ -13,32 +25,61 @@ on:
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'mkdocs.mike.yml'
       - '.github/workflows/docs.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish, such as v0.10.1'
+        required: true
+
 permissions:
   contents: write
+
+env:
+  MKDOCS_MATERIAL_VERSION: '9.5.17'
+  MIKE_VERSION: '2.2.0'
+
 jobs:
-  deploy:
+  build:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - run: pip install "mkdocs-material==$MKDOCS_MATERIAL_VERSION" "mike==$MIKE_VERSION"
+      - name: Build Docs
+        run: mkdocs build --strict
+      - name: Build Docs with the versioned-site configuration
+        run: mkdocs build --strict -f mkdocs.mike.yml
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # One writer to gh-pages at a time.
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Tags and the gh-pages branch, which mike commits to.
+          fetch-depth: 0
       - name: Configure Git Credentials
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - run: echo "cache_id=$(date --utc +%V)" >> $GITHUB_ENV
-      - uses: actions/cache@v4
-        with:
-          key: mkdocs-material-${{ env.cache_id }}
-          path: .cache
-          restore-keys: |
-            mkdocs-material-
-      - run: pip install mkdocs-material==9.5.17
-      - name: Build Docs
-        run: mkdocs build --strict
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: mkdocs gh-deploy --force
+      - run: pip install "mkdocs-material==$MKDOCS_MATERIAL_VERSION" "mike==$MIKE_VERSION"
+      - name: Publish the tag's docs
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: devenv/scripts/docs-publish.sh --push "$TAG"
+      - name: Check the root 404 page
+        run: |
+          git cat-file -e origin/gh-pages:404.html ||
+            echo "::warning::gh-pages has no 404.html, so unversioned links are not redirected. See devenv/scripts/docs-backfill.sh."
