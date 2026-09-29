@@ -101,6 +101,8 @@ Values that come from the IdP or the browser, such as the declared issuer or the
 
 In discovery lines, `[id: …]` is the first 16 hex characters of the SHA-256 of `issuer_url`, exactly as configured. In JWKS lines, it is the same hash of the normalized `jwks_uri`: scheme and host in lower case, no `:443`, no trailing slash. In rate-limit lines, `[id: …]` is the same kind of hash of the client key, so no address is logged.
 
+Every hashed identifier (`[id: …]`, `[sub_id: …]`, `[oidc_id: …]`, `[session_id: …]`) reads `[INVALID]` when its value is missing, is not a string, or is shorter than 8 characters, and `[ERROR]` if hashing fails.
+
 To check which URL an id belongs to, hash the candidate on the router:
 
 ```bash

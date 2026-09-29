@@ -352,4 +352,4 @@ apk del luci-sso
 apk add --allow-untrusted /tmp/luci-sso-<old-version>.apk
 ```
 
-The removal copies each role's permissions back onto the role, `unauthenticated` included, and deletes the `luci_sso_*` entries. SSO users lose their rights at the removal and log in again. The old release then merges matching roles and gives `*` its old meaning. If you reduced `internal_issuer_url` to an origin in step 7 of [Before you upgrade](#before-you-upgrade-from-091-or-earlier), add the issuer's path back, or discovery fails on the old release.
+The removal copies each role's permissions back onto the role, `unauthenticated` included, and deletes the `luci_sso_*` entries. SSO users lose their rights at the removal and log in again. The old release then merges matching roles and gives `*` its old meaning. If you reduced `internal_issuer_url` to an origin in step 7 of [Before you upgrade](#before-you-upgrade-from-091-or-earlier), add the issuer's path back, or discovery fails on the old release, possibly only after the next reboot: 0.9.1 keeps using its cached discovery document until then.
