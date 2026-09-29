@@ -33,6 +33,8 @@ The error codes are grouped by the step of the login where they occur. Find the 
 | [Role Lines](#role-lines) | Lines without a code about roles and their `rpcd` login entries, at login, at install, upgrade and removal |
 | [System Errors](#system-errors) | Transport, crypto, rate-limit and input-size failures at any step |
 
+Every line `luci-sso` writes, with or without a code, is listed in [Every Log Line](#every-log-line), so the text of any line can be looked up there.
+
 ---
 
 ## How codes appear in the log
@@ -152,13 +154,13 @@ A cached copy (24 hours) is used when present. When the IdP is unreachable, an e
 
 Notes:
 
-- `DISCOVERY_ISSUER_MISMATCH`: the comparison is exact (OIDC Discovery §4.3). A trailing slash, a letter-case difference or an explicit `:443` is a mismatch. When that is the only difference, the line adds a hint before `[id: …]`:
+- `DISCOVERY_ISSUER_MISMATCH`: the comparison is exact (OIDC Discovery §4.3). A trailing slash, a letter-case difference or an explicit `:443` is a mismatch. When the only difference is a trailing slash, letter case in the scheme or host, or the default port, the line adds a hint before `[id: …]`:
 
     ```
     DISCOVERY_ISSUER_MISMATCH: issuer_url is "https://id.example.com/" but the discovery document declares "https://id.example.com"; they differ only in a trailing slash, letter case or default port: set issuer_url to exactly the declared value [id: …]
     ```
 
-    Copy the declared value into `issuer_url`. The code can also appear as the detail of `ID_TOKEN_VERIFICATION_FAILED`.
+    A case difference in the path, such as in a Keycloak realm name, gets no hint. Copy the declared value into `issuer_url`. The code is also kept as a detail of `ID_TOKEN_VERIFICATION_FAILED`, as a backstop that is not expected in practice: discovery already refuses a fetched or cached document whose `issuer` differs.
 
 ---
 
@@ -257,7 +259,7 @@ luci-sso[1234]: OAuth flow failed [session_id: 1a2b...]: ID_TOKEN_VERIFICATION_F
 luci-sso[1234]: [401] ID_TOKEN_VERIFICATION_FAILED
 ```
 
-Codes from the [Token Validation Errors](#token-validation-errors) table can also appear here, as can `DISCOVERY_ISSUER_MISMATCH` (when the cached discovery document's issuer no longer matches) and `CRYPTO_ERROR`.
+Codes from the [Token Validation Errors](#token-validation-errors) table can also appear here, as can `CRYPTO_ERROR`, and `DISCOVERY_ISSUER_MISMATCH`, which is kept as a backstop and not expected in practice (see [Discovery Errors](#discovery-errors)).
 
 The tables below have no **In the log** column: every code in them is logged only as the detail of `ID_TOKEN_VERIFICATION_FAILED`.
 
@@ -332,7 +334,7 @@ A failure here does not stop the login. It is logged as a warning, and the login
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `INSECURE_USERINFO_ENDPOINT` | The UserInfo endpoint is not HTTPS | Discovery drops a plain-HTTP UserInfo endpoint first and logs `Insecure userinfo_endpoint ignored`. | In `UserInfo fallback failed [session_id: …]: <CODE>` |
+| `INSECURE_USERINFO_ENDPOINT` | The UserInfo endpoint is not HTTPS | Discovery drops a plain-HTTP UserInfo endpoint first and logs `Insecure userinfo_endpoint ignored`, so the request is skipped. When roles match by email, the login usually ends in `USER_NOT_AUTHORIZED`. | Not logged |
 | `USERINFO_FETCH_FAILED` | The UserInfo endpoint returned a status other than 200 | The IdP rejected the request. Usually a scope or permission issue. | In `UserInfo fallback failed`, preceded by `UserInfo fetch HTTP <status>` |
 | `USERINFO_NETWORK_ERROR` | The UserInfo request did not complete | Transport failure before any HTTP response. | In `UserInfo fallback failed`, preceded by `UserInfo fetch network error: HTTP_REQUEST_FAILED (<cause>)` |
 | `USERINFO_INVALID_JSON` | The UserInfo response is not valid JSON | The IdP returned a malformed UserInfo response. | In `UserInfo fallback failed`, preceded by `UserInfo JSON parse error: …` |
@@ -388,7 +390,7 @@ Logged by the CGI script under `luci-sso[<pid>]`.
 | :--- | :--- | :--- |
 | `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | `require_email_verified` is on and the email arrived without `email_verified: true`, so only the user's groups were matched. Followed by `matched no roles` when no group matched. See [Provider Compatibility](provider-compatibility.md#verified-email). |
 | `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | The user got `<role>`. When other roles matched too, the line reads `mapped to role '<role>', the first match; also matched: <role>, <role>`. |
-| `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. |
+| `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. `[oidc_id: …]` is a hash of the user's email, or `[INVALID]` for a user without one, such as a user matched by group whose IdP sends no email. |
 | `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | A plain name in the entry's `read` or `write` list matches no access group. It grants nothing. Globs and negations are not checked. |
 | `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | The role in `/etc/config/luci-sso` still has `read` or `write` options, which grant nothing. |
 | `Ignoring role '<role>': missing email or group list` | warn | The role has neither an `email` nor a `group` value. |
@@ -403,7 +405,7 @@ Logged by the package's scripts with `logger -t luci-sso -p user.warn`, so they 
 | `role '<role>' has no rpcd login entry: <reason>; its users cannot log in` | Install or upgrade. A role without lists or entry has a name the entry cannot use. | Rename the role (letters, digits and underscores, at most 32). The line comes back on every upgrade until then. |
 | `role '<role>' had no permissions to move: its rpcd login entry grants nothing but 'unauthenticated'; set its permissions on the settings page` | Install or upgrade. The role had no lists and no entry, and is not the untouched shipped `admin` role. | Its users log in and see nothing. Set its permissions. |
 | `rpcd section 'luci_sso_<name>' has no luci-sso role to keep its permissions; deleted` | Removal. An entry has no role in `/etc/config/luci-sso`, or is not a login. | None. Its lists are gone. |
-| `could not write /etc/config/luci-sso: the rpcd login entries are kept` | Removal. The roles' permissions could not be saved back. | The `luci_sso_*` entries stay in `/etc/config/rpcd`. |
+| `could not write /etc/config/luci-sso: the rpcd login entries are kept`, followed by ucode's trace lines | Removal. The roles' permissions could not be saved back. | The `luci_sso_*` entries stay in `/etc/config/rpcd`. |
 
 ---
 
@@ -426,3 +428,159 @@ Notes:
 
 - `HTTP_REQUEST_FAILED`: the cause is one of `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE`, `UCLIENT_ERROR_<n>`, or, rarely, `REQUEST_START_FAILED`, `UCLIENT_ALLOC_FAILED` or `INVALID_DATA_TYPE`. See [How to Debug luci-sso](../how-to/sysadmin/debugging.md#a-back-channel-request-to-the-idp-failed) for what each means.
 - `CRYPTO_INIT_FAILED`: this can happen with any backend (mbedtls, wolfssl or openssl). At the callback, the same failure ends as `[500] UBUS_LOGIN_FAILED`.
+
+---
+
+## Every Log Line
+
+Every line `luci-sso` writes to the system log, in the order a login meets them. Lines about roles are explained in [Role Lines](#role-lines), and lines before a `[<status>]` line in the code tables above; the **Meaning** column links there.
+
+- **Level** is the syslog priority, as `logread` shows it after `user.`: `err`, `warn`, `info` or `debug`.
+- `…` stands for a hashed value (see [`[id: …]` values](#id-values)); `[sub_id: …]` is the same kind of hash of the user's `sub`, and `[session_id: …]` of the login's handshake, so one login's lines can be followed. `<text>` stands for a value.
+- The CGI script logs as `luci-sso[<pid>]`. The package's scripts log as `luci-sso` without a process ID; see [At install, upgrade and removal](#at-install-upgrade-and-removal).
+
+### Any request
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `[<status>] <CODE>` | err | The request failed with `<CODE>`. See [How codes appear in the log](#how-codes-appear-in-the-log). |
+| `Configuration rejected: <reason>` | err | Before `[500] CONFIG_ERROR`. See [Configuration Errors](#configuration-errors). |
+| `Router crash: <message>`, followed by a stack trace | err | An unexpected exception, answered with a 500 page. File a bug with the trace. |
+| `Login rate limit exceeded for client [id: …]: <count> in 300s [limit: 10]` | warn | Before `[429] TOO_MANY_REQUESTS`. See [System Errors](#system-errors). |
+| `Request rate limit exceeded for client [id: …]: <count> in 60s [limit: 30]` | warn | Before `[429] TOO_MANY_REQUESTS`. See [System Errors](#system-errors). |
+| `Rate limit state file is corrupt; starting from empty` | warn | `/var/run/luci-sso/ratelimit.json` could not be read as JSON, so every client's count starts again from zero. The request goes on. |
+| `Rate limit state not saved: CSPRNG failure` | err | This request's counts were not saved, so while this lasts the per-client budgets are not enforced across requests. The random number generator failed; see `CRYPTO_INIT_FAILED` in [System Errors](#system-errors). |
+| `Failed to write rate limit state file` | err | As above, because the new counts could not be written. Check free space in `/var/run/luci-sso/`. |
+| `Failed to install rate limit state file` | err | As above, because the new counts could not replace the old file. |
+| `Rate limit state write failed: <exception>` | err | As above, with the exception text. |
+
+### Login start
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Cleaned up <n> stale handshakes` | info | Before a login starts, `<n>` expired handshake files were removed. |
+| `Initiating OIDC login flow` | info | A login started. |
+| `Handshake capacity reached; removed <n> expired handshakes` | info | 500 logins were pending; expired ones were removed to make room, and the login goes on. |
+| `Handshake capacity reached (<n> pending, limit 500); refusing new login` | warn | Before `[503] HANDSHAKE_CAPACITY_EXCEEDED`. See [Login Initiation Errors](#login-initiation-errors). |
+| `CRITICAL: CSPRNG failure during handshake state generation` | err | Before `[500] CRYPTO_INIT_FAILED`. See [System Errors](#system-errors). |
+| `CRITICAL: b64url_encode failure during handshake state generation` | err | Before `[500] CRYPTO_INIT_FAILED`. Internal error; file a bug. |
+| `Failed to save handshake state (write): <error>`, `Failed to save handshake state (rename): <error>` or `Failed to save handshake state: <exception>` | err | Before `[500] STATE_SAVE_FAILED`. See [Login Initiation Errors](#login-initiation-errors). |
+| `Handshake state created [session_id: …]` | info | The handshake was saved, and the browser is sent to the IdP. |
+
+### Discovery and JWK Set
+
+These lines appear at login start, at the callback and at logout, whenever the discovery document or the JWK Set is needed. A discovery document read from a fresh cache logs nothing.
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Discovery successful for [id: …]` | info | The discovery document was fetched and passed every check. |
+| `Using stale discovery cache due to network failure [id: …]` | warn | The IdP could not be reached or answered an error, so an expired cached document is used. See [Discovery Errors](#discovery-errors). |
+| `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)` | warn | Before `[502] OIDC_DISCOVERY_FAILED`: `DISCOVERY_NETWORK_ERROR`. |
+| `Discovery fetch HTTP <status> from [id: …]` | warn | Before `[502] OIDC_DISCOVERY_FAILED`: `DISCOVERY_FAILED`. |
+| `Discovery JSON parse error: <detail>` | err | Before `[502] OIDC_DISCOVERY_FAILED`: `INVALID_DISCOVERY_DOC`. |
+| `Discovery document missing issuer field from [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`: `DISCOVERY_MISSING_ISSUER`. |
+| `DISCOVERY_ISSUER_MISMATCH: issuer_url is "<configured>" but the discovery document declares "<declared>" [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`. See [Discovery Errors](#discovery-errors). |
+| `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field> [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`. |
+| `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "<url>" [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`. |
+| `Insecure userinfo_endpoint ignored from [id: …]` | warn | The IdP advertises a plain-HTTP UserInfo endpoint. It is dropped, so UserInfo is never asked; a user whose ID Token has no email then matches only by group. |
+| `Insecure end_session_endpoint ignored from [id: …]` | warn | The IdP advertises a plain-HTTP `end_session_endpoint`. It is dropped, so **Log out** ends only the router session, not the IdP's. |
+| `JWKS loaded from cache for [id: …]` | info | The cached JWK Set, less than 24 hours old, is used. |
+| `Using stale JWKS cache due to network failure [id: …]` | warn | The IdP could not be reached or answered an error, so an expired cached JWK Set is used. |
+| `JWKS fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)` | warn | Before `[502] JWKS_FETCH_FAILED`: `JWKS_NETWORK_ERROR`. |
+| `JWKS fetch HTTP <status> from [id: …]` | warn | Before `[502] JWKS_FETCH_FAILED`. |
+| `JWKS JSON parse error: <detail>` | err | Before `[502] JWKS_FETCH_FAILED`: `INVALID_JWKS_FORMAT`. `Invalid structure` means valid JSON without a `keys` array. |
+| `JWKS successfully fetched: <n> keys from [id: …]` | info | The JWK Set was fetched from the IdP and cached. |
+| `Cache write aborted: CSPRNG failure` | err | The discovery document or JWK Set was fetched but not cached, so the next request fetches it again. The login goes on. |
+| `Cache write failure: <exception>` | err | As above, with the exception text. Check free space in `/var/run/luci-sso/`. |
+
+### Callback
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `OIDC callback received` | info | The browser came back from the IdP. |
+| `IDP_ERROR: the IdP returned error=<error> (<error_description>)` | warn | Before `[400] IDP_ERROR`. See [Callback Errors](#callback-errors). |
+| `Handshake state not found or already consumed [session_id: …]` | err | Before `[401] STATE_NOT_FOUND`. |
+| `Handshake state already consumed [session_id: …]` | err | Before `[401] STATE_NOT_FOUND`: two callbacks for the same login raced. |
+| `Handshake state corrupted [session_id: …]: <detail>` | err | Before `[401] STATE_CORRUPTED`: the file is not valid JSON. |
+| `Handshake state <problem> [session_id: …]` | err | Before `[401] STATE_CORRUPTED`. `<problem>` is `missing or invalid PKCE verifier`, `missing state parameter`, `missing nonce`, `missing or invalid 'exp'` or `missing or invalid 'iat'`. |
+| `Callback state does not match the handshake; handshake kept [session_id: …]` | warn | Before `[403] STATE_PARAMETER_MISMATCH`. |
+| `Handshake state expired [session_id: …]` | warn | Before `[401] HANDSHAKE_EXPIRED`. |
+| `Handshake state not yet valid [session_id: …]` | warn | Before `[401] HANDSHAKE_NOT_YET_VALID`. |
+| `Handshake state successfully validated [session_id: …]` | info | The callback belongs to the login this browser started. |
+
+### Token exchange
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Initiating token exchange [session_id: …]` | info | The router sends the authorization code to the token endpoint. |
+| `Rejected token exchange [session_id: …]: PKCE verifier length out of bounds` | err | Before `[500] INVALID_PKCE_VERIFIER`. See [Token Exchange Errors](#token-exchange-errors). |
+| `Token exchange network error [session_id: …]: HTTP_REQUEST_FAILED (<cause>)` | warn | Before `[502] TOKEN_ENDPOINT_NETWORK_ERROR`. |
+| `Token exchange failed (invalid_grant, HTTP <status>) [session_id: …]` | err | Before `[502] OIDC_INVALID_GRANT`. |
+| `Token exchange HTTP <status> [session_id: …]` | warn | Before `[502] TOKEN_EXCHANGE_FAILED`. |
+| `Token exchange JSON parse error [session_id: …]: <detail>` | err | Before `[502] TOKEN_RESPONSE_INVALID_JSON`. |
+| `Token exchange successful [session_id: …]` | info | The IdP returned the tokens. |
+
+### ID Token and UserInfo
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Unrecognized or stale key detected [session_id: …]; forcing JWKS refresh` | info | The ID Token names a key (`kid`) that the JWK Set lacks, or that did not verify its signature. The JWK Set is fetched again and the check retried. |
+| `ID Token verified. Claims present: <names>` | debug | The claim names in the verified ID Token. Values are never logged. |
+| `Fetching supplemental claims from UserInfo endpoint` | info | The ID Token has no email, so UserInfo is asked. |
+| `UserInfo fetch network error: HTTP_REQUEST_FAILED (<cause>)` | warn | Before `UserInfo fallback failed`: `USERINFO_NETWORK_ERROR`. See [UserInfo Errors](#userinfo-errors). |
+| `UserInfo fetch HTTP <status>` | warn | Before `UserInfo fallback failed`: `USERINFO_FETCH_FAILED`. |
+| `UserInfo JSON parse error: <detail>` | err | Before `UserInfo fallback failed`: `USERINFO_INVALID_JSON`. |
+| `UserInfo claims received: <names>` | debug | The claim names in the UserInfo response. Values are never logged. |
+| `UserInfo 'sub' mismatch [session_id: …]` | err | Before `[403] IDENTITY_MISMATCH`. |
+| `Claims successfully supplemented via UserInfo [session_id: …]` | info | The email, and the name and groups when the ID Token lacked them, came from UserInfo. |
+| `UserInfo fallback failed [session_id: …]: <CODE>` | warn | UserInfo failed; the login goes on with the ID Token's claims. See [UserInfo Errors](#userinfo-errors). |
+| `OAuth flow failed [session_id: …]: <CODE> (<details>)` | err | Before the `[<status>]` line of most callback failures. See [Inside another line](#inside-another-line). |
+| `ID Token successfully validated for [sub_id: …] [session_id: …]` | info | The ID Token passed every check. |
+
+### Replay registry
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Replay attack detected: access token already registered [session_id: …]` | warn | Before `[403] TOKEN_REPLAYED`. See [Authorization Errors](#authorization-errors). |
+| `Exception in register_token: <exception>` | err | Before `Access token registry write failed …: SYSTEM_ERROR`. |
+| `Access token registry write failed [session_id: …]: <CODE>` | err | Before `[500] TOKEN_REGISTRY_ERROR`. |
+| `Access token lifetime exceeds 24h replay window [session_id: …]` | warn | The access token is a JWT that lives longer than 24 hours, while the registry forgets a token after 24 hours. The login goes on. Shorten the access token lifetime at the IdP to close the gap. |
+
+### Role and session
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `User [sub_id: …] matched no roles [session_id: …]` | warn | Before `[403] USER_NOT_AUTHORIZED`. See [Authorization Errors](#authorization-errors). |
+| `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | See [Role Lines](#at-login-and-on-configuration-load). |
+| `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'` | err | Before `[500] UBUS_LOGIN_FAILED`. See [Session Errors](#session-errors). |
+| `INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_<role>' of role '<role>' has a password option; remove it` | err | Before `[500] UBUS_LOGIN_FAILED`. |
+| `ACL scan failed: /usr/share/rpcd/acl.d is missing or unreadable` | err | Followed by `Failed to load LuCI ACLs for role '<role>'`. |
+| `Failed to load LuCI ACLs for role '<role>'` | err | Before `[500] UBUS_LOGIN_FAILED`. |
+| `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `UBUS session creation failed` | err | Before `[500] UBUS_LOGIN_FAILED`. |
+| `CRITICAL: CSPRNG failure during CSRF token generation` | err | Before `[500] UBUS_LOGIN_FAILED`. |
+| `CRITICAL: b64url_encode failure during CSRF token generation` | err | Before `[500] UBUS_LOGIN_FAILED`. Internal error; file a bug. |
+| `UBUS session set failed [sid: …]` | err | Before `[500] UBUS_LOGIN_FAILED`. `[sid: …]` is a hash of the session ID. |
+| `UBUS session grant failed [sid: …] [scope: <scope>] [objects: <n>]` | err | Before `[500] UBUS_LOGIN_FAILED`. |
+| `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Session successfully created for user [sub_id: …] [session_id: …] (mapped to role=<role>)` | info | The login is complete; the browser is sent to LuCI. |
+
+### Configuration load
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Ignoring role '<role>': missing email or group list` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+
+### Logout
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Logout attempt with invalid or missing CSRF token` | warn | Before `[403] CSRF_CHECK_FAILED`. See [Authorization Errors](#authorization-errors). |
+
+A successful logout is not logged.
+
+### Package scripts
+
+The lines of the install, upgrade and removal scripts are in [At install, upgrade and removal](#at-install-upgrade-and-removal).
