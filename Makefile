@@ -136,6 +136,7 @@ lint:
 	@bash $(DEVENV_DIR)/scripts/check-request-limits.sh
 	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
 	@bash $(DEVENV_DIR)/scripts/check-code-style.sh
+	@bash $(DEVENV_DIR)/scripts/check-docs-links.sh
 
 pull: DOCKER_SUITE = ci
 pull: .pull

@@ -2,7 +2,7 @@
 
 A fully containerized OIDC/OAuth2 stack for developing and testing `luci-sso` without a physical router.
 
-For a full walkthrough, see [Development Workflow](https://m00qek.github.io/luci-sso/how-to/developer/development-workflow/).
+For a full walkthrough, see [Development Workflow](https://m00qek.github.io/luci-sso/latest/how-to/developer/development-workflow/).
 
 ---
 
