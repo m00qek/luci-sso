@@ -87,7 +87,7 @@ Adding the feed's signing key needs a shell: LuCI's **Software** page can edit t
         2.  In the **Filter** box, type `luci-sso-crypto`, and click **Install…** next to the backend you chose (for example `luci-sso-crypto-mbedtls`).
         3.  Filter for `luci-sso` and click **Install…** next to `luci-sso`.
 
-        ![LuCI System > Software page on OpenWrt 24.10 with luci-sso typed in the Filter box and the Available tab selected. The table lists luci-sso, luci-sso-crypto-mbedtls, luci-sso-crypto-openssl and luci-sso-crypto-wolfssl, version 0.9.1-r1, each with an Install… button. Above the tabs, the Actions row has the Update lists…, Upload Package… and Configure opkg buttons.](../../assets/screenshots/luci-software-install.png "System > Software, Available tab, filtered for luci-sso")
+        ![LuCI System > Software page on OpenWrt 24.10 with luci-sso typed in the Filter box and the Available tab selected. The table lists luci-sso, luci-sso-crypto-mbedtls, luci-sso-crypto-openssl and luci-sso-crypto-wolfssl, version 0.10.0-r1, each with an Install… button. Above the tabs, the Actions row has the Update lists…, Upload Package… and Configure opkg buttons.](../../assets/screenshots/luci-software-install.png "System > Software, Available tab, filtered for luci-sso")
 
 ---
 

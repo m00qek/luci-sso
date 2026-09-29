@@ -49,7 +49,7 @@ The crypto backend is a separate package and has to be removed as well. `luci-ss
     4.  Click **Remove** next to `luci-sso`.
     5.  Click **Remove** next to your crypto backend (for example `luci-sso-crypto-mbedtls`).
 
-    ![LuCI System > Software page on OpenWrt 24.10 with luci-sso typed in the Filter box and the Installed tab selected. The table lists luci-sso and luci-sso-crypto-mbedtls, version 0.9.1-r1, each with a red Remove… button.](../../assets/screenshots/luci-software-uninstall.png "System > Software, Installed tab, filtered for luci-sso")
+    ![LuCI System > Software page on OpenWrt 24.10 with luci-sso typed in the Filter box and the Installed tab selected. The table lists luci-sso and luci-sso-crypto-mbedtls, version 0.10.0-r1, each with a red Remove… button.](../../assets/screenshots/luci-software-uninstall.png "System > Software, Installed tab, filtered for luci-sso")
 
 ---
 
