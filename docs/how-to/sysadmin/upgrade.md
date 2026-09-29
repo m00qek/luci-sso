@@ -132,6 +132,13 @@ apk list --installed luci-sso
 
     Replace `luci-sso-crypto-mbedtls` with the backend you installed.
 
+    If you first installed `luci-sso` from a local `.apk` file and added the feed later, `apk upgrade` reports `OK` but leaves the old version installed: `apk` keeps a package installed from a file pinned to that exact file. `apk policy luci-sso` then lists the feed's newer version, and `/etc/apk/world` holds `luci-sso><…` instead of `luci-sso`. Run `apk add` once with the package names to make both packages follow the feed, then upgrade:
+
+    ```bash
+    apk add luci-sso luci-sso-crypto-mbedtls
+    apk upgrade luci-sso luci-sso-crypto-mbedtls
+    ```
+
 === "From a local package"
 
     Build the new version (see [How to Build the Packages from Source](build-from-source.md)) and copy it to the router:
