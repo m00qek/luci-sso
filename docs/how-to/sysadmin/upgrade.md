@@ -3,10 +3,10 @@
 This guide walks through upgrading an existing `luci-sso` installation to a new version, restoring the SSO button after a LuCI upgrade, and rolling back.
 
 !!! warning "Upgrading from 0.9.1 or earlier: role permissions move to rpcd"
-    Releases up to 0.9.1 kept each role's permissions in `/etc/config/luci-sso`. Later releases keep them in `/etc/config/rpcd`, and a user gets only the **first** matching role. The upgrade moves the permissions for you, but work through [Before you upgrade from 0.9.1 or earlier](#before-you-upgrade-from-091-or-earlier) first.
+    Releases up to 0.9.1 kept each role's permissions in `/etc/config/luci-sso`. 0.10.0 and later keep them in `/etc/config/rpcd`, and a user gets only the **first** matching role. The upgrade moves the permissions for you, but work through [Before you upgrade from 0.9.1 or earlier](#before-you-upgrade-from-091-or-earlier) first.
 
 !!! warning "Upgrading from 0.9.1 or earlier: email rules need a verified email"
-    From the next release, an `email` rule matches only if the IdP marks the address as verified (`email_verified: true`). Keycloak, Authentik and Pocket ID send `false` by default for addresses an administrator entered, and so does Authelia's ID Token under a claims policy that lists `email` alone. Users who match only by email then cannot log in. Deal with it [before you upgrade](#before-you-upgrade-from-091-or-earlier).
+    From 0.10.0, an `email` rule matches only if the IdP marks the address as verified (`email_verified: true`). Keycloak, Authentik and Pocket ID send `false` by default for addresses an administrator entered, and so does Authelia's ID Token under a claims policy that lists `email` alone. Users who match only by email then cannot log in. Deal with it [before you upgrade](#before-you-upgrade-from-091-or-earlier).
 
 !!! note "Sessions and the upgrade"
     Installing a newer or older `luci-sso` package over the installed one normally keeps every LuCI session. The install script reloads `rpcd`, which keeps each session and rebuilds its rights from its login entry. The upgrade from 0.9.1 or earlier is the exception:
@@ -163,7 +163,7 @@ apk list --installed luci-sso
     apk add --allow-untrusted /tmp/luci-sso-<version>.apk
     ```
 
-The install script runs again during the upgrade: it recreates `/var/run/luci-sso/` if needed, keeps the cleanup cron job, moves any role permissions still in `/etc/config/luci-sso` into rpcd login entries, reloads `rpcd`, re-applies the SSO button to LuCI's login templates (with `luci-sso-repatch`) and clears LuCI's cache. There is nothing to run by hand, except the checks in [Upgrading from 0.9.1 or earlier](#upgrading-from-091-or-earlier) when they apply.
+The install script runs again during the upgrade: it recreates `/var/run/luci-sso/` if needed, keeps the cleanup cron job, moves any role permissions still in `/etc/config/luci-sso` into rpcd login entries, reloads `rpcd`, re-applies the SSO button to LuCI's login templates (with `luci-sso-repatch`) and clears LuCI's cache. There is nothing to run by hand, except, from 0.9.1 or earlier, step 6 of [Before you upgrade](#before-you-upgrade-from-091-or-earlier) and the checks in [Upgrading from 0.9.1 or earlier to 0.10.0](#upgrading-from-091-or-earlier-to-0100).
 
 If `/etc/config/luci-sso-opkg` (or `luci-sso.apk-new`) appeared, compare it with your configuration for new options, then delete it.
 
@@ -181,9 +181,9 @@ Then attempt a login from a browser. Check the log if anything goes wrong:
 
 ---
 
-## Upgrading from 0.9.1 or earlier
+## Upgrading from 0.9.1 or earlier to 0.10.0
 
-Releases up to 0.9.1 kept a role's permissions as `read` and `write` lists on the role in `/etc/config/luci-sso`. Later releases keep them in a login entry in `/etc/config/rpcd`, one per role, which the settings page edits. [About Roles and Permissions](../../explanation/roles-and-permissions.md) explains why.
+Releases up to 0.9.1 kept a role's permissions as `read` and `write` lists on the role in `/etc/config/luci-sso`. 0.10.0 and later keep them in a login entry in `/etc/config/rpcd`, one per role, which the settings page edits. [About Roles and Permissions](../../explanation/roles-and-permissions.md) explains why.
 
 ### What changes
 

@@ -31,8 +31,8 @@ package)
   # Copy only this project's packages: luci-sso and luci-sso-crypto-<lib>, as
   # .ipk (opkg, OpenWrt 24.10) or .apk (apk, OpenWrt 25.12+). bin/ also holds
   # every package the SDK built as a dependency, which must not be copied.
-  #   ipk: luci-sso_0.9.1-r1_x86_64.ipk   luci-sso-crypto-mbedtls_0.9.1-r1_x86_64.ipk
-  #   apk: luci-sso-0.9.1-r1.apk          luci-sso-crypto-mbedtls-0.9.1-r1.apk
+  #   ipk: luci-sso_0.10.0-r1_x86_64.ipk   luci-sso-crypto-mbedtls_0.10.0-r1_x86_64.ipk
+  #   apk: luci-sso-0.10.0-r1.apk          luci-sso-crypto-mbedtls-0.10.0-r1.apk
   OUT="$ARTIFACTS_DIR/$SDK_ARCH/$SDK_VERSION/packages"
   PKG_RE="^$PKG_NAME(-crypto-[a-z0-9]+)?(_[^_]+_[^/]+\.ipk|-[0-9][^/]*\.apk)\$"
   mkdir -p "$OUT"
