@@ -121,7 +121,7 @@ Leave the code out of the cherry-pick, or split the commit on `main` into a docs
 2. Push the release tag, `vX.Y.Z`. The workflow publishes the docs of the tag as version `X.Y`.
 3. Move the docs branch:
 
-    - For a new minor, `vX.Y.0`, create `docs/X.Y` from the tag. Stop pushing to the previous `docs/*` branch: its version is frozen from now on.
+    - For a new minor, `vX.Y.0`, create `docs/X.Y` from the tag. Stop pushing to the previous `docs/X.Y` branch: its version is frozen from now on.
 
         ```bash
         git branch docs/0.11 v0.11.0

@@ -17,7 +17,10 @@ on:
   push:
     branches:
       - main
-      - 'docs/*'
+      # Only version branches such as docs/0.10. The filter must match the
+      # whole branch name, so work branches like docs/versioned-site or
+      # docs/0.10.0-screenshots never start a publish.
+      - 'docs/[0-9]+.[0-9]+'
     tags:
       - 'v*.*.*'
   pull_request:
@@ -71,7 +74,7 @@ jobs:
         with:
           # The publishing scripts and configuration come from main. The ref
           # to publish is checked out by the script, from the full history:
-          # tags, docs/* branches and gh-pages, which mike commits to.
+          # tags, docs/X.Y branches and gh-pages, which mike commits to.
           ref: main
           fetch-depth: 0
       - name: Configure Git Credentials
