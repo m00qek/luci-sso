@@ -9,6 +9,10 @@
 #      keep the 404 page from sending those links to /luci-sso/latest/<page>.
 #   3. Publishes v0.9.1 as 0.9 and v0.10.0 as 0.10, with latest on 0.10.
 #   4. Makes /luci-sso/ redirect to latest.
+#   5. Prints the commands that create the docs/0.9 and docs/0.10 branches.
+#
+# Run it on main once the versioned-site workflow is merged: until then, a
+# push to main runs `mkdocs gh-deploy --force`, which replaces gh-pages.
 #
 # Needs mkdocs-material and mike on PATH, at the versions
 # .github/workflows/docs.yml pins.
@@ -55,4 +59,22 @@ gh-pages is ready locally. Review it:
 Then publish it:
 
     git push origin gh-pages
+
+Then create the docs branches, from the same tags:
+
+    git branch docs/0.9 v0.9.1
+    git branch docs/0.10 v0.10.0
+    git push origin docs/0.9 docs/0.10
+
+Pushing them publishes nothing: their workflow file is the one of their tag,
+which runs on main only. docs/0.9 stays that way, frozen. docs/0.10 needs
+this workflow file once, before its first docs fix can publish:
+
+    git switch docs/0.10
+    git checkout origin/main -- .github/workflows/docs.yml
+    git commit -m "ci(docs): publish docs/0.10 from its branch"
+    git push origin docs/0.10
+
+That push publishes 0.10 again with the same files as the backfill, so mike
+makes no commit.
 EOF

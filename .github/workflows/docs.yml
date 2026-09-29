@@ -5,20 +5,21 @@ name: Publish Docs
 #
 #   pull request, push to main   strict build only; nothing is published
 #   tag vX.Y.Z                   publishes the tag's docs as X.Y
-#   manual run                   publishes the docs of an existing tag again
+#   push to docs/X.Y             publishes the branch's docs as X.Y, if the
+#                                branch changes nothing but the docs since
+#                                its newest vX.Y.Z tag
+#   manual run                   publishes a tag or docs/X.Y branch again
 #
-# GitHub does not apply the paths filter to tag pushes: every tag publishes.
+# The publish job runs the scripts from main, whatever triggered it. GitHub
+# runs a push with the workflow file of the pushed commit, so a docs/X.Y
+# branch needs this file to publish, but nothing else from main.
 on:
   push:
     branches:
       - main
+      - 'docs/*'
     tags:
       - 'v*.*.*'
-    paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - 'mkdocs.mike.yml'
-      - '.github/workflows/docs.yml'
   pull_request:
     branches:
       - main
@@ -29,8 +30,8 @@ on:
       - '.github/workflows/docs.yml'
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Release tag to publish, such as v0.10.1'
+      ref:
+        description: 'Release tag or docs branch to publish, such as v0.10.1 or docs/0.10'
         required: true
 
 permissions:
@@ -56,7 +57,10 @@ jobs:
         run: mkdocs build --strict -f mkdocs.mike.yml
 
   publish:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      startsWith(github.ref, 'refs/heads/docs/')
     runs-on: ubuntu-latest
     # One writer to gh-pages at a time.
     concurrency:
@@ -65,7 +69,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Tags and the gh-pages branch, which mike commits to.
+          # The publishing scripts and configuration come from main. The ref
+          # to publish is checked out by the script, from the full history:
+          # tags, docs/* branches and gh-pages, which mike commits to.
+          ref: main
           fetch-depth: 0
       - name: Configure Git Credentials
         run: |
@@ -75,10 +82,10 @@ jobs:
         with:
           python-version: 3.x
       - run: pip install "mkdocs-material==$MKDOCS_MATERIAL_VERSION" "mike==$MIKE_VERSION"
-      - name: Publish the tag's docs
+      - name: Publish the docs
         env:
-          TAG: ${{ inputs.tag || github.ref_name }}
-        run: devenv/scripts/docs-publish.sh --push "$TAG"
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: devenv/scripts/docs-publish.sh --push "$REF"
       - name: Check the root 404 page
         run: |
           git cat-file -e origin/gh-pages:404.html ||
