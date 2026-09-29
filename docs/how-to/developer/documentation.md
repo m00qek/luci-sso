@@ -59,6 +59,52 @@ make idp-screenshots IDP=authentik      # one IdP
 
 The target needs no running stack, only the browser image (`make build-images`). For each IdP, `devenv/scripts/idp-screenshots/<idp>.sh` starts the pinned image in its own containers and network, under an `example.com` host name, with generated passwords and secrets. Then `<idp>.js` walks the admin pages through the guide's steps and crops each shot. Secrets are masked before a capture. The script removes the containers and network when it ends, even on failure. To move to a newer IdP release, change the image tag in `<idp>.sh`, retake the shots, check the guide's steps against the new UI, and update the release the guide names.
 
+### 5. Preview the Versioned Site
+`make -C docs serve` shows one version, without the version selector. To see your working tree as a version of the published site, next to the released versions, build it with [mike](https://github.com/jimporter/mike) into a throwaway branch. mike runs on the host, in a Python virtual environment, at the versions `.github/workflows/docs.yml` pins:
+
+```bash
+python3 -m venv bin/venv
+bin/venv/bin/pip install mkdocs-material==9.5.17 mike==2.2.0
+export PATH="$PWD/bin/venv/bin:$PATH"
+
+git fetch origin gh-pages
+git branch --force docs-preview origin/gh-pages
+mike deploy -F mkdocs.mike.yml -b docs-preview dev
+mike serve -F mkdocs.mike.yml -b docs-preview
+```
+
+Then open **http://localhost:8000/dev/**. The selector lists `dev` with the released versions. When you are done, delete the branch with `git branch -D docs-preview`. Never pass `--push`, and never use the `gh-pages` branch for a preview.
+
+`mike serve` does not serve the site's `404.html`, so it cannot show the redirect of unversioned links.
+
+---
+
+## Publish the Docs
+
+The site has one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, and `/latest/` points to the newest. The docs workflow publishes a version when a release tag is pushed, and at no other time. Merges to `main` only build the site, with `--strict`.
+
+### Publish a release
+
+1. Before the release commit, run `make lint`. The docs link check fails if a link in `files/`, `src/` or `mod/` names another minor than `PKG_VERSION`, or if a `CHANGELOG.md` link names another minor than its release. Change those links to the new minor, for example from `/luci-sso/0.10/` to `/luci-sso/0.11/`.
+2. Push the release tag, `vX.Y.Z`. The **Publish Docs** workflow runs `devenv/scripts/docs-publish.sh --push vX.Y.Z`. It publishes the docs of the tag as version `X.Y`, titled `X.Y.Z`, and moves `latest` to it if no newer minor is published.
+3. Open `https://m00qek.github.io/luci-sso/latest/` and check that the version selector shows the new release.
+
+A patch release replaces the docs of its minor. A patch to an older minor, such as `v0.9.2` after `0.10` is out, replaces `0.9` and leaves `latest` on `0.10`.
+
+### Publish a release again
+
+To publish the docs of an existing tag again, for example after a failed run, start the workflow by hand:
+
+```bash
+gh workflow run docs.yml -f tag=v0.10.0
+```
+
+This builds the docs from the tag, not from `main`. A fix to the docs of a release reaches the site with the next patch release of that minor.
+
+### Link to the published docs
+
+Pages inside `docs/` link to each other with relative links. A link from outside `docs/` to the site names a version; see [Links to the Published Docs](../../reference/style-guide.md#4-links-to-the-published-docs).
+
 ---
 
 ## Standards & Style
