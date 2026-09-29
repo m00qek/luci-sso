@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block announce %}
+  <strong>Beta:</strong> This project and its documentation are under active development. APIs and configuration options may change before the 1.0 release.
+{% endblock %}
+
+{#- Shown only on the published site, on a version other than latest. -#}
+{% block outdated %}
+  You are reading the documentation for an older release.
+  <a href="{{ '../' ~ base_url }}"><strong>Go to the latest release.</strong></a>
+{% endblock %}
