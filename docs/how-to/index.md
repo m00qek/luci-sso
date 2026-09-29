@@ -35,3 +35,4 @@ GitHub is not supported. See [Provider Compatibility](../reference/provider-comp
 *   [Running the Fuzzer](developer/fuzzing.md) - How to run the coverage-guided fuzzer.
 *   [Writing Documentation](developer/documentation.md) - How to use the documentation toolkit and standards.
 *   [Adding Error Codes, Limits, and Cookies](developer/adding-documented-interfaces.md) - How to keep the code and the lint-checked reference pages in sync.
+*   [Releasing a New Version](developer/releasing.md) - How to bump the version, tag it, and publish it to the package feed.

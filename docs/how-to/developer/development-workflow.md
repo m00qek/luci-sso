@@ -93,13 +93,13 @@ Never hardcode environment-specific values (versions, domains) in Dockerfiles or
 
 ## Lint
 
-CI runs five lint checks: three documentation contracts, a code style check and a docs link check. Run them locally before pushing:
+CI runs six lint checks: three documentation contracts, a code style check, a docs link check, and a check of the feed Makefile generator. Run them locally before pushing:
 
 ```bash
 make lint
 ```
 
-If a documentation check fails, see [How to add error codes, limit constants, and cookies](adding-documented-interfaces.md) for what to update. The code style check (`devenv/scripts/check-code-style.sh`) prints `file:line: rule: detail` for each violation; the rules are in the [style guide](../../reference/style-guide.md#enforcement). The docs link check (`devenv/scripts/check-docs-links.sh`) prints each link to the published docs that names no version or the wrong one; the rules are in [Links to the Published Docs](../../reference/style-guide.md#4-links-to-the-published-docs).
+If a documentation check fails, see [How to add error codes, limit constants, and cookies](adding-documented-interfaces.md) for what to update. The code style check (`devenv/scripts/check-code-style.sh`) prints `file:line: rule: detail` for each violation; the rules are in the [style guide](../../reference/style-guide.md#enforcement). The docs link check (`devenv/scripts/check-docs-links.sh`) prints each link to the published docs that names no version or the wrong one; the rules are in [Links to the Published Docs](../../reference/style-guide.md#4-links-to-the-published-docs). If the feed Makefile check fails, see [How to Release a New Version](releasing.md#if-the-generator-refuses-the-makefile).
 
 ---
 

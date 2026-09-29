@@ -88,6 +88,7 @@ nav:
           - Running the Fuzzer: how-to/developer/fuzzing.md
           - Writing Documentation: how-to/developer/documentation.md
           - Adding Error Codes, Limits, and Cookies: how-to/developer/adding-documented-interfaces.md
+          - Releasing a New Version: how-to/developer/releasing.md
   - Reference:
       - Overview: reference/index.md
       - Log Messages: reference/log-messages.md
