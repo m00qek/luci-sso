@@ -73,7 +73,7 @@ export function check_name(name) {
  * The role of an SSO session's username: `<role>` for `sso:<role>` with a
  * valid role name, null for anything else. A session is an SSO session
  * exactly when this returns a role; its email (`oidc_user`) is only a tag,
- * absent for a user matched by group whose IdP sends no email.
+ * absent when the IdP sends no verified email.
  */
 export function role_of(name) {
 	if (type(name) != "string" || substr(name, 0, length(USERNAME_PREFIX)) != USERNAME_PREFIX)

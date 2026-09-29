@@ -212,6 +212,30 @@ describe('config: matchable_email', () => {
 	});
 });
 
+describe('config: session_email', () => {
+	it('returns a verified email, the label a session is stored with', () => {
+		assert.match('a@b.c', config.session_email({ email: 'a@b.c', email_verified: true }));
+	});
+
+	it('returns null for an unverified or unflagged email, or the string "true"', () => {
+		for (let v in [ false, 'true', 'false', null ])
+			assert.match(null, config.session_email({ email: 'a@b.c', email_verified: v }), `${v}`);
+		assert.match(null, config.session_email({ email: 'a@b.c' }));
+	});
+
+	it('returns null for an unverified email even where require_email_verified off lets it match a role', () => {
+		let claims = { email: 'a@b.c', email_verified: false };
+		assert.match('a@b.c', config.matchable_email({ require_email_verified: false }, claims), 'it matches');
+		assert.match(null, config.session_email(claims), 'but is not a label');
+	});
+
+	it('returns null for an empty, missing or non-string email', () => {
+		for (let e in [ '', null, 42, [ 'a@b.c' ] ])
+			assert.match(null, config.session_email({ email: e, email_verified: true }), `${e}`);
+		assert.match(null, config.session_email({}));
+	});
+});
+
 // ─── load — success & normalization ────────────────────────────────────────────
 
 describe('config: load — success', () => {

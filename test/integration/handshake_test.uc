@@ -761,7 +761,7 @@ describe('handshake: email_verified', () => {
 	// fetch fails). Returns the result, whether a session was created, the
 	// session's username, the log lines and the URLs fetched.
 	function login(id, userinfo, over) {
-		let out = { result: null, created: false, username: null, logs: [], fetched: [] };
+		let out = { result: null, created: false, username: null, values: null, logs: [], fetched: [] };
 		let http = {
 			[DISCOVERY_URL]:             { status: 200, body: f.MOCK_DISCOVERY },
 			[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
@@ -773,7 +773,7 @@ describe('handshake: email_verified', () => {
 			ubus: { data: {
 				"session:create": () => { out.created = true; return { ubus_rpc_session: "s-ev" }; },
 				"session:grant":  UBUS_NO_DATA,
-				"session:set":    (args) => { out.username = args.values.username; return UBUS_NO_DATA; },
+				"session:set":    (args) => { out.username = args.values.username; out.values = args.values; return UBUS_NO_DATA; },
 			} },
 			http_client: {
 				data: http,
@@ -888,6 +888,31 @@ describe('handshake: email_verified', () => {
 		let r = login({ email: null, email_verified: null }, { email: "admin@example.com" }, { require_email_verified: false });
 		assert.match("sso:admin", r.username);
 		assert.match(0, length(warned(r)));
+	});
+
+	it('oidc_user: a verified email is stored as the session label', () => {
+		let r = login({ email: "admin@example.com", email_verified: true });
+		assert.match("sso:admin", r.username);
+		assert.match("admin@example.com", r.values.oidc_user);
+	});
+
+	it('oidc_user: an unverified email is left out, and the user still logs in through a group', () => {
+		let r = login({ email: "admin@example.com", email_verified: false, groups: [ "staff" ] });
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:staff", r.username);
+		assert.match(false, exists(r.values, "oidc_user"), "no label, not even null");
+	});
+
+	it('oidc_user: with require_email_verified off, an unverified email matches its role but is left out', () => {
+		let r = login({ email: "admin@example.com", email_verified: false }, null, { require_email_verified: false });
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:admin", r.username, "the email still matched");
+		assert.match(false, exists(r.values, "oidc_user"), "no label, not even null");
+	});
+
+	it('oidc_user: an email verified only in UserInfo is stored', () => {
+		let r = login({ email: null, email_verified: null }, { email: "admin@example.com", email_verified: true });
+		assert.match("admin@example.com", r.values.oidc_user);
 	});
 });
 

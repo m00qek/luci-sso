@@ -190,8 +190,8 @@ function _abort_session(deps, sid, code) {
  *
  * @param {object} deps - { fs, ubus, uci, log, native }
  * @param {string} role - The luci-sso role the user matched
- * @param {string|null} oidc_email - The user's email, stored as the label
- *   `oidc_user`; null when the user has none
+ * @param {string|null} oidc_email - The user's verified email, stored as the
+ *   label `oidc_user`; null when there is none (config.session_email)
  * @param {string} access_token - OIDC access token to persist
  * @param {string} refresh_token - OIDC refresh token to persist
  * @param {string} id_token - OIDC ID token to persist (for logout)
@@ -262,8 +262,8 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 	// a failure here must not hand back a usable session.
 	// The username makes it an SSO session (rpcd_login.role_of). The email
 	// is only a label for finding the session, and is left out, not stored
-	// as null, when the user has none: a user matched by group whose IdP
-	// sends no email.
+	// as null, when there is none: a user whose IdP sends no email, or no
+	// verified one (the caller passes only a verified email).
 	let values = {
 		username: rpcd_login.username(role),
 		oidc_access_token: access_token,

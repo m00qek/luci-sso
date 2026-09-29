@@ -36,6 +36,7 @@ Upgrading from 0.9.1 needs some steps **before** you install. Follow [Before you
 - Every `read` list includes the `unauthenticated` access group, which LuCI needs on every page.
 - SSO sessions use LuCI's session timeout, `luci.sauth.sessiontime`.
 - A session is recognised as an SSO session by its username, `sso:<role>`, so a user matched by group whose IdP sends no email also logs out at the IdP.
+- The session's `oidc_user` label holds the user's email only when the IdP marks it as verified, whatever `require_email_verified` says, so an address a user typed in themselves cannot make their session look like someone else's.
 - Upgrades and downgrades keep every session: the package reloads `rpcd` and never restarts it. Removal copies the roles' permissions back onto the roles, and installing again moves them back.
 - A failed request to the IdP is answered with `502 Bad Gateway`.
 - The login button takes the theme's colours.

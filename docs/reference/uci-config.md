@@ -34,7 +34,7 @@ The connection to the IdP. A missing or invalid required option makes every requ
     - The claim is read from the response the email came from: the ID Token, or UserInfo when the ID Token has no `email`. The two are never mixed.
     - Only the JSON boolean `true` counts, as OIDC Core §5.1 defines the claim. Any other value, including the string `"true"`, or no claim, is not verified.
     - An unverified email is ignored for matching, and the log says `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified)`. `group` rules still match. A user who matches no role is refused with `USER_NOT_AUTHORIZED`.
-    - The email is still stored in the session as `oidc_user`.
+    - The session's `oidc_user` label holds only a verified email, whether the option is on or off. An unverified email is not stored.
     - What each IdP sends: [Provider Compatibility](provider-compatibility.md#verified-email). Why: [About Roles and Permissions](../explanation/roles-and-permissions.md#verified-email-addresses).
 - **`clock_tolerance`** has no built-in code default: if it is absent, the service reports `CONFIG_ERROR`. The shipped UCI configuration sets it to `60`.
 

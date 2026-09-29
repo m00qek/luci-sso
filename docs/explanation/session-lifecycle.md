@@ -40,7 +40,7 @@ The IdP's ID Token carries its own `exp` claim, which `luci-sso` validates at lo
 
 The reason for decoupling session length from token expiry is the architectural constraint of the CGI model. `luci-sso` runs as a CGI script, not a daemon. There is no background process watching for token expiry and terminating sessions, and LuCI does not call `luci-sso` on later page loads, so nothing could re-check the tokens there. Doing so would also mean a back-channel call to the IdP on every request, which is expensive for an embedded router and introduces a new failure mode if the IdP is temporarily unreachable. Reusing LuCI's idle timeout keeps SSO sessions as long-lived as password sessions, without that cost.
 
-The tokens themselves are kept. The access, refresh and ID tokens from the login are stored in the `rpcd` session, next to the user's email when there is one, for as long as the session lives. `luci-sso` only ever reads the ID token back, as the `id_token_hint` of an RP-Initiated Logout; it never refreshes or re-validates the others.
+The tokens themselves are kept. The access, refresh and ID tokens from the login are stored in the `rpcd` session, next to the user's email when the IdP marked it as verified, for as long as the session lives. `luci-sso` only ever reads the ID token back, as the `id_token_hint` of an RP-Initiated Logout; it never refreshes or re-validates the others.
 
 ---
 
@@ -48,7 +48,7 @@ The tokens themselves are kept. The access, refresh and ID tokens from the login
 
 Nothing, immediately. `luci-sso` validates OIDC claims once, at login. If the IdP revokes a user's account or removes them from a group after they have logged in, the active LuCI session is not affected. The user retains their access until the session expires or they log out.
 
-This is a known, documented residual risk. The mitigation available to administrators is to end the user's sessions on the router, which takes effect immediately: each SSO session carries its role in its username, `sso:<role>`, and the user's email when the IdP sent one, so it can be found and destroyed without touching anyone else's. [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#change-access-for-users-already-logged-in) shows the commands. The idle timeout also bounds the exposure window, but only once the session stops being used: an attacker who keeps using a stolen session keeps it alive.
+This is a known, documented residual risk. The mitigation available to administrators is to end the user's sessions on the router, which takes effect immediately: each SSO session carries its role in its username, `sso:<role>`, and the user's email when the IdP marked it as verified, so it can be found and destroyed without touching anyone else's. A user without a verified email can only be found by role, so their sessions go together with the other sessions of the same role. [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#change-access-for-users-already-logged-in) shows the commands. The idle timeout also bounds the exposure window, but only once the session stops being used: an attacker who keeps using a stolen session keeps it alive.
 
 ---
 
@@ -80,7 +80,7 @@ The rebuild has two consequences worth knowing. A session keeps the role it was 
 
 The `luci-sso` package reloads `rpcd` when it is installed, upgraded or removed; it never restarts it. The one restart comes from outside it: on OpenWrt 24.10, `opkg` runs the old package's removal script during an upgrade, and the removal script of 0.9.1 and earlier restarts `rpcd`, so the upgrade from those releases logs every user out once, password logins included. On OpenWrt 25.12, sessions created before the upgrade that moved role permissions into `rpcd` are the exception. They carry the bare role name as their user name, which matches no `sso:` entry, so at that upgrade's reload they lose their rights and their users log in again. A role named like an existing login, such as `root`, would instead get that login's rights at the reload, which is one of the problems the move to `sso:` names fixes; ending such sessions before the upgrade avoids it. See [How to Upgrade luci-sso](../how-to/sysadmin/upgrade.md) and [How to Remove luci-sso](../how-to/sysadmin/uninstall.md).
 
-Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and idle timeout. `rpcd` can list every session with its values. An SSO session has the username `sso:<role>`, and carries the user's email as `oidc_user` when the IdP sent one, so an administrator can find one user's sessions, or one role's, and destroy just those. Restarting `rpcd`, rather than reloading it, evicts every session, password logins included.
+Multiple simultaneous sessions are allowed. Each login creates a new independent UBUS session with its own ID and idle timeout. `rpcd` can list every session with its values. An SSO session has the username `sso:<role>`, and carries the user's email as `oidc_user` when the IdP marked it as verified, so an administrator can find one user's sessions, or one role's, and destroy just those. Restarting `rpcd`, rather than reloading it, evicts every session, password logins included.
 
 ---
 

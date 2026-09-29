@@ -267,10 +267,12 @@ export function authenticate(deps, config, request) {
 		(length(others) ? `, the first match; also matched: ${join(", ", others)}` : "") +
 		` [session_id: ${session_id}]`);
 
+	// The session's oidc_user label holds only a verified email
+	// (config.session_email), even with require_email_verified off.
 	let ubus_res = ubus.create_passwordless_session(
 		deps,
 		role,
-		user_data.email,
+		config_mod.session_email(user_data),
 		oauth_res.data.access_token,
 		oauth_res.data.refresh_token,
 		oauth_res.data.id_token

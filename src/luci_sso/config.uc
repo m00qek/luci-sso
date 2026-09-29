@@ -148,6 +148,19 @@ export function matchable_email(config, claims) {
 };
 
 /**
+ * Returns the email stored in the session as its `oidc_user` label, or null.
+ * Only a verified email (email_is_verified) is stored, whatever
+ * require_email_verified says: the label is used to find a user's sessions,
+ * and an address the user could set themselves unverified would let those
+ * sessions pass for someone else's. That option only governs role matching.
+ */
+export function session_email(claims) {
+	let email = claims.email;
+	if (type(email) != "string" || email == "" || !email_is_verified(claims)) return null;
+	return email;
+};
+
+/**
  * Returns true when the claims match a role, by email (case-insensitive) or
  * by group (exact).
  *

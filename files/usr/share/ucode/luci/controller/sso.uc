@@ -10,8 +10,8 @@
 // paths and forwards the browser to the IdP's end_session_endpoint
 // (RP-Initiated Logout), so the IdP session ends too. Every other session, and
 // any session that cannot be looked up, gets LuCI's own logout, called
-// unchanged. The `oidc_user` value is not the test: it holds the user's email,
-// which a user matched by group whose IdP sends no email does not have.
+// unchanged. The `oidc_user` value is not the test: it holds the user's
+// verified email, which a user whose IdP sends none does not have.
 
 "use strict";
 

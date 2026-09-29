@@ -162,12 +162,12 @@ Processes the callback. `deps`: all fields. In order, it:
 7. fetches UserInfo when the ID Token has no `email`, and then takes `email` and `email_verified` both from UserInfo;
 8. registers the access token against replay;
 9. logs a warning when `config.matchable_email` sets an unverified email aside, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches;
-10. creates the `rpcd` session from the role's `rpcd` login entry. Any failure there, including `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN`, ends as `UBUS_LOGIN_FAILED` (500).
+10. creates the `rpcd` session from the role's `rpcd` login entry, labelled with the email `config.session_email` returns. Any failure there, including `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN`, ends as `UBUS_LOGIN_FAILED` (500).
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
 | `sid` | string | The `rpcd` session ID. Set it as the `sysauth_https` and `sysauth` cookies. |
-| `email` | string | The user's email address. |
+| `email` | string or `null` | The user's email address, verified or not; `null` when the IdP sent none. |
 
 The HTTP status of each failure is listed in the [HTTP API Reference](http-api.md#error-responses).
 
@@ -266,6 +266,10 @@ Matches the email `matchable_email` returns (case-insensitive) and `claims.group
 
 `claims.email` when it is a non-empty string and either `config.require_email_verified` is `false` or `email_is_verified(claims)`. Otherwise `null`. A `config` without `require_email_verified` counts as on.
 
+### `session_email(claims)` → `string` or `null`
+
+`claims.email` when it is a non-empty string and `email_is_verified(claims)`. Otherwise `null`. `require_email_verified` plays no part. `authenticate` stores the result as the session's `oidc_user` label.
+
 ---
 
 ## `luci_sso.session`
@@ -319,7 +323,7 @@ The session holds these values:
 | Value | Content |
 | :--- | :--- |
 | `username` | `sso:<role>`, the entry's user name, from which `rpcd` rebuilds the session's rights on reload. |
-| `oidc_user` | The email, as a label for finding the session. Absent when the user has none, for example a user matched by `group` whose IdP sends no email. |
+| `oidc_user` | `oidc_email`, as a label for finding the session: the user's verified email, from `config.session_email`. Absent when `oidc_email` is not a non-empty string, that is when the IdP sent no email or did not mark it as verified, whatever `require_email_verified` says. |
 | `oidc_access_token` | The access token. |
 | `oidc_refresh_token` | The refresh token. |
 | `oidc_id_token` | The ID token. |
