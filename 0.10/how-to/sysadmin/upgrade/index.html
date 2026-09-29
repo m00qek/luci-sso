@@ -2312,6 +2312,10 @@ opkg<span class="w"> </span>upgrade<span class="w"> </span>luci-sso<span class="
 apk<span class="w"> </span>upgrade<span class="w"> </span>luci-sso<span class="w"> </span>luci-sso-crypto-mbedtls
 </code></pre></div>
 <p>Replace <code>luci-sso-crypto-mbedtls</code> with the backend you installed.</p>
+<p>If you first installed <code>luci-sso</code> from a local <code>.apk</code> file and added the feed later, <code>apk upgrade</code> reports <code>OK</code> but leaves the old version installed: <code>apk</code> keeps a package installed from a file pinned to that exact file. <code>apk policy luci-sso</code> then lists the feed's newer version, and <code>/etc/apk/world</code> holds <code>luci-sso&gt;&lt;…</code> instead of <code>luci-sso</code>. Run <code>apk add</code> once with the package names to make both packages follow the feed, then upgrade:</p>
+<div class="highlight"><pre><span></span><code>apk<span class="w"> </span>add<span class="w"> </span>luci-sso<span class="w"> </span>luci-sso-crypto-mbedtls
+apk<span class="w"> </span>upgrade<span class="w"> </span>luci-sso<span class="w"> </span>luci-sso-crypto-mbedtls
+</code></pre></div>
 </div>
 <div class="tabbed-block">
 <p>Build the new version (see <a href="../build-from-source/">How to Build the Packages from Source</a>) and copy it to the router:</p>
