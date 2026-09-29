@@ -17,7 +17,7 @@ Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading r
 ## 2. Fill in the Settings section
 
 1.  Enter the **Issuer URL**, **Client ID** and **Client Secret** from your identity provider. The Issuer URL must be exactly the `issuer` your provider declares.
-2.  Check the **Redirect URI**. If none is saved yet, the field suggests `https://<host>/cgi-bin/luci-sso/callback` with the host name you opened LuCI at, without its port. Keep it only if users will open LuCI at that same host name; otherwise, replace the host. The value must match the redirect URI registered with the IdP exactly.
+2.  Check the **Redirect URI**. If none is saved yet, the field suggests `https://<host>/cgi-bin/luci-sso/callback` with the host name you opened LuCI at, without its port. Keep it only if users will open LuCI at that same host name; otherwise, replace the host. Behind a reverse proxy, use the proxy's public host name; see [How to Run LuCI Behind a Reverse Proxy](reverse-proxy.md#3-use-the-public-host-name-in-the-sso-settings). The value must match the redirect URI registered with the IdP exactly.
 3.  If you map users by group, add `groups` to **Scopes** (for example `openid profile email groups`), provided your IdP supports it. See [How to Configure Role-Based Access Control](rbac.md).
 4.  If the router reaches the IdP at a different address than browsers do, set **Internal Issuer URL** to that origin (`https://host[:port]`, no path). Otherwise leave it empty. See [How to Configure Split-Horizon Networking](split-horizon.md).
 5.  Leave **Clock Tolerance** at `60` unless logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` while the clocks look right.
@@ -82,3 +82,4 @@ The first command prints the saved redirect URI; confirm it matches the value re
 - Map users by group instead of email: [How to Configure Role-Based Access Control](rbac.md)
 - Update credentials after a provider rotation: [How to Rotate Credentials](rotate-credentials.md)
 - Configure a split-horizon setup: [How to Configure Split-Horizon Networking](split-horizon.md)
+- Serve LuCI through a reverse proxy that terminates TLS: [How to Run LuCI Behind a Reverse Proxy](reverse-proxy.md)

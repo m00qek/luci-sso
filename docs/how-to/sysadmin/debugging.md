@@ -28,7 +28,7 @@ Check that the service is enabled and responding. On the router:
 uclient-fetch -q -O - --no-check-certificate 'https://127.0.0.1/cgi-bin/luci-sso?action=enabled'
 ```
 
-`--no-check-certificate` is only there because LuCI's certificate is not issued for `127.0.0.1`.
+`--no-check-certificate` is only there because LuCI's certificate is not issued for `127.0.0.1`. Behind a reverse proxy, `uhttpd` serves plain HTTP on another address; probe that instead, as in [How to Run LuCI Behind a Reverse Proxy](reverse-proxy.md#4-verify).
 
 - If it returns `{"enabled": false}`: SSO is disabled. Enable it in **Services > Single Sign-On** (toggle **Enable SSO** on and click **Save & Apply**), or via SSH: `uci set luci-sso.default.enabled='1' && uci commit luci-sso`.
 - If the request fails entirely: run the CGI script directly with `QUERY_STRING="action=enabled" /www/cgi-bin/luci-sso`. If the script is missing, check that the package is installed: `opkg list-installed | grep luci-sso` (OpenWrt 24.10) or `apk list --installed | grep luci-sso` (OpenWrt 25.12).
@@ -71,7 +71,7 @@ The router could not start the login, so the browser never reached the IdP.
     - `Discovery fetch failed for [id: …]: HTTP_REQUEST_FAILED (<cause>)`: the router could not connect. See [A back-channel request to the IdP failed](#a-back-channel-request-to-the-idp-failed).
     - `Discovery fetch HTTP <status> from [id: …]`: the IdP answered with an error, usually `404` for a wrong path in `issuer_url`.
     - `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field>` or `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "…"`: the IdP's document lacks a required endpoint, or advertises it over plain HTTP. Fix the IdP's configuration; `luci-sso` will not use a plain-HTTP endpoint.
-- **Log shows `[429] TOO_MANY_REQUESTS`**: this client started more than 10 logins in 5 minutes, or sent more than 30 requests in a minute. A client is its IP address (for IPv6, its /64 prefix), so users behind one NAT address share these limits. The line before it is `Login rate limit exceeded for client [id: …]` or `Request rate limit exceeded for client [id: …]`. Wait for the time in the `Retry-After` header, or a few minutes.
+- **Log shows `[429] TOO_MANY_REQUESTS`**: this client started more than 10 logins in 5 minutes, or sent more than 30 requests in a minute. A client is its IP address (for IPv6, its /64 prefix), so users behind one NAT address share these limits. The line before it is `Login rate limit exceeded for client [id: …]` or `Request rate limit exceeded for client [id: …]`. Wait for the time in the `Retry-After` header, or a few minutes. Behind a reverse proxy, every user arrives with the proxy's address and shares one budget; see [How to Run LuCI Behind a Reverse Proxy](reverse-proxy.md#troubleshooting).
 - **Log shows `[503] HANDSHAKE_CAPACITY_EXCEEDED`**: 500 logins are already in progress, preceded by `Handshake capacity reached (<n> pending, limit 500); refusing new login`. Logins in progress are never dropped to make room; a pending login's slot is freed once it is older than 5 minutes plus `clock_tolerance`. Password login still works meanwhile.
 
 ---
@@ -81,7 +81,7 @@ The router could not start the login, so the browser never reached the IdP.
 The browser reached the IdP and came back, but the callback failed. Nothing retries a failed callback: the user starts again from the login page.
 
 - **Log shows `[401] MISSING_HANDSHAKE_COOKIE`**: the browser did not send the handshake cookie. Two common causes:
-    - The login page was opened at a different host name than the one in `redirect_uri`, for example `https://192.168.1.1/` while `redirect_uri` is `https://router.lan/…`. The button starts the login at the address in the browser, and the `__Host-` handshake cookie is only sent back to that exact host. Open LuCI at the host in `redirect_uri`, or set `redirect_uri` to the host you use.
+    - The login page was opened at a different host name than the one in `redirect_uri`, for example `https://192.168.1.1/` while `redirect_uri` is `https://router.lan/…`. The button starts the login at the address in the browser, and the `__Host-` handshake cookie is only sent back to that exact host. Open LuCI at the host in `redirect_uri`, or set `redirect_uri` to the host you use. Behind a reverse proxy, that is the proxy's public host name.
     - More than 5 minutes passed between clicking the button and returning from the IdP. The cookie expires after 300 seconds.
 - **Log shows `[403] STATE_PARAMETER_MISMATCH`**: the callback does not belong to the login this browser started, for example an old callback URL from the history, or a second login in another tab. The pending login is kept; start again from the login page.
 - **Log shows `[401] STATE_NOT_FOUND`**: the callback was already used (a double submit or a reload of the callback URL), or the handshake was cleaned up as stale.

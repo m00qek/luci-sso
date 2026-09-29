@@ -23,6 +23,7 @@ GitHub is not supported. See [Provider Compatibility](../reference/provider-comp
 *   [Rotating Credentials](sysadmin/rotate-credentials.md) - How to update the client secret or switch identity providers.
 *   [Role-Based Access Control](sysadmin/rbac.md) - How to define who can access the router and what they can do.
 *   [Split-Horizon Networking](sysadmin/split-horizon.md) - How to configure luci-sso when your router and browser reach the IdP via different addresses.
+*   [Running Behind a Reverse Proxy](sysadmin/reverse-proxy.md) - How to serve LuCI and luci-sso through a reverse proxy, such as nginx, that terminates TLS.
 *   [Debugging](sysadmin/debugging.md) - How to troubleshoot authentication failures.
 *   [Backing Up and Restoring](sysadmin/backup-restore.md) - How to preserve your configuration across a reflash or factory reset.
 *   [Removing luci-sso](sysadmin/uninstall.md) - How to completely uninstall the package and restore password login.

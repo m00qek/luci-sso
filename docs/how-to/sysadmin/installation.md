@@ -202,4 +202,6 @@ Configure `luci-sso` with an identity provider:
 - **[Your First SSO Login: Public IdP](../../tutorials/first-sso-login.md)** — Google. Requires a domain name and a publicly trusted certificate.
 - **[Your First SSO Login: Self-hosted IdP](../../tutorials/pocket-id-sso-login.md)** — Pocket ID on your LAN. No public infrastructure required.
 
+To serve LuCI through a reverse proxy that terminates TLS, such as nginx on the router, see [How to Run LuCI Behind a Reverse Proxy](reverse-proxy.md).
+
 If you already know which provider you are using, go directly to the [How-to Guides](../index.md#identity-providers) for provider-specific configuration.

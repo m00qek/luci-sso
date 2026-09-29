@@ -77,6 +77,7 @@ nav:
           - Rotating Credentials: how-to/sysadmin/rotate-credentials.md
           - Role-Based Access Control: how-to/sysadmin/rbac.md
           - Split-Horizon Networking: how-to/sysadmin/split-horizon.md
+          - Running Behind a Reverse Proxy: how-to/sysadmin/reverse-proxy.md
           - Debugging: how-to/sysadmin/debugging.md
           - Backing Up and Restoring: how-to/sysadmin/backup-restore.md
           - Removing luci-sso: how-to/sysadmin/uninstall.md

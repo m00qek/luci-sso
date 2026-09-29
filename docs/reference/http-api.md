@@ -10,7 +10,7 @@
 https://<router>/cgi-bin/luci-sso
 ```
 
-All paths below are relative to this base. The script does not check the scheme itself, but every cookie it sets is `Secure`, so the flow works only over HTTPS; the router's `uhttpd` configuration should not serve this path over HTTP.
+All paths below are relative to this base. The script does not check the scheme itself, but every cookie it sets is `Secure`, so the flow works only when the browser uses HTTPS. `uhttpd` should not serve this path to browsers over HTTP; it may serve it over HTTP to a reverse proxy that terminates TLS. The script does not read the `Host` header: it builds its redirects from `redirect_uri` or as relative paths. See [How to Run LuCI Behind a Reverse Proxy](../how-to/sysadmin/reverse-proxy.md).
 
 ---
 
@@ -86,7 +86,7 @@ If no active session is found (cookie absent or session already expired), the en
 
 ## Cookies
 
-The cookies `luci-sso` sets. The handshake cookie lives only during a login; the two session cookies carry the LuCI session afterwards.
+The cookies `luci-sso` sets. The handshake cookie lives only during a login; the two session cookies carry the LuCI session afterwards. None sets `Domain`, so the browser returns each only to the host it used; behind a reverse proxy, that is the proxy's public host name.
 
 ### `__Host-luci_sso_state`
 
@@ -215,7 +215,7 @@ Rate limits are per client:
 - **Client identity.** A client is its source address as uhttpd reports it (`REMOTE_ADDR`): the full address for IPv4, the `/64` prefix for IPv6, and one shared bucket for an address that cannot be parsed.
 - **Budgets spent.** `GET /` spends both budgets; `/callback`, `/logout` and unknown paths spend only the per-minute one. `?action=enabled` is never limited.
 - **No global limit.** There is no router-wide limit: uhttpd's cap on concurrent CGI processes bounds the total load.
-- **Reverse proxies.** Behind a reverse proxy, every client arrives with the proxy's address and shares one budget. `X-Forwarded-For` is not trusted.
+- **Reverse proxies.** Behind a reverse proxy, every client arrives with the proxy's address and shares one budget. `X-Forwarded-For` is not trusted. See [How to Run LuCI Behind a Reverse Proxy](../how-to/sysadmin/reverse-proxy.md).
 
 Requests that exceed the size limits return `431`. Requests that exceed a rate limit return `429` with a `Retry-After` header giving the seconds until that budget resets.
 
