@@ -25,6 +25,8 @@ Before you start, go through the [open issues labelled `next-release`](https://g
 
     Leave `devenv/scripts/testdata/` alone: it holds a fixed release that the lint checks compare against.
 
+    Links to the published docs in shipped files name only the minor, such as `/0.10/`, so this search misses them. For a new minor, `make lint` in step 4 lists each one that still names the previous minor.
+
 3. Add the release to `CHANGELOG.md`.
 4. Run `make lint`. It also checks that the feed Makefile generator still accepts `openwrt/luci-sso/Makefile` (see [If the generator refuses the Makefile](#if-the-generator-refuses-the-makefile)).
 5. Commit as `chore(release): <version>` and merge to `main` through a pull request.
@@ -36,11 +38,13 @@ Tag the merge commit on `main` and push the tag:
 ```bash
 git switch main
 git pull
-git tag v0.11.0
+git tag -a v0.11.0 -m v0.11.0
 git push origin v0.11.0
 ```
 
 The tag name is `v` followed by `PKG_VERSION`. The feed downloads `https://github.com/m00qek/luci-sso/archive/refs/tags/v<version>.tar.gz`, so the tag must be on GitHub before the next step.
+
+Pushing the tag also publishes its docs as version `X.Y` of the docs site, and moves `latest` to it when it is the newest minor. Then create or move the `docs/X.Y` branch: for a new minor, create it from the tag and stop updating the previous one; for a patch release, move it to the tag. See [Publish a release](documentation.md#publish-a-release).
 
 ## 3. Generate the feed Makefile
 
