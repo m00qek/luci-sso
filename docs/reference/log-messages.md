@@ -479,7 +479,7 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | `Discovery fetch HTTP <status> from [id: …]` | warn | Before `[502] OIDC_DISCOVERY_FAILED`: `DISCOVERY_FAILED`. |
 | `Discovery JSON parse error: <detail>` | err | Before `[502] OIDC_DISCOVERY_FAILED`: `INVALID_DISCOVERY_DOC`. |
 | `Discovery document missing issuer field from [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`: `DISCOVERY_MISSING_ISSUER`. |
-| `DISCOVERY_ISSUER_MISMATCH: issuer_url is "<configured>" but the discovery document declares "<declared>" [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`. See [Discovery Errors](#discovery-errors). |
+| `DISCOVERY_ISSUER_MISMATCH: issuer_url is "<configured>" but the discovery document declares "<declared>"; they differ only in a trailing slash, letter case or default port: set issuer_url to exactly the declared value [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`. The text from `; they differ only` up to `[id: …]` is added only for a near miss. See [Discovery Errors](#discovery-errors). |
 | `DISCOVERY_MISSING_ENDPOINT: the discovery document has no <field> [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`. |
 | `INSECURE_ENDPOINT: <field> in the discovery document is not HTTPS: "<url>" [id: …]` | err | Before `[502] OIDC_DISCOVERY_FAILED`. |
 | `Insecure userinfo_endpoint ignored from [id: …]` | warn | The IdP advertises a plain-HTTP UserInfo endpoint. It is dropped, so UserInfo is never asked; a user whose ID Token has no email then matches only by group. |
@@ -578,7 +578,7 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | Line | Level | Meaning |
 | :--- | :--- | :--- |
 | `Logout attempt with invalid or missing CSRF token` | warn | Before `[403] CSRF_CHECK_FAILED`. See [Authorization Errors](#authorization-errors). |
-| `Logout for [sub_id: …] (role=<role>)` | info | An SSO session was ended on the router. `[sub_id: …]` is read from the session's ID Token, so it matches the user's login lines. The browser then goes to the IdP's `end_session_endpoint`, if it has one. |
+| `Logout for [sub_id: …] (role=<role>)` | info | An SSO session was ended on the router. `[sub_id: …]` is read from the session's ID Token, so it matches the user's login lines; it reads `[INVALID]` when the session holds no ID Token, when its `sub` cannot be read, or, as in the login lines, when the `sub` is shorter than 8 characters. The browser then goes to the IdP's `end_session_endpoint`, if it has one. |
 | `Logout for [sub_id: …] (not an SSO session)` | info | A session whose username is not `sso:<role>` was sent to `/cgi-bin/luci-sso/logout` directly and ended. LuCI's **Log out** never sends one there. |
 
 A logout that goes through LuCI's own logout, as it does for a password session, is not logged by `luci-sso`.

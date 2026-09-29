@@ -18,7 +18,7 @@ This guide walks through upgrading an existing `luci-sso` installation to a new 
 
 ## Before you upgrade from 0.9.1 or earlier
 
-Do these steps in this order. All of them but step 6 work with the release you run now, so they are done before you install. The root password login is never affected: if SSO stops working, you can still log in to LuCI with the password.
+Do these steps in this order. All of them but step 7 work with the release you run now, so they are done before you install; step 7 is done right after installing. The root password login is never affected: if SSO stops working, you can still log in to LuCI with the password.
 
 1.  **Keep a way back.** Check that the `root` password works, keep the package files of the version you run now (see [Rolling back](#rolling-back)), and have SSH access to the router. On OpenWrt 24.10, do the upgrade over SSH: it logs out every LuCI session, including the one that would run it from the **Software** page.
 
@@ -52,16 +52,7 @@ Do these steps in this order. All of them but step 6 work with the release you r
 
 5.  **Register the post-logout redirect URI at the IdP.** In 0.10.0, LuCI's **Log out** sends SSO users to the IdP's `end_session_endpoint`, with `post_logout_redirect_uri` set to the origin of `redirect_uri` followed by `/`, for example `https://router.example.com/`. Keycloak and Authentik show an error page for a URI they do not have registered. Add it to the client's post-logout redirect URIs; see [Provider Compatibility](../../reference/provider-compatibility.md#logout).
 
-6.  **Note the change to `internal_issuer_url`, if you set it.** 0.10.0 accepts only an origin, such as `https://auth.lan:9443`, and adds the issuer's path itself. 0.9.1 appended `/.well-known/openid-configuration` to the value as given, so for an issuer with a path, as Keycloak's and Authentik's have, the value had to include that path. A value with a path turns SSO off in 0.10.0: every login fails with `[500] CONFIG_ERROR`, after `Configuration rejected: internal_issuer_url must be an origin (scheme://host[:port]) with no path, query or fragment`. An origin alone would break discovery on 0.9.1, so when the value has a path, reduce it to its origin right after installing, in the same SSH session:
-
-    ```bash
-    uci set luci-sso.default.internal_issuer_url='https://auth.lan:9443'
-    uci commit luci-sso
-    ```
-
-    See [How to Configure Split-Horizon Networking](split-horizon.md#what-gets-replaced).
-
-7.  **On OpenWrt 25.12, just before you install, end open sessions of a role named like an `rpcd` login.** A role named, for example, `root` gives its 0.9.1 sessions the username `root`, so at the upgrade's reload they would get the `root` login's rights. List the `rpcd` logins, then the sessions:
+6.  **On OpenWrt 25.12, just before you install, end open sessions of a role named like an `rpcd` login.** A role named, for example, `root` gives its 0.9.1 sessions the username `root`, so at the upgrade's reload they would get the `root` login's rights. List the `rpcd` logins, then the sessions:
 
     ```bash
     uci show rpcd | grep username
@@ -76,7 +67,16 @@ Do these steps in this order. All of them but step 6 work with the release you r
 
     On OpenWrt 24.10 there is nothing to do: the upgrade logs everyone out.
 
-Then install the upgrade with Step 2 below, and [check the result](#check-the-result).
+7.  **Right after installing, reduce `internal_issuer_url` to an origin, if you set it.** 0.10.0 accepts only an origin, such as `https://auth.lan:9443`, and adds the issuer's path itself. A value with a path turns SSO off: every login fails with `[500] CONFIG_ERROR`, after `Configuration rejected: internal_issuer_url must be an origin (scheme://host[:port]) with no path, query or fragment`. If the value has a path, set the origin in the same SSH session as the install:
+
+    ```bash
+    uci set luci-sso.default.internal_issuer_url='https://auth.lan:9443'
+    uci commit luci-sso
+    ```
+
+    Do not do it before installing. 0.9.1 appends `/.well-known/openid-configuration` to the value as given, so for an issuer with a path, as Keycloak's and Authentik's have, 0.9.1 needs that path, and an origin alone breaks its discovery. See [How to Configure Split-Horizon Networking](split-horizon.md#what-gets-replaced).
+
+Then install the upgrade with [Step 2](#step-2-install-the-upgrade) below, do step 7 in the same SSH session if it applies, and [check the result](#check-the-result).
 
 ---
 
@@ -163,7 +163,7 @@ apk list --installed luci-sso
     apk add --allow-untrusted /tmp/luci-sso-<version>.apk
     ```
 
-The install script runs again during the upgrade: it recreates `/var/run/luci-sso/` if needed, keeps the cleanup cron job, moves any role permissions still in `/etc/config/luci-sso` into rpcd login entries, reloads `rpcd`, re-applies the SSO button to LuCI's login templates (with `luci-sso-repatch`) and clears LuCI's cache. There is nothing to run by hand, except, from 0.9.1 or earlier, step 6 of [Before you upgrade](#before-you-upgrade-from-091-or-earlier) and the checks in [Upgrading from 0.9.1 or earlier to 0.10.0](#upgrading-from-091-or-earlier-to-0100).
+The install script runs again during the upgrade: it recreates `/var/run/luci-sso/` if needed, keeps the cleanup cron job, moves any role permissions still in `/etc/config/luci-sso` into rpcd login entries, reloads `rpcd`, re-applies the SSO button to LuCI's login templates (with `luci-sso-repatch`) and clears LuCI's cache. There is nothing to run by hand, except, from 0.9.1 or earlier, step 7 of [Before you upgrade](#before-you-upgrade-from-091-or-earlier) and the checks in [Upgrading from 0.9.1 or earlier to 0.10.0](#upgrading-from-091-or-earlier-to-0100).
 
 If `/etc/config/luci-sso-opkg` (or `luci-sso.apk-new`) appeared, compare it with your configuration for new options, then delete it.
 
@@ -217,7 +217,7 @@ The install script moves each role's permissions, in role order:
 
 Running the script again changes nothing. SSO sessions opened before the upgrade lose their rights at the `rpcd` reload that follows, and their users log in again; on OpenWrt 24.10 everyone was already logged out by the old package's removal script.
 
-If a role has the same name as an `rpcd` login, such as `root`, its open sessions would instead get that login's rights at the reload. End them just before you upgrade, as step 7 of [Before you upgrade from 0.9.1 or earlier](#before-you-upgrade-from-091-or-earlier) describes. On OpenWrt 24.10 the upgrade logs everyone out first, so this cannot happen there.
+If a role has the same name as an `rpcd` login, such as `root`, its open sessions would instead get that login's rights at the reload. End them just before you upgrade, as step 6 of [Before you upgrade from 0.9.1 or earlier](#before-you-upgrade-from-091-or-earlier) describes. On OpenWrt 24.10 the upgrade logs everyone out first, so this cannot happen there.
 
 ### Check the result
 
@@ -352,4 +352,4 @@ apk del luci-sso
 apk add --allow-untrusted /tmp/luci-sso-<old-version>.apk
 ```
 
-The removal copies each role's permissions back onto the role, `unauthenticated` included, and deletes the `luci_sso_*` entries. SSO users lose their rights at the removal and log in again. The old release then merges matching roles and gives `*` its old meaning.
+The removal copies each role's permissions back onto the role, `unauthenticated` included, and deletes the `luci_sso_*` entries. SSO users lose their rights at the removal and log in again. The old release then merges matching roles and gives `*` its old meaning. If you reduced `internal_issuer_url` to an origin in step 7 of [Before you upgrade](#before-you-upgrade-from-091-or-earlier), add the issuer's path back, or discovery fails on the old release.

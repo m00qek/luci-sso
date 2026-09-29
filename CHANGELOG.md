@@ -37,7 +37,7 @@ Upgrading from 0.9.1 needs some steps **before** you install. Follow [Before you
 - SSO sessions use LuCI's session timeout, `luci.sauth.sessiontime`.
 - A session is recognised as an SSO session by its username, `sso:<role>`, so a user matched by group whose IdP sends no email also logs out at the IdP.
 - The session's `oidc_user` label holds the user's email only when the IdP marks it as verified, whatever `require_email_verified` says, so an address a user typed in themselves cannot make their session look like someone else's.
-- Upgrades and downgrades keep every session: the package reloads `rpcd` and never restarts it. Removal copies the roles' permissions back onto the roles, and installing again moves them back.
+- From 0.10.0 on, upgrades and downgrades keep every session: the package reloads `rpcd` and never restarts it. The upgrade from 0.9.1 is the exception; see [Upgrade actions](#upgrade-actions). So is a rollback to 0.9.1, which [needs a removal first](https://m00qek.github.io/luci-sso/how-to/sysadmin/upgrade/#rolling-back-to-091-or-earlier). Removal copies the roles' permissions back onto the roles, and installing again moves them back.
 - A failed request to the IdP is answered with `502 Bad Gateway`.
 - The login button takes the theme's colours.
 - A fresh install ships without a `redirect_uri`, so the settings page suggests one built from the host LuCI was opened at.
