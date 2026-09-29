@@ -2,11 +2,18 @@
 
 All notable changes to `luci-sso` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Until 1.0, a minor version may change the configuration or behaviour; each such change is listed under **Upgrade actions**.
 
+## [Unreleased]
+
+### Changed
+
+- The documentation has one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, starting with 0.9 and 0.10. [`/latest/`](https://m00qek.github.io/luci-sso/latest/) shows the newest release, and a selector on every page switches between versions. Links to the old unversioned pages lead to the same page, and anchor, under `/latest/`.
+- The settings page links to the documentation of the installed release, `/0.10/`, instead of the unversioned site.
+
 ## [0.10.0] - 2026-09-29
 
 ### Upgrade actions
 
-Upgrading from 0.9.1 needs some steps **before** you install, and one right after. Follow [Before you upgrade from 0.9.1 or earlier](https://m00qek.github.io/luci-sso/how-to/sysadmin/upgrade/#before-you-upgrade-from-091-or-earlier); the upgrade page explains each change.
+Upgrading from 0.9.1 needs some steps **before** you install, and one right after. Follow [Before you upgrade from 0.9.1 or earlier](https://m00qek.github.io/luci-sso/0.10/how-to/sysadmin/upgrade/#before-you-upgrade-from-091-or-earlier); the upgrade page explains each change.
 
 - **On OpenWrt 24.10, the upgrade logs every user out once, `root` included.** `opkg` runs 0.9.1's removal script, which restarts `rpcd`. Upgrade over SSH, not from LuCI's **Software** page.
 - **Role permissions move to `rpcd`.** A role's `read` and `write` lists become the login entry `luci_sso_<role>` in `/etc/config/rpcd`, with the username `sso:<role>`. The upgrade moves them for you.
@@ -37,7 +44,7 @@ Upgrading from 0.9.1 needs some steps **before** you install, and one right afte
 - SSO sessions use LuCI's session timeout, `luci.sauth.sessiontime`.
 - A session is recognised as an SSO session by its username, `sso:<role>`, so a user matched by group whose IdP sends no email also logs out at the IdP.
 - The session's `oidc_user` label holds the user's email only when the IdP marks it as verified, whatever `require_email_verified` says, so an address a user typed in themselves cannot make their session look like someone else's.
-- From 0.10.0 on, upgrades and downgrades keep every session: the package reloads `rpcd` and never restarts it. The upgrade from 0.9.1 is the exception; see [Upgrade actions](#upgrade-actions). So is a rollback to 0.9.1, which [needs a removal first](https://m00qek.github.io/luci-sso/how-to/sysadmin/upgrade/#rolling-back-to-091-or-earlier). Removal copies the roles' permissions back onto the roles, and installing again moves them back.
+- From 0.10.0 on, upgrades and downgrades keep every session: the package reloads `rpcd` and never restarts it. The upgrade from 0.9.1 is the exception; see [Upgrade actions](#upgrade-actions). So is a rollback to 0.9.1, which [needs a removal first](https://m00qek.github.io/luci-sso/0.10/how-to/sysadmin/upgrade/#rolling-back-to-091-or-earlier). Removal copies the roles' permissions back onto the roles, and installing again moves them back.
 - A failed request to the IdP is answered with `502 Bad Gateway`.
 - The login button takes the theme's colours.
 - A fresh install ships without a `redirect_uri`, so the settings page suggests one built from the host LuCI was opened at.
@@ -75,6 +82,7 @@ Upgrading from 0.9.1 needs some steps **before** you install, and one right afte
 
 First public release.
 
+[Unreleased]: https://github.com/m00qek/luci-sso/compare/v0.10.0...HEAD
 [0.10.0]: https://github.com/m00qek/luci-sso/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/m00qek/luci-sso/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/m00qek/luci-sso/releases/tag/v0.9.0

@@ -44,7 +44,7 @@ All development commands run through `Makefile`. Invoke them as `make <target> [
 | `watch-tests` | CI | Re-run tests automatically when files change in `files/`, `src/`, or `test/`. Requires `inotify-tools` on the host. |
 | `fuzzer-test` | CI | Run coverage-guided fuzzing (libFuzzer + AddressSanitizer) on native C code. Needs no running stack. |
 | `sanitizer-test` | CI | Run `test/native` and `test/unit/luci_sso/crypto` against the native module built with AddressSanitizer + UndefinedBehaviorSanitizer, in an interpreter built the same way. Fails on any sanitizer report, including leaks found at process exit. Needs no running stack. |
-| `lint` | — | Run the lint checks: the three documentation checks (error codes, request limits, cookies) and the code style check (indentation, function endings and quotes; see [Style Guide](style-guide.md#enforcement)). No stack required. |
+| `lint` | — | Run the lint checks: the three documentation checks (error codes, request limits, cookies), the code style check (indentation, function endings and quotes; see [Style Guide](style-guide.md#enforcement)) and the docs link check (every link to the published docs names the right version; see [Style Guide](style-guide.md#4-links-to-the-published-docs)). No stack required. |
 
 ### Documentation
 

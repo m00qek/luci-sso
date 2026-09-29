@@ -19,12 +19,12 @@
 
 ## Documentation
 
-### [Read the Documentation](https://m00qek.github.io/luci-sso/)
+### [Read the Documentation](https://m00qek.github.io/luci-sso/latest/)
 
-*   **[Tutorials](https://m00qek.github.io/luci-sso/tutorials/)**: Start here — [Your First SSO Login](https://m00qek.github.io/luci-sso/tutorials/first-sso-login/) walks you through a complete setup in minutes.
-*   **[How-to Guides](https://m00qek.github.io/luci-sso/how-to/)**: Provider configuration, RBAC, split-horizon, debugging, and more.
-*   **[Reference](https://m00qek.github.io/luci-sso/reference/)**: UCI schema, HTTP API, log messages, and RFC compliance.
-*   **[Explanation](https://m00qek.github.io/luci-sso/explanation/)**: Architecture, security model, OIDC flow, and threat model.
+*   **[Tutorials](https://m00qek.github.io/luci-sso/latest/tutorials/)**: Start here — [Your First SSO Login](https://m00qek.github.io/luci-sso/latest/tutorials/first-sso-login/) walks you through a complete setup in minutes.
+*   **[How-to Guides](https://m00qek.github.io/luci-sso/latest/how-to/)**: Provider configuration, RBAC, split-horizon, debugging, and more.
+*   **[Reference](https://m00qek.github.io/luci-sso/latest/reference/)**: UCI schema, HTTP API, log messages, and RFC compliance.
+*   **[Explanation](https://m00qek.github.io/luci-sso/latest/explanation/)**: Architecture, security model, OIDC flow, and threat model.
 
 ---
 
@@ -39,7 +39,7 @@ echo 'src/gz ucode.dev https://m00qek.github.io/packages.ucode.dev/24.10' >> /et
 opkg update && opkg install luci-sso luci-sso-crypto-mbedtls
 ```
 
-For OpenWrt 25.12 (`apk`) and the other steps, see [How to Install luci-sso](https://m00qek.github.io/luci-sso/how-to/sysadmin/installation/).
+For OpenWrt 25.12 (`apk`) and the other steps, see [How to Install luci-sso](https://m00qek.github.io/luci-sso/latest/how-to/sysadmin/installation/).
 
 ## Build from Source
 
@@ -49,7 +49,7 @@ For other architectures, or to try your own changes, build the packages with Doc
 make package SDK_ARCH=x86-64
 ```
 
-See [How to Build the Packages from Source](https://m00qek.github.io/luci-sso/how-to/sysadmin/build-from-source/).
+See [How to Build the Packages from Source](https://m00qek.github.io/luci-sso/latest/how-to/sysadmin/build-from-source/).
 
 ---
 

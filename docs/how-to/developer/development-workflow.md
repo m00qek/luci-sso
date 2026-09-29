@@ -93,13 +93,13 @@ Never hardcode environment-specific values (versions, domains) in Dockerfiles or
 
 ## Lint
 
-CI runs four lint checks: three documentation contracts and a code style check. Run them locally before pushing:
+CI runs five lint checks: three documentation contracts, a code style check and a docs link check. Run them locally before pushing:
 
 ```bash
 make lint
 ```
 
-If a documentation check fails, see [How to add error codes, limit constants, and cookies](adding-documented-interfaces.md) for what to update. The code style check (`devenv/scripts/check-code-style.sh`) prints `file:line: rule: detail` for each violation; the rules are in the [style guide](../../reference/style-guide.md#enforcement).
+If a documentation check fails, see [How to add error codes, limit constants, and cookies](adding-documented-interfaces.md) for what to update. The code style check (`devenv/scripts/check-code-style.sh`) prints `file:line: rule: detail` for each violation; the rules are in the [style guide](../../reference/style-guide.md#enforcement). The docs link check (`devenv/scripts/check-docs-links.sh`) prints each link to the published docs that names no version or the wrong one; the rules are in [Links to the Published Docs](../../reference/style-guide.md#4-links-to-the-published-docs).
 
 ---
 
@@ -141,7 +141,7 @@ GitHub's blame view reads the file without any setup. When you land a commit tha
     - every `TODO` names an issue.
 6. If you changed behaviour or an interface, update the matching page in `docs/` in the same pull request.
 7. Commit following the [commit message format](../../reference/style-guide.md#commit-messages).
-8. Open the pull request. CI runs the lint checks on every pull request. A pull request that changes only documentation (files under `docs/`, any `*.md` file, `mkdocs.yml` or `LICENSE`) skips the test workflow entirely. Otherwise the test suites run when the pull request changes `src/`, `mod/`, `files/`, `test/`, `openwrt/`, `Makefile`, or the `openwrt`, `idp`, `browser` or `pki` service under `devenv/services/`. CI builds the docs site with `--strict` whenever `docs/` or `mkdocs.yml` changes, the same as `make -C docs build`.
+8. Open the pull request. CI runs the lint checks on every pull request. A pull request that changes only documentation (files under `docs/`, any `*.md` file, `mkdocs.yml` or `LICENSE`) skips the test workflow entirely. Otherwise the test suites run when the pull request changes `src/`, `mod/`, `files/`, `test/`, `openwrt/`, `Makefile`, or the `openwrt`, `idp`, `browser` or `pki` service under `devenv/services/`. CI builds the docs site with `--strict` whenever `docs/`, `mkdocs.yml` or `mkdocs.mike.yml` changes, the same as `make -C docs build`. Nothing is published from `main`: a release tag or a push to a `docs/X.Y` branch publishes; see [Publish the Docs](documentation.md#publish-the-docs).
 
 ---
 

@@ -1,6 +1,6 @@
 # docs/
 
-Source for the [luci-sso documentation site](https://m00qek.github.io/luci-sso/).
+Source for the [luci-sso documentation site](https://m00qek.github.io/luci-sso/latest/).
 
 Built with [MkDocs Material](https://squidfunk.github.io/mkdocs-material/). Structured using the [Diátaxis framework](https://diataxis.fr/) — tutorials, how-to guides, reference, and explanation.
 
@@ -24,4 +24,4 @@ docs/
 └── _snippets/     # Shared blocks included with pymdownx.snippets; not pages
 ```
 
-For contribution guidelines, see [How to Write Documentation](https://m00qek.github.io/luci-sso/how-to/developer/documentation/).
+For contribution guidelines, see [How to Write Documentation](https://m00qek.github.io/luci-sso/latest/how-to/developer/documentation/).

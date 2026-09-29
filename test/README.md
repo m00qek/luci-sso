@@ -3,9 +3,9 @@
 Native, unit, integration, system and end-to-end tests for `luci-sso`.
 
 For the buckets and the mocking interface, see
-[Testing Architecture](https://m00qek.github.io/luci-sso/reference/testing-architecture/);
-for the rationale, [About the Test Architecture](https://m00qek.github.io/luci-sso/explanation/test-architecture/);
-and for usage, [How to Run Tests](https://m00qek.github.io/luci-sso/how-to/developer/testing/).
+[Testing Architecture](https://m00qek.github.io/luci-sso/latest/reference/testing-architecture/);
+for the rationale, [About the Test Architecture](https://m00qek.github.io/luci-sso/latest/explanation/test-architecture/);
+and for usage, [How to Run Tests](https://m00qek.github.io/luci-sso/latest/how-to/developer/testing/).
 
 ---
 

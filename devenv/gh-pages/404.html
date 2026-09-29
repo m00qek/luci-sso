@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Page not found - LuCI SSO</title>
+  <script>
+    // The root 404 page of the gh-pages branch. GitHub Pages serves it for
+    // every path under https://m00qek.github.io/luci-sso/ that has no file.
+    //
+    // Before 0.10 the docs were published unversioned, at /luci-sso/<page>.
+    // Those links, in release notes, issues and routers running 0.9, now
+    // move to /luci-sso/latest/<page>, with the query and #anchor kept.
+    // A path that is already inside a version (/luci-sso/0.10/..., latest,
+    // dev) is left alone: that page really is missing, and redirecting it
+    // again would loop.
+    (function () {
+      var site = '/luci-sso/';
+      var path = window.location.pathname;
+      if (path.indexOf(site) !== 0) return;
+      var rest = path.slice(site.length);
+      if (/^(latest|dev|\d+\.\d+)(\/|$)/.test(rest)) return;
+      window.location.replace(site + 'latest/' + rest +
+                              window.location.search + window.location.hash);
+    })();
+  </script>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <h1>Page not found</h1>
+  <p>This page does not exist in the LuCI SSO documentation.</p>
+  <p><a href="/luci-sso/latest/">Go to the documentation for the latest release.</a></p>
+</body>
+</html>

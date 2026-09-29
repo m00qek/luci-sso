@@ -795,6 +795,18 @@ We prioritize accessibility for blind users, those with cognitive disabilities, 
 ### 3. Machine-Readable Reference
 Reference documentation must be high-density and unambiguous. Avoid narrative prose in reference quadrants — describe, don't explain.
 
+### 4. Links to the Published Docs
+The site publishes one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, with the alias `latest` for the newest. Every absolute link to the site names a version:
+
+| Where the link is | Version it names | Example |
+| :--- | :--- | :--- |
+| Pages in `docs/` | None: link relatively | `../sysadmin/upgrade.md#rolling-back` |
+| `files/`, `src/`, `mod/` (shipped in the package) | The minor of `PKG_VERSION` | `https://m00qek.github.io/luci-sso/0.10/how-to/sysadmin/split-horizon/` |
+| `CHANGELOG.md` and release notes | The minor of the release they describe; `latest` under `[Unreleased]` | `.../luci-sso/0.10/how-to/sysadmin/upgrade/` |
+| `README.md` and every other file | `latest` | `.../luci-sso/latest/tutorials/` |
+
+`devenv/scripts/check-docs-links.sh` (part of `make lint`) enforces the table, except for release notes, which live on GitHub. A link without a version still works, through the site's `404.html`, but always lands on `latest`.
+
 ---
 
 ## Commit Messages

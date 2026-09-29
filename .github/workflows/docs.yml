@@ -1,44 +1,95 @@
 name: Publish Docs
+
+# The site has one version per minor release, published by mike to gh-pages:
+# https://m00qek.github.io/luci-sso/<X.Y>/, with /latest/ on the newest.
+#
+#   pull request, push to main   strict build only; nothing is published
+#   tag vX.Y.Z                   publishes the tag's docs as X.Y
+#   push to docs/X.Y             publishes the branch's docs as X.Y, if the
+#                                branch changes nothing but the docs since
+#                                its newest vX.Y.Z tag
+#   manual run                   publishes a tag or docs/X.Y branch again
+#
+# The publish job runs the scripts from main, whatever triggered it. GitHub
+# runs a push with the workflow file of the pushed commit, so a docs/X.Y
+# branch needs this file to publish, but nothing else from main.
 on:
   push:
     branches:
       - main
-    paths:
-      - 'docs/**'
-      - 'mkdocs.yml'
-      - '.github/workflows/docs.yml'
+      # Only version branches such as docs/0.10. The filter must match the
+      # whole branch name, so work branches like docs/versioned-site or
+      # docs/0.10.0-screenshots never start a publish.
+      - 'docs/[0-9]+.[0-9]+'
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches:
       - main
     paths:
       - 'docs/**'
       - 'mkdocs.yml'
+      - 'mkdocs.mike.yml'
       - '.github/workflows/docs.yml'
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Release tag or docs branch to publish, such as v0.10.1 or docs/0.10'
+        required: true
+
 permissions:
   contents: write
+
+env:
+  MKDOCS_MATERIAL_VERSION: '9.5.17'
+  MIKE_VERSION: '2.2.0'
+
 jobs:
-  deploy:
+  build:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: 3.x
+      - run: pip install "mkdocs-material==$MKDOCS_MATERIAL_VERSION" "mike==$MIKE_VERSION"
+      - name: Build Docs
+        run: mkdocs build --strict
+      - name: Build Docs with the versioned-site configuration
+        run: mkdocs build --strict -f mkdocs.mike.yml
+
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.ref, 'refs/tags/v') ||
+      startsWith(github.ref, 'refs/heads/docs/')
+    runs-on: ubuntu-latest
+    # One writer to gh-pages at a time.
+    concurrency:
+      group: gh-pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The publishing scripts and configuration come from main. The ref
+          # to publish is checked out by the script, from the full history:
+          # tags, docs/X.Y branches and gh-pages, which mike commits to.
+          ref: main
+          fetch-depth: 0
       - name: Configure Git Credentials
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
       - uses: actions/setup-python@v5
         with:
           python-version: 3.x
-      - run: echo "cache_id=$(date --utc +%V)" >> $GITHUB_ENV
-      - uses: actions/cache@v4
-        with:
-          key: mkdocs-material-${{ env.cache_id }}
-          path: .cache
-          restore-keys: |
-            mkdocs-material-
-      - run: pip install mkdocs-material==9.5.17
-      - name: Build Docs
-        run: mkdocs build --strict
-      - name: Deploy to GitHub Pages
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: mkdocs gh-deploy --force
+      - run: pip install "mkdocs-material==$MKDOCS_MATERIAL_VERSION" "mike==$MIKE_VERSION"
+      - name: Publish the docs
+        env:
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: devenv/scripts/docs-publish.sh --push "$REF"
+      - name: Check the root 404 page
+        run: |
+          git cat-file -e origin/gh-pages:404.html ||
+            echo "::warning::gh-pages has no 404.html, so unversioned links are not redirected. See devenv/scripts/docs-backfill.sh."

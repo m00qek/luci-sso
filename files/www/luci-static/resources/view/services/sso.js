@@ -272,7 +272,7 @@ return view.extend({
 		o = s.option(form.Flag, 'require_email_verified', _('Require Verified Email'),
 		        _('Match a user by email address only if the provider marks it as verified (<code>email_verified</code>). ' +
 		          'Group matching is not affected. ' +
-		          'See <a href="https://m00qek.github.io/luci-sso/explanation/roles-and-permissions/#verified-email-addresses" target="_blank">verified email addresses</a>.'));
+		          'See <a href="https://m00qek.github.io/luci-sso/0.10/explanation/roles-and-permissions/#verified-email-addresses" target="_blank">verified email addresses</a>.'));
 		/* On when the option is unset, as the backend treats it. */
 		o.default = o.enabled;
 		o.rmempty = false;
@@ -287,7 +287,7 @@ return view.extend({
 		o = s.option(form.Value, 'internal_issuer_url', _('Internal Issuer URL'),
 		        _('Physical URL the router uses for back-channel requests (token exchange, JWKS fetch). ' +
 		          'Leave empty if the router can reach the Issuer URL directly. ' +
-		          'See <a href="https://m00qek.github.io/luci-sso/how-to/sysadmin/split-horizon/" target="_blank">split-horizon networking</a>.'));
+		          'See <a href="https://m00qek.github.io/luci-sso/0.10/how-to/sysadmin/split-horizon/" target="_blank">split-horizon networking</a>.'));
 		o.optional = true;
 		o.rmempty = true;
 		o.validate = function(section_id, value) {
