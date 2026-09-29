@@ -8,6 +8,24 @@ describe('rpcd_login: section_name and username', () => {
 	});
 });
 
+describe('rpcd_login: role_of — what makes a session an SSO session', () => {
+	it('returns the role of an sso:<role> username', () => {
+		assert.match("viewer", rpcd_login.role_of("sso:viewer"));
+		assert.match("viewer", rpcd_login.role_of(rpcd_login.username("viewer")));
+	});
+
+	it('returns null for any other username', () => {
+		for (let name in [ "root", "admin", "sso:", "sso:bad-name", "sso:a b", "SSO:viewer", " sso:viewer", null, 1, {} ])
+			assert.match(null, rpcd_login.role_of(name), `${name}`);
+	});
+
+	it('returns null for a role name longer than NAME_MAX', () => {
+		let long = "";
+		for (let i = 0; i <= rpcd_login.NAME_MAX; i++) long += "a";
+		assert.match(null, rpcd_login.role_of("sso:" + long));
+	});
+});
+
 describe('rpcd_login: permits — rpcd rules', () => {
 	let can = (lists, perm, group) => rpcd_login.permits(lists, perm, group);
 

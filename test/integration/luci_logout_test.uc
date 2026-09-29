@@ -38,11 +38,29 @@ function run(opts) {
 
 describe('luci.controller.sso: action_logout', () => {
 	it('sends an SSO session to luci-sso /logout with the session CSRF token', () => {
-		let r = run({ sid: 'S1', token: 'tok/+=', values: { oidc_user: 'a@example.com', token: 'tok/+=' } });
+		let r = run({ sid: 'S1', token: 'tok/+=', values: { username: 'sso:admin', oidc_user: 'a@example.com', token: 'tok/+=' } });
 		assert.match(null, r.err);
 		assert.match([
 			[ 'ubus', 'session', 'get', 'S1' ],
 			[ 'redirect', '/cgi-bin/luci-sso/logout?stoken=tok%2F%2B%3D' ],
+		], r.calls);
+	});
+
+	it('sends an SSO session without an email to luci-sso /logout too', () => {
+		// A user matched by group whose IdP sends no email: no oidc_user value.
+		let r = run({ sid: 'S5', token: 't', values: { username: 'sso:viewer', token: 't' } });
+		assert.match(null, r.err);
+		assert.match([
+			[ 'ubus', 'session', 'get', 'S5' ],
+			[ 'redirect', '/cgi-bin/luci-sso/logout?stoken=t' ],
+		], r.calls);
+	});
+
+	it('gives a session whose username is not sso:<role> LuCI\'s own logout, even with an oidc_user value', () => {
+		let r = run({ sid: 'S6', token: 't', values: { username: 'root', oidc_user: 'a@example.com', token: 't' } });
+		assert.match([
+			[ 'ubus', 'session', 'get', 'S6' ],
+			[ 'luci-logout', 'S6' ],
 		], r.calls);
 	});
 
@@ -61,7 +79,7 @@ describe('luci.controller.sso: action_logout', () => {
 	});
 
 	it('falls back to LuCI\'s logout without a CSRF token, without asking rpcd', () => {
-		let r = run({ sid: 'S4', token: null, values: { oidc_user: 'a@example.com' } });
+		let r = run({ sid: 'S4', token: null, values: { username: 'sso:admin', oidc_user: 'a@example.com' } });
 		assert.match([ [ 'luci-logout', 'S4' ] ], r.calls);
 	});
 

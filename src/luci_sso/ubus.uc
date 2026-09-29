@@ -190,7 +190,8 @@ function _abort_session(deps, sid, code) {
  *
  * @param {object} deps - { fs, ubus, uci, log, native }
  * @param {string} role - The luci-sso role the user matched
- * @param {string} oidc_email - The real user's email for tagging
+ * @param {string|null} oidc_email - The user's email, stored as the label
+ *   `oidc_user`; null when the user has none
  * @param {string} access_token - OIDC access token to persist
  * @param {string} refresh_token - OIDC refresh token to persist
  * @param {string} id_token - OIDC ID token to persist (for logout)
@@ -259,17 +260,20 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 	// rights: rebuilt from the entry, or granted by the calls after it.
 	// Without the variables the session has no CSRF token and no username, so
 	// a failure here must not hand back a usable session.
-	let res_set = deps.ubus.call("session", "set", {
-		ubus_rpc_session: sid,
-		values: {
-			username: rpcd_login.username(role),
-			oidc_user: oidc_email,
-			oidc_access_token: access_token,
-			oidc_refresh_token: refresh_token,
-			oidc_id_token: id_token,
-			token: csrf_token
-		}
-	});
+	// The username makes it an SSO session (rpcd_login.role_of). The email
+	// is only a label for finding the session, and is left out, not stored
+	// as null, when the user has none: a user matched by group whose IdP
+	// sends no email.
+	let values = {
+		username: rpcd_login.username(role),
+		oidc_access_token: access_token,
+		oidc_refresh_token: refresh_token,
+		oidc_id_token: id_token,
+		token: csrf_token
+	};
+	if (type(oidc_email) == "string" && length(oidc_email))
+		values.oidc_user = oidc_email;
+	let res_set = deps.ubus.call("session", "set", { ubus_rpc_session: sid, values });
 	if (!res_set.ok) {
 		deps.log("error", `UBUS session set failed [sid: ${crypto.safe_id(deps.native, sid)}]`);
 		return _abort_session(deps, sid, UBUS_SESSION_FAILED);

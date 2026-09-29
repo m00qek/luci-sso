@@ -356,6 +356,26 @@ describe('ubus: create_passwordless_session — session values', () => {
 		});
 	});
 
+	it('leaves oidc_user out for a user without an email, and keeps the sso:<role> username', () => {
+		let values = null;
+		mock.inject_all({
+			ubus: { strict: true, data: {
+				"session:create": { ubus_rpc_session: SID },
+				"session:grant":  UBUS_NO_DATA,
+				"session:set":    (args) => { values = args.values; return UBUS_NO_DATA; },
+			} },
+			fs: ACL_FS,
+			uci: USER_UCI,
+		}, (proxies) => {
+			assert.match(contains({ ok: true, data: SID }),
+				ubus_mod.create_passwordless_session(
+					build_deps(proxies), 'guest', null, 'at', 'rt', 'it'
+				));
+			assert.match('sso:guest', values.username);
+			assert.match(false, exists(values, 'oidc_user'), 'no placeholder email');
+		});
+	});
+
 	it('destroys the session and returns UBUS_SESSION_FAILED when session set fails', () => {
 		let destroyed = null;
 		mock.inject_all({

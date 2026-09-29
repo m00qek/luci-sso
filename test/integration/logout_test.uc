@@ -2,6 +2,7 @@ import { describe, it, assert, truthy, falsy, spy } from 'utest';
 import * as router from 'luci_sso.router';
 import { with_context, UBUS_NO_DATA } from 'context';
 import * as f from 'fixtures.oidc';
+import * as encoding from 'luci_sso.encoding';
 
 // Integration bucket — the logout flow, entered at router.handle(deps, config,
 // request) with a full deps graph (with_context). Covers RP-initiated logout,
@@ -108,6 +109,49 @@ describe('logout: RP-initiated', () => {
 			assert.match(302, res.data.status);
 			assert.match("/", res.data.headers["Location"], "Should redirect to root for unauthenticated logout");
 		});
+	});
+});
+
+// ─── SSO sessions without an email ────────────────────────────────────────────
+
+// An ID Token as the session stores it; the logout never verifies it again,
+// so the signature is not needed.
+function stored_id_token(claims) {
+	let part = (v) => encoding.b64url_encode(sprintf("%J", v)).data;
+	return `${part({ alg: "RS256", typ: "JWT" })}.${part(claims)}.c2ln`;
+}
+
+function logout_with(values) {
+	let res;
+	let DISC_WITH_LOGOUT = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
+
+	with_context({
+		fs: { data: {} },
+		ubus: {
+			data: {
+				"session:get": { values: { token: "csrf-789", ...values } },
+				"session:destroy": UBUS_NO_DATA
+			}
+		},
+		http_client: {
+			data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: DISC_WITH_LOGOUT } }
+		},
+		clock: { data: { now: 1516239022 } },
+		native: {}
+	}, (deps) => {
+		res = router.handle(deps, MOCK_CONFIG, mock_request("/logout", { stoken: "csrf-789" }, { "sysauth_https": "session-789" }));
+	});
+	return { res };
+}
+
+describe('logout: an SSO session without an email', () => {
+	it('logs out at the IdP: a user matched by group has no oidc_user', () => {
+		let id_token = stored_id_token({ sub: "group-only-user", iss: "https://idp.com" });
+		let r = logout_with({ username: "sso:viewer", oidc_id_token: id_token });
+
+		assert.match(truthy(), r.res.ok);
+		assert.match(302, r.res.data.status);
+		assert.match(0, index(r.res.data.headers["Location"], "https://idp.com/logout?id_token_hint="), "Should reach the IdP end_session_endpoint");
 	});
 });
 

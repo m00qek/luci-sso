@@ -270,16 +270,21 @@ A permission change reaches users who are logged in. Each write through the sett
 
 Changes to emails, groups and the order apply from the next login only. A session keeps the role it was given. To take a user out of a role at once, remove them from the role, then end their sessions.
 
-1. List the sessions. Each SSO session shows the user's email as `oidc_user` on the line after its session ID:
+1. List the sessions. Under its session ID, each SSO session shows its role as `username` (`sso:<role>`) and, when the IdP sent one, the user's email as `oidc_user`:
 
     ```bash
-    ubus call session list | grep -E '"(ubus_rpc_session|oidc_user)"'
+    ubus call session list | grep -E '"(ubus_rpc_session|oidc_user|username)"'
     ```
 
     ```text
     	"ubus_rpc_session": "01c8b0237fb048cb1e8042e022e51baa",
     		"oidc_user": "bob@example.com",
+    		"username": "sso:viewer"
+    	"ubus_rpc_session": "7d2f95c0e6a14b0c9a5d3f8e21b6c4aa",
+    		"username": "sso:ops"
     ```
+
+    A session with no `oidc_user` belongs to a user matched by a `group` rule whose IdP sends no email. It can only be told apart by its role: to remove such a user at once, end every session of that role, and let the others log in again.
 
 2. Destroy each of that user's sessions by its ID:
 

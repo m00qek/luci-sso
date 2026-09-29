@@ -319,7 +319,7 @@ The session holds these values:
 | Value | Content |
 | :--- | :--- |
 | `username` | `sso:<role>`, the entry's user name, from which `rpcd` rebuilds the session's rights on reload. |
-| `oidc_user` | The email. |
+| `oidc_user` | The email, as a label for finding the session. Absent when the user has none, for example a user matched by `group` whose IdP sends no email. |
 | `oidc_access_token` | The access token. |
 | `oidc_refresh_token` | The refresh token. |
 | `oidc_id_token` | The ID token. |
@@ -366,6 +366,10 @@ The roles' `rpcd` login entries (`luci_sso_<role>` in `/etc/config/rpcd`, `usern
 ### `check_name(name)` → `Result<string>`
 
 1 to `NAME_MAX` letters, digits and underscores. Fails with `INVALID_NAME`.
+
+### `role_of(name)` → `string | null`
+
+The role of the username `sso:<role>` when `<role>` passes `check_name`; `null` for any other value. A session is an SSO session exactly when its `username` gives a role here. `luci.controller.sso` uses it; the `oidc_user` value is never the test.
 
 ### `check_list(label, list)` → `Result<array>`
 

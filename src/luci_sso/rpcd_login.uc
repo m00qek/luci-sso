@@ -70,6 +70,19 @@ export function check_name(name) {
 };
 
 /**
+ * The role of an SSO session's username: `<role>` for `sso:<role>` with a
+ * valid role name, null for anything else. A session is an SSO session
+ * exactly when this returns a role; its email (`oidc_user`) is only a tag,
+ * absent for a user matched by group whose IdP sends no email.
+ */
+export function role_of(name) {
+	if (type(name) != "string" || substr(name, 0, length(USERNAME_PREFIX)) != USERNAME_PREFIX)
+		return null;
+	let role = substr(name, length(USERNAME_PREFIX));
+	return check_name(role).ok ? role : null;
+};
+
+/**
  * Checks a read or write list: an array of at most LIST_MAX non-empty
  * strings of at most ENTRY_MAX characters, without control characters.
  * @param {string} label - "read" or "write", for the message

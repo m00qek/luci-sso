@@ -80,7 +80,7 @@ Destroys the active LuCI session and redirects the browser. If the IdP advertise
 If no active session is found (cookie absent or session already expired), the endpoint returns `302 /` without error.
 
 !!! note "LuCI's Log out entry uses this endpoint for SSO sessions"
-    `luci-sso` overrides the action of LuCI's `admin/logout` menu entry (`/usr/share/luci/menu.d/luci-sso-logout.json`, handled by `luci.controller.sso`). For a session that carries an `oidc_user` value and a CSRF token it redirects to `/cgi-bin/luci-sso/logout?stoken=<session token>`; for any other session it runs LuCI's own logout unchanged.
+    `luci-sso` overrides the action of LuCI's `admin/logout` menu entry (`/usr/share/luci/menu.d/luci-sso-logout.json`, handled by `luci.controller.sso`). For a session whose username is `sso:<role>` and that has a CSRF token it redirects to `/cgi-bin/luci-sso/logout?stoken=<session token>`; for any other session it runs LuCI's own logout unchanged.
 
 ---
 
