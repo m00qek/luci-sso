@@ -2,6 +2,13 @@
 
 All notable changes to `luci-sso` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Until 1.0, a minor version may change the configuration or behaviour; each such change is listed under **Upgrade actions**.
 
+## [Unreleased]
+
+### Changed
+
+- The documentation has one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, starting with 0.9 and 0.10. [`/latest/`](https://m00qek.github.io/luci-sso/latest/) shows the newest release, and a selector on every page switches between versions. Links to the old unversioned pages lead to the same page, and anchor, under `/latest/`.
+- The settings page links to the documentation of the installed release, `/0.10/`, instead of the unversioned site.
+
 ## [0.10.0] - 2026-09-29
 
 ### Upgrade actions
@@ -75,6 +82,7 @@ Upgrading from 0.9.1 needs some steps **before** you install, and one right afte
 
 First public release.
 
+[Unreleased]: https://github.com/m00qek/luci-sso/compare/v0.10.0...HEAD
 [0.10.0]: https://github.com/m00qek/luci-sso/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/m00qek/luci-sso/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/m00qek/luci-sso/releases/tag/v0.9.0

@@ -4,7 +4,10 @@
 #
 #   files/, src/, mod/   the minor of PKG_VERSION in openwrt/luci-sso/Makefile,
 #                        so a router links to the docs of the release it runs
-#   CHANGELOG.md         the minor of the release section the link is in
+#   CHANGELOG.md         the minor of the release section the link is in;
+#                        latest under [Unreleased], whose minor has no docs
+#                        yet. At release the section gets its number, and
+#                        this check asks for the links to be pinned to it
 #   anything else        any version, usually latest
 #
 # A link without a version still works, through the 404 page on gh-pages, but
@@ -45,7 +48,7 @@ check() {
         echo "FAIL: $file:$line: $url has no version; use .../luci-sso/${want/any/latest}/..."
         fail=1
     elif [ "$want" != any ] && [ "$got" != "$want" ]; then
-        echo "FAIL: $file:$line: $url links to $got; this file is pinned to $want"
+        echo "FAIL: $file:$line: $url links to $got; it must link to $want"
         fail=1
     fi
 }
@@ -65,14 +68,17 @@ while IFS=: read -r file line text; do
     done < <(grep -oE "$url_re" <<< "$text")
 done < <(git grep -nE "$url_re" -- . || true)
 
-# CHANGELOG.md: a link under "## [X.Y.Z]" names X.Y. Under any other heading
-# (Unreleased) it names some version.
+# CHANGELOG.md: a link under "## [X.Y.Z]" names X.Y, one under
+# "## [Unreleased]" names latest, and one under any other heading names some
+# version.
 want=any
 line=0
 while IFS= read -r text; do
     line=$((line + 1))
     if [[ $text =~ ^##\ \[([0-9]+)\.([0-9]+)\.[0-9]+\] ]]; then
         want=${BASH_REMATCH[1]}.${BASH_REMATCH[2]}
+    elif [[ $text =~ ^##\ \[Unreleased\] ]]; then
+        want=latest
     elif [[ $text =~ ^##\  ]]; then
         want=any
     fi
