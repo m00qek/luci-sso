@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="540" viewBox="0 0 900 540">
+  <rect width="900" height="540" fill="#f5f5f5" stroke="#ccc" stroke-width="1"/>
+  <!-- Browser chrome -->
+  <rect width="900" height="40" fill="#e0e0e0"/>
+  <rect x="10" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="40" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="70" y="10" width="20" height="20" rx="10" fill="#bbb"/>
+  <rect x="100" y="8" width="700" height="24" rx="12" fill="#fff" stroke="#ccc"/>
+  <text x="450" y="24" font-family="monospace" font-size="12" fill="#666" text-anchor="middle">https://192.168.1.1/cgi-bin/luci/</text>
+  <!-- LuCI header -->
+  <rect y="40" width="900" height="48" fill="#1a237e"/>
+  <text x="20" y="70" font-family="sans-serif" font-size="18" font-weight="bold" fill="white">OpenWrt — LuCI</text>
+  <text x="700" y="62" font-family="sans-serif" font-size="11" fill="#90caf9">Logged in as: admin@example.com</text>
+  <text x="700" y="78" font-family="sans-serif" font-size="11" fill="#a5d6a7">Role: admin (full access)</text>
+  <!-- Sidebar - full menu -->
+  <rect x="0" y="88" width="190" height="452" fill="#283593"/>
+  <rect x="0" y="88" width="190" height="32" fill="#3949ab"/>
+  <text x="16" y="109" font-family="sans-serif" font-size="13" font-weight="bold" fill="white">Status</text>
+  <text x="16" y="132" font-family="sans-serif" font-size="12" fill="#c5cae9">  Overview</text>
+  <text x="16" y="152" font-family="sans-serif" font-size="12" fill="#c5cae9">  Routes</text>
+  <rect x="0" y="165" width="190" height="2" fill="#1a237e"/>
+  <text x="16" y="186" font-family="sans-serif" font-size="13" font-weight="bold" fill="white">System</text>
+  <text x="16" y="207" font-family="sans-serif" font-size="12" fill="#c5cae9">  Administration</text>
+  <text x="16" y="227" font-family="sans-serif" font-size="12" fill="#c5cae9">  Software</text>
+  <text x="16" y="247" font-family="sans-serif" font-size="12" fill="#c5cae9">  Reboot</text>
+  <rect x="0" y="260" width="190" height="2" fill="#1a237e"/>
+  <text x="16" y="281" font-family="sans-serif" font-size="13" font-weight="bold" fill="white">Network</text>
+  <text x="16" y="302" font-family="sans-serif" font-size="12" fill="#c5cae9">  Interfaces</text>
+  <text x="16" y="322" font-family="sans-serif" font-size="12" fill="#c5cae9">  Firewall</text>
+  <text x="16" y="342" font-family="sans-serif" font-size="12" fill="#c5cae9">  DHCP &amp; DNS</text>
+  <rect x="0" y="355" width="190" height="2" fill="#1a237e"/>
+  <text x="16" y="376" font-family="sans-serif" font-size="13" font-weight="bold" fill="white">Services</text>
+  <text x="16" y="397" font-family="sans-serif" font-size="12" fill="#90caf9">  SSO Login</text>
+  <!-- Main content -->
+  <rect x="206" y="100" width="678" height="420" fill="white" stroke="#e0e0e0"/>
+  <text x="226" y="130" font-family="sans-serif" font-size="15" font-weight="bold" fill="#1a237e">System Status</text>
+  <line x1="226" y1="138" x2="868" y2="138" stroke="#e0e0e0"/>
+  <text x="226" y="165" font-family="sans-serif" font-size="12" fill="#555">Router:  OpenWrt 23.05</text>
+  <text x="226" y="188" font-family="sans-serif" font-size="12" fill="#555">Uptime:  3 days, 14:22</text>
+  <text x="226" y="211" font-family="sans-serif" font-size="12" fill="#555">Load:    0.08, 0.12, 0.09</text>
+  <text x="226" y="234" font-family="sans-serif" font-size="12" fill="#555">Memory: 42% used</text>
+  <!-- Reboot button visible to admin -->
+  <rect x="726" y="380" width="120" height="32" rx="4" fill="#c62828"/>
+  <text x="786" y="401" font-family="sans-serif" font-size="13" fill="white" text-anchor="middle">Reboot</text>
+  <!-- Placeholder banner -->
+  <rect x="0" y="490" width="900" height="50" fill="#fff8e1"/>
+  <text x="450" y="519" font-family="sans-serif" font-size="13" fill="#f57f17" text-anchor="middle">[ PLACEHOLDER — Replace with actual screenshot of LuCI when logged in as a full admin ]</text>
+</svg>
