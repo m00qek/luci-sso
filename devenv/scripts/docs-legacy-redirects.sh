@@ -20,7 +20,7 @@ set -eu
 old_ref=$1
 out=$2
 base=/luci-sso
-site=https://m00qek.github.io/luci-sso
+latest_url=https://m00qek.github.io/luci-sso/latest
 
 version=${3:-$(python3 -c 'import json,sys
 for v in json.load(open(sys.argv[1])):
@@ -47,12 +47,12 @@ for page in $(git ls-tree -r --name-only "$old_ref" | grep '/index\.html$'); do
 <head>
 <meta charset="utf-8">
 <title>Moved</title>
-<link rel="canonical" href="$site/latest/$dir">
+<link rel="canonical" href="$latest_url/$dir">
 <meta name="robots" content="noindex">
 <script>location.replace("$target" + location.search + location.hash);</script>
 <meta http-equiv="refresh" content="0; url=$target">
 </head>
-<body><p>This page moved to <a href="$target">$site/latest/$dir</a>.</p></body>
+<body><p>This page moved to <a href="$target">$latest_url/$dir</a>.</p></body>
 </html>
 EOF
 	count=$((count + 1))
