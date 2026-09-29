@@ -137,6 +137,7 @@ lint:
 	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
 	@bash $(DEVENV_DIR)/scripts/check-code-style.sh
 	@bash $(DEVENV_DIR)/scripts/check-docs-links.sh
+	@bash $(DEVENV_DIR)/scripts/check-feed-makefile.sh
 
 # The luci-sso Makefile for the packages.ucode.dev feed, built from the
 # v$(VERSION) release tarball: it downloads the tarball unless TARBALL=<path>

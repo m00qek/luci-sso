@@ -60,3 +60,13 @@ jobs:
 
       - name: Check docs links name the right version
         run: bash devenv/scripts/check-docs-links.sh
+
+  feed-makefile:
+    name: Feed Makefile Generator
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check the feed Makefile generator reproduces 0.10.0 and fails closed
+        run: bash devenv/scripts/check-feed-makefile.sh
