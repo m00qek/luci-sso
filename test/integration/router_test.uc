@@ -7,18 +7,14 @@ import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_loader from 'luci_sso.config';
 import * as web_mod from 'luci_sso.web';
-import { with_context } from 'context';
-import * as f from 'fixtures.anchor';
+import { with_context, rpcd_logins, UBUS_NO_DATA } from 'context';
 import * as tf from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
-// Integration bucket — enter at router.handle(deps, config, request, policy) with
+// Integration bucket — enter at router.handle(deps, config, request) with
 // a full deps graph built by with_context (real module subgraph, faked system
 // boundary). Covers dispatch, login/callback, rate-limit, security, and error
 // mapping. The logout flow lives in logout_test.uc.
-
-const TEST_SECRET = "integration-test-secret-32-bytes!!!";
-const TEST_POLICY = { allowed_algs: ["RS256", "ES256"] };
 
 const MOCK_CONFIG = {
 	...tf.MOCK_CONFIG,
@@ -26,7 +22,7 @@ const MOCK_CONFIG = {
 	internal_issuer_url: "https://idp.com",
 	redirect_uri: "https://router/callback",
 	roles: [
-		{ name: "system_admin", emails: ["user-123"], read: ["*"], write: ["*"] }
+		{ name: "system_admin", emails: ["user-123"] }
 	]
 };
 
@@ -50,38 +46,19 @@ function mock_request(path, query, cookies, env) {
 describe('router: login', () => {
 	it('handle massive discovery response', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: { "https://idp.com/.well-known/openid-configuration": { error: "RESPONSE_TOO_LARGE" } }
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let res = router.handle(deps, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, mock_request("/"));
 			assert.match(falsy(), res.ok, "Should fail on discovery failure");
-			assert.match(500, res.details.http_status, "Should return 500 status in details");
+			assert.match(502, res.details.http_status, "An IdP back-channel failure is a 502");
 		});
 	});
 
 	it('redirect to healthy IdP', () => {
-		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
-			http_client: {
-				data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC } }
-			},
-			clock: { data: { now: 1516239022 } }
-		}, (deps) => {
-			let res = router.handle(deps, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
-			assert.match(truthy(), res.ok, "Router handle should succeed");
-			assert.match(302, res.data.status);
-			assert.match(0, index(res.data.headers["Location"], "https://idp.com/auth"), "Redirect MUST point to auth endpoint");
-		});
-	});
-});
-
-describe('router: bootstrap', () => {
-	it('automatic secret key generation', () => {
-		let final_key = null;
-
 		with_context({
 			fs: { data: {} },
 			http_client: {
@@ -89,12 +66,11 @@ describe('router: bootstrap', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			router.handle(deps, MOCK_CONFIG, mock_request("/"), TEST_POLICY);
-			final_key = deps.fs.readfile("/etc/luci-sso/secret.key");
+			let res = router.handle(deps, MOCK_CONFIG, mock_request("/"));
+			assert.match(truthy(), res.ok, "Router handle should succeed");
+			assert.match(302, res.data.status);
+			assert.match(0, index(res.data.headers["Location"], "https://idp.com/auth"), "Redirect MUST point to auth endpoint");
 		});
-
-		assert.match(truthy(), final_key, "Secret key should exist after bootstrap");
-		assert.match(32, length(final_key), "Secret key should be 32 bytes");
 	});
 });
 
@@ -105,7 +81,7 @@ describe('router: enabled', () => {
 		with_context({
 			uci: { data: { "luci-sso": { "default": { ".type": "oidc", enabled: "1" } } } }
 		}, (deps) => {
-			let res = router.handle(deps, MOCK_CONFIG, request, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, request);
 			assert.match(truthy(), res.ok);
 			assert.match(200, res.data.status);
 			assert.match('{"enabled": true}', res.data.body);
@@ -115,7 +91,7 @@ describe('router: enabled', () => {
 		with_context({
 			uci: { data: { "luci-sso": { "default": { ".type": "oidc", enabled: "0" } } } }
 		}, (deps) => {
-			let res = router.handle(deps, MOCK_CONFIG, request, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, request);
 			assert.match(truthy(), res.ok);
 			assert.match('{"enabled": false}', res.data.body);
 		});
@@ -130,7 +106,7 @@ describe('router: callback', () => {
 		let pending_id_token = null;
 
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -140,23 +116,24 @@ describe('router: callback', () => {
 					post: (url, opts) => {
 						if (url == "https://idp.com/token")
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: at, refresh_token: "rt", id_token: pending_id_token }) } };
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
+			uci: { data: rpcd_logins({ system_admin: { read: ["*"], write: ["*"] } }) },
 			ubus: {
 				data: {
 					"session:create": (args) => { ubus_create_called = true; return { ubus_rpc_session: "session-for-root" }; },
-					"session:grant": {},
+					"session:grant": UBUS_NO_DATA,
 					"session:set": (args) => {
 						if (args && args.values && args.values.oidc_access_token == at) found_set = true;
-						return {};
+						return UBUS_NO_DATA;
 					}
 				}
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
@@ -165,7 +142,7 @@ describe('router: callback', () => {
 			pending_id_token = h.generate_id_token(payload, tf.MOCK_PRIVKEY, "RS256");
 
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
 			assert.match("/cgi-bin/luci/", res.data.headers["Location"]);
@@ -183,7 +160,6 @@ describe('router: callback', () => {
 		with_context({
 			fs: {
 				data: {
-					"/etc/luci-sso/secret.key": TEST_SECRET,
 					[cache_path]: sprintf("%J", { keys: [ tf.MOCK_JWK ], cached_at: 1516239022 })
 				}
 			},
@@ -196,20 +172,21 @@ describe('router: callback', () => {
 					post: (url, opts) => {
 						if (url == "https://idp.com/token")
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: at, id_token: pending_id_token }) } };
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
+			uci: { data: rpcd_logins({ system_admin: { read: ["*"], write: ["*"] } }) },
 			ubus: {
 				data: {
 					"session:create": (args) => ({ ubus_rpc_session: "s" }),
-					"session:grant": {},
-					"session:set": {}
+					"session:grant": UBUS_NO_DATA,
+					"session:set": UBUS_NO_DATA
 				}
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
@@ -218,7 +195,7 @@ describe('router: callback', () => {
 			pending_id_token = h.generate_id_token(payload, tf.ROTATION_NEW_PRIVKEY, "RS256", tf.ROTATION_NEW_JWK.kid);
 
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
-			router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			router.handle(deps, MOCK_CONFIG, req);
 
 			let rename_calls = spy(deps.fs).calls.rename;
 			assert.match(truthy(), length(rename_calls) > 0, "Should have used atomic rename for cache update");
@@ -236,7 +213,7 @@ describe('router: callback', () => {
 		let pending_id_token = null;
 
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -246,13 +223,13 @@ describe('router: callback', () => {
 					post: (url, opts) => {
 						if (url == "https://idp.com/token")
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: at, id_token: pending_id_token }) } };
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
@@ -260,7 +237,7 @@ describe('router: callback', () => {
 			pending_id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", sub: "unknown", email: "unknown@example.com", nonce: handshake_data.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
-			let res = router.handle(deps, { ...MOCK_CONFIG, roles: [] }, req, TEST_POLICY);
+			let res = router.handle(deps, { ...MOCK_CONFIG, roles: [] }, req);
 			assert.match(falsy(), res.ok);
 			assert.match(403, res.details.http_status, "Should return Forbidden for non-whitelisted user");
 			assert.match("USER_NOT_AUTHORIZED", res.error);
@@ -277,7 +254,7 @@ describe('router: callback', () => {
 
 		with_context({
 			fs: {
-				data: { "/etc/luci-sso/secret.key": TEST_SECRET },
+				data: {},
 				behavior: {
 					mkdir: (path, mode) => {
 						if (path == preregistered) return false;
@@ -294,13 +271,13 @@ describe('router: callback', () => {
 					post: (url, opts) => {
 						if (url == "https://idp.com/token")
 							return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: access_token, id_token: pending_id_token }) } };
-						return { ok: false, error: "HTTP_REQUEST_FAILED", detail: "NOT_FOUND" };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
 					}
 				}
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 
@@ -308,7 +285,7 @@ describe('router: callback', () => {
 			pending_id_token = h.generate_id_token({ ...tf.MOCK_CLAIMS, iss: "https://idp.com", email: "user-123", nonce: handshake_data.nonce, at_hash: at_hash }, tf.MOCK_PRIVKEY, "RS256");
 
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(falsy(), res.ok);
 			assert.match(403, res.details.http_status);
 			assert.match("TOKEN_REPLAYED", res.error);
@@ -317,7 +294,7 @@ describe('router: callback', () => {
 
 	it('reject state replay', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -326,14 +303,14 @@ describe('router: callback', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
 
-			router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			router.handle(deps, MOCK_CONFIG, req);
 
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(falsy(), res.ok);
 			assert.match(401, res.details.http_status);
 			assert.match("STATE_NOT_FOUND", res.error);
@@ -342,7 +319,7 @@ describe('router: callback', () => {
 
 	it('reject code replay', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -351,13 +328,14 @@ describe('router: callback', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 			let req = mock_request("/callback", { code: "REPLAYED_CODE", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(falsy(), res.ok);
 			assert.match("OIDC_INVALID_GRANT", res.error);
+			assert.match(502, res.details.http_status);
 		});
 	});
 });
@@ -365,7 +343,7 @@ describe('router: callback', () => {
 describe('router: security', () => {
 	it('reject PKCE bypass', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
@@ -374,41 +352,42 @@ describe('router: security', () => {
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 			let req = mock_request("/callback", { code: "VALID_CODE", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(falsy(), res.ok);
 			assert.match("OIDC_INVALID_GRANT", res.error);
+			assert.match(502, res.details.http_status);
 		});
 	});
 
 	it('skip token registration on verification failure', () => {
 		with_context({
-			fs: { data: { "/etc/luci-sso/secret.key": TEST_SECRET } },
+			fs: { data: {} },
 			http_client: {
 				data: {
 					"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
 					"https://idp.com/token": { status: 200, body: { access_token: "DO_NOT_REGISTER_ME", id_token: "invalid.jwt.sig" } },
-					"https://idp.com/jwks": { status: 200, body: { keys: [ f.ANCHOR_JWK ] } }
+					"https://idp.com/jwks": { status: 200, body: { keys: [ tf.MOCK_JWK ] } }
 				}
 			},
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let state_res = session.create_state(deps);
+			let state_res = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res));
 			let handshake_data = state_res.data;
 			let req = mock_request("/callback", { code: "c", state: handshake_data.state }, { "__Host-luci_sso_state": handshake_data.token });
-			let res1 = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res1 = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(falsy(), res1.ok, "Should fail verification");
 			assert.match(401, res1.details.http_status);
 
-			let state_res2 = session.create_state(deps);
+			let state_res2 = session.create_state(deps, 0);
 			assert.match(truthy(), Result.is(state_res2));
 			let handshake_data2 = state_res2.data;
 			let req2 = mock_request("/callback", { code: "c2", state: handshake_data2.state }, { "__Host-luci_sso_state": handshake_data2.token });
-			let res2 = router.handle(deps, MOCK_CONFIG, req2, TEST_POLICY);
+			let res2 = router.handle(deps, MOCK_CONFIG, req2);
 
 			assert.match(falsy(), res2.ok);
 			assert.match(401, res2.details.http_status, "Should fail verification again (NOT replay) because token wasn't registered");
@@ -423,7 +402,7 @@ describe('router: routing', () => {
 			fs: { data: {} },
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let res = router.handle(deps, MOCK_CONFIG, mock_request("/unknown/path"), TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, mock_request("/unknown/path"));
 			assert.match(falsy(), res.ok);
 			assert.match(404, res.details.http_status);
 		});
@@ -477,81 +456,64 @@ describe('router: null config guard (reproduction)', () => {
 			let res = router.handle(deps, null, req);
 			assert.match(falsy(), res.ok, "Should fail when config is null");
 			assert.match("SSO_DISABLED", res.error);
-			assert.match(503, res.details.http_status);
+			assert.match(500, res.details.http_status, "the same status entry.uc renders for disabled SSO");
 		});
 	});
 });
 
-describe('router: global rate limiting (reproduction)', () => {
-	it('enforces a global request limit and exempts action=enabled (N3)', () => {
+describe('router: per-client rate limiting', () => {
+	const DISC = { [tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY } };
+	const login = (addr) => ({ path: "/", query: {}, cookies: {}, client: addr });
+
+	it('limits one client\'s login initiations and leaves other clients alone', () => {
 		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
+		with_context({ fs: { data: {} }, http_client: { data: DISC }, clock: { data: { now: 1516239022 } } }, (deps) => {
+			for (let i = 1; i <= 10; i++)
+				assert.match(truthy(), router.handle(deps, test_config, login("198.51.100.9")).ok, `initiation ${i}`);
 
+			let res = router.handle(deps, test_config, login("198.51.100.9"));
+			assert.match("TOO_MANY_REQUESTS", res.error);
+			assert.match(429, res.details.http_status);
+			assert.match(truthy(), res.details.retry_after > 0, "tells the client when to retry");
+
+			assert.match(truthy(), router.handle(deps, test_config, login("198.51.100.10")).ok,
+				"a different client still gets through");
+		});
+	});
+
+	it('does not charge callbacks to the login budget', () => {
+		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
+		with_context({ fs: { data: {} }, http_client: { data: DISC }, clock: { data: { now: 1516239022 } } }, (deps) => {
+			let cb = { path: "/callback", query: { code: "c", state: "s" }, cookies: {}, client: "198.51.100.9" };
+			for (let i = 0; i < 15; i++) router.handle(deps, test_config, cb);
+			assert.match(truthy(), router.handle(deps, test_config, login("198.51.100.9")).ok);
+		});
+	});
+
+	it('exempts action=enabled from every budget (N3)', () => {
+		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
 		with_context({
-			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			uci:         { data: { "luci-sso": { "default": { ".type": "oidc", "enabled": "0" } } } },
-			ubus:        { data: {} },
-			http_client: { data: {
-				[tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY }
-			} },
-			clock:       { data: { now: 1516239022 } }
+			fs: { data: {} },
+			uci: { data: { "luci-sso": { "default": { ".type": "oidc", "enabled": "1" } } } },
+			http_client: { data: DISC },
+			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
-			let request = { path: "/", query: {}, cookies: {} };
-
-			for (let i = 1; i <= 60; i++) {
-				let res = router.handle(deps, test_config, request);
-				if (i <= 50) {
-					assert.match(truthy(), res.ok, `Request ${i} SHOULD succeed (within limit)`);
-				} else {
-					assert.match(falsy(), res.ok, `Request ${i} SHOULD fail (exceeded limit)`);
-					assert.match("TOO_MANY_REQUESTS", res.error);
-				}
-			}
-
-			let action_req = { path: "/", query: { action: "enabled" }, cookies: {} };
-			for (let i = 0; i < 5; i++) {
-				let res = router.handle(deps, test_config, action_req);
-				assert.match(truthy(), res.ok, "Action=Enabled SHOULD be exempt from rate limiting to prevent UI DoS (N3)");
+			for (let i = 0; i < 11; i++) router.handle(deps, test_config, login("198.51.100.9"));
+			let probe = { path: "/", query: { action: "enabled" }, cookies: {}, client: "198.51.100.9" };
+			for (let i = 0; i < 40; i++) {
+				let res = router.handle(deps, test_config, probe);
+				assert.match(truthy(), res.ok, "the enabled probe is never rate limited");
 				assert.match(200, res.data.status);
 			}
 		});
 	});
-});
 
-describe('router: rate-limit persistence atomicity (reproduction)', () => {
-	it('persists the rate-limit file via write-tmp + atomic rename', () => {
+	it('treats a request without REMOTE_ADDR as the shared unknown client', () => {
 		let test_config = { ...tf.MOCK_CONFIG, enabled: "1" };
-
-		const RATELIMIT_FILE = "/var/run/luci-sso/ratelimit.json";
-		const TMP_FILE = RATELIMIT_FILE + ".tmp";
-
-		let writefile_calls = null;
-		let rename_calls = null;
-
-		with_context({
-			fs:          { data: { "/etc/luci-sso/secret.key": "fixed-test-secret-32-bytes-!!!!" } },
-			ubus:        { data: {} },
-			http_client: { data: {
-				[tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY }
-			} },
-			clock:       { data: { now: 1516239022 } }
-		}, (deps) => {
-			let request = { path: "/", query: {}, cookies: {} };
-			router.handle(deps, test_config, request);
-			writefile_calls = spy(deps.fs).calls.writefile || [];
-			rename_calls    = spy(deps.fs).calls.rename    || [];
+		with_context({ fs: { data: {} }, http_client: { data: DISC }, clock: { data: { now: 1516239022 } } }, (deps) => {
+			for (let i = 0; i < 10; i++) router.handle(deps, test_config, { path: "/", query: {}, cookies: {} });
+			assert.match("TOO_MANY_REQUESTS", router.handle(deps, test_config, login("not-an-address")).error);
 		});
-
-		let wrote_tmp = false;
-		for (let c in writefile_calls) {
-			if (c[0] === TMP_FILE) { wrote_tmp = true; break; }
-		}
-		assert.match(truthy(), wrote_tmp, "Should write to temporary file first");
-
-		let renamed = false;
-		for (let c in rename_calls) {
-			if (c[0] === TMP_FILE && c[1] === RATELIMIT_FILE) { renamed = true; break; }
-		}
-		assert.match(truthy(), renamed, "Should atomically rename tmp to target");
 	});
 });
 

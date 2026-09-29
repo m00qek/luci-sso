@@ -4,11 +4,18 @@ config oidc 'default'
 	# option internal_issuer_url ''
 	option client_id 'REPLACE_ME'
 	option client_secret 'REPLACE_ME'
-	option redirect_uri 'https://router.lan/cgi-bin/luci-sso/callback'
+	# Set this to https://<the name you open LuCI at>/cgi-bin/luci-sso/callback.
+	# Left unset, the settings page suggests the browser's current host.
+	# option redirect_uri ''
 	option scope 'openid profile email'
 	option clock_tolerance '60'
+	# A role matches by email only if the IdP marks the address as verified
+	# (email_verified). Unset means on; '0' also matches unverified addresses.
+	option require_email_verified '1'
 
+# A role's permissions are its rpcd login entry, luci_sso_<role> in
+# /etc/config/rpcd, which the settings page edits. On install, this role gets
+# read '*' and write '*' (full access, like root) if it still matches only
+# admin@example.com; edited first, it gets an entry that grants nothing.
 config role 'admin'
 	list email 'admin@example.com'
-	list read '*'
-	list write '*'

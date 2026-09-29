@@ -18,9 +18,7 @@ function setupPristineMocks(page) {
         },
         admin: {
             '.name': 'admin', '.type': 'role', '.anonymous': false,
-            email: ['admin@example.com'],
-            read: ['*'],
-            write: ['*']
+            email: ['admin@example.com']
         }
     };
 

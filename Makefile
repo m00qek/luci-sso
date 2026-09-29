@@ -66,7 +66,7 @@ COMPOSE_FLAGS = -p $(DOCKER_SUITE)-$(SDK_ARCH)-$(SAFE_SDK_VERSION) -f $(DEVENV_D
 SUITE_IS_RUNNING_CMD = docker compose $(COMPOSE_FLAGS) ps -a -q 2>/dev/null
 
 # --- 3. PUBLIC INTERFACE ---
-.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint
+.PHONY: build-images up down ps shell run unit-test e2e-test test watch-tests lint fuzzer-test sanitizer-test screenshots idp-screenshots
 .PHONY: local-up local-down local-ps local-shell local-run
 
 # Sentinel file tracks the last successful build for a specific arch/version/crypto combo
@@ -78,6 +78,9 @@ local-up: .up
 
 local-down: DOCKER_SUITE = local
 local-down: .down
+
+local-ps: DOCKER_SUITE = local
+local-ps: .ps
 
 local-run: DOCKER_SUITE = local
 local-run: .run
@@ -109,11 +112,22 @@ unit-test: .unit-test
 fuzzer-test: DOCKER_SUITE = ci
 fuzzer-test: .fuzzer-test
 
+sanitizer-test: DOCKER_SUITE = ci
+sanitizer-test: .sanitizer-test
+
 e2e-test: DOCKER_SUITE = ci
 e2e-test: .e2e-test
 
 watch-tests: DOCKER_SUITE = ci
 watch-tests: .watch-tests
+
+screenshots: DOCKER_SUITE = ci
+screenshots: .screenshots
+
+# Identity provider screenshots for the provider guides: needs no devenv
+# stack, only docker and the browser image. IDP=<name> captures one IdP.
+idp-screenshots:
+	bash $(DEVENV_DIR)/scripts/idp-screenshots/run.sh $(IDP)
 
 test: unit-test e2e-test
 
@@ -121,6 +135,7 @@ lint:
 	@bash $(DEVENV_DIR)/scripts/check-error-codes.sh
 	@bash $(DEVENV_DIR)/scripts/check-request-limits.sh
 	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
+	@bash $(DEVENV_DIR)/scripts/check-code-style.sh
 
 pull: DOCKER_SUITE = ci
 pull: .pull
@@ -149,6 +164,8 @@ endef
 
 TIME ?= 60
 DETECT_LEAKS ?= 0
+# The sanitizer run is leak-clean, so LeakSanitizer is on by default there.
+SANITIZER_LEAKS ?= 1
 
 .fuzzer-test:
 	docker compose $(COMPOSE_FLAGS) pull fuzzer || true
@@ -157,6 +174,12 @@ DETECT_LEAKS ?= 0
 		cmake -DENABLE_FUZZING=ON ../../mod && \
 		make -j$$(nproc) && \
 		./fuzz_$(CRYPTO_LIB) -max_total_time=$(TIME) -rss_limit_mb=2048"
+
+.sanitizer-test:
+	docker compose $(COMPOSE_FLAGS) build fuzzer
+	docker compose $(COMPOSE_FLAGS) run --rm -T \
+		-e CRYPTO_LIB=$(CRYPTO_LIB) -e DETECT_LEAKS=$(SANITIZER_LEAKS) \
+		fuzzer bash devenv/scripts/sanitizer-test.sh
 
 .e2e-test:
 	$(VALIDATE_SUITE_RUNNING)
@@ -169,6 +192,19 @@ DETECT_LEAKS ?= 0
 	@mkdir -p $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB)
 	@chmod -R a+rwx $(PROJECT_ROOT)/bin/lib/$(SDK_ARCH)/$(SDK_VERSION)/$(CRYPTO_LIB) 2>/dev/null || true
 	@COMPOSE_FLAGS="$(COMPOSE_FLAGS)" $(DEVENV_DIR)/scripts/test.sh watch --modules "$(MODULES)" --filter "$(FILTER)"
+
+# Documentation screenshots: runs test/e2e/screenshots.capture.js in the
+# browser container, copies the PNGs into docs/assets/screenshots/ and
+# compresses them losslessly with oxipng in a throwaway Alpine container.
+SCREENSHOTS_DIR := $(PROJECT_ROOT)/docs/assets/screenshots
+
+.screenshots:
+	$(VALIDATE_SUITE_RUNNING)
+	docker compose $(COMPOSE_FLAGS) exec openwrt rm -f /var/run/luci-sso/ratelimit.json
+	docker compose $(COMPOSE_FLAGS) exec browser sh -c 'rm -rf /tmp/luci-sso-screenshots && node tests/screenshots.capture.js'
+	docker compose $(COMPOSE_FLAGS) cp browser:/tmp/luci-sso-screenshots/. $(SCREENSHOTS_DIR)/
+	docker run --rm -v $(SCREENSHOTS_DIR):/out alpine:$(ALPINE_VERSION) sh -c \
+		'apk add -q --no-cache oxipng && oxipng -q -o 4 --strip safe /out/*.png && chown $(UID):$(GID) /out/*.png'
 
 .build-images:
 	docker compose $(COMPOSE_FLAGS) build --pull=false
@@ -183,8 +219,11 @@ DETECT_LEAKS ?= 0
 	@[ "$(GITHUB_ACTIONS)" != "true" ] && docker compose $(COMPOSE_FLAGS) build
 	docker compose $(COMPOSE_FLAGS) up --remove-orphans -d
 
+# -v also removes the anonymous volumes of the suite's containers, so an
+# image VOLUME cannot outlive them. The compose files declare no named
+# volumes, so -v deletes nothing that is meant to persist.
 .down:
-	docker compose $(COMPOSE_FLAGS) down --remove-orphans
+	docker compose $(COMPOSE_FLAGS) down --remove-orphans -v
 
 .ps:
 	@docker compose $(COMPOSE_FLAGS) ps

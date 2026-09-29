@@ -1,6 +1,6 @@
 # Your First SSO Login: Public IdP
 
-In this tutorial, we will enable single sign-on on your OpenWrt router using Google as the identity provider. By the end, we will have replaced the router's password prompt with a "Login with SSO" button and confirmed full admin access to LuCI.
+In this tutorial, we will enable single sign-on on your OpenWrt router using Google as the identity provider (IdP): the service that checks who the user is and tells the router. By the end, we will have added a "Login with SSO" button to the router's login page and confirmed full admin access to LuCI through it.
 
 ---
 
@@ -27,8 +27,8 @@ We need:
 
 - `luci-sso` installed on the router. If not, follow [How to Install luci-sso](../how-to/sysadmin/installation.md) first.
 - A Google account and access to [Google Cloud Console](https://console.cloud.google.com/).
-- **A domain name pointing to the router's public IP** (e.g. `router.example.com`).
-- **LuCI accessible over HTTPS with a publicly trusted certificate** (e.g. Let's Encrypt) at that domain.
+- **A domain name for the router** (e.g. `router.example.com`) that resolves to the router **from the browser we use**. It does not have to be reachable from the internet: Google only redirects the browser, it never connects to the router. A name in the LAN's DNS works. Google does not accept an IP address or a private suffix such as `.lan` in a redirect URI, so the name must end in a public domain.
+- **LuCI accessible over HTTPS with a publicly trusted certificate** (e.g. Let's Encrypt) at that domain. For a name that exists only on the LAN, a DNS-01 challenge can issue one. Do not open LuCI to the internet for this.
 
 !!! warning "Why a trusted certificate is required"
     After login, Google redirects the browser back to the router's callback URL. That URL must use HTTPS with a certificate the browser already trusts. A self-signed certificate will cause the browser to block or warn on the redirect, breaking the login flow mid-way. Do not proceed without a valid certificate.
@@ -53,15 +53,13 @@ We need to tell Google that our router is allowed to request user logins.
    - **Authorized redirect URIs:** `https://router.example.com/cgi-bin/luci-sso/callback` — replace with your actual domain.
    - Click **Create**.
 
-Google will display the Client ID and Client Secret. Copy both.
-
-![Google Cloud Console OAuth credentials dialog showing a newly created OAuth client. The Client ID field contains a long string ending in .apps.googleusercontent.com, and the Client Secret field contains a shorter token beginning with GOCSPX-.](../assets/screenshots/google-cloud-oauth-credentials.svg "Google Cloud Console — OAuth client credentials dialog")
+Google will display the Client ID and Client Secret in an **OAuth client created** dialog. The Client ID is a long string ending in `.apps.googleusercontent.com`; the Client Secret is a shorter token beginning with `GOCSPX-`. Copy both.
 
 ---
 
 ## Step 2: Configure luci-sso
 
-Navigate to **Services > SSO Login**.
+Navigate to **Services > Single Sign-On**.
 
 Fill in the **Settings** section with the values from Step 1:
 
@@ -75,23 +73,23 @@ Fill in the **Settings** section with the values from Step 1:
 | **Scopes** | `openid profile email` |
 | **Clock Tolerance** | `60` |
 
-The Redirect URI must exactly match what we entered in Google Cloud Console.
+The Redirect URI must exactly match what we entered in Google Cloud Console. The field suggests a callback URL built from the address in our browser; we check that it is exactly `https://router.example.com/cgi-bin/luci-sso/callback`, and correct it if not.
 
-Scroll to the **Users** section, click **Edit** on the `admin` role, add our Gmail address to **Email Addresses**, and click **Save**.
+Scroll to the **Users** section and click **Edit** on the `admin` role. In **Email Addresses**, remove the placeholder `admin@example.com`, add our Gmail address, and click **Save**.
 
 Click **Save & Apply**.
 
 !!! note "Prefer the command line?"
-    The same configuration can be done over SSH. See [How to Connect luci-sso to Google](../how-to/providers/google.md) for the UCI equivalents.
+    The same configuration can be done over SSH. See [How to Configure Google](../how-to/providers/google.md) for the UCI equivalents.
 
 ---
 
 ## Step 3: Confirm the service is running
 
-Before opening a browser, verify the configuration took effect:
+Let's check that the configuration took effect. In the browser, we open:
 
-```bash
-curl -s https://router.example.com/cgi-bin/luci-sso?action=enabled
+```text
+https://router.example.com/cgi-bin/luci-sso?action=enabled
 ```
 
 Expected response:
@@ -100,27 +98,29 @@ Expected response:
 {"enabled": true}
 ```
 
-If we see `{"enabled": false}`, verify that **Enable SSO** is toggled on in **Services > SSO Login** and that we clicked **Save & Apply**.
+If we see `{"enabled": false}`, verify that **Enable SSO** is toggled on in **Services > Single Sign-On** and that we clicked **Save & Apply**.
+
+If we get an error page instead, SSO is on but the configuration is incomplete. The system log (**Status > System Log**) has a line starting `Configuration rejected:` that names the option. If it says `redirect_uri is mandatory and must use HTTPS`, re-check the Redirect URI in **Services > Single Sign-On** and **Save & Apply** again. We can also set it over SSH:
+
+```bash
+uci set luci-sso.default.redirect_uri='https://router.example.com/cgi-bin/luci-sso/callback'
+uci commit luci-sso
+```
 
 ---
 
 ## Step 4: See the SSO button
 
-Navigate to `https://router.example.com/cgi-bin/luci/`. The login page should show a "Login with SSO" button above the standard fields.
+Navigate to `https://router.example.com/cgi-bin/luci/`. The login page should show a "Login with SSO" button below the **Log in** button.
 
-![LuCI login page showing the standard username and password fields, with a blue "Login with SSO" button prominently displayed above them](../assets/screenshots/luci-login-sso-button.svg "LuCI login page with the SSO button enabled")
+!!! warning "Use the same host name as the Redirect URI"
+    Open LuCI at `router.example.com`, the host in the Redirect URI, not at its IP address or another name. The login starts at whatever address the browser shows, and its cookie is only sent back to that exact host, so a login started at `192.168.1.1` fails when Google returns to `router.example.com`.
+
+![LuCI login page: an Authorization Required box with Username and Password fields and a green Log in button, followed by "— or —" and a blue Login with SSO button](../assets/screenshots/luci-login-sso-button.png "The LuCI login page with the Login with SSO button")
 
 If the button is not there, clear the browser cache and reload. If it still does not appear, check the system log:
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso | tail -20
-    ```
+--8<-- "check-log.md"
 
 ---
 
@@ -130,7 +130,7 @@ Click **Login with SSO**. The browser redirects to Google's sign-in page. Sign i
 
 After authenticating, Google redirects back to the router. The router exchanges the authorization code for tokens, validates them, matches the email to the `admin` role, and issues a LuCI session.
 
-![LuCI dashboard showing the System Status page after a successful SSO login. The sidebar shows Status, System, Network, and Services menus all expanded. The top bar shows the logged-in email address and role.](../assets/screenshots/luci-admin-view.svg "LuCI dashboard — logged in via SSO with admin role")
+![LuCI Status > Overview page after an SSO login with the admin role. The top bar shows the router's hostname and the Status, System, Services and Network menus and Log out. The System table lists hostname, model, architecture, target platform, firmware and kernel versions, local time, uptime and load average.](../assets/screenshots/luci-admin-view.png "Status > Overview after an SSO login with the admin role")
 
 ---
 

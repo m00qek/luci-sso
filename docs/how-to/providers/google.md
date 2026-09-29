@@ -1,4 +1,4 @@
-# How-to: Configure Google OIDC
+# How to Configure Google
 
 This guide describes how to connect `luci-sso` to Google Workspace or a personal Google Cloud project.
 
@@ -12,8 +12,10 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
 4. Navigate to **APIs & Services > Credentials > Create Credentials > OAuth client ID**.
    - **Application type:** Web application.
    - **Name:** `LuCI Router`.
-   - **Authorized redirect URIs:** `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback`.
+   - **Authorized redirect URIs:** `https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback`.
 5. Click **Create**. Copy the generated **Client ID** and **Client Secret**.
+
+Google rejects redirect URIs whose host is an IP address or does not end in a public domain (so `router.lan` does not work). Use a name under a domain you own; it only has to resolve for your browsers, for example through the LAN's DNS.
 
 !!! note "External apps and test users"
     If you chose **External** on the OAuth consent screen, Google restricts sign-in to accounts listed as test users until the app is verified. Add your Gmail address under **OAuth consent screen > Test users** before proceeding.
@@ -24,7 +26,7 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     Fill in the **Settings** section:
 
@@ -34,7 +36,7 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
     | **Issuer URL** | `https://accounts.google.com` |
     | **Client ID** | Your Client ID from Step 1 |
     | **Client Secret** | Your Client Secret from Step 1 |
-    | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+    | **Redirect URI** | `https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback` |
     | **Scopes** | `openid profile email` |
     | **Clock Tolerance** | `60` |
 
@@ -48,7 +50,7 @@ This guide describes how to connect `luci-sso` to Google Workspace or a personal
     uci set luci-sso.default.issuer_url='https://accounts.google.com'
     uci set luci-sso.default.client_id='<YOUR_CLIENT_ID>'
     uci set luci-sso.default.client_secret='<YOUR_CLIENT_SECRET>'
-    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'
+    uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback'
     uci set luci-sso.default.scope='openid profile email'
     uci set luci-sso.default.clock_tolerance='60'
     uci set luci-sso.default.enabled='1'
@@ -65,9 +67,9 @@ Google does not provide a `groups` claim for personal accounts. Map access by em
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter your Gmail address in **Email Addresses**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter your Gmail address in **Email Addresses**, then click **Save**.
 
     Click **Save & Apply**.
 
@@ -84,12 +86,9 @@ For Google Workspace accounts, group-based mapping requires the Admin SDK and is
 
 ## 4. Verify
 
-Check that the service is active:
+Check that the service is active. On the router:
 
-```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
-```
+--8<-- "probe-enabled.md"
 
 Navigate to the LuCI login page. The **Login with SSO** button should appear. Clicking it redirects to Google's sign-in screen.
 
@@ -97,22 +96,18 @@ Navigate to the LuCI login page. The **Login with SSO** button should appear. Cl
 
 ## Troubleshooting
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso
-    ```
+--8<-- "check-log.md"
 
 | Symptom | Likely cause |
 | :--- | :--- |
-| `OIDC_DISCOVERY_FAILED` | The router cannot reach `accounts.google.com`. Check DNS and firewall rules from the router, not just from your laptop. |
-| `TOKEN_EXCHANGE_FAILED` | The `redirect_uri` in UCI does not exactly match the authorized redirect URI in Google Cloud Console. Both must be identical, including scheme and path. |
-| `USER_NOT_AUTHORIZED` | Authentication succeeded but the Gmail address is not in any role. Add it with `uci add_list luci-sso.admin.email='...'`. |
-| Google returns "Access blocked: This app's request is invalid" | The authorized redirect URI in Google Cloud Console is missing or wrong. Double-check it matches `https://<router>/cgi-bin/luci-sso/callback`. |
-| Google sign-in works but redirects back to Google | The OAuth consent screen app is in **External** mode and the signing-in account is not listed as a test user. Add it under **OAuth consent screen > Test users**. |
+| A message under **Login with SSO** says "The identity provider is not responding" | The browser cannot reach the IdP; the router has no error to log. Open `https://accounts.google.com/.well-known/openid-configuration` in the same browser, on the same device. See [The SSO button says the identity provider is not responding](../sysadmin/debugging.md#the-sso-button-says-the-identity-provider-is-not-responding). |
+| `[502] OIDC_DISCOVERY_FAILED`, preceded by `Discovery fetch failed for [id: …]: …` | The router cannot reach `accounts.google.com`; the end of the line names the cause. Check DNS and firewall rules from the router, not just from your laptop. |
+| `[500] CONFIG_ERROR`, preceded by `Configuration rejected: redirect_uri is mandatory and must use HTTPS` | `redirect_uri` was never saved. Set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`. Other `Configuration rejected` reasons name the option to fix. |
+| `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Google rejected the client credentials. Check that `client_id` and `client_secret` are the pair from Step 1. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `Ignoring the unverified email of user [sub_id: …] for role matching` | Google has not verified the account's address. Verify it in the Google account, or map the user another way. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | Authentication succeeded but the Gmail address is not in any role. Add it with `uci add_list luci-sso.admin.email='...'`. Email matching ignores case. |
+| Google shows an error page, such as `redirect_uri_mismatch`, instead of the sign-in screen | The authorized redirect URI in Google Cloud Console is missing or differs from the router's `redirect_uri`. Both must be identical, including scheme and path. The router logs no `OIDC callback received` line, because Google never sends the browser back. |
+| Google shows "Access blocked" for an account | The OAuth consent screen app is in **External** mode and the account is not listed as a test user. Add it under **OAuth consent screen > Test users**. |
+| **Log out** in LuCI leaves you signed in to Google | Expected. Google's discovery document has no `end_session_endpoint`, so **Log out** ends only the router session; the next **Login with SSO** may complete without asking for a password. Sign out of Google to end that session. |
 
-For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md).
+For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

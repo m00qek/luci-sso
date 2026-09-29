@@ -112,7 +112,7 @@ describe('session.handshake: reap', () => {
 describe('session.handshake: create', () => {
 	it('returns ok with token, state, nonce, code_challenge', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
-			let res = handshake.create(make_deps(injected));
+			let res = handshake.create(make_deps(injected), 0);
 			assert.match(contains({ ok: true, data: contains({ token: regex(B64URL), state: regex(B64URL), nonce: regex(B64URL), code_challenge: regex(B64URL) }) }), res);
 		});
 	});
@@ -120,7 +120,7 @@ describe('session.handshake: create', () => {
 	it('stored JSON has iat == NOW and exp == NOW + HANDSHAKE_DURATION', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			let res = handshake.create(deps);
+			let res = handshake.create(deps, 0);
 			assert.match(contains({ ok: true }), res);
 			let stored = json(injected.fs.readfile(DIR + '/handshake_' + res.data.token + '.json'));
 			assert.match(NOW,                            stored.iat);
@@ -131,7 +131,7 @@ describe('session.handshake: create', () => {
 	it('stored JSON has state, nonce, code_verifier matching the returned values', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			let res = handshake.create(deps);
+			let res = handshake.create(deps, 0);
 			assert.match(contains({ ok: true }), res);
 			let stored = json(injected.fs.readfile(DIR + '/handshake_' + res.data.token + '.json'));
 			assert.match(res.data.state, stored.state);
@@ -140,29 +140,57 @@ describe('session.handshake: create', () => {
 		});
 	});
 
-	it('triggers emergency reap and still succeeds at HANDSHAKE_MAX_COUNT', () => {
-		// At exactly max count, emergency reap removes 50%, leaving 50 — create proceeds
-		let data = {};
-		for (let i = 0; i < common.HANDSHAKE_MAX_COUNT; i++)
-			data[DIR + '/handshake_' + sprintf('%04d', i) + '.json'] = '{}';
-		mock.inject_all({ fs: fs_mock(data), clock: { data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: true }), handshake.create(make_deps(injected)));
+	// At the cap: LIMIT_PENDING_HANDSHAKES files, `expired` of them old enough
+	// that verify would reject them (mtime = iat; exp = iat + HANDSHAKE_DURATION).
+	function full_dir(expired) {
+		let data = {}, mtimes = {};
+		for (let i = 0; i < common.LIMIT_PENDING_HANDSHAKES; i++) {
+			let p = DIR + '/handshake_' + sprintf('%04d', i) + '.json';
+			data[p] = '{}';
+			mtimes[p] = (i < expired) ? NOW - common.HANDSHAKE_DURATION - 61 : NOW - 10;
+		}
+		return { data, stat: (p) => (mtimes[p] != null) ? { mtime: mtimes[p] } : null };
+	}
+
+	it('at the cap, removes expired handshakes to make room and keeps the live ones', () => {
+		let d = full_dir(3);
+		mock.inject_all({ fs: fs_mock(d.data, { behavior: { stat: d.stat } }), clock: { data: { now: NOW } } }, (injected) => {
+			assert.match(contains({ ok: true }), handshake.create(make_deps(injected), 60));
+			let removed = map(spy(injected.fs).calls.unlink || [], (c) => c[0]);
+			assert.match(3, length(removed), 'exactly the expired ones');
+			for (let p in removed)
+				assert.match(true, index(p, '/handshake_000') >= 0, `only expired files are removed, not ${p}`);
 		});
 	});
 
-	it('returns HANDSHAKE_CAPACITY_EXCEEDED when emergency reap cannot free enough slots', () => {
-		// At 2× max, emergency reap removes 50% leaving exactly max → still full
-		let data = {};
-		for (let i = 0; i < 2 * common.HANDSHAKE_MAX_COUNT; i++)
-			data[DIR + '/handshake_' + sprintf('%04d', i) + '.json'] = '{}';
-		mock.inject_all({ fs: fs_mock(data), clock: { data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'HANDSHAKE_CAPACITY_EXCEEDED' }), handshake.create(make_deps(injected)));
+	it('when full of live handshakes, refuses the new login and touches none of them', () => {
+		let d = full_dir(0);
+		mock.inject_all({ fs: fs_mock(d.data, { behavior: { stat: d.stat } }), clock: { data: { now: NOW } } }, (injected) => {
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_CAPACITY_EXCEEDED' }), handshake.create(make_deps(injected), 60));
+			assert.match(0, length(spy(injected.fs).calls.unlink || []), 'no handshake deleted');
+			assert.match(0, length(spy(injected.fs).calls.writefile || []), 'no handshake written');
+		});
+	});
+
+	it('does not treat a handshake inside the clock tolerance as expired', () => {
+		// Past exp by 30 s but within a 60 s tolerance: verify would still accept it.
+		let d = full_dir(0);
+		d.stat = (p) => ({ mtime: NOW - common.HANDSHAKE_DURATION - 30 });
+		mock.inject_all({ fs: fs_mock(d.data, { behavior: { stat: d.stat } }), clock: { data: { now: NOW } } }, (injected) => {
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_CAPACITY_EXCEEDED' }), handshake.create(make_deps(injected), 60));
+			assert.match(0, length(spy(injected.fs).calls.unlink || []));
+		});
+	});
+
+	it('dies for a non-integer clock_tolerance', () => {
+		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
+			assert.throws(() => handshake.create(make_deps(injected)), /CONTRACT_VIOLATION/);
 		});
 	});
 
 	it('writes atomically: tmp file, chmod 0600, then rename to the final path', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
-			let res = handshake.create(make_deps(injected));
+			let res = handshake.create(make_deps(injected), 0);
 			assert.match(contains({ ok: true }), res);
 
 			let write_op  = (spy(injected.fs).calls.writefile || [])[0];
@@ -184,7 +212,7 @@ describe('session.handshake: create', () => {
 			clock:  { data: { now: NOW } },
 			native: { behavior: { random: () => null } },
 		}, (injected) => {
-			assert.match(contains({ ok: false, error: 'CRYPTO_INIT_FAILED' }), handshake.create(make_deps(injected)));
+			assert.match(contains({ ok: false, error: 'CRYPTO_INIT_FAILED' }), handshake.create(make_deps(injected), 0));
 		});
 	});
 });
@@ -222,7 +250,7 @@ describe('session.handshake: consume', () => {
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
 			handshake.consume(deps, HANDLE);
-			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(deps, HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(deps, HANDLE, 'state_value', 0));
 		});
 	});
 });
@@ -233,37 +261,37 @@ describe('session.handshake: verify', () => {
 	it('dies for a non-string handle', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			assert.throws(() => handshake.verify(deps, null, 0), /CONTRACT_VIOLATION/);
-			assert.throws(() => handshake.verify(deps, 42,   0), /CONTRACT_VIOLATION/);
+			assert.throws(() => handshake.verify(deps, null, 'state_value', 0), /CONTRACT_VIOLATION/);
+			assert.throws(() => handshake.verify(deps, 42, 'state_value',   0), /CONTRACT_VIOLATION/);
 		});
 	});
 
 	it('dies for a non-integer clock_tolerance', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			assert.throws(() => handshake.verify(deps, HANDLE, '0'),  /CONTRACT_VIOLATION/);
-			assert.throws(() => handshake.verify(deps, HANDLE, 0.5), /CONTRACT_VIOLATION/);
+			assert.throws(() => handshake.verify(deps, HANDLE, 'state_value', '0'),  /CONTRACT_VIOLATION/);
+			assert.throws(() => handshake.verify(deps, HANDLE, 'state_value', 0.5), /CONTRACT_VIOLATION/);
 		});
 	});
 
 	it('returns MALFORMED_STATE_COOKIE for an empty string handle', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			// regex uses + (one-or-more), so empty string does not match
-			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(make_deps(injected), '', 0));
+			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(make_deps(injected), '', 'state_value', 0));
 		});
 	});
 
 	it('returns MALFORMED_STATE_COOKIE for handle with non-base64url characters', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(deps, 'bad handle!', 0));
-			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(deps, '../etc/passwd', 0));
+			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(deps, 'bad handle!', 'state_value', 0));
+			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(deps, '../etc/passwd', 'state_value', 0));
 		});
 	});
 
 	it('returns STATE_NOT_FOUND when the file does not exist', () => {
 		mock.inject_all({ fs: fs_mock(), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -271,7 +299,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = 'not json at all';
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -279,7 +307,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ code_verifier: null });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -287,7 +315,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ code_verifier: 'tooshort' });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -297,7 +325,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ code_verifier: long_verifier });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -305,7 +333,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ state: null });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -313,7 +341,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ nonce: null });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -321,7 +349,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ exp: null });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -329,7 +357,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ iat: null });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -337,7 +365,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ exp: NOW - 100 });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'HANDSHAKE_EXPIRED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_EXPIRED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -347,7 +375,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ exp: 0 });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'HANDSHAKE_EXPIRED' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_EXPIRED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -356,7 +384,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ iat: NOW - 60, exp: NOW - 60 });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: true }), handshake.verify(make_deps(injected), HANDLE, 60));
+			assert.match(contains({ ok: true }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 60));
 		});
 	});
 
@@ -364,7 +392,7 @@ describe('session.handshake: verify', () => {
 		let data = {};
 		data[PATH] = make_state({ iat: NOW + 100, exp: NOW + common.HANDSHAKE_DURATION + 100 });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
-			assert.match(contains({ ok: false, error: 'HANDSHAKE_NOT_YET_VALID' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_NOT_YET_VALID' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -374,7 +402,7 @@ describe('session.handshake: verify', () => {
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			assert.match(
 				contains({ ok: true, data: contains({ state: 'state_value', nonce: 'nonce_value', code_verifier: VERIFIER }) }),
-				handshake.verify(make_deps(injected), HANDLE, 0)
+				handshake.verify(make_deps(injected), HANDLE, 'state_value', 0)
 			);
 		});
 	});
@@ -384,8 +412,8 @@ describe('session.handshake: verify', () => {
 		data[PATH] = make_state({});
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			assert.match(contains({ ok: true }),                          handshake.verify(deps, HANDLE, 0));
-			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(deps, HANDLE, 0));
+			assert.match(contains({ ok: true }),                          handshake.verify(deps, HANDLE, 'state_value', 0));
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(deps, HANDLE, 'state_value', 0));
 		});
 	});
 
@@ -394,40 +422,108 @@ describe('session.handshake: verify', () => {
 		data[PATH] = make_state({ exp: NOW - 100 });
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			let deps = make_deps(injected);
-			assert.match(contains({ ok: false, error: 'HANDSHAKE_EXPIRED' }), handshake.verify(deps, HANDLE, 0));
-			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }),    handshake.verify(deps, HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'HANDSHAKE_EXPIRED' }), handshake.verify(deps, HANDLE, 'state_value', 0));
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }),    handshake.verify(deps, HANDLE, 'state_value', 0));
 		});
 	});
 
-	it('removes the .consumed file even when the post-rename read fails (Audit W5)', () => {
-		// verify renames the state to <path>.consumed, then reads it. If the read
-		// fails, the .consumed file must still be unlinked so it cannot linger.
+	it('reports STATE_NOT_FOUND without claiming anything when the file cannot be read', () => {
 		let data = {};
 		data[PATH] = make_state({});
 		mock.inject_all({
 			fs:     fs_mock(data, { behavior: { readfile: () => null } }),
 			clock: { strict: true, data: { now: NOW } },
 		}, (injected) => {
-			let res = handshake.verify(make_deps(injected), HANDLE, 0);
-			assert.match(contains({ ok: false }), res, 'Should fail due to the read error');
-
-			let removed = false;
-			for (let call in (spy(injected.fs).calls.unlink || []))
-				if (call[0] === PATH + '.consumed') removed = true;
-			assert.match(truthy(), removed, 'Must unlink the .consumed file even when the read fails');
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
+			assert.match(0, length(spy(injected.fs).calls.rename || []), 'nothing is claimed');
 		});
 	});
 
-	it('does not recover state from a pre-existing .consumed file when rename fails (strict one-time use)', () => {
-		// An attacker-planted <path>.consumed must never be honoured: if the atomic
-		// rename that claims the state fails, verify must report STATE_NOT_FOUND.
+	it('reports STATE_NOT_FOUND when the claiming rename fails, never honouring a planted .consumed file', () => {
 		let data = {};
+		data[PATH] = make_state({});
 		data[PATH + '.consumed'] = make_state({ exp: NOW + 100000 });
 		mock.inject_all({
 			fs:     fs_mock(data, { behavior: { rename: () => false } }),
 			clock: { strict: true, data: { now: NOW } },
 		}, (injected) => {
-			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(make_deps(injected), HANDLE, 0));
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
+		});
+	});
+});
+
+// ─── verify: state is checked before the handshake is consumed ───────────────
+
+describe('session.handshake: verify — state before consume', () => {
+	it('a wrong state is rejected and leaves the handshake in place', () => {
+		let data = {};
+		data[PATH] = make_state({});
+		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
+			let deps = make_deps(injected);
+			assert.match(contains({ ok: false, error: 'STATE_PARAMETER_MISMATCH' }), handshake.verify(deps, HANDLE, 'forged', 0));
+			assert.match(0, length(spy(injected.fs).calls.rename || []), 'nothing is claimed');
+			assert.match(0, length(spy(injected.fs).calls.unlink || []), 'nothing is deleted');
+			assert.match(make_state({}), injected.fs.readfile(PATH));
+		});
+	});
+
+	it('a forged callback does not stop the real one from completing', () => {
+		let data = {};
+		data[PATH] = make_state({});
+		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
+			let deps = make_deps(injected);
+			assert.match(contains({ ok: false, error: 'STATE_PARAMETER_MISMATCH' }), handshake.verify(deps, HANDLE, 'forged', 0));
+			assert.match(contains({ ok: true, data: contains({ state: 'state_value' }) }), handshake.verify(deps, HANDLE, 'state_value', 0));
+		});
+	});
+
+	it('a missing or non-string state is a mismatch, not a consume', () => {
+		let data = {};
+		data[PATH] = make_state({});
+		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
+			let deps = make_deps(injected);
+			for (let bad in [ null, 42, '' ])
+				assert.match(contains({ ok: false, error: 'STATE_PARAMETER_MISMATCH' }), handshake.verify(deps, HANDLE, bad, 0));
+			assert.match(contains({ ok: true }), handshake.verify(deps, HANDLE, 'state_value', 0));
+		});
+	});
+
+	it('a replay after a successful callback fails', () => {
+		let data = {};
+		data[PATH] = make_state({});
+		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
+			let deps = make_deps(injected);
+			assert.match(contains({ ok: true }), handshake.verify(deps, HANDLE, 'state_value', 0));
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), handshake.verify(deps, HANDLE, 'state_value', 0));
+		});
+	});
+
+	it('two concurrent correct callbacks: exactly one wins the claim', () => {
+		// Both processes read the file before either renames it: readfile keeps
+		// returning the content, as it would to a reader that opened it earlier.
+		// The mock's rename moves the entry, so only the first rename succeeds.
+		let content = make_state({});
+		let data = {};
+		data[PATH] = content;
+		mock.inject_all({
+			fs:    fs_mock(data, { behavior: { readfile: (p) => (p === PATH) ? content : null } }),
+			clock: { strict: true, data: { now: NOW } },
+		}, (injected) => {
+			let deps = make_deps(injected);
+			let a = handshake.verify(deps, HANDLE, 'state_value', 0);
+			let b = handshake.verify(deps, HANDLE, 'state_value', 0);
+			assert.match(contains({ ok: true }), a);
+			assert.match(contains({ ok: false, error: 'STATE_NOT_FOUND' }), b);
+			assert.match(2, length(spy(injected.fs).calls.rename), 'both tried to claim');
+		});
+	});
+
+	it('a corrupt handshake is removed', () => {
+		let data = {};
+		data[PATH] = 'not json';
+		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
+			assert.match(contains({ ok: false, error: 'STATE_CORRUPTED' }), handshake.verify(make_deps(injected), HANDLE, 'state_value', 0));
+			assert.match(null, injected.fs.readfile(PATH));
 		});
 	});
 });

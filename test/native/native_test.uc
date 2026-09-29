@@ -11,7 +11,7 @@ import { hex_to_bin, JWK_RSA, JWK_EC } from 'native.fixtures';
 // This is the single gate for swapping crypto backends (mbedtls / wolfssl /
 // openssl): it asserts the FFI contract of the seven exported functions —
 // correctness against known-answer vectors, and the security/boundary controls
-// enforced in native_common.c. It imports ONLY `luci_sso.native` (+ pure
+// enforced in mod/native_api.c. It imports ONLY `luci_sso.native` (+ pure
 // helpers/fixtures); it must never route through `luci_sso.crypto`.
 //
 // Contract constants (mod/native.h): MAX_INPUT_SIZE=16384, ES256 sig=64,
@@ -321,6 +321,13 @@ describe('native: verify_es256', () => {
 		assert.match(false, native.verify_es256(f0.EC_256.msg, hex_to_bin(f0.EC_256.sig_hex), f0.RSA_2048.pub));
 	});
 
+	it('rejects an EC key on a curve other than P-256', () => {
+		// A 64-byte R|S passes the length guard, so this reaches each backend's
+		// own key check. A valid P-384 signature can never be 64 bytes, so this
+		// pins the contract (P-256 only) rather than a reachable forgery.
+		assert.match(false, native.verify_es256(f0.EC_256.msg, hex_to_bin(f0.EC_256.sig_hex), f0.EC_384_PUB));
+	});
+
 	it('SECURITY: rejects any signature that is not exactly 64 bytes (R|S)', () => {
 		let sig = hex_to_bin(f0.EC_256.sig_hex);           // 64 bytes
 		assert.match(false, native.verify_es256(f0.EC_256.msg, substr(sig, 0, 63),  f0.EC_256.pub)); // 63
@@ -353,6 +360,13 @@ describe('native: verify_es256', () => {
 describe('native: jwk_rsa_to_pem', () => {
 	it('produces a PUBLIC KEY PEM header', () => {
 		assert.match(regex(/^-----BEGIN PUBLIC KEY-----/), native.jwk_rsa_to_pem(JWK_RSA.n_bin, JWK_RSA.e_bin));
+	});
+
+	it('returns exactly one PEM block, with nothing after the END line', () => {
+		// The C layer turns a char buffer into a ucode string with strlen, so a
+		// backend that does not NUL-terminate leaks stack bytes after the footer.
+		assert.match(regex(/^-----BEGIN PUBLIC KEY-----\n[A-Za-z0-9+\/=\n]+-----END PUBLIC KEY-----\n?$/),
+			native.jwk_rsa_to_pem(JWK_RSA.n_bin, JWK_RSA.e_bin));
 	});
 
 	it('produced PEM validates the PLUMBING_RSA JWT signature (round-trip)', () => {
@@ -399,6 +413,11 @@ describe('native: jwk_rsa_to_pem', () => {
 describe('native: jwk_ec_p256_to_pem', () => {
 	it('produces a PUBLIC KEY PEM header', () => {
 		assert.match(regex(/^-----BEGIN PUBLIC KEY-----/), native.jwk_ec_p256_to_pem(JWK_EC.x_bin, JWK_EC.y_bin));
+	});
+
+	it('returns exactly one PEM block, with nothing after the END line', () => {
+		assert.match(regex(/^-----BEGIN PUBLIC KEY-----\n[A-Za-z0-9+\/=\n]+-----END PUBLIC KEY-----\n?$/),
+			native.jwk_ec_p256_to_pem(JWK_EC.x_bin, JWK_EC.y_bin));
 	});
 
 	it('produced PEM validates a known EC_256 signature (round-trip)', () => {

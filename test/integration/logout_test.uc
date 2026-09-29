@@ -1,7 +1,10 @@
 import { describe, it, assert, truthy, falsy, spy } from 'utest';
 import * as router from 'luci_sso.router';
-import { with_context } from 'context';
+import { with_context, UBUS_NO_DATA } from 'context';
 import * as f from 'fixtures.oidc';
+import * as encoding from 'luci_sso.encoding';
+import * as crypto from 'luci_sso.crypto';
+import * as real_native from 'luci_sso.native';
 
 // Integration bucket — the logout flow, entered at router.handle(deps, config,
 // request) with a full deps graph (with_context). Covers RP-initiated logout,
@@ -9,7 +12,6 @@ import * as f from 'fixtures.oidc';
 // post_logout_redirect_uri. Consolidates the tier3 router-logout block plus the
 // tier2 logout_* reproductions.
 
-const TEST_POLICY = { allowed_algs: ["RS256"] };
 
 // Local config/discovery for the RP-initiated scenarios (idp.com issuer).
 const MOCK_CONFIG = {
@@ -44,7 +46,7 @@ describe('logout: RP-initiated', () => {
 			ubus: {
 				data: {
 					"session:get": (args) => { ubus_get_called = true; return { values: { oidc_id_token: "mock-id-token", token: "csrf-123" } }; },
-					"session:destroy": (args) => { ubus_destroy_called = true; return {}; }
+					"session:destroy": (args) => { ubus_destroy_called = true; return UBUS_NO_DATA; }
 				}
 			},
 			http_client: {
@@ -53,7 +55,7 @@ describe('logout: RP-initiated', () => {
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
 			let req = mock_request("/logout", { stoken: "csrf-123" }, { "sysauth": "session-12345" }, { HTTP_HOST: "router.lan" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
@@ -74,7 +76,7 @@ describe('logout: RP-initiated', () => {
 			ubus: {
 				data: {
 					"session:get": (args) => ({ values: { token: "csrf-456" } }),
-					"session:destroy": (args) => { ubus_destroy_called = true; return {}; }
+					"session:destroy": (args) => { ubus_destroy_called = true; return UBUS_NO_DATA; }
 				}
 			},
 			http_client: {
@@ -83,7 +85,7 @@ describe('logout: RP-initiated', () => {
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
 			let req = mock_request("/logout", { stoken: "csrf-456" }, { "sysauth": "session-12345" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
 			assert.match("/", res.data.headers["Location"]);
@@ -103,12 +105,86 @@ describe('logout: RP-initiated', () => {
 			clock: { data: { now: 1516239022 } }
 		}, (deps) => {
 			let req = mock_request("/logout", {}, {}, { HTTP_HOST: "router.lan" });
-			let res = router.handle(deps, MOCK_CONFIG, req, TEST_POLICY);
+			let res = router.handle(deps, MOCK_CONFIG, req);
 
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
 			assert.match("/", res.data.headers["Location"], "Should redirect to root for unauthenticated logout");
 		});
+	});
+});
+
+// ─── SSO sessions without an email, and the log line ──────────────────────────
+
+// An ID Token as the session stores it. The logout never verifies it again,
+// and reads only its `sub` for the log line, so the signature is not needed.
+function stored_id_token(claims) {
+	let part = (v) => encoding.b64url_encode(sprintf("%J", v)).data;
+	return `${part({ alg: "RS256", typ: "JWT" })}.${part(claims)}.c2ln`;
+}
+
+function logout_with(values) {
+	let logs = [];
+	let res;
+	let DISC_WITH_LOGOUT = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
+
+	with_context({
+		fs: { data: {} },
+		ubus: {
+			data: {
+				"session:get": { values: { token: "csrf-789", ...values } },
+				"session:destroy": UBUS_NO_DATA
+			}
+		},
+		http_client: {
+			data: { "https://idp.com/.well-known/openid-configuration": { status: 200, body: DISC_WITH_LOGOUT } }
+		},
+		clock: { data: { now: 1516239022 } },
+		native: {}
+	}, (deps) => {
+		deps.log = (level, msg) => push(logs, [ level, msg ]);
+		res = router.handle(deps, MOCK_CONFIG, mock_request("/logout", { stoken: "csrf-789" }, { "sysauth_https": "session-789" }));
+	});
+	return { res, logs };
+}
+
+describe('logout: an SSO session without an email', () => {
+	it('logs out at the IdP: a user matched by group has no oidc_user', () => {
+		let id_token = stored_id_token({ sub: "group-only-user", iss: "https://idp.com" });
+		let r = logout_with({ username: "sso:viewer", oidc_id_token: id_token });
+
+		assert.match(truthy(), r.res.ok);
+		assert.match(302, r.res.data.status);
+		assert.match(0, index(r.res.data.headers["Location"], "https://idp.com/logout?id_token_hint="), "Should reach the IdP end_session_endpoint");
+	});
+});
+
+describe('logout: the log line', () => {
+	it('names the user by sub_id, as the login lines do, and the role', () => {
+		let id_token = stored_id_token({ sub: "alice-sub", iss: "https://idp.com" });
+		let r = logout_with({ username: "sso:viewer", oidc_user: "alice@example.com", oidc_id_token: id_token });
+		let sub_id = crypto.safe_id(real_native, "alice-sub");
+
+		assert.match(truthy(), r.res.ok);
+		assert.match([ [ "info", `Logout for [sub_id: ${sub_id}] (role=viewer)` ] ],
+			filter(r.logs, (l) => index(l[1], "Logout") == 0));
+	});
+
+	it('never logs the email, the sub or a token', () => {
+		let id_token = stored_id_token({ sub: "alice-sub", iss: "https://idp.com" });
+		let r = logout_with({ username: "sso:viewer", oidc_user: "alice@example.com", oidc_id_token: id_token });
+
+		for (let l in r.logs)
+			for (let secret in [ "alice@example.com", "alice-sub", id_token, "csrf-789", "session-789" ])
+				assert.match(-1, index(l[1], secret), `log line leaks ${secret}: ${l[1]}`);
+	});
+
+	it('says when the session was not an SSO session, and when its ID Token cannot be read', () => {
+		let r = logout_with({ username: "root", oidc_id_token: "not-a-jwt" });
+
+		assert.match(truthy(), r.res.ok);
+		assert.match([ [ "info", "Logout for [sub_id: [INVALID]] (not an SSO session)" ] ],
+			filter(r.logs, (l) => index(l[1], "Logout") == 0));
 	});
 });
 
@@ -157,7 +233,7 @@ describe('logout: CSRF protection', () => {
 		let ubus_calls3 = null;
 		with_context({
 			fs:          { data: {} },
-			ubus:        { data: { "session:get": mock_session, "session:destroy": {} } },
+			ubus:        { data: { "session:get": mock_session, "session:destroy": UBUS_NO_DATA } },
 			http_client: { data: DISCOVERY_DATA },
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
@@ -178,7 +254,7 @@ describe('logout: CSRF protection', () => {
 		let ubus_calls4 = null;
 		with_context({
 			fs:          { data: {} },
-			ubus:        { data: { "session:get": { error: 404 }, "session:destroy": {} } },
+			ubus:        { data: { "session:get": { error: 404 }, "session:destroy": UBUS_NO_DATA } },
 			http_client: { data: DISCOVERY_DATA },
 			clock:       { data: { now: 1516239022 } }
 		}, (deps) => {
@@ -250,7 +326,7 @@ describe('logout: post-logout redirect origin', () => {
 				},
 				"session:destroy": (args) => {
 					assert.match(sid, args.ubus_rpc_session);
-					return {};
+					return UBUS_NO_DATA;
 				}
 			};
 
@@ -298,7 +374,7 @@ describe('logout: post-logout redirect origin', () => {
 			fs:          { data: {} },
 			ubus:        { data: {
 				"session:get":    { values: { token: stoken, oidc_id_token: "hint" } },
-				"session:destroy": {}
+				"session:destroy": UBUS_NO_DATA
 			} },
 			http_client: { data: {
 				"https://trusted.idp/.well-known/openid-configuration": {
@@ -338,7 +414,7 @@ describe('logout: invalid session and malformed redirect', () => {
 				query: { "stoken": "some-token" },
 				env: { HTTPS: "on" }
 			};
-			let res = router.handle(deps, test_config, request, {});
+			let res = router.handle(deps, test_config, request);
 			assert.match(truthy(), res.ok);
 			assert.match("/", res.data.headers["Location"], "Should redirect to root if session is invalid");
 		});
@@ -353,7 +429,7 @@ describe('logout: invalid session and malformed redirect', () => {
 			fs:          { data: {} },
 			ubus:        { data: {
 				"session:get": { values: { token: "valid-stoken", oidc_id_token: id_token, user: "admin" } },
-				"session:destroy": {}
+				"session:destroy": UBUS_NO_DATA
 			} },
 			http_client: { data: {
 				[`${f.MOCK_CONFIG.issuer_url}/.well-known/openid-configuration`]: {
@@ -382,7 +458,7 @@ describe('logout: redirect derivation robustness', () => {
 		let DISC = { ...MOCK_DISC_DOC, end_session_endpoint: "https://idp.com/logout" };
 		let session_data = {
 			"session:get": (args) => ({ values: { oidc_id_token: "hint", token: "csrf" } }),
-			"session:destroy": {}
+			"session:destroy": UBUS_NO_DATA
 		};
 		let discovery_data = {
 			"https://idp.com/.well-known/openid-configuration": { status: 200, body: DISC }
@@ -396,7 +472,7 @@ describe('logout: redirect derivation robustness', () => {
 		}, (deps) => {
 			let config = { issuer_url: "https://idp.com", redirect_uri: "https://router.lan/cgi-bin/luci-sso/callback" };
 			let req = { path: "/logout", query: { stoken: "csrf" }, cookies: { sysauth: "sid" } };
-			let res = router.handle(deps, config, req, TEST_POLICY);
+			let res = router.handle(deps, config, req);
 			assert.match(truthy(), res.ok);
 			assert.match(truthy(), index(res.data.headers["Location"], "post_logout_redirect_uri=https%3A%2F%2Frouter.lan%2F") != -1);
 		});
@@ -409,7 +485,7 @@ describe('logout: redirect derivation robustness', () => {
 		}, (deps) => {
 			let config = { issuer_url: "https://idp.com", redirect_uri: "ftp://router.lan/callback" };
 			let req = { path: "/logout", query: { stoken: "csrf" }, cookies: { sysauth: "sid" } };
-			let res = router.handle(deps, config, req, TEST_POLICY);
+			let res = router.handle(deps, config, req);
 			assert.match(truthy(), res.ok);
 			assert.match(-1, index(res.data.headers["Location"], "post_logout_redirect_uri="), "Should OMIT post_logout_redirect_uri for invalid redirect_uri scheme");
 		});

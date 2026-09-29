@@ -1,35 +1,35 @@
-import * as uclient from 'uclient';
+"use strict";
+
 import * as lucihttp from 'lucihttp';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
-import * as discovery from 'luci_sso.discovery';
+import { find_jwk } from 'luci_sso.discovery';
 import * as Result from 'luci_sso.result';
-import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, MISSING_AZP_CLAIM, AZP_MISMATCH, MISSING_ACCESS_TOKEN, MISSING_AT_HASH, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON } from 'luci_sso.errors';
-
-// --- Internal Helpers ---
-
-// --- Public API ---
+import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER, MISSING_NONCE_PARAMETER, MISSING_PKCE_CHALLENGE, INSECURE_TOKEN_ENDPOINT, INVALID_PKCE_VERIFIER, TOKEN_ENDPOINT_NETWORK_ERROR, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_RESPONSE_INVALID_JSON, MISSING_ID_TOKEN, UNSUPPORTED_ALGORITHM, DISCOVERY_ISSUER_MISMATCH, MISSING_SUB_CLAIM, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, MISSING_NONCE, NONCE_MISMATCH, AZP_MISMATCH, MISSING_ACCESS_TOKEN, AT_HASH_MISMATCH, CRYPTO_ERROR, INSECURE_USERINFO_ENDPOINT, USERINFO_FETCH_FAILED, USERINFO_NETWORK_ERROR, USERINFO_INVALID_JSON, INVALID_JWT_HEADER, IDENTITY_MISMATCH } from 'luci_sso.errors';
 
 /**
- * Fetches and caches OIDC discovery document.
+ * ID token signature algorithms this module accepts. Fixed in code rather than
+ * UCI so a configuration change can never weaken it: symmetric algorithms such
+ * as HS256 would allow the algorithm-confusion attack.
  */
-export const discover = discovery.discover;
+const ALLOWED_ALGS = ["RS256", "ES256"];
 
 /**
- * Fetches JWK Set from IdP with caching.
+ * Browser-facing status (details.http_status) for every failed back-channel
+ * call to the IdP: the router acted as a gateway and the upstream failed. The
+ * IdP's own status is logged here, never forwarded: a 401 from the token
+ * endpoint means the router's client credentials failed, not the browser's.
  */
-export const fetch_jwks = discovery.fetch_jwks;
+const BAD_GATEWAY = 502;
 
-/**
- * Finds the correct JWK by key ID (kid).
- */
-export const find_jwk = discovery.find_jwk;
+/** Status for a UserInfo response about a different subject (IDENTITY_MISMATCH). */
+const FORBIDDEN = 403;
 
 /**
  * Generates the authorization URL.
  */
 export function get_auth_url(deps, config, discovery_doc, params) {
-	// BLOCKER FIX: Enforce mandatory CSRF protection (B1)
+	// state and nonce are the CSRF and replay bindings; refuse to start without them.
 	if (!params.state || type(params.state) != "string" || length(params.state) < 16) {
 		return Result.err(MISSING_STATE_PARAMETER);
 	}
@@ -42,13 +42,13 @@ export function get_auth_url(deps, config, discovery_doc, params) {
 		return Result.err(MISSING_PKCE_CHALLENGE);
 	}
 
-	// BLOCKER FIX: Enforce HTTPS on authorization_endpoint (B3)
+	// The browser is sent here with state, nonce and challenge in the URL; never over plain HTTP.
 	if (!encoding.is_https(discovery_doc.authorization_endpoint)) {
 		return Result.err(INSECURE_AUTH_ENDPOINT);
 	}
 	
-	// W2: RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
-	if (index(discovery_doc.authorization_endpoint, '#') != -1) {
+	// RFC 6749 §3.1: "The endpoint URI MUST NOT include a fragment component."
+	if (index(discovery_doc.authorization_endpoint, "#") != -1) {
 		return Result.err(INVALID_AUTH_ENDPOINT, "authorization_endpoint MUST NOT contain a fragment");
 	}
 
@@ -64,11 +64,11 @@ export function get_auth_url(deps, config, discovery_doc, params) {
 	};
 	let url = discovery_doc.authorization_endpoint;
 
-	let sep = (index(url, '?') == -1) ? '?' : '&';
+	let sep = (index(url, "?") == -1) ? "?" : "&";
 	for (let k, v in query) {
 		if (v == null) continue;
 		url += `${sep}${k}=${lucihttp.urlencode(v, 1)}`;
-		sep = '&';
+		sep = "&";
 	}
 	return Result.ok(url);
 };
@@ -79,7 +79,7 @@ export function get_auth_url(deps, config, discovery_doc, params) {
 export function exchange_code(deps, config, discovery, code, verifier, session_id) {
 	if (!encoding.is_https(discovery.token_endpoint)) return Result.err(INSECURE_TOKEN_ENDPOINT);
 
-	// Audit logging for PKCE usage (Blocker #2)
+	// Log PKCE-bound exchanges so they can be correlated with the handshake.
 	let sid_ctx = session_id ? ` [session_id: ${session_id}]` : "";
 	deps.log("info", `Initiating token exchange${sid_ctx}`);
 
@@ -111,25 +111,25 @@ export function exchange_code(deps, config, discovery, code, verifier, session_i
 	});
 
 	if (!res_http.ok) {
-		deps.log("warn", `Token exchange network error${sid_ctx}: ${res_http.error}`);
-		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR);
+		deps.log("warn", `Token exchange network error${sid_ctx}: ${Result.describe(res_http)}`);
+		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR, { http_status: BAD_GATEWAY });
 	}
 
 	let response = res_http.data;
 	if (response.status != 200) {
 		let res_err = encoding.safe_json(response.body);
 		if (res_err.ok && res_err.data.error == "invalid_grant") {
-			deps.log("error", `Token exchange failed (invalid_grant)${sid_ctx}`);
-			return Result.err(OIDC_INVALID_GRANT, { http_status: 400 });
+			deps.log("error", `Token exchange failed (invalid_grant, HTTP ${response.status})${sid_ctx}`);
+			return Result.err(OIDC_INVALID_GRANT, { http_status: BAD_GATEWAY });
 		}
 		deps.log("warn", `Token exchange HTTP ${response.status}${sid_ctx}`);
-		return Result.err(TOKEN_EXCHANGE_FAILED, { http_status: response.status });
+		return Result.err(TOKEN_EXCHANGE_FAILED, { http_status: BAD_GATEWAY });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
 		deps.log("error", `Token exchange JSON parse error${sid_ctx}: ${res.details}`);
-		return Result.err(TOKEN_RESPONSE_INVALID_JSON);
+		return Result.err(TOKEN_RESPONSE_INVALID_JSON, { http_status: BAD_GATEWAY });
 	}
 	let tokens = res.data;
 
@@ -147,26 +147,21 @@ export function exchange_code(deps, config, discovery, code, verifier, session_i
  * @param {object} handshake - Handshake state {nonce, ...}
  * @param {object} discovery - Discovery document
  * @param {number} now - Current timestamp
- * @param {object} [policy] - Security policy (Second Dimension) {allowed_algs}
  */
-export function verify_id_token(deps, tokens, keys, config, handshake, discovery, now, policy) {
+export function verify_id_token(deps, tokens, keys, config, handshake, discovery, now) {
 	if (!tokens.id_token || type(tokens.id_token) != "string") return Result.err(MISSING_ID_TOKEN);
-
-	// 1. Policy Enforcement (Second Dimension)
-	const DEFAULT_POLICY = { allowed_algs: ["RS256", "ES256"] };
-	let p = policy || DEFAULT_POLICY;
 
 	let parts = split(tokens.id_token, ".");
 	let res_h = encoding.safe_json(encoding.b64url_decode(parts[0]));
 	if (!res_h.ok) {
-		return Result.err("INVALID_JWT_HEADER", res_h.details);
+		return Result.err(INVALID_JWT_HEADER, res_h.details);
 	}
 	let header = res_h.data;
 
-	// BLOCKER: Enforce algorithm whitelist from policy
+	// Reject any alg outside the allow-list before touching keys (alg-confusion defence).
 	let alg_allowed = false;
-	for (let a in p.allowed_algs) {
-		if (crypto.constant_time_eq(header.alg, a)) {
+	for (let a in ALLOWED_ALGS) {
+		if (header.alg === a) {
 			alg_allowed = true;
 			break;
 		}
@@ -181,10 +176,10 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	let pem_res = crypto.jwk_to_pem(deps.native, jwk_res.data);
 	if (!pem_res.ok) return pem_res;
 
-	// MANDATORY Claims Check
-	let disc_iss_res = encoding.normalize_url(discovery.issuer);
-	let conf_iss_res = encoding.normalize_url(config.issuer_url);
-	if (!disc_iss_res.ok || !conf_iss_res.ok || !crypto.constant_time_eq(disc_iss_res.data, conf_iss_res.data)) {
+	// The discovery document must describe the issuer we are configured for,
+	// character for character (OIDC Discovery §4.3). discovery.discover()
+	// already checked this; checking again keeps this function safe on its own.
+	if (type(discovery.issuer) != "string" || discovery.issuer !== config.issuer_url) {
 		return Result.err(DISCOVERY_ISSUER_MISMATCH, `Expected ${config.issuer_url}, IdP claimed ${discovery.issuer}`);
 	}
 
@@ -192,7 +187,9 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		alg: header.alg,
 		now: now,
 		clock_tolerance: config.clock_tolerance,
-		iss: config.issuer_url,
+		// OIDC Core §3.1.3.7 (2): iss must exactly match the issuer
+		// identifier obtained through discovery.
+		iss: discovery.issuer,
 		aud: config.client_id,
 		pre_parsed_header: header
 	};
@@ -209,12 +206,13 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 	}
 	deps.log("debug", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
 
-	// 3. OIDC Mandatory Claims Check
-	if (!payload.sub) {
+	// 3. OIDC Mandatory Claims Check. sub is a non-empty, case-sensitive
+	// string (OIDC Core §2); a number, "" or null is not a subject.
+	if (type(payload.sub) != "string" || length(payload.sub) == 0) {
 		return Result.err(MISSING_SUB_CLAIM);
 	}
 
-	// B1 & W2: Enforce mandatory exp and iat claims (OIDC Core 1.0 §2)
+	// exp and iat are REQUIRED by OIDC Core 1.0 §2.
 	// These claims MUST be present for full compliance and robust token age validation.
 	if (payload.exp == null) {
 		return Result.err(MISSING_EXP_CLAIM);
@@ -223,7 +221,7 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		return Result.err(MISSING_IAT_CLAIM);
 	}
 
-	// 3.1 Nonce Check (Blocker #3: Mandatory)
+	// 3.1 Nonce binds this ID token to our handshake and prevents replay.
 	if (!handshake.nonce || !payload.nonce) {
 		return Result.err(MISSING_NONCE);
 	}
@@ -231,41 +229,43 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 		return Result.err(NONCE_MISMATCH);
 	}
 
-	// 3.2 Authorized Party Check (OIDC Core 1.0 §3.1.3.7 items 4-5)
-	// azp is required only when the ID Token has MULTIPLE audiences.
-	if (type(payload.aud) == "array" && length(payload.aud) > 1 && !payload.azp) {
-		return Result.err(MISSING_AZP_CLAIM);
-	}
-	if (payload.azp && !crypto.constant_time_eq(payload.azp, config.client_id)) {
-		return Result.err(AZP_MISMATCH, `Expected ${config.client_id}, got ${payload.azp}`);
+	// 3.2 Authorized Party Check (OIDC Core §3.1.3.7 (5)): when azp is
+	// present, it must be our client_id. azp is OPTIONAL (§2) and never
+	// required, not even with several audiences: that rule came from errata
+	// set 1 and errata set 2 removed it. An ID token with several audiences
+	// is refused by the aud check anyway. "in" catches azp: "" and azp: 0,
+	// which a truthiness test would let through.
+	if ("azp" in payload && payload.azp !== config.client_id) {
+		let got = (type(payload.azp) == "string") ? encoding.log_safe(payload.azp) : `(${type(payload.azp)})`;
+		return Result.err(AZP_MISMATCH, `Expected ${config.client_id}, got ${got}`);
 	}
 
-	// 3.3 Access Token Hash Check
+	// 3.3 Access Token Hash Check (OIDC Core 1.0 §3.1.3.8). In the code flow
+	// at_hash is OPTIONAL (§3.1.3.6), and some IdPs never send it: an ID token
+	// without it is accepted. One that has it must match the access token.
 	if (!tokens.access_token) {
 		return Result.err(MISSING_ACCESS_TOKEN);
 	}
-	if (!payload.at_hash) {
-		deps.log("error", "ID Token missing mandatory at_hash claim (Token Binding violation)");
-		return Result.err(MISSING_AT_HASH);
-	}
+	if (payload.at_hash != null) {
+		let hash_res = crypto.hash_sha256(deps.native, tokens.access_token);
+		if (!hash_res.ok) return hash_res;
 
-	let hash_res = crypto.hash_sha256(deps.native, tokens.access_token);
-	if (!hash_res.ok) return hash_res;
-	let full_hash = hash_res.data;
+		let left_half_res = encoding.binary_truncate(hash_res.data, 16);
+		if (!left_half_res.ok) return Result.err(CRYPTO_ERROR);
 
-	let left_half_res = encoding.binary_truncate(full_hash, 16);
-	if (!left_half_res.ok) return Result.err(CRYPTO_ERROR);
+		let expected_hash_res = encoding.b64url_encode(left_half_res.data);
+		if (!expected_hash_res.ok) return Result.err(CRYPTO_ERROR);
 
-	let expected_hash_res = encoding.b64url_encode(left_half_res.data);
-	if (!expected_hash_res.ok) return Result.err(CRYPTO_ERROR);
-
-	if (!crypto.constant_time_eq(expected_hash_res.data, payload.at_hash)) {
-		return Result.err(AT_HASH_MISMATCH);
+		if (!crypto.constant_time_eq(expected_hash_res.data, payload.at_hash)) {
+			return Result.err(AT_HASH_MISMATCH);
+		}
 	}
 
 	let user_data = {
 		sub: payload.sub,
 		email: (type(payload.email) == "string") ? payload.email : null,
+		// Kept as sent; config.email_is_verified decides what counts as true.
+		email_verified: payload.email_verified,
 		name: (type(payload.name) == "string") ? payload.name : null,
 		groups: (type(payload.groups) == "array") ? payload.groups : []
 	};
@@ -275,13 +275,21 @@ export function verify_id_token(deps, tokens, keys, config, handshake, discovery
 
 /**
  * Fetches user claims from the UserInfo endpoint.
- * 
- * @param {object} io - I/O provider
+ *
+ * The claims are returned only when the response's sub is exactly
+ * expected_sub (OIDC Core §5.3.2). A response whose sub is missing, not a
+ * string, empty or different fails with IDENTITY_MISMATCH (403), so no caller
+ * can use claims that are not bound to the ID Token's subject.
+ *
+ * @param {object} deps - { http, log }
  * @param {string} endpoint - UserInfo URL
  * @param {string} access_token - OAuth2 Access Token
+ * @param {string} expected_sub - The verified ID Token's sub
  * @returns {object} - Result Object {ok, data: {sub, email, ...}}
  */
-export function fetch_userinfo(deps, endpoint, access_token) {
+export function fetch_userinfo(deps, endpoint, access_token, expected_sub) {
+	if (type(expected_sub) != "string" || !length(expected_sub))
+		die("CONTRACT_VIOLATION: oidc.fetch_userinfo requires the ID Token's sub");
 	if (!encoding.is_https(endpoint)) return Result.err(INSECURE_USERINFO_ENDPOINT);
 	if (!access_token) return Result.err(MISSING_ACCESS_TOKEN);
 
@@ -292,20 +300,20 @@ export function fetch_userinfo(deps, endpoint, access_token) {
 	});
 
 	if (!res_http.ok) {
-		deps.log("warn", `UserInfo fetch network error: ${res_http.error}`);
-		return Result.err(USERINFO_NETWORK_ERROR);
+		deps.log("warn", `UserInfo fetch network error: ${Result.describe(res_http)}`);
+		return Result.err(USERINFO_NETWORK_ERROR, { http_status: BAD_GATEWAY });
 	}
 
 	let response = res_http.data;
 	if (response.status != 200) {
 		deps.log("warn", `UserInfo fetch HTTP ${response.status}`);
-		return Result.err(USERINFO_FETCH_FAILED, { http_status: response.status });
+		return Result.err(USERINFO_FETCH_FAILED, { http_status: BAD_GATEWAY });
 	}
 
 	let res = encoding.safe_json(response.body);
 	if (!res.ok) {
 		deps.log("error", `UserInfo JSON parse error: ${res.details}`);
-		return Result.err(USERINFO_INVALID_JSON);
+		return Result.err(USERINFO_INVALID_JSON, { http_status: BAD_GATEWAY });
 	}
 
 	let payload = res.data;
@@ -317,10 +325,12 @@ export function fetch_userinfo(deps, endpoint, access_token) {
 	}
 	deps.log("debug", `UserInfo claims received: ${join(", ", claim_names)}`);
 
-	// 1. Mandatory sub claim check (OIDC Core 1.0 §5.3.2)
-	if (!payload.sub) {
-		deps.log("error", "UserInfo response missing mandatory 'sub' claim");
-		return Result.err(MISSING_SUB_CLAIM);
+	// The sub MUST exactly match the ID Token's sub (OIDC Core §5.3.2), or the
+	// claims could belong to a different user. sub is case-sensitive, so the
+	// comparison is exact. A missing, non-string or empty sub cannot match.
+	let sub = (type(payload) == "object") ? payload.sub : null;
+	if (type(sub) != "string" || sub !== expected_sub) {
+		return Result.err(IDENTITY_MISMATCH, { http_status: FORBIDDEN });
 	}
 
 	return Result.ok(payload);

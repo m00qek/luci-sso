@@ -1,9 +1,9 @@
-'use strict';
+"use strict";
 
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
-import { INSECURE_ISSUER_URL, INSECURE_FETCH_URL, DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCOVERY_MISSING_ISSUER, DISCOVERY_ISSUER_MISMATCH, DISCOVERY_MISSING_ENDPOINT, INSECURE_ENDPOINT, INSECURE_JWKS_URI, JWKS_FETCH_FAILED, JWKS_NETWORK_ERROR, INVALID_JWKS_FORMAT } from 'luci_sso.errors';
+import { INSECURE_ISSUER_URL, INSECURE_FETCH_URL, DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCOVERY_MISSING_ISSUER, DISCOVERY_ISSUER_MISMATCH, DISCOVERY_MISSING_ENDPOINT, INSECURE_ENDPOINT, INSECURE_JWKS_URI, JWKS_FETCH_FAILED, JWKS_NETWORK_ERROR, INVALID_JWKS_FORMAT, KEY_NOT_FOUND, NO_KEYS_AVAILABLE } from 'luci_sso.errors';
 
 /**
  * Implementation of OIDC Discovery and JWKS management.
@@ -21,7 +21,7 @@ function get_cache_path(native, id_res, prefix) {
 	let h_res = encoding.b64url_encode(hash_res.data);
 	if (!h_res.ok) return null;
 	return `/var/run/luci-sso/oidc-${prefix}-${substr(h_res.data, 0, 32)}.json`;
-};
+}
 
 /**
  * Reads and validates a cached object.
@@ -45,7 +45,7 @@ function _read_cache(deps, path, ttl, ignore_ttl) {
 	} catch (e) {
 		return null;
 	}
-};
+}
 
 /**
  * Writes data to cache with a timestamp (Atomic).
@@ -74,7 +74,7 @@ function _write_cache(deps, path, data) {
 	} catch (e) {
 		deps.log("error", `Cache write failure: ${e}`);
 	}
-};
+}
 
 /**
  * Fetches and caches OIDC discovery document.
@@ -83,49 +83,55 @@ export function discover(deps, issuer, options) {
 	if (!encoding.is_https(issuer)) return Result.err(INSECURE_ISSUER_URL);
 
 	options = options || {};
-	let normalized_issuer_res = encoding.normalize_url(issuer);
-	if (!normalized_issuer_res.ok) return normalized_issuer_res;
-	let normalized_issuer = normalized_issuer_res.data;
 
-	let cache_path = options.cache_path || get_cache_path(deps.native, normalized_issuer_res, "discovery");
+	// OIDC Discovery §4.3: the document's issuer MUST be identical to the
+	// issuer URL we are configured with. The cache is keyed on, and every
+	// cached document is checked against, that exact string, so a document
+	// cached by an earlier version that compared normalized URLs is ignored
+	// (and refetched) unless its issuer is identical too.
+	let cache_path = options.cache_path || get_cache_path(deps.native, Result.ok(issuer), "discovery");
 	let ttl = options.ttl || 86400; // 24 hours default (production standard)
 
 	let cached = _read_cache(deps, cache_path, ttl);
-	if (cached && cached.issuer) {
-		let cached_issuer_res = encoding.normalize_url(cached.issuer);
-		if (cached_issuer_res.ok && crypto.constant_time_eq(cached_issuer_res.data, normalized_issuer)) {
-			return Result.ok(cached);
-		}
+	if (cached && cached.issuer === issuer) {
+		return Result.ok(cached);
 	}
 
-	// The fetch URL might be different from the logical issuer URL (Split-Horizon)
-	let fetch_url = options.internal_issuer_url || issuer;
+	// Split-horizon: fetch from the internal origin, keeping the issuer's path
+	// (https://kc.example.com/realms/home + internal https://10.0.0.5:8443
+	// -> https://10.0.0.5:8443/realms/home/.well-known/openid-configuration).
+	// The cache key and the issuer check below still use the public issuer.
+	let fetch_url = issuer;
+	if (options.internal_issuer_url) {
+		if (!encoding.is_https(options.internal_issuer_url)) return Result.err(INSECURE_FETCH_URL);
+		let int_res = encoding.split_origin(options.internal_issuer_url);
+		let iss_res = encoding.split_origin(issuer);
+		if (!int_res.ok || !iss_res.ok) return Result.err(INSECURE_FETCH_URL);
+		fetch_url = int_res.data.origin + iss_res.data.rest;
+	}
 	if (!encoding.is_https(fetch_url)) return Result.err(INSECURE_FETCH_URL);
 
-	if (substr(fetch_url, -1) != '/') fetch_url += '/';
+	if (substr(fetch_url, -1) != "/") fetch_url += "/";
 	fetch_url += ".well-known/openid-configuration";
 
 	let res_http = deps.http.get(fetch_url, { verify: true });
-	let issuer_id = crypto.safe_id(deps.native, normalized_issuer);
+	let issuer_id = crypto.safe_id(deps.native, issuer);
 
 	if (!res_http.ok || res_http.data.status != 200) {
-		// RESILIENCE FALLBACK: Try to use stale cache if network failed (W1)
+		// If the IdP is unreachable, serve a stale cached document rather than fail the login.
 		let stale = _read_cache(deps, cache_path, ttl, true);
-		if (stale && stale.issuer) {
-			let stale_issuer_res = encoding.normalize_url(stale.issuer);
-			if (stale_issuer_res.ok && crypto.constant_time_eq(stale_issuer_res.data, normalized_issuer)) {
-				deps.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
-				return Result.ok(stale);
-			}
+		if (stale && stale.issuer === issuer) {
+			deps.log("warn", `Using stale discovery cache due to network failure [id: ${issuer_id}]`);
+			return Result.ok(stale);
 		}
 
 		if (!res_http.ok) {
-			deps.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${res_http.error}`);
+			deps.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${Result.describe(res_http)}`);
 			return Result.err(DISCOVERY_NETWORK_ERROR);
 		}
 
 		deps.log("warn", `Discovery fetch HTTP ${res_http.data.status} from [id: ${issuer_id}]`);
-		return Result.err(DISCOVERY_FAILED, { http_status: res_http.data.status });
+		return Result.err(DISCOVERY_FAILED, { http_status: 502 });
 	}
 
 	let response = res_http.data;
@@ -143,24 +149,34 @@ export function discover(deps, issuer, options) {
 		return Result.err(DISCOVERY_MISSING_ISSUER);
 	}
 
-	let config_issuer_res = encoding.normalize_url(config.issuer);
-	if (!config_issuer_res.ok || !crypto.constant_time_eq(config_issuer_res.data, normalized_issuer)) {
-		deps.log("error", `Discovery issuer mismatch: Requested [id: ${issuer_id}], got [id: ${config_issuer_res.ok ? crypto.safe_id(deps.native, config_issuer_res.data) : "INVALID"}]`);
+	if (config.issuer !== issuer) {
+		// The issuer is configuration, not a secret: log both values so the
+		// admin can see exactly what to copy into issuer_url.
+		let doc_issuer = (type(config.issuer) == "string") ? `"${encoding.log_safe(config.issuer)}"` : `(${type(config.issuer)})`;
+		// A near miss (trailing slash, letter case, default port) is the
+		// usual upgrade trap: say so, since the two can look identical.
+		let hint = "";
+		let conf_norm = encoding.normalize_url(issuer), doc_norm = encoding.normalize_url(config.issuer);
+		if (conf_norm.ok && doc_norm.ok && conf_norm.data === doc_norm.data)
+			hint = "; they differ only in a trailing slash, letter case or default port: set issuer_url to exactly the declared value";
+		deps.log("error", `DISCOVERY_ISSUER_MISMATCH: issuer_url is "${encoding.log_safe(issuer)}" but the discovery document declares ${doc_issuer}${hint} [id: ${issuer_id}]`);
 		return Result.err(DISCOVERY_ISSUER_MISMATCH,
 			 `Expected issuer_id ${issuer_id}` );
 	}
 
-	deps.log("info", `Discovery successful for [id: ${issuer_id}]`);
-
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
 	for (let i, field in required) {
 		if (type(config[field]) != "string" || length(config[field]) == 0) {
+			deps.log("error", `DISCOVERY_MISSING_ENDPOINT: the discovery document has no ${field} [id: ${issuer_id}]`);
 			return Result.err(DISCOVERY_MISSING_ENDPOINT, field);
 		}
 		if (!encoding.is_https(config[field])) {
+			deps.log("error", `INSECURE_ENDPOINT: ${field} in the discovery document is not HTTPS: "${encoding.log_safe(config[field], 100)}" [id: ${issuer_id}]`);
 			return Result.err(INSECURE_ENDPOINT, field);
 		}
 	}
+
+	deps.log("info", `Discovery successful for [id: ${issuer_id}]`);
 
 	// OPTIONAL: UserInfo endpoint (RFC 6749 / OIDC)
 	if (config.userinfo_endpoint && !encoding.is_https(config.userinfo_endpoint)) {
@@ -206,7 +222,7 @@ export function fetch_jwks(deps, jwks_uri, options) {
 
 	let res_http = deps.http.get(jwks_uri, { verify: true });
 	if (!res_http.ok || res_http.data.status != 200) {
-		// RESILIENCE FALLBACK: Try stale cache
+		// If the IdP is unreachable, serve stale cached keys rather than fail the login.
 		let stale = _read_cache(deps, cache_path, ttl, true);
 		if (stale && type(stale.keys) == "array") {
 			deps.log("warn", `Using stale JWKS cache due to network failure [id: ${uri_id}]`);
@@ -214,12 +230,12 @@ export function fetch_jwks(deps, jwks_uri, options) {
 		}
 
 		if (!res_http.ok) {
-			deps.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${res_http.error}`);
+			deps.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${Result.describe(res_http)}`);
 			return Result.err(JWKS_NETWORK_ERROR);
 		}
 
 		deps.log("warn", `JWKS fetch HTTP ${res_http.data.status} from [id: ${uri_id}]`);
-		return Result.err(JWKS_FETCH_FAILED, { http_status: res_http.data.status });
+		return Result.err(JWKS_FETCH_FAILED, { http_status: 502 });
 	}
 
 	let response = res_http.data;
@@ -243,12 +259,12 @@ export function fetch_jwks(deps, jwks_uri, options) {
  */
 export function find_jwk(keys, kid) {
 	if (type(keys) != "array") die("CONTRACT_VIOLATION: keys must be an array");
-		if (!kid) {
-			if (length(keys) > 0) return Result.ok(keys[0]);
-			return Result.err("NO_KEYS_AVAILABLE");
-		}
-		for (let i, key in keys) {
-			if (crypto.constant_time_eq(key.kid, kid)) return Result.ok(key);
-		}
-		return Result.err("KEY_NOT_FOUND", kid);
-	};
+	if (!kid) {
+		if (length(keys) > 0) return Result.ok(keys[0]);
+		return Result.err(NO_KEYS_AVAILABLE);
+	}
+	for (let i, key in keys) {
+		if (key.kid === kid) return Result.ok(key);
+	}
+	return Result.err(KEY_NOT_FOUND, kid);
+};

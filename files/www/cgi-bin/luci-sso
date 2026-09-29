@@ -1,5 +1,5 @@
 #!/usr/bin/ucode
-'use strict';
+"use strict";
 
 import * as fs from 'fs';
 import { create as make_deps } from 'luci_sso.deps';

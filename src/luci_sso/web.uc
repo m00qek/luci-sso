@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as lucihttp from 'lucihttp';
 import * as encoding from 'luci_sso.encoding';
@@ -29,6 +29,7 @@ const HTTP_STATUS_MESSAGES = {
 	"429": "429 Too Many Requests",
 	"431": "431 Request Header Fields Too Large",
 	"500": "500 Internal Server Error",
+	"502": "502 Bad Gateway",
 	"503": "503 Service Unavailable"
 };
 
@@ -37,24 +38,57 @@ const HTTP_STATUS_MESSAGES = {
  * @private
  */
 const ERROR_MAP = {
-	"STATE_NOT_FOUND": "Your session has expired or is invalid. You MUST try logging in again.",
-	"STATE_CORRUPTED": "Authentication failed due to a system error. You MUST contact your administrator.",
-	"STATE_SAVE_FAILED": "Internal server error: Could not initialize authentication. You MUST contact your administrator.",
-	"OIDC_DISCOVERY_FAILED": "Could not connect to the Identity Provider. Contact your administrator.",
-	"TOKEN_EXCHANGE_FAILED": "Failed to exchange authorization code for tokens. Contact your administrator.",
-	"OIDC_INVALID_GRANT": "The authorization code is expired or has already been used. You MUST try logging in again.",
-	"ID_TOKEN_VERIFICATION_FAILED": "The identity token provided by the IdP is invalid. You MUST contact your administrator.",
-	"USER_NOT_AUTHORIZED": "Your account is not authorized to access this device. You MUST contact your administrator.",
-	"TOKEN_REPLAYED": "Authentication rejected: this token has already been used. You MUST try logging in again.",
-	"TOKEN_REGISTRY_ERROR": "Authentication failed due to an internal system error. You MUST contact your administrator.",
-	"CSRF_CHECK_FAILED": "Logout request rejected: invalid or missing CSRF token.",
-	"TOKEN_ENDPOINT_NETWORK_ERROR": "A network error occurred while communicating with the IdP token endpoint. Contact your administrator.",
-	"INSECURE_ENDPOINT": "The IdP provided an insecure endpoint. Connection aborted for security. You MUST contact your administrator.",
-	"INPUT_TOO_LARGE": "The request contains too much data. You MUST reduce the size of your request (e.g. fewer cookies).",
-	"TOO_MANY_REQUESTS": "Too many requests. Please wait before trying again.",
-	"SSO_DISABLED": "Single Sign-On is not enabled on this device.",
-	"NOT_FOUND": "The requested path was not found."
+	"STATE_NOT_FOUND": "Your sign-in attempt expired or was already used. Please try signing in again.",
+	"STATE_CORRUPTED": "Sign-in failed because of a problem on this router. Please contact your administrator.",
+	"STATE_SAVE_FAILED": "Sign-in could not start because of a problem on this router. Please contact your administrator.",
+	"OIDC_DISCOVERY_FAILED": "The router could not reach the identity provider. Please try again later, or contact your administrator.",
+	"TOKEN_EXCHANGE_FAILED": "The identity provider did not accept the sign-in request. Please contact your administrator.",
+	"OIDC_INVALID_GRANT": "This sign-in attempt expired or was already used. Please try signing in again.",
+	"ID_TOKEN_VERIFICATION_FAILED": "The identity provider's response could not be verified. Please contact your administrator.",
+	"USER_NOT_AUTHORIZED": "Your account is not allowed to manage this router. Please contact your administrator if you need access.",
+	"TOKEN_REPLAYED": "This sign-in response was already used. Please try signing in again.",
+	"TOKEN_REGISTRY_ERROR": "Sign-in failed because of a problem on this router. Please contact your administrator.",
+	"CSRF_CHECK_FAILED": "This logout link is invalid or has expired, so nothing was changed.",
+	"TOKEN_ENDPOINT_NETWORK_ERROR": "The router could not reach the identity provider. Please try again later, or contact your administrator.",
+	"INSECURE_ENDPOINT": "Sign-in was stopped because the identity provider is not configured securely. Please contact your administrator.",
+	"INPUT_TOO_LARGE": "The request contained too much data. Clearing this site's cookies usually fixes this.",
+	"HANDSHAKE_CAPACITY_EXCEEDED": "Too many sign-ins are in progress right now. Please try again in a few minutes, or log in with a password.",
+	"TOO_MANY_REQUESTS": "There have been too many sign-in attempts. Please wait a minute and try again.",
+	"SSO_DISABLED": "Single sign-on is not enabled on this router. You can still log in with a password.",
+	"NOT_FOUND": "This page does not exist."
 };
+
+/**
+ * Shown for any code without a specific message, and for crashes.
+ * @private
+ */
+const GENERIC_MESSAGE = "Sign-in could not be completed. Please try again, or contact your administrator.";
+
+/**
+ * Where the error page's link sends the user: LuCI's own login page, which
+ * also carries the SSO button.
+ * @private
+ */
+const LOGIN_URL = "/cgi-bin/luci/";
+
+/**
+ * Renders the body of an error page: a heading, one message and a link back
+ * to the login page. No inline style or script, so the page satisfies the
+ * default-src 'none' CSP applied to every response. The message is always one
+ * of the fixed strings above, never request data or an internal error code.
+ * @private
+ */
+function _error_page(message) {
+	return "<!DOCTYPE html>\n" +
+		'<html lang="en">\n' +
+		'<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Single sign-on</title></head>\n' +
+		"<body>\n" +
+		"<h1>Single sign-on</h1>\n" +
+		`<p>${message}</p>\n` +
+		`<p><a href="${LOGIN_URL}">Back to the login page</a></p>\n` +
+		"</body>\n" +
+		"</html>\n";
+}
 
 /**
  * Safely retrieves an environment variable with length enforcement.
@@ -64,7 +98,7 @@ function safe_getenv(getenv, key) {
 	let val = getenv(key);
 	if (val && length(val) > LIMIT_INPUT_LEN) return Result.err(INPUT_TOO_LARGE, { http_status: 431, key: key });
 	return Result.ok(val);
-};
+}
 
 /**
  * Parses a query string into an object with URL decoding.
@@ -82,8 +116,8 @@ export function parse_params(str) {
 		let k = parts[0];
 		let v = parts[1];
 		if (k) {
-			let key = lucihttp.urldecode(replace(k, /\+/g, ' '));
-			let val = (v != null) ? lucihttp.urldecode(replace(v, /\+/g, ' ')) : null;
+			let key = lucihttp.urldecode(replace(k, /\+/g, " "));
+			let val = (v != null) ? lucihttp.urldecode(replace(v, /\+/g, " ")) : null;
 			params[key] = val;
 		}
 	}
@@ -124,7 +158,7 @@ export function parse_cookies(str) {
 function _sanitize_header(val) {
 	if (type(val) != "string") return val;
 	return replace(val, /[\r\n]+/g, " ");
-};
+}
 
 /**
  * Internal helper to write HTTP headers and body.
@@ -151,7 +185,7 @@ function _out(stdout, headers, body) {
 		stdout.write(body);
 	}
 	stdout.flush();
-};
+}
 
 /**
  * Applies security headers to a response headers object in-place.
@@ -164,13 +198,13 @@ function _apply_security_headers(headers) {
 	headers["X-Frame-Options"] = "DENY";
 	headers["Cache-Control"] = "no-store";
 	headers["Referrer-Policy"] = "no-referrer";
-};
+}
 
 /**
  * Extracts and parses the request context from the CGI environment.
  *
  * @param {object} deps - { getenv }
- * @returns {object} - Result.ok({path, query, cookies, env}) or Result.err
+ * @returns {object} - Result.ok({path, query, cookies, client}) or Result.err
  */
 export function request(deps) {
 	let res_path = safe_getenv(deps.getenv, "PATH_INFO");
@@ -182,8 +216,9 @@ export function request(deps) {
 	let res_cookie = safe_getenv(deps.getenv, "HTTP_COOKIE");
 	if (!res_cookie.ok) return res_cookie;
 
-	let res_host = safe_getenv(deps.getenv, "HTTP_HOST");
-	if (!res_host.ok) return res_host;
+	// The client address uhttpd saw, used only as a rate-limit key.
+	let res_addr = safe_getenv(deps.getenv, "REMOTE_ADDR");
+	if (!res_addr.ok) return res_addr;
 
 	let res_params = parse_params(res_qs.data);
 	if (!res_params.ok) return res_params;
@@ -198,9 +233,7 @@ export function request(deps) {
 		path: path,
 		query: res_params.data,
 		cookies: res_cookies.data,
-		env: {
-			HTTP_HOST: res_host.data
-		}
+		client: res_addr.data
 	});
 };
 
@@ -220,7 +253,7 @@ export function render(deps, res) {
 
 	if (res.status == 302) {
 		headers["Content-Type"] = "text/html";
-		body = '<html><body><p>Redirecting...</p></body></html>\n';
+		body = "<html><body><p>Redirecting...</p></body></html>\n";
 	}
 
 	_out(deps.stdout, headers, body);
@@ -232,18 +265,21 @@ export function render(deps, res) {
  * @param {object} deps - { log, stdout }
  * @param {string} code - Internal error code (SCREAMING_SNAKE_CASE)
  * @param {number} status - HTTP status code
+ * @param {object} [extra] - Additional response headers, e.g. { "Retry-After": "42" }
  */
-export function render_error(deps, code, status) {
-	let user_msg = ERROR_MAP[code] || "An unexpected authentication error occurred.";
+export function render_error(deps, code, status, extra) {
+	let user_msg = ERROR_MAP[code] || GENERIC_MESSAGE;
 
 	deps.log("error", `[${status || 500}] ${code}`);
 
 	let headers = {
 		"Status": HTTP_STATUS_MESSAGES["" + (status || 500)] || "500 Internal Server Error",
-		"Content-Type": "text/plain"
+		"Content-Type": "text/html; charset=utf-8"
 	};
+	for (let k, v in (extra || {}))
+		headers[k] = v;
 	_apply_security_headers(headers);
-	_out(deps.stdout, headers, `Error: ${user_msg}\n`);
+	_out(deps.stdout, headers, _error_page(user_msg));
 };
 
 /**
@@ -260,8 +296,8 @@ export function error(deps, e) {
 
 	let headers = {
 		"Status": "500 Internal Server Error",
-		"Content-Type": "text/plain"
+		"Content-Type": "text/html; charset=utf-8"
 	};
 	_apply_security_headers(headers);
-	_out(deps.stdout, headers, "Router Crash: An internal error occurred. Please contact support.\n");
+	_out(deps.stdout, headers, _error_page(GENERIC_MESSAGE));
 };

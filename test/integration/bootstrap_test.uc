@@ -17,19 +17,26 @@ describe('deps.ubus_channel', () => {
 		assert.match(contains({ ok: false, error: 'UBUS_CONNECT_FAILED' }), ch.call('obj', 'method', {}));
 	});
 
-	it('returns UBUS_ERROR when the underlying call returns null', () => {
-		let ch = ubus_channel({ call: () => null });
-		assert.match(contains({ ok: false, error: 'UBUS_ERROR' }), ch.call('session', 'create', {}));
+	it('returns UBUS_ERROR with the connection error when the call fails', () => {
+		let ch = ubus_channel({ call: () => null, error: () => 'Not found' });
+		assert.match(contains({ ok: false, error: 'UBUS_ERROR', details: 'Not found' }), ch.call('session', 'set', {}));
+	});
+
+	it('returns Result.ok(null) for a successful call that replies with no data', () => {
+		// rpcd answers session set/grant/destroy with no data; ucode returns null
+		// and error() stays null. Treating that as failure broke every grant/destroy.
+		let ch = ubus_channel({ call: () => null, error: () => null });
+		assert.match(contains({ ok: true, data: null }), ch.call('session', 'set', {}));
 	});
 
 	it('returns Result.ok wrapping the raw ubus response on success', () => {
-		let ch = ubus_channel({ call: () => ({ ubus_rpc_session: 'sid' }) });
+		let ch = ubus_channel({ call: () => ({ ubus_rpc_session: 'sid' }), error: () => null });
 		assert.match(contains({ ok: true, data: { ubus_rpc_session: 'sid' } }), ch.call('session', 'create', {}));
 	});
 
 	it('forwards (obj, method, args) to the underlying connection verbatim', () => {
 		let seen = null;
-		let ch = ubus_channel({ call: (obj, method, args) => { seen = [obj, method, args]; return {}; } });
+		let ch = ubus_channel({ call: (obj, method, args) => { seen = [obj, method, args]; return {}; }, error: () => null });
 		ch.call('session', 'grant', { scope: 'x' });
 		assert.match('session',        seen[0]);
 		assert.match('grant',          seen[1]);

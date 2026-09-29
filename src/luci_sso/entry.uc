@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * CGI entry pipeline for luci-sso.
@@ -16,6 +16,7 @@
 import * as web from 'luci_sso.web';
 import * as config from 'luci_sso.config';
 import * as router from 'luci_sso.router';
+import { SSO_DISABLED } from 'luci_sso.errors';
 
 /**
  * Emits a router Result to the client: renders the response on success, or a
@@ -25,11 +26,14 @@ import * as router from 'luci_sso.router';
 function emit(web_deps, res) {
 	if (!res.ok) {
 		let status = (type(res.details) == "object") ? res.details.http_status : 500;
-		web.render_error(web_deps, res.error, status);
+		let extra = null;
+		if (type(res.details) == "object" && type(res.details.retry_after) == "int" && res.details.retry_after > 0)
+			extra = { "Retry-After": `${res.details.retry_after}` };
+		web.render_error(web_deps, res.error, status, extra);
 	} else {
 		web.render(web_deps, res.data);
 	}
-};
+}
 
 /**
  * Runs the full request → config → route → render pipeline.
@@ -48,14 +52,18 @@ export function run(deps, web_deps) {
 
 		let req = res_req.data;
 
-		// W2: allow ?action=enabled even when config loading fails with SSO_DISABLED,
+		// Allow ?action=enabled even when config loading fails with SSO_DISABLED,
 		// so the login button can probe availability on an unconfigured router.
 		let res_c = config.load({ uci: deps.uci, log: deps.log });
 		if (!res_c.ok) {
-			if (res_c.error == "SSO_DISABLED" && req.path == "/" && req.query.action == "enabled") {
+			if (res_c.error == SSO_DISABLED && req.path == "/" && req.query.action == "enabled") {
 				emit(web_deps, router.handle(deps, null, req));
 				return;
 			}
+			// The detail names the UCI option that is wrong. It never carries
+			// the option's value, so it is safe to log; the page stays generic.
+			if (res_c.details)
+				deps.log("error", `Configuration rejected: ${res_c.details}`);
 			web.render_error(web_deps, res_c.error, 500);
 			return;
 		}

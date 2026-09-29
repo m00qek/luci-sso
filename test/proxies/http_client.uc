@@ -1,7 +1,7 @@
 // Loaded via require() in ucode program mode — see proxy_base.uc for why `return` is used here.
 // Note: require() runs files as program-mode scripts, so `import` / `export` are not available.
 function ok(data)          { return { ok: true,  data: data }; }
-function err(code, detail) { return { ok: false, error: code, detail: detail }; }
+function err(code, details) { return { ok: false, error: code, details: details }; }
 
 return {
 	api: ['get', 'post'],

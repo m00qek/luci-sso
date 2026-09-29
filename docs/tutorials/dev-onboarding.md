@@ -20,7 +20,7 @@ In this tutorial, we will set up a local development environment, run the full t
 └──────────────────────────────────────────────────────┘
 ```
 
-The mock IdP is pre-configured with test credentials — no real Google or Authelia account is needed. All SSO traffic stays on the local machine.
+The mock IdP signs everyone in as the same test user, `admin@example.com` — no real Google or Authelia account is needed. All SSO traffic stays on the local machine.
 
 ---
 
@@ -47,7 +47,7 @@ Now we'll start the "Mock Environment" — a fake Identity Provider (IdP) and a 
 make up
 ```
 
-After a moment, you should see all containers report as healthy. The mock IdP is pre-configured with test credentials so we don't need a real Google or Authelia account.
+After a moment, you should see all containers report as healthy.
 
 ## Step 3: Run the test suite
 
@@ -57,13 +57,15 @@ Let's verify everything is working correctly:
 make unit-test
 ```
 
-You should see a series of green checkmarks for Tiers 0 through 4, ending with a summary like:
+You should see a row of green dots for each bundle — the native crypto tests, the unit tests, the integration tests and the system tests — ending with a summary like:
 
 ```
-All tests passed. (Tier 0: 12, Tier 1: 8, Tier 2: 24, Tier 3: 9, Tier 4: 3)
+Summary:
+
+  594 successes / 0 failures / 0 errors / 0 skipped / 0 ignored (3500 ms)
 ```
 
-If any tier fails, the output will identify the failing test and the module it belongs to.
+The exact count grows as tests are added. If a test fails, rerun with `make unit-test VERBOSE=1` to see each test's name and the failing assertion.
 
 ## Step 4: Try the login flow
 
@@ -75,16 +77,18 @@ make local-up
 
 Then open `https://localhost:8443` in your browser and choose **"Login with SSO"** to trigger the OIDC flow against the mock IdP.
 
-Notice that the login redirects to the mock IdP, then back to LuCI — the same flow a real user experiences with Google or Authelia. The mock IdP accepts any credentials, so any username/password will work.
+The stack's certificates come from a private CA that the stack generated on its first start, so the browser warns about them at first. Import `devenv/.pki/CA.crt` into the browser to trust them, or accept the warning for `localhost:8443` and again for the mock IdP at `localhost:5556`.
+
+Notice that the login goes to the mock IdP and straight back to LuCI. The mock IdP has no login form: it approves every request at once and issues an ID Token for `admin@example.com`, which the default `admin` role accepts. Apart from that missing step, it is the same flow a real user experiences with Google or Authelia.
 
 ---
 
 ## What we just built
 
 * A native C crypto bridge compiled for the local architecture, loaded by `ucode` for cryptographic operations.
-* A mock Identity Provider pre-configured with test credentials that accepts any username and password.
+* A mock Identity Provider that signs every login in as `admin@example.com`, without a login form.
 * A CI stack (`make up`) for running the test suite, and a local stack (`make local-up`) with ports exposed for browser-based interaction at `https://localhost:8443`.
-* A full test suite covering Tiers 0–4, runnable without a physical router or a real IdP.
+* A full test suite — native, unit, integration, system and browser end-to-end — runnable without a physical router or a real IdP.
 
 ---
 

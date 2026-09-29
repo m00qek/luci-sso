@@ -20,7 +20,8 @@ docs/
 ├── tutorials/     # Learning-oriented — guided first-time experiences
 ├── how-to/        # Goal-oriented — recipes for specific tasks
 ├── reference/     # Information-oriented — UCI schema, HTTP API, log messages
-└── explanation/   # Understanding-oriented — architecture, security model, OIDC flow
+├── explanation/   # Understanding-oriented — architecture, security model, OIDC flow
+└── _snippets/     # Shared blocks included with pymdownx.snippets; not pages
 ```
 
 For contribution guidelines, see [How to Write Documentation](https://m00qek.github.io/luci-sso/how-to/developer/documentation/).

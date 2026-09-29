@@ -1,30 +1,85 @@
 # LuCI SSO Style Guide
 
-This document is the technical reference for coding standards in the luci-sso project. For the reasoning behind these standards, see [Design Philosophy](../explanation/design-philosophy.md).
+This document is the technical reference for coding standards in the luci-sso project. For the reasoning behind these standards, see [About the Design Philosophy](../explanation/design-philosophy.md).
 
-Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, and trailing semicolons on exported functions. For real-world implementations, see `src/` (production) and `test/tier*/` (tests).
+Code examples use tabs for indentation (OpenWrt standard), `snake_case` naming, and trailing semicolons on exported functions. For real-world implementations, see `src/luci_sso/` (production) and `test/` (tests).
 
 ---
 
 ## Table of Contents
 
 1. [Terminology](#terminology)
-2. [Error Handling](#error-handling)
-3. [Testing Standards](#testing-standards)
-4. [ucode Style](#ucode-style)
-5. [C Code Style](#c-code-style)
-6. [Module Organization](#module-organization)
-7. [Security Guidelines](#security-guidelines)
-8. [Documentation Standards](#documentation-standards)
-9. [Commit Messages](#commit-messages)
-10. [Code Review Checklist](#code-review-checklist)
-11. [Technical Debt & Known Exceptions](#technical-debt--known-exceptions)
+2. [Design Rules](#design-rules)
+3. [Error Handling](#error-handling)
+4. [Testing Standards](#testing-standards)
+5. [ucode Style](#ucode-style)
+6. [C Code Style](#c-code-style)
+7. [Module Organization](#module-organization)
+8. [Security Guidelines](#security-guidelines)
+9. [Documentation Standards](#documentation-standards)
+10. [Commit Messages](#commit-messages)
+11. [Summary of Key Rules](#summary-of-key-rules)
+12. [Technical Debt & Known Exceptions](#technical-debt-known-exceptions)
+
+For the steps to take before opening a pull request, see [How to Work on luci-sso Day to Day](../how-to/developer/development-workflow.md#prepare-a-pull-request).
 
 ---
 
 ## Terminology
 
 The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in this document and all other project documentation are to be interpreted as described in [RFC 2119](https://tools.ietf.org/html/rfc2119).
+
+---
+
+## Design Rules
+
+The reasoning behind these rules is in [About the Design Philosophy](../explanation/design-philosophy.md).
+
+### I/O Through `deps`
+
+All I/O and nondeterminism MUST reach a module through the `deps` object: `fs`, `http`, `ubus`, `uci`, `clock`, `native` and `log`. Only `deps.uc` (which builds the production object) and `components/*` (which implement `http` and `clock`) MAY import `fs`, `uci`, `ubus`, `uclient`, `uloop`, `log` or `luci_sso.native`, or call `time()`.
+
+- A function that needs I/O MUST take `deps` as its first argument and pass it on. The `crypto/*` wrappers take only `native`.
+- Every `deps` object MUST include `log`.
+- `luci_sso.rpcd_login` is the exception: its writing functions take a UCI cursor, because the `rpcd` plugin and the package scripts call them outside the CGI, where there is no `deps`. They MUST stage changes only; the caller commits.
+- Deterministic, pure operations (string handling, Base64URL, JSON, URL normalization) MUST NOT go through `deps`.
+
+```javascript
+// Production (the CGI script): real modules, wired by deps.uc
+let deps = create();                          // from luci_sso.deps
+discover(deps, "https://idp.example.com");    // luci_sso.discovery
+
+// Test: the same call with a deps object built from proxies
+with_context({ fs: { data: {} }, http_client: { data: { … } }, clock: { data: { now: 1516239022 } } },
+	(deps) => discover(deps, "https://idp.example.com"));
+```
+
+### Crypto Backend Independence
+
+Code MUST NOT import a crypto backend directly. It MUST use the `native` module passed in through `deps` (or as the `native` argument of a `crypto/*` wrapper). New native operations MUST be added to all three backends (see [C Code Style](#c-code-style)).
+
+**❌ INCORRECT:**
+```javascript
+import * as mbedtls from 'native_mbedtls';
+```
+
+**✅ CORRECT:**
+```javascript
+let res = crypto.hash_sha256(deps.native, data);
+```
+
+### Security Invariants in Code
+
+Security invariants MUST be constants in code. They MUST NOT be UCI options or function parameters. Examples: the ID Token algorithm allow-list (`ALLOWED_ALGS` in `oidc.uc`), the PKCE method (`S256`), and the input size limits.
+
+```javascript
+// oidc.uc
+const ALLOWED_ALGS = ["RS256", "ES256"];
+```
+
+### Minimal C
+
+C code MUST be limited to cryptographic primitives. Everything else MUST be written in ucode. See [Minimize C Code](#minimize-c-code).
 
 ---
 
@@ -39,31 +94,33 @@ We distinguish between errors caused by the programmer (Contract Bugs) and error
 If a function is called with the wrong types or in an invalid state, this is a bug in the calling code. The system should "fail fast" to prevent undefined behavior.
 
 ```javascript
-export function jws_sign(payload, secret) {
-	if (type(payload) != "object") die("CONTRACT_VIOLATION: payload must be an object");
-	if (type(secret) != "string") die("CONTRACT_VIOLATION: secret must be a string");
+export function verify(native, token, pubkey, options) {
+	if (type(token) != "string") die("CONTRACT_VIOLATION: jwt.verify expects string token");
+	if (type(pubkey) != "string") die("CONTRACT_VIOLATION: jwt.verify expects string pubkey");
 	// ...
 };
 ```
 
 #### 2. Runtime Realities (Expected Failures)
-**Action: Use Result Objects or Exceptions**
-If an operation fails due to external factors (expired token, network down, invalid signature), this is a valid state that the application might want to handle.
-
-- **Exceptions:** Use for "stop the world" failures where the caller likely can't recover easily (e.g., malformed discovery response).
-- **Result Objects:** Use for all runtime failures and common business logic branches (e.g., token expired vs. invalid signature). These MUST be created using the `luci_sso.result` module.
+**Action: Return a Result Object**
+If an operation fails due to external factors (expired token, network down, invalid signature, malformed IdP response), this is a valid state that the application must handle. Runtime failures MUST return a Result Object created with the `luci_sso.result` module (`Result.ok(data)`, `Result.err(code, details)`). They MUST NOT throw.
 
 ```javascript
 import * as Result from 'luci_sso.result';
 
-// Result Object Pattern (MANDATORY)
-export function verify_session(io, token) {
-	// ... logic ...
-	if (expired) return Result.err("EXPIRED");
-	if (bad_sig) return Result.err("INVALID_SIGNATURE");
+// deps: { http, log } — from luci_sso.oidc.fetch_userinfo, shortened
+export function fetch_userinfo(deps, endpoint, access_token) {
+	if (!encoding.is_https(endpoint)) return Result.err(INSECURE_USERINFO_ENDPOINT);
 
-	return Result.ok(payload);
-}
+	let res_http = deps.http.get(endpoint, {
+		headers: { "Authorization": `Bearer ${access_token}` }
+	});
+	if (!res_http.ok) return Result.err(USERINFO_NETWORK_ERROR, { http_status: 502 });
+	if (res_http.data.status != 200)
+		return Result.err(USERINFO_FETCH_FAILED, { http_status: 502 });
+
+	return encoding.safe_json(res_http.data.body);
+};
 ```
 
 ### Exception vs. Result Object Decision Tree
@@ -87,9 +144,9 @@ When returning an error, developers SHOULD use a "context object" for the `detai
 
 **✅ CORRECT:**
 ```javascript
-return Result.err("DISCOVERY_FAILED", { 
-    http_status: 502, 
-    details: "Connection timed out" 
+return Result.err(ID_TOKEN_VERIFICATION_FAILED, {
+	details: verify_res.error,
+	http_status: 401
 });
 ```
 
@@ -120,27 +177,24 @@ return Result.err("DISCOVERY_FAILED", {
 
 ### Never Silently Fail
 
+Every returned Result MUST be checked (`if (!res.ok)`) before its `data` is used.
+
 **❌ INCORRECT:**
 
 ```javascript
-let result = jwt_verify(token, key, opts);
-// Forgot to check result.error
-use(result.payload);  // Undefined if error occurred
+let res = discovery.fetch_jwks(deps, jwks_uri);
+// Forgot to check res.ok
+let keys = res.data;  // null if the fetch failed
 ```
 
 **✅ CORRECT:**
 
 ```javascript
-// With exceptions (automatic propagation)
-let payload = jwt_verify(token, key, opts);
-use(payload);  // Exception thrown if verification failed
-
-// With result objects (explicit check)
-let result = verify_session(io, token);
-if (result.error) {
-	return handle_error(result.error);
+let res = discovery.fetch_jwks(deps, jwks_uri);
+if (!res.ok) {
+	return Result.err(JWKS_FETCH_FAILED, { http_status: 502 });
 }
-use(result.session);
+let keys = res.data;
 ```
 
 ---
@@ -149,50 +203,42 @@ use(result.session);
 
 ### Test Requirements
 
-### Test Requirements
-
-1. **Mandatory Coverage:** Every exported function MUST have unit tests.
+1. **Mandatory Coverage:** Every exported function MUST be tested, in the bucket the [placement rule](testing-architecture.md#placement-rule) assigns to its module.
 2. **Failure Verification:** Every error path MUST be verified by a corresponding test case.
-3. **Attack Simulation:** Security-critical code MUST have specialized attack tests.
+3. **Attack Simulation:** Security-critical code MUST have specialized attack tests (tampering, injection, replay, algorithm confusion, bypass attempts).
 4. **Offline Purity:** All tests MUST be runnable offline without external network dependencies.
+5. **Native Isolation:** Tests in `test/native/` MUST import only `luci_sso.native` and pure helpers. Tests of the `crypto/*` wrappers MUST fake `native`.
+6. **Proxies Over Stubs:** The system boundary MUST be faked with `mock.inject_all`, `mock.inject` or `with_context`. A hand-written stub object MUST NOT be used where a proxy exists. Proxies SHOULD use `strict: true` and SHOULD prefer `data:` over `behavior:`.
 
 ### Test Structure
 
+Tests use [utest](https://github.com/m00qek/utest): `describe` / `it` blocks, `assert.match` with matchers, and a `deps` object built from proxies. See [Testing Architecture](testing-architecture.md#mocking-the-proxy-dsl) for the proxy DSL and `with_context`.
+
 ```javascript
-import { test, assert, assert_eq } from 'testing';
-import * as module_under_test from 'luci_sso.module';
-import { create_mock_io } from 'helpers';
+import { describe, it, assert, contains, truthy, falsy, spy } from 'utest';
+import * as discovery from 'luci_sso.discovery';
+import { with_context } from 'context';
+import * as f from 'fixtures.oidc';
 
-test('Feature: Success case', () => {
-	let io = create_mock_io();
+const ISSUER = "https://trusted.idp";
 
-	// Setup
-	io._responses["https://idp.com/.well-known"] = {
-		status: 200,
-		body: "{}"
-	};
+describe('discovery: discover — validation & security', () => {
+	it('rejects an issuer mismatch', () => {
+		let evil_doc = { ...f.MOCK_DISCOVERY, issuer: "https://evil.idp" };
+		with_context({
+			fs:          { data: {} },
+			http_client: { data: { [`${ISSUER}/.well-known/openid-configuration`]: { status: 200, body: evil_doc } } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			let res = discovery.discover(deps, ISSUER);
+			assert.match(falsy(), res.ok);
+			assert.match("DISCOVERY_ISSUER_MISMATCH", res.error);
+		});
+	});
 
-	// Execute
-	let result = module_under_test.function(io, args);
-
-	// Assert
-	assert(!result.error, "Should succeed");
-	assert_eq(result.data, expected);
-});
-
-test('Feature: Error case', () => {
-	let io = create_mock_io();
-	io._responses["https://idp.com/.well-known"] = {
-		status: 500,
-		body: ""
-	};
-
-	try {
-		module_under_test.function(io, args);
-		assert(false, "Should have thrown");
-	} catch (e) {
-		assert(index(e, "EXPECTED_ERROR") >= 0);
-	}
+	it('dies with CONTRACT_VIOLATION when keys is not an array', () => {
+		assert.throws(() => discovery.find_jwk(null, 'key-1'), /CONTRACT_VIOLATION/);
+	});
 });
 ```
 
@@ -200,40 +246,30 @@ test('Feature: Error case', () => {
 
 ### Test Naming Convention
 
-**Pattern:** `test('Module: Feature - Condition', () => { ... })`
+**Pattern:** `describe('<module>: <function>[ — <aspect>]', …)` containing `it('<expected behaviour>', …)`. The module name is its path under `luci_sso`, dotted (`crypto.jwt`, `session.handshake`).
 
 **Examples:**
 
 ```javascript
-test('JWT: Verify RS256 signature', () => { /* ... */ });
-test('JWT: Reject expired token', () => { /* ... */ });
-test('JWT: Handle missing algorithm', () => { /* ... */ });
-test('OIDC: Discovery caching', () => { /* ... */ });
-test('Security: Reject alg=none attack', () => { /* ... */ });
+describe('crypto.jwt: verify — claims', () => {
+	it('returns TOKEN_EXPIRED for an expired token', () => { /* ... */ });
+	it('rejects a token issued in the future', () => { /* ... */ });
+});
+describe('discovery: fetch_jwks — cache', () => { /* ... */ });
+describe('web: parse_cookies', () => { /* ... */ });
 ```
 
 ---
 
 ### Test Coverage Requirements
 
-**Minimum coverage per function:**
+**Minimum coverage per exported function:**
 - ✅ 1 success case (happy path)
-- ✅ 1 error case per error type
-- ✅ Edge cases (empty input, null, boundary values)
-- ✅ Security cases (tampering, injection, bypass attempts)
+- ✅ 1 error case per error type or branch
+- ✅ Edge cases (empty input, `null`, boundary values)
+- ✅ Security cases where relevant (tampering, injection, replay, algorithm confusion, bypass attempts)
 
-**Example for `jwt_verify()`:**
-
-```javascript
-test('JWT: Valid token succeeds', () => { /* ... */ });
-test('JWT: Expired token rejected', () => { /* ... */ });
-test('JWT: Invalid signature rejected', () => { /* ... */ });
-test('JWT: Malformed token rejected', () => { /* ... */ });
-test('JWT: Wrong algorithm rejected', () => { /* ... */ });
-test('JWT: Missing header rejected', () => { /* ... */ });
-test('JWT: Tampered payload rejected', () => { /* ... */ });
-test('Security: Alg=none attack rejected', () => { /* ... */ });
-```
+**Example for `crypto.jwt.verify()`:** a valid token succeeds; expired, not-yet-valid and future-issued tokens are rejected; a bad signature, a malformed token, a wrong or missing algorithm and a tampered payload are rejected; `alg: none` and HS256 algorithm confusion are rejected.
 
 ---
 
@@ -287,7 +323,32 @@ function helper_function(arg) {
 ### String Formatting
 
 - **Interpolation:** Logic SHOULD use template literals for string building.
-- **Quotes:** Double quotes MUST be used for standard strings.
+- **Quotes:** Standard strings MUST use double quotes, including the `"use strict";` directive. Two exceptions use single quotes:
+    - **Import specifiers**, as everywhere in this codebase and in OpenWrt ucode: `import * as result from 'luci_sso.result';`
+    - **A string that contains a double quote** MAY use single quotes to avoid escaping it, for example JSON: `'{"enabled": %s}'`.
+- **Scope:** The quote rule applies to production ucode in `src/` and `files/`. Tests follow the same rule and exceptions in new code where practical; existing test strings are not converted.
+
+```javascript
+"use strict";
+
+import * as result from 'luci_sso.result';
+
+let method = "GET";
+let body = sprintf('{"enabled": %s}', enabled ? "true" : "false");
+```
+
+### Enforcement
+
+`make lint` runs `devenv/scripts/check-code-style.sh`, which checks three of these rules and reports each violation as `file:line: rule: detail`:
+
+| Rule | Files | Check |
+| :--- | :--- | :--- |
+| `indent` | Production ucode: `src/**/*.uc`, `files/**/*.uc`, `files/www/cgi-bin/luci-sso` | No line is indented with spaces. Tabs followed by spaces for alignment are allowed. |
+| `func-end` | Production ucode | An exported function ends with `};`, a private top-level function with `}`. |
+| `quotes` | Production ucode | No single-quoted string, except import specifiers and strings that contain `"`. |
+| `indent` | C (`mod/*.c`, `mod/*.h`, `test/fuzz_test.c`) and browser JavaScript (`files/www/**/*.js`) | No line is indented with spaces, except a continuation line (the previous line ends with `,`, `(` or an operator), such as parameters aligned under a top-level `(`. |
+
+Comments and template literals are not checked. The other rules on this page are checked in review.
 
 ### Imports
 
@@ -304,18 +365,17 @@ let x = compute();  // Cache for performance
 /**
  * Multi-line JSDoc-style for exported functions.
  * 
- * @param {object} io - I/O provider { http_get, time, ... }
+ * @param {object} deps - Injected dependencies; uses { fs, http, native, clock, log }
  * @param {string} issuer - IdP issuer URL
  * @param {object} [options] - Optional configuration
- * @returns {object} - Decoded payload
- * @throws {string} - Error code on failure
+ * @returns {object} - Result Object {ok, data/error}
  */
-export function discover(io, issuer, options) {
+export function discover(deps, issuer, options) {
 	// ...
 };
 
-// TODO comments for planned work
-// TODO: Add support for P-384 curve
+// TODO comments for planned work MUST name the issue that tracks it
+// TODO(#123): Add support for P-384 curve
 ```
 
 ---
@@ -345,15 +405,14 @@ function validate(input) {
 
 ## C Code Style
 
-### Standards: MbedTLS 3.x / PSA Crypto
-This project exclusively uses **MbedTLS 3.x**. All new cryptographic operations MUST be implemented using the **PSA Crypto API** (`psa/crypto.h`).
+### Standards: Crypto Backends
+The native bridge in `mod/` has three backends: `native_mbedtls.c` (mbedTLS 3.x), `native_wolfssl.c` (wolfSSL) and `native_openssl.c` (OpenSSL 3). Each implements the interface in `mod/native.h`; input checks shared by all of them live in `mod/native_api.c`. New operations MUST be added to all three. See [How to Add a New Crypto Backend](../how-to/developer/adding-crypto-backend.md).
 
 **Requirements:**
-- ✅ Call `psa_crypto_init()` in `uc_module_init`.
-- ✅ Check `psa_status_t` for ALL operations.
-- ✅ Use opaque handles (`psa_key_id_t`) where possible.
-- ✅ Destroy keys (`psa_destroy_key`) on all return paths.
-- ✅ Use `MBEDTLS_PRIVATE()` macro if direct structure access is unavoidable (deprecated).
+- ✅ Initialize the library in `native_crypto_init()`, which `uc_module_init` calls; the functions are registered only when it succeeds.
+- ✅ Check the return value of ALL library calls.
+- ✅ Free keys and contexts on all return paths.
+- ✅ mbedTLS: use the **PSA Crypto API** (`psa/crypto.h`) and check `psa_status_t`; use opaque handles (`psa_key_id_t`) where possible and destroy them (`psa_destroy_key`); use the `MBEDTLS_PRIVATE()` macro only if direct structure access is unavoidable.
 
 ---
 
@@ -367,31 +426,40 @@ This project exclusively uses **MbedTLS 3.x**. All new cryptographic operations 
 
 ### Function Naming
 
-```c
-// Pattern: uc_<backend>_<operation>
-static uc_value_t *uc_mbedtls_verify_rs256(uc_vm_t *vm, size_t nargs);
-static uc_value_t *uc_mbedtls_hmac_sha256(uc_vm_t *vm, size_t nargs);
+| Layer | File | Pattern | Example |
+| :--- | :--- | :--- | :--- |
+| ucode binding | `mod/native_ucode.c` | `uc_native_<operation>` | `uc_native_verify_rs256` |
+| Input guards | `mod/native_api.c` | `native_api_<operation>` | `native_api_verify_rs256` |
+| Backend interface | `mod/native.h`, `mod/native_<lib>.c` | `native_<operation>` | `native_verify_rs256` |
 
-// NOT generic names (backend might be swapped)
-// ❌ uc_verify_rs256
-```
+Every backend implements the same `native_<operation>` names, so no backend name appears in a function name.
 
 ---
 
 ### Error Handling in C
 
+What a ucode binding in `mod/native_ucode.c` returns on failure depends on what it returns on success:
+
+| Kind | Bindings | Success | Any failure |
+| :--- | :--- | :--- | :--- |
+| Value | `sha256`, `hmac_sha256`, `random`, `jwk_rsa_to_pem`, `jwk_ec_p256_to_pem` | the value (a string) | `null` |
+| Predicate | `verify_rs256`, `verify_es256` | `true` | `false` |
+
+- A value binding MUST return `null` on every failure, including wrong argument types, oversized input and backend errors.
+- A predicate binding MUST return `true` only for a verified signature, and `false` for everything else: wrong argument types, oversized input, an unparsable key or a bad signature. It MUST NOT return `null`, and MUST NOT distinguish an error from an invalid signature. A check has exactly two outcomes, so no caller can treat "could not check" as anything other than a rejection.
+- Callers MUST treat anything other than `true` from a predicate as a failure.
+
 ```c
-// Return NULL for errors (ucode convention)
-if (error_condition) {
-	mbedtls_pk_free(&pk);
-	return NULL;
-}
+// Value binding: null on any failure
+if (ucv_type(arg) != UC_STRING) return NULL;
+...
+return ucv_string_new_length((const char *)output, NATIVE_SHA256_SIZE);
 
-// Return boolean for success/failure
-return ucv_boolean_new(ret == 0);
-
-// Return string for data
-return ucv_string_new_length((const char *)output, 32);
+// Predicate binding: false on any failure, true only when verified
+if (ucv_type(v_msg) != UC_STRING || ucv_type(v_sig) != UC_STRING || ucv_type(v_key) != UC_STRING)
+	return ucv_boolean_new(false);
+...
+return ucv_boolean_new(native_api_verify_rs256(msg, msg_len, sig, sig_len, key, key_len));
 ```
 
 ### Memory Management & Safety
@@ -424,8 +492,7 @@ memcpy(local, key, 32); // Vulnerable if key_len < 32
 
 ---
 
-### Memory Hygiene
-
+### Input Type Validation
 
 ```c
 // ALWAYS validate input types
@@ -445,7 +512,7 @@ All stack or heap buffers containing sensitive cryptographic material (keys, non
 
 **Requirements:**
 - Use `mbedtls_platform_zeroize()` for MbedTLS backends.
-- Use `ForceZero()` or `memset_s()` equivalents for other backends.
+- Use `OPENSSL_cleanse()` for OpenSSL, and `ForceZero()` or an equivalent that cannot be optimized away for wolfSSL.
 
 ---
 
@@ -459,7 +526,7 @@ All stack or heap buffers containing sensitive cryptographic material (keys, non
  * @param message (string) - Message to authenticate (binary)
  * @return (string) - 32-byte HMAC digest, or NULL on error
  */
-static uc_value_t *uc_mbedtls_hmac_sha256(uc_vm_t *vm, size_t nargs) {
+static uc_value_t *uc_native_hmac_sha256(uc_vm_t *vm, size_t nargs) {
 	// Implementation
 }
 ```
@@ -474,12 +541,12 @@ While the parser may accept it, the behavior is inconsistent. When used on a `nu
 
 **❌ INCORRECT:**
 ```javascript
-let val = io?.getenv("PATH");
+let tol = config?.clock_tolerance;
 ```
 
 **✅ CORRECT:**
 ```javascript
-let val = (io && io.getenv) ? io.getenv("PATH") : null;
+let tol = config ? config.clock_tolerance : null;
 ```
 
 ### 2. No Destructuring (`let { a } = obj`)
@@ -573,34 +640,45 @@ if (substr(url, 0, 8) !== "https://") ...
 
 ```
 luci-sso/
-├── src/
-│   ├── crypto.uc      # High-level crypto API (wraps native)
-│   ├── oidc.uc        # OIDC protocol (exchange, verification)
-│   ├── discovery.uc   # OIDC metadata fetching and caching
-│   ├── handshake.uc   # OIDC state machine and session orchestration
-│   ├── session.uc     # Session management (JWS tokens)
-│   ├── encoding.uc    # Pure data encoding and string logic
-│   ├── result.uc      # Standard Result object pattern for error handling
-│   ├── jwk.uc         # JSON Web Key management
-│   ├── config.uc      # UCI configuration loader
-│   ├── web.uc         # CGI and HTTP request/response logic
-│   ├── secure_http.uc # HTTPS client logic
-│   ├── ubus.uc        # UBUS session integration
-│   └── io.uc          # I/O abstraction (create_io helper)
-├── src/
-│   ├── native_mbedtls.c   # mbedtls backend
-│   └── native_wolfssl.c   # wolfssl backend
+├── src/luci_sso/          # ucode modules, installed as luci_sso.*
+│   ├── entry.uc           # CGI pipeline: request → config → router → response
+│   ├── deps.uc            # Production dependency graph (fs, http, ubus, uci, clock, native, log)
+│   ├── router.uc          # Endpoint dispatch, logout
+│   ├── ratelimit.uc       # Per-client rate limits
+│   ├── handshake.uc       # OIDC login orchestration
+│   ├── oidc.uc            # Authorization URL, token exchange, ID-token checks, UserInfo
+│   ├── discovery.uc       # Discovery document and JWKS fetching/caching
+│   ├── config.uc          # UCI loading and role matching
+│   ├── ubus.uc            # rpcd session creation and token replay registry
+│   ├── rpcd_login.uc      # The roles' rpcd login entries and rpcd's rules for them
+│   ├── web.uc             # CGI request parsing and response rendering
+│   ├── encoding.uc        # Base64URL, JSON, URL normalisation
+│   ├── result.uc          # Result object
+│   ├── errors.uc          # Public error codes (documented in log-messages.md)
+│   ├── crypto.uc          # Crypto façade over crypto/
+│   ├── crypto/            # base, hash, jwk, jwt, pkce wrappers over native
+│   ├── session.uc         # Façade over session/
+│   ├── session/           # Handshake state files
+│   └── components/        # http_client, clock
+├── mod/                   # Native crypto module (C)
+│   ├── native_ucode.c     # ucode binding
+│   ├── native_api.c       # Input guards
+│   ├── native.h           # Backend interface
+│   └── native_<lib>.c     # mbedtls, wolfssl, openssl backends
+├── files/                 # Installed as-is: CGI script, LuCI view, menu and controller, rpcd ACL and plugin, uci-defaults, luci-sso-repatch
+├── openwrt/luci-sso/      # OpenWrt package Makefile
 ├── test/
-│   ├── tier0/         # Native crypto compliance (MbedTLS/WolfSSL)
-│   ├── tier1/         # Encoding/crypto logic tests
-│   ├── tier2/         # Integration (handshake, session, config, ubus)
-│   ├── tier3/         # Router / IO tests
-│   ├── tier4/         # Mock system tests
-│   ├── e2e/           # Playwright browser tests
-│   ├── testing/       # Test framework
-│   ├── lib/           # Test helpers
-│   ├── mock.uc        # Mock I/O provider
-│   └── runner.uc      # Test harness
+│   ├── native/            # The compiled crypto module's contract
+│   ├── unit/luci_sso/     # One module at a time (mirrors src/)
+│   ├── integration/       # Orchestrators and wiring (handshake, router, logout, entry, bootstrap, LuCI logout)
+│   ├── system/            # Checks against the container's real rpcd
+│   ├── e2e/               # Playwright browser tests
+│   ├── fixtures/          # Shared keys, tokens, discovery documents
+│   ├── lib/               # Test helpers (signed JWTs)
+│   ├── proxies/           # utest proxies for luci_sso components
+│   ├── context.uc         # with_context(): full deps graph from proxies
+│   └── fuzz_test.c        # libFuzzer harness
+├── devenv/                # Docker services and scripts for tests and builds
 └── docs/              # Documentation (Diátaxis framework)
 ```
 
@@ -619,27 +697,19 @@ luci-sso/
 **Export only public API:**
 
 ```javascript
-// crypto.uc
+// crypto/jwk.uc
 
 // Private helpers (not exported)
-function b64url_to_b64(str) {
+function rsa_to_pem(native, jwk) {
+	// ...
+}
+
+function ec_to_pem(native, jwk) {
 	// ...
 }
 
 // Public API (exported)
-export function constant_time_eq(a, b) {
-	// ...
-}
-
-export function jwt_verify(token, pubkey, options) {
-	// ...
-};
-
-export function jws_sign(payload, secret) {
-	// ...
-};
-
-export function pkce_pair(len) {
+export function to_pem(native, jwk) {
 	// ...
 };
 ```
@@ -660,41 +730,41 @@ All random values MUST be sourced from a CSPRNG (e.g. `crypto.random`). Predicta
 
 The system MUST validate all external inputs. Contract violations MUST trigger `die()`, while runtime data errors MUST return a Result Object.
 
-### 4. Fail-Safe Execution Order (Consumption First)
+### 4. Fail-Safe Execution Order (Check, Then Claim)
 
-State handles (handshake state) MUST be consumed BEFORE performing expensive verification operations. OIDC Access Tokens MUST be registered in the local session registry AFTER successful cryptographic verification of the ID Token.
+State handles (handshake state) MUST be checked against the request (state parameter, expiry) and then claimed with a single atomic operation BEFORE performing expensive verification operations. A request that fails the check MUST NOT consume the handle. OIDC Access Tokens MUST be registered in the local session registry AFTER successful cryptographic verification of the ID Token.
 
 See [Security Model](../explanation/security-model.md) and [Threat Model](../explanation/threat-model.md) for the reasoning behind this ordering.
 
 ---
 
-### 6. No Secrets in Logs
+### 5. No Secrets in Logs
 
 **NEVER log secrets:**
 
 ```javascript
 // ❌ INCORRECT
-log("Secret key: " + secret);
-log("ID token: " + id_token);
+deps.log("info", `Client secret: ${config.client_secret}`);
+deps.log("info", `ID token: ${id_token}`);
 
-// ✅ CORRECT
-log("Using secret key from " + SECRET_KEY_PATH);
-log("ID token present: " + (id_token ? "yes" : "no"));
+// ✅ CORRECT: claim names only, identifiers as a hashed prefix
+deps.log("debug", `ID Token verified. Claims present: ${join(", ", claim_names)}`);
+deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}]`);
 ```
 
 ---
 
-### 7. Algorithm Whitelisting
+### 6. Algorithm Allow-Lists
 
-The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be implemented or accepted.
+The system MUST only support `S256` for PKCE. The `plain` method MUST NOT be implemented or accepted. ID Tokens MUST be verified with `RS256` or `ES256` only. Both lists are [security invariants in code](#security-invariants-in-code).
 
 ---
 
-### 8. No Shell Execution (system() / popen())
+### 7. No Shell Execution (system() / popen())
 
 Logic MUST NOT use `system()` or `popen()` for any operation.
 
-- **Delays:** Use `io.sleep()` (which uses `uloop.timer()`) instead of `system("sleep X")`.
+- **Delays:** Use `deps.clock.sleep()` (which uses a `uloop` timer) instead of `system("sleep X")`.
 - **System Calls:** Use ucode built-ins or native C bindings for all system operations.
 
 ---
@@ -729,6 +799,8 @@ Reference documentation must be high-density and unambiguous. Avoid narrative pr
 
 ## Commit Messages
 
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/).
+
 ### Format
 
 ```
@@ -738,6 +810,11 @@ Reference documentation must be high-density and unambiguous. Avoid narrative pr
 
 <footer>
 ```
+
+- **Subject:** imperative mood, lowercase, no trailing period.
+- **Scope:** the module or area changed (`oidc`, `crypto`, `ubus`, `router`, `docs` sub-areas such as `reference`).
+- **Body:** what changed and why.
+- **Footer:** issue references (`Closes #42`, `Fixes #56`).
 
 ### Types
 
@@ -753,17 +830,17 @@ Reference documentation must be high-density and unambiguous. Avoid narrative pr
 ### Examples
 
 ```
-feat(crypto): Add HMAC-SHA256 implementation
+feat(crypto): add HMAC-SHA256 implementation
 
-- Implement uc_mbedtls_hmac_sha256 in C
-- Add jws_sign/jws_verify wrappers in ucode
-- Add tests for JWS creation and verification
+- Implement native_hmac_sha256 in each backend
+- Expose hmac_sha256 through the native module
+- Add known-answer tests in test/native
 
 Closes #42
 ```
 
 ```
-fix(oidc): Handle missing kid in JWT header
+fix(oidc): handle missing kid in JWT header
 
 Previously, find_jwk() would return error if JWT lacked kid claim.
 Now defaults to first key in JWKS (common for single-key IdPs).
@@ -772,30 +849,11 @@ Fixes #56
 ```
 
 ```
-refactor(crypto): Rename jwk_es256_to_pem → jwk_ec_p256_to_pem
+refactor(crypto): rename jwk_es256_to_pem to jwk_ec_p256_to_pem
 
 ES256 is an algorithm, P-256 is a curve. Function converts
 EC keys (key type) not ES256 signatures (algorithm).
-
-More accurate naming for future P-384 support.
 ```
-
----
-
-## Code Review Checklist
-
-Before submitting PR, verify:
-
-- [ ] All functions have tests
-- [ ] All tests pass (`make test`)
-- [ ] No secrets in code/logs
-- [ ] Error handling follows guide (exceptions vs result objects)
-- [ ] I/O uses dependency injection
-- [ ] C code is minimal (only crypto primitives)
-- [ ] Function names follow conventions (snake_case, trailing `;` on exports)
-- [ ] Commit messages follow format
-- [ ] Documentation updated (if API changed)
-- [ ] No TODOs without issue number
 
 ---
 
@@ -803,24 +861,21 @@ Before submitting PR, verify:
 
 | Area | Rule | Enforcement |
 |------|------|-------------|
-| **Error Handling** | Exceptions for most errors, result objects for fine-grained control | Code review |
-| **I/O Abstraction** | Always inject `io` object for testability | Code review |
-| **Virtual Identity** | Use OIDC role name as session label, no local passwords | Security review |
+| **Error Handling** | `die()` for contract bugs, `Result` objects for every runtime failure | Code review |
+| **I/O Abstraction** | All I/O and nondeterminism goes through `deps` (`fs`, `http`, `ubus`, `uci`, `clock`, `native`, `log`) | Code review |
+| **Virtual Identity** | Name the session `sso:<role>` and grant exactly its `rpcd` login entry; no local passwords | Security review, `test/system/` |
 | **C Code** | Crypto primitives only, everything else in ucode | Architecture review |
 | **PKCE** | S256 only, no `plain` method support | Security review |
-| **RBAC Merging** | Aggregate role permissions using logical OR with deduplication | Logic review |
-| **Indentation** | Tabs (OpenWrt standard) | Consistency review |
+| **First Match** | A user gets the first matching role in config order; never merge the rights of several roles | Logic review |
+| **rpcd Login Entries** | Touch only `luci_sso_*` sections, through `luci_sso.rpcd_login`; never write a `password` option; always store `unauthenticated` in `read` | Security review, `test/system/` |
+| **Indentation** | Tabs (OpenWrt standard) | `make lint` (CI) |
 | **Naming** | snake_case for variables/functions | Style review |
-| **Exports** | Trailing semicolon on `export` statements | Syntax requirement |
+| **Exports** | Trailing semicolon on `export` statements; none on private functions | `make lint` (CI) |
+| **Quotes** | Double quotes for strings; single quotes for import specifiers and strings containing `"` | `make lint` (CI) |
 | **Testing** | Every function, every error path, security attacks | Test coverage review |
+| **Error codes, limits, cookies** | Match the reference pages | `make lint` (CI) |
 
----
-
-**Remember:** This guide exists to help you make consistent decisions, not to slow you down. When rules conflict with common sense, use judgment and document the decision.
-
----
-
-**End of Style Guide**
+When a rule conflicts with common sense, use judgment and record the decision in the commit message or under [Technical Debt & Known Exceptions](#technical-debt-known-exceptions).
 
 ---
 
@@ -837,8 +892,9 @@ The `safe_json(data)` function in `encoding.uc` violates the principle of **Expl
 **Why it exists:** To allow clean chaining like `safe_json(b64url_decode(jwt_part))`.
 **Debt:** The dual-mode behavior is opaque. Future refactors should consider splitting this into explicit `read_json()` and `parse_json()` functions.
 
-### API Return Type Consistency
-The project is in the process of migrating all cryptographic and encoding functions to return `Result` objects.
-- **Status:** `normalize_url`, `normalize_sub`, `sha256`, and `sha256_hex` have been migrated.
-- **Debt:** Some low-level encoding functions (e.g., `b64url_encode`) still return raw strings. These should be migrated during the next major version update.
-
+### Functions That Do Not Return a `Result`
+Every fallible encoding and crypto function returns a `Result`. The exceptions return plain values by design:
+- **Predicates** return booleans: `encoding.is_https`, `encoding.is_origin`, `crypto.constant_time_eq`.
+- **`encoding.rebase_origin`** returns a string: `url` unchanged when it cannot be rebased.
+- **`crypto.safe_id`** returns a string for log lines: a 16-character hex prefix, or `[INVALID]` / `[ERROR]`.
+- **`config.email_is_verified`** returns a boolean, and **`config.matchable_email`** the email or `null`: both only read claims already verified.

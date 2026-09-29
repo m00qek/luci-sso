@@ -293,20 +293,27 @@ describe('crypto.jwt: verify — claims', () => {
 		);
 	}));
 
-	it('normalizes issuer URLs for comparison (trailing slash)', () => with_pass((native) => {
-		// opts.iss and payload.iss differ only by trailing slash — normalize_url should make them equal
-		assert.match(
-			contains({ ok: true }),
-			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, iss: 'https://issuer.example.com/' }), 'pem', BASE_OPTS)
-		);
+	it('returns ISSUER_MISMATCH for an iss that differs only by normalization (OIDC Core §3.1.3.7 (2))', () => with_pass((native) => {
+		// iss must be the exact issuer identifier: no trailing-slash, case or port folding.
+		for (let iss in [ 'https://issuer.example.com/', 'HTTPS://ISSUER.EXAMPLE.COM', 'https://Issuer.example.com', 'https://issuer.example.com:443' ]) {
+			assert.match(
+				contains({ ok: false, error: 'ISSUER_MISMATCH' }),
+				jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, iss }), 'pem', BASE_OPTS),
+				iss
+			);
+		}
 	}));
 
-	it('normalizes issuer scheme and host to lowercase', () => with_pass((native) => {
-		// normalize_url lowercases scheme and host
-		assert.match(
-			contains({ ok: true }),
-			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, iss: 'HTTPS://ISSUER.EXAMPLE.COM' }), 'pem', BASE_OPTS)
-		);
+	it('returns ISSUER_MISMATCH for a missing or non-string iss', () => with_pass((native) => {
+		for (let iss in [ null, 42, [ BASE_OPTS.iss ], { v: BASE_OPTS.iss } ]) {
+			let payload = { ...VALID_PAYLOAD, iss };
+			if (iss == null) delete payload.iss;
+			assert.match(
+				contains({ ok: false, error: 'ISSUER_MISMATCH' }),
+				jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, payload), 'pem', BASE_OPTS),
+				sprintf('%J', iss)
+			);
+		}
 	}));
 
 	it('returns AUDIENCE_MISMATCH when aud string does not match', () => with_pass((native) => {
@@ -316,11 +323,40 @@ describe('crypto.jwt: verify — claims', () => {
 		);
 	}));
 
-	it('accepts when aud is an array containing the expected client', () => with_pass((native) => {
+	it('accepts aud as the string client_id (Keycloak, Authentik)', () => with_pass((native) => {
 		assert.match(
 			contains({ ok: true }),
-			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, aud: ['other-client', 'test-client', 'yet-another'] }), 'pem', BASE_OPTS)
+			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, aud: 'test-client' }), 'pem', BASE_OPTS)
 		);
+	}));
+
+	it('accepts aud as the one-entry array [client_id] (Pocket ID, Authelia)', () => with_pass((native) => {
+		assert.match(
+			contains({ ok: true }),
+			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, aud: ['test-client'] }), 'pem', BASE_OPTS)
+		);
+	}));
+
+	it('returns AUDIENCE_MISMATCH when aud lists an additional untrusted audience (OIDC Core §3.1.3.7 (3))', () => with_pass((native) => {
+		for (let aud in [ ['other-client', 'test-client', 'yet-another'], ['test-client', 'other'], ['other', 'test-client'], ['test-client', 'test-client'] ]) {
+			assert.match(
+				contains({ ok: false, error: 'AUDIENCE_MISMATCH' }),
+				jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, aud }), 'pem', BASE_OPTS),
+				sprintf('%J', aud)
+			);
+		}
+	}));
+
+	it('returns AUDIENCE_MISMATCH when aud is missing or neither a string nor an array', () => with_pass((native) => {
+		for (let aud in [ null, 42, true, { 'test-client': true } ]) {
+			let payload = { ...VALID_PAYLOAD, aud };
+			if (aud == null) delete payload.aud;
+			assert.match(
+				contains({ ok: false, error: 'AUDIENCE_MISMATCH' }),
+				jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, payload), 'pem', BASE_OPTS),
+				sprintf('%J', aud)
+			);
+		}
 	}));
 
 	it('returns AUDIENCE_MISMATCH when aud array does not contain the expected client', () => with_pass((native) => {
@@ -337,12 +373,14 @@ describe('crypto.jwt: verify — claims', () => {
 		);
 	}));
 
-	it('returns MALFORMED_AUDIENCE when aud array contains a non-string element before the match', () => with_pass((native) => {
-		// non-string before the matching entry — iterator hits it first
-		assert.match(
-			contains({ ok: false, error: 'MALFORMED_AUDIENCE' }),
-			jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, aud: [42, 'test-client'] }), 'pem', BASE_OPTS)
-		);
+	it('returns MALFORMED_AUDIENCE when any aud array entry is not a string, before or after the match', () => with_pass((native) => {
+		for (let aud in [ [42, 'test-client'], ['test-client', 42], ['test-client', null], ['test-client', ['x']], [{}] ]) {
+			assert.match(
+				contains({ ok: false, error: 'MALFORMED_AUDIENCE' }),
+				jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, { ...VALID_PAYLOAD, aud }), 'pem', BASE_OPTS),
+				sprintf('%J', aud)
+			);
+		}
 	}));
 });
 
@@ -451,20 +489,22 @@ describe('crypto.jwt: verify — claims (properties)', () => {
 		}
 	);
 
-	prop('an aud array is accepted iff it is non-empty and contains the expected client',
+	prop('an aud array is accepted iff it is exactly [client_id]',
 		gen.map(gen.array(gen.int(0, 3), { min_len: 0, max_len: 5 }),
 		        (idxs) => map(idxs, (i) => AUD_POOL[i])),
 		(auds, ctx) => {
+			let exact = (length(auds) === 1 && auds[0] === BASE_OPTS.aud);
 			let has_client = false;
 			for (let a in auds) if (a === BASE_OPTS.aud) has_client = true;
 			ctx.classify('empty', length(auds) === 0);
-			ctx.classify('contains client', has_client);
+			ctx.classify('exactly [client_id]', exact);
+			ctx.classify('client plus others', has_client && !exact);
 			let payload = { ...VALID_PAYLOAD, aud: auds };
 			with_pass((native) => {
 				let res = jwt.verify(native, make_jwt({ alg: 'RS256', typ: 'JWT' }, payload), 'pem', BASE_OPTS);
 				if (length(auds) === 0)
 					assert.match(contains({ ok: false, error: 'INVALID_AUDIENCE' }), res);
-				else if (has_client)
+				else if (exact)
 					assert.match(contains({ ok: true }), res);
 				else
 					assert.match(contains({ ok: false, error: 'AUDIENCE_MISMATCH' }), res);

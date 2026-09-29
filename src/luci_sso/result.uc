@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 /**
  * Standardised result monad for luci-sso.
@@ -32,6 +32,20 @@ export function is(obj) {
  */
 export function ok(data) {
 	return proto({ ok: true, data: data }, ResultMethods);
+};
+
+/**
+ * Formats a failed Result for a log line: the code, plus the details in
+ * parentheses when they are a string (a lower-level cause such as
+ * "CERT_UNTRUSTED"). Object details, such as { http_status }, are left out.
+ *
+ * @param {Result} res A failed Result.
+ * @returns {string}
+ */
+export function describe(res) {
+	return (type(res.details) == "string" && length(res.details) > 0)
+		? `${res.error} (${res.details})`
+		: `${res.error}`;
 };
 
 /**

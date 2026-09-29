@@ -1,0 +1,12 @@
+{
+	"admin/logout": {
+		"action": {
+			"type": "function",
+			"module": "luci.controller.sso",
+			"function": "action_logout"
+		},
+		"depends": {
+			"acl": [ "luci-base" ]
+		}
+	}
+}

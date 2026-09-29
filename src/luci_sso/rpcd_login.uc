@@ -1,0 +1,396 @@
+"use strict";
+
+/**
+ * The rpcd login entries that hold the permissions of luci-sso's roles, and
+ * rpcd's rules for them: one place for every rule that the login path
+ * (ubus.uc), the `luci-sso` ubus object (files/usr/share/rpcd/ucode/luci-sso.uc),
+ * the upgrade script (files/etc/uci-defaults/20-luci-sso-rpcd) and the
+ * package's removal script (prerm in openwrt/luci-sso/Makefile) share.
+ *
+ * Each role `<role>` has exactly one entry in /etc/config/rpcd:
+ *
+ *   config login 'luci_sso_<role>'
+ *   	option username 'sso:<role>'
+ *   	list read '<access group or pattern>'
+ *   	list write '<access group or pattern>'
+ *
+ * and never a password option: rpcd's password login skips an entry without
+ * one, so the entry can rebuild SSO sessions on an rpcd reload but can never
+ * be used to log in.
+ *
+ * The read list always grants the `unauthenticated` access group. LuCI calls
+ * session.access and luci.getFeatures, which that group grants, on every
+ * page, and treats a session that may call neither as expired. A read list
+ * that already grants the group, through the name itself or a pattern such as
+ * `*`, is kept as it is; any other gets the name appended. A read list with a
+ * negation that denies the group is refused, since no addition could undo it.
+ */
+
+import * as Result from 'luci_sso.result';
+
+export const CONFIG = "rpcd";
+export const SECTION_PREFIX = "luci_sso_";
+export const USERNAME_PREFIX = "sso:";
+
+/** The access group every role's read list grants (see above). */
+export const BASELINE_GROUP = "unauthenticated";
+
+// Role names become part of a UCI section name, so they use its alphabet.
+export const NAME_MAX = 32;
+const NAME_RE = /^[A-Za-z0-9_]+$/;
+
+// Access group names and rpcd patterns (globs, "!" negations) are short.
+export const LIST_MAX = 128;
+export const ENTRY_MAX = 128;
+// NUL cannot appear in a POSIX regex, so it is checked on its own.
+const CONTROL_RE = regexp("[\x01-\x1f\x7f]");
+
+/** The section name of a role's entry. */
+export function section_name(role) {
+	return SECTION_PREFIX + role;
+};
+
+/** The username of a role's entry, which its SSO sessions carry. */
+export function username(role) {
+	return USERNAME_PREFIX + role;
+};
+
+/**
+ * Checks a role name: 1 to NAME_MAX letters, digits and underscores.
+ * @returns {object} - Result: ok(name), or err("INVALID_NAME", message)
+ */
+export function check_name(name) {
+	if (type(name) != "string" || !length(name))
+		return Result.err("INVALID_NAME", "name is required");
+	if (length(name) > NAME_MAX)
+		return Result.err("INVALID_NAME", `name is longer than ${NAME_MAX} characters`);
+	if (!match(name, NAME_RE))
+		return Result.err("INVALID_NAME", "name may contain only letters, digits and underscores");
+	return Result.ok(name);
+};
+
+/**
+ * The role of an SSO session's username: `<role>` for `sso:<role>` with a
+ * valid role name, null for anything else. A session is an SSO session
+ * exactly when this returns a role; its email (`oidc_user`) is only a tag,
+ * absent when the IdP sends no verified email.
+ */
+export function role_of(name) {
+	if (type(name) != "string" || substr(name, 0, length(USERNAME_PREFIX)) != USERNAME_PREFIX)
+		return null;
+	let role = substr(name, length(USERNAME_PREFIX));
+	return check_name(role).ok ? role : null;
+};
+
+/**
+ * Checks a read or write list: an array of at most LIST_MAX non-empty
+ * strings of at most ENTRY_MAX characters, without control characters.
+ * @param {string} label - "read" or "write", for the message
+ * @returns {object} - Result: ok(list), or err("INVALID_LIST", message)
+ */
+export function check_list(label, list) {
+	if (type(list) != "array")
+		return Result.err("INVALID_LIST", `${label} must be an array of strings`);
+	if (length(list) > LIST_MAX)
+		return Result.err("INVALID_LIST", `${label} has more than ${LIST_MAX} entries`);
+	for (let i = 0; i < length(list); i++) {
+		let e = list[i];
+		if (type(e) != "string")
+			return Result.err("INVALID_LIST", `${label}[${i}] is not a string`);
+		if (!length(e))
+			return Result.err("INVALID_LIST", `${label}[${i}] is empty`);
+		if (length(e) > ENTRY_MAX)
+			return Result.err("INVALID_LIST", `${label}[${i}] is longer than ${ENTRY_MAX} characters`);
+		if (match(e, CONTROL_RE) || index(e, chr(0)) >= 0)
+			return Result.err("INVALID_LIST", `${label}[${i}] contains a control character`);
+	}
+	return Result.ok(list);
+};
+
+// fnmatch(3) without flags, as rpcd matches role lists against group names:
+// `*` and `?` are wildcards and `[...]` is a character class ([!...] negates).
+function glob_regexp(pattern) {
+	let out = "^";
+	for (let i = 0; i < length(pattern); i++) {
+		let ch = substr(pattern, i, 1);
+		if (ch == "*") out += ".*";
+		else if (ch == "?") out += ".";
+		else if (ch == "[") {
+			let j = index(substr(pattern, i + 1), "]");
+			if (j < 1) { out += "\\["; continue; }
+			let body = substr(pattern, i + 1, j);
+			if (substr(body, 0, 1) == "!") body = "^" + substr(body, 1);
+			out += "[" + replace(body, /\\/g, "\\\\") + "]";
+			i += j + 1;
+		}
+		else out += (index("\\.^$|+(){}]", ch) >= 0) ? "\\" + ch : ch;
+	}
+	return regexp(out + "$");
+}
+
+function glob_matches(pattern, group) {
+	return match(group, glob_regexp(pattern)) != null;
+}
+
+// The pattern of a negation ("!pattern"), or null for a positive entry.
+// rpcd skips whitespace after the "!" only, and ignores an empty negation.
+function negated(entry) {
+	if (substr(entry, 0, 1) != "!") return null;
+	let p = ltrim(substr(entry, 1));
+	return length(p) ? p : null;
+}
+
+// One list against a group, as rpcd's rpc_login_test_permission reads it:
+// true (allowed), false (denied by a negation) or null (no entry matches).
+// Negations are checked first.
+function list_verdict(list, group) {
+	if (type(list) != "array") return null;
+	for (let p in list) {
+		if (type(p) != "string") continue;
+		let neg = negated(p);
+		if (neg != null && glob_matches(neg, group)) return false;
+	}
+	for (let p in list) {
+		if (type(p) != "string" || !length(p) || substr(p, 0, 1) == "!") continue;
+		if (glob_matches(p, group)) return true;
+	}
+	return null;
+}
+
+/**
+ * Whether an entry with these lists has `perm` ("read" or "write") on an
+ * access group, exactly as rpcd decides it: fnmatch(3) patterns, so `*`
+ * matches every group; a negation in the permission's own list denies before
+ * any positive entry allows; and a read that the read list neither allows nor
+ * denies falls back to the write list (write implies read). rpcd only reads
+ * list options: a single `option read` is ignored, so only arrays count here.
+ *
+ * @param {object} lists - { read, write }
+ * @param {string} perm - "read" or "write"
+ * @param {string} group - An access group name
+ * @returns {boolean}
+ */
+export function permits(lists, perm, group) {
+	let v = list_verdict(lists[perm], group);
+	if (v != null) return v;
+	return (perm == "read") ? (list_verdict(lists.write, group) == true) : false;
+};
+
+/**
+ * The read list a role's entry stores: the list as given, plus the
+ * `unauthenticated` group appended when the list does not grant it already
+ * (see the module comment). Applying it twice gives the same list.
+ *
+ * @param {array} read - A checked read list
+ * @returns {object} - Result: ok(list), or err("INVALID_LIST", message) when a
+ *   negation in the list denies the group
+ */
+export function with_baseline(read) {
+	let v = list_verdict(read, BASELINE_GROUP);
+	if (v == false)
+		return Result.err("INVALID_LIST", `read must not deny '${BASELINE_GROUP}': LuCI needs it to check the session`);
+	if (v == true) return Result.ok(read);
+	return Result.ok([ ...read, BASELINE_GROUP ]);
+};
+
+/**
+ * Checks a role name and its lists and returns the entry to store for it.
+ *
+ * @returns {object} - Result: ok({ name, section, username, read, write }),
+ *   with the read list as with_baseline() returns it, or err(code, message)
+ *   with code INVALID_NAME or INVALID_LIST
+ */
+export function entry(name, read, write) {
+	let res = check_name(name);
+	if (!res.ok) return res;
+	res = check_list("read", read);
+	if (!res.ok) return res;
+	res = check_list("write", write);
+	if (!res.ok) return res;
+	res = with_baseline(read);
+	if (!res.ok) return res;
+	return Result.ok({ name, section: section_name(name), username: username(name), read: res.data, write });
+};
+
+/**
+ * Stages an entry, as entry() returns it, on a UCI cursor: the section
+ * becomes a login (a section of another type under the name is replaced), its
+ * username is set, a password option is removed, and each list is replaced,
+ * or removed when empty. Touches no other section. The caller commits.
+ *
+ * @param {object} uci - A UCI cursor, which the caller opened and commits
+ * @param {object} e - An entry from entry()
+ */
+export function stage(uci, e) {
+	if (uci.get(CONFIG, e.section) != "login")
+		uci.set(CONFIG, e.section, "login");
+	uci.set(CONFIG, e.section, "username", e.username);
+	uci.delete(CONFIG, e.section, "password");
+	for (let opt in [ "read", "write" ]) {
+		uci.delete(CONFIG, e.section, opt);
+		if (length(e[opt]))
+			uci.set(CONFIG, e.section, opt, e[opt]);
+	}
+};
+
+// A role's read/write option as a list. Before role permissions moved to rpcd,
+// luci-sso read a single option as a one-entry list, so the upgrade does too.
+function old_list(v) {
+	if (type(v) == "array") return v;
+	return (v != null) ? [ v ] : [];
+}
+
+/** The role the package ships in /etc/config/luci-sso. */
+export const DEFAULT_ROLE = "admin";
+
+/** The one matching rule the shipped role has: a placeholder email. */
+export const PLACEHOLDER_EMAIL = "admin@example.com";
+
+/**
+ * Whether a luci-sso role section is the role the package ships, untouched:
+ * named DEFAULT_ROLE, matching the email PLACEHOLDER_EMAIL and nothing else
+ * (no other email, no group). Only that role may get full access without
+ * lists to take it from: a role an administrator has edited says who its users
+ * are, and nothing says they should have every right.
+ *
+ * @param {object} s - A luci-sso role section, as uci.foreach() passes it
+ * @returns {boolean}
+ */
+export function is_placeholder(s) {
+	let emails = old_list(s.email);
+	return s[".name"] == DEFAULT_ROLE && length(emails) == 1 && emails[0] == PLACEHOLDER_EMAIL &&
+		!length(old_list(s.group));
+};
+
+/**
+ * Moves role permissions from /etc/config/luci-sso to rpcd login entries: the
+ * upgrade from releases that kept read/write lists on the luci-sso role, and
+ * the reinstall after demigrate() put them back there.
+ *
+ * Each luci-sso role, in config order:
+ *
+ * - A role with a read or write option gets its entry created or replaced
+ *   from those lists, by the same rules as the luci-sso ubus object (entry()
+ *   and stage(): the `unauthenticated` group added, rpcd's meaning of every
+ *   pattern, no password), and the options are removed from the role. A role
+ *   whose name or lists the rules refuse keeps its options, and a warning
+ *   names it: its users cannot log in until its permissions are saved on the
+ *   settings page.
+ * - A role without lists that has an entry is left alone.
+ * - The shipped role, untouched (is_placeholder()), without lists and without
+ *   an entry, gets read '*' and write '*', the permissions it ships with. That
+ *   covers a fresh install.
+ * - Any other role without lists and without an entry gets an entry that
+ *   grants nothing but `unauthenticated`, and a warning names it, so its
+ *   permissions can be set on the settings page. An edited `admin` role that
+ *   lost its lists is one: nothing says its users should have every right.
+ *
+ * Touches no rpcd section but luci_sso_<role> ones, never the order of the
+ * luci-sso roles, and nothing at all when there is nothing to do, so running
+ * it again changes nothing. Stages the changes on the cursor; the caller
+ * commits rpcd before luci-sso, so an interrupted upgrade that committed
+ * only the first is completed by the next run.
+ *
+ * @param {object} uci - A UCI cursor
+ * @param {function} warn - Called with a message for each role that needs an
+ *   administrator
+ * @returns {object} - { rpcd, luci_sso }: whether each configuration changed
+ */
+export function migrate(uci, warn) {
+	let changed = { rpcd: false, luci_sso: false };
+
+	let roles = [];
+	uci.foreach("luci-sso", "role", (s) => push(roles, s));
+
+	for (let s in roles) {
+		let name = s[".name"];
+
+		if (s.read != null || s.write != null) {
+			let res = entry(name, old_list(s.read), old_list(s.write));
+			if (!res.ok) {
+				warn(`role '${name}' keeps its read/write lists and has no rpcd login entry: ${res.details}; save its permissions on the settings page`);
+				continue;
+			}
+			stage(uci, res.data);
+			uci.delete("luci-sso", name, "read");
+			uci.delete("luci-sso", name, "write");
+			changed.rpcd = changed.luci_sso = true;
+			continue;
+		}
+
+		if (uci.get(CONFIG, section_name(name)) != null)
+			continue;
+
+		if (is_placeholder(s)) {
+			stage(uci, entry(name, [ "*" ], [ "*" ]).data);
+			changed.rpcd = true;
+			continue;
+		}
+
+		let res = entry(name, [], []);
+		if (!res.ok) {
+			warn(`role '${name}' has no rpcd login entry: ${res.details}; its users cannot log in`);
+			continue;
+		}
+		stage(uci, res.data);
+		changed.rpcd = true;
+		warn(`role '${name}' had no permissions to move: its rpcd login entry grants nothing but '${BASELINE_GROUP}'; set its permissions on the settings page`);
+	}
+
+	return changed;
+};
+
+/**
+ * The reverse of migrate(), for the package's removal: each role's
+ * permissions go back onto its luci-sso role, and every rpcd login entry
+ * luci-sso owns is deleted. A reinstall's migrate() then recreates each entry
+ * exactly (see below), so removing and installing the package again, which is
+ * also what opkg's --force-reinstall does, loses no permissions.
+ *
+ * For each rpcd section named luci_sso_<role>, in config order: if it is a
+ * login entry and /etc/config/luci-sso has a role `<role>`, its read and
+ * write lists replace the role's read and write options (an empty list
+ * removes the option). The lists are copied as stored, `unauthenticated`
+ * included: migrate() keeps a read list that grants it as it is, so the entry
+ * it creates from them is the one deleted here. Leaving the group out when
+ * set_role added it would turn an entry that grants only `unauthenticated` into
+ * a role without lists, which migrate() treats as having no permissions to
+ * move: an untouched admin role would get full access back. The section is then
+ * deleted, and so is any luci_sso_* section without a role, with a warning.
+ *
+ * Stages the changes on the cursor; the caller commits luci-sso before rpcd,
+ * so an interruption leaves each role's permissions in at least one place.
+ *
+ * @param {object} uci - A UCI cursor
+ * @param {function} warn - Called with a message for each entry deleted
+ *   without a role to keep its permissions
+ * @returns {object} - { rpcd, luci_sso }: whether each configuration changed
+ */
+export function demigrate(uci, warn) {
+	let changed = { rpcd: false, luci_sso: false };
+
+	let sections = [];
+	uci.foreach(CONFIG, null, (s) => {
+		if (index(s[".name"], SECTION_PREFIX) == 0) push(sections, s);
+	});
+
+	for (let s in sections) {
+		let name = substr(s[".name"], length(SECTION_PREFIX));
+		if (s[".type"] == "login" && length(name) && uci.get("luci-sso", name) == "role") {
+			for (let opt in [ "read", "write" ]) {
+				let list = old_list(s[opt]);
+				uci.delete("luci-sso", name, opt);
+				if (length(list))
+					uci.set("luci-sso", name, opt, list);
+			}
+			changed.luci_sso = true;
+		}
+		else {
+			warn(`rpcd section '${s[".name"]}' has no luci-sso role to keep its permissions; deleted`);
+		}
+		uci.delete(CONFIG, s[".name"]);
+		changed.rpcd = true;
+	}
+
+	return changed;
+};

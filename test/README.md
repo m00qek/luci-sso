@@ -1,23 +1,24 @@
 # Tests
 
-Native, unit, integration, and end-to-end tests for `luci-sso`.
+Native, unit, integration, system and end-to-end tests for `luci-sso`.
 
-For the full rationale, see
-[Testing Architecture](https://m00qek.github.io/luci-sso/reference/testing-architecture/)
-and [How to Run Tests](https://m00qek.github.io/luci-sso/how-to/developer/testing/).
+For the buckets and the mocking interface, see
+[Testing Architecture](https://m00qek.github.io/luci-sso/reference/testing-architecture/);
+for the rationale, [About the Test Architecture](https://m00qek.github.io/luci-sso/explanation/test-architecture/);
+and for usage, [How to Run Tests](https://m00qek.github.io/luci-sso/how-to/developer/testing/).
 
 ---
 
 ## Running tests
 
 ```bash
-make unit-test                          # native + unit + integration
+make unit-test                          # native + unit + integration + system
 make unit-test VERBOSE=1                # with per-test output
-make unit-test FILTER='session.key'     # regex filter on test titles
+make unit-test FILTER='session.handshake' # regex filter on test titles
 make unit-test MODULES='test/unit/luci_sso/oidc_test.uc'  # a single file/dir
 
 make up && make e2e-test                # full browser E2E (requires Docker)
-make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls  # C-level fuzzer (~60s)
+make fuzzer-test CRYPTO_LIB=mbedtls     # C-level fuzzer (~60s)
 ```
 
 ## Buckets
@@ -26,10 +27,11 @@ make -sC devenv fuzzer-test CRYPTO_LIB=mbedtls  # C-level fuzzer (~60s)
 | :--- | :--- | :--- |
 | **native** | `native/` | `luci_sso.native` FFI exports (crypto KAT, memory safety, hardening) |
 | **unit** | `unit/**` (mirrors `src/`) | one module's exported function; system boundary faked |
-| **integration** | `integration/**` | an orchestrator/wiring seam (`handshake`, `router`, `logout`) |
+| **integration** | `integration/**` | an orchestrator/wiring seam (`handshake`, `router`, `logout`, `entry`, `deps` bootstrap, the LuCI logout controller) |
+| **system** | `system/` | the real rpcd, no browser (e.g. rpcd parity of SSO session ACLs) |
 | **e2e** | `e2e/` | Playwright → real uhttpd/rpcd/IdP |
 
-Shared helpers: `fixtures/` (`fixtures.rsa`, `fixtures.oidc`, `fixtures.anchor`),
+Shared helpers: `fixtures/` (`fixtures.rsa`, `fixtures.oidc`),
 `lib/helpers.uc` (real signed JWTs), `context.uc` (`with_context` deps builder),
 `proxies/` (component proxies). Module resolution and the proxied modules are
 configured in `utest.config.uc`.
@@ -44,17 +46,19 @@ returns **proxies** driven by a `{ strict, data, behavior }` spec. Prefer
 
 ```javascript
 import { describe, it, assert, contains, spy, mock } from 'utest';
-import * as key from 'luci_sso.session.key';
+import * as handshake from 'luci_sso.session.handshake';
 
-describe('session.key: get', () => {
-    it('returns the on-disk secret', () => {
+describe('session.handshake: reap', () => {
+    it('removes a handshake file older than its lifetime', () => {
         mock.inject_all({
-            fs:    { strict: true, data: { '/etc/luci-sso/secret.key': SECRET } },
+            fs:    { strict: true,
+                     data: { '/var/run/luci-sso/handshake_abc.json': '{}' },
+                     behavior: { stat: () => ({ mtime: 1700000000 - 1000 }) } },
             clock: { strict: true, data: { now: 1700000000 } },
         }, (injected) => {
-            let deps = { fs: injected.fs, clock: injected.clock, native, log: () => null };
-            assert.match(contains({ ok: true, data: SECRET }), key.get(deps));
-            assert.match('/etc/luci-sso/secret.key', spy(injected.fs).calls.readfile[0][0]);
+            let deps = { fs: injected.fs, clock: injected.clock, log: () => null };
+            assert.match(contains({ ok: true, data: 1 }), handshake.reap(deps, 0));
+            assert.match('/var/run/luci-sso/handshake_abc.json', spy(injected.fs).calls.unlink[0][0]);
         });
     });
 });

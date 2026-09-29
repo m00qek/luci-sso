@@ -3,6 +3,12 @@ site_description: Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.
 site_url: https://m00qek.github.io/luci-sso/
 site_dir: bin/site
 
+# docs/README.md describes the docs source tree for GitHub; it is not a page.
+# docs/_snippets/ holds blocks included into pages with pymdownx.snippets.
+exclude_docs: |
+  /README.md
+  /_snippets/
+
 theme:
   name: material
   custom_dir: docs/overrides
@@ -40,6 +46,9 @@ markdown_extensions:
           format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.snippets:
+      base_path: docs/_snippets
+      check_paths: true
   - toc:
       permalink: true
 
@@ -49,25 +58,26 @@ nav:
       - Overview: tutorials/index.md
       - First SSO Login (Public IdP): tutorials/first-sso-login.md
       - First SSO Login (Self-hosted): tutorials/pocket-id-sso-login.md
-      - Building from Source: tutorials/building.md
       - Developer Onboarding: tutorials/dev-onboarding.md
   - How-to Guides:
       - Overview: how-to/index.md
       - Providers:
           - Generic OIDC Provider: how-to/providers/generic-oidc.md
           - Google: how-to/providers/google.md
-          - Github: how-to/providers/github.md
           - Authelia: how-to/providers/authelia.md
           - Keycloak: how-to/providers/keycloak.md
           - Authentik: how-to/providers/authentik.md
           - Pocket ID: how-to/providers/pocket-id.md
       - Sysadmin:
           - Installation: how-to/sysadmin/installation.md
+          - Building from Source: how-to/sysadmin/build-from-source.md
+          - Configuring in LuCI: how-to/sysadmin/configure-in-luci.md
           - Installing a Private CA Certificate: how-to/sysadmin/install-ca-certificate.md
           - Upgrading: how-to/sysadmin/upgrade.md
           - Rotating Credentials: how-to/sysadmin/rotate-credentials.md
           - Role-Based Access Control: how-to/sysadmin/rbac.md
           - Split-Horizon Networking: how-to/sysadmin/split-horizon.md
+          - Running Behind a Reverse Proxy: how-to/sysadmin/reverse-proxy.md
           - Debugging: how-to/sysadmin/debugging.md
           - Backing Up and Restoring: how-to/sysadmin/backup-restore.md
           - Removing luci-sso: how-to/sysadmin/uninstall.md
@@ -83,18 +93,21 @@ nav:
       - Log Messages: reference/log-messages.md
       - HTTP API: reference/http-api.md
       - UCI Configuration: reference/uci-config.md
+      - Provider Compatibility: reference/provider-compatibility.md
       - Internal API: reference/internal-api.md
       - Style Guide: reference/style-guide.md
       - Testing Architecture: reference/testing-architecture.md
       - RFC Compliance: reference/rfc-compliance.md
-      - devenv Targets: reference/devenv-targets.md
+      - Makefile Targets: reference/devenv-targets.md
   - Explanation:
       - Overview: explanation/index.md
       - About LuCI SSO: explanation/about.md
-      - Design Philosophy: explanation/design-philosophy.md
+      - About the Design Philosophy: explanation/design-philosophy.md
+      - About the Architecture: explanation/architecture.md
+      - About Crypto Backends: explanation/crypto-backends.md
+      - About the Test Architecture: explanation/test-architecture.md
       - About the OIDC Login Flow: explanation/oidc-flow.md
       - About the Session Lifecycle: explanation/session-lifecycle.md
-      - About Crypto Backends: explanation/crypto-backends.md
-      - Security Model: explanation/security-model.md
-      - Architecture: explanation/architecture.md
-      - Threat Model: explanation/threat-model.md
+      - About Roles and Permissions: explanation/roles-and-permissions.md
+      - About the Security Model: explanation/security-model.md
+      - About the Threat Model: explanation/threat-model.md

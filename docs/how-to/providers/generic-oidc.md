@@ -1,6 +1,6 @@
 # How to Configure a Generic OIDC Provider
 
-This guide covers connecting `luci-sso` to any standards-compliant OIDC provider — Azure AD, Okta, Dex, Zitadel, or others. If your provider has a dedicated guide in the sidebar (Google, GitHub, Authelia, Keycloak, Authentik, Pocket ID), use that instead; it covers provider-specific setup steps and gotchas.
+This guide covers connecting `luci-sso` to any standards-compliant OIDC provider — Azure AD, Okta, Dex, Zitadel, or others. If your provider has a dedicated guide in the sidebar (Google, Authelia, Keycloak, Authentik, Pocket ID), use that instead; it covers provider-specific setup steps and gotchas.
 
 ---
 
@@ -11,6 +11,9 @@ Your identity provider must support:
 - **OIDC Core 1.0** — authorization code flow with `/.well-known/openid-configuration` discovery
 - **PKCE** (RFC 7636) — `S256` method. `luci-sso` requires PKCE; providers that only support the `plain` method or no PKCE at all will not work.
 - **RS256 or ES256** signatures for ID Tokens. HS256 is not accepted.
+- **A confidential client** with a client secret, accepted in the token request body (`client_secret_post`).
+
+These are the requirements providers most often miss. The complete list, with the error each failure logs and the status of known providers, is in [Provider Compatibility](../../reference/provider-compatibility.md).
 
 If your provider requires PKCE to be explicitly enabled on the client, enable it before proceeding.
 
@@ -29,13 +32,13 @@ Common patterns:
 | Dex | `https://dex.example.com` |
 | Zitadel | `https://zitadel.example.com` |
 
-Verify the discovery endpoint is reachable before proceeding:
+Verify the router can fetch the discovery document before proceeding. On the router:
 
 ```bash
-curl -s https://<issuer_url>/.well-known/openid-configuration | python3 -m json.tool
+uclient-fetch -q -O - '<issuer_url>/.well-known/openid-configuration' | jsonfilter -e '@.issuer' -e '@.authorization_endpoint' -e '@.token_endpoint' -e '@.jwks_uri'
 ```
 
-The response should be a JSON document containing `authorization_endpoint`, `token_endpoint`, and `jwks_uri`.
+The command should print four HTTPS URLs. The first is the issuer: your `issuer_url` must match it exactly, character for character, including any trailing slash. A certificate error means the router does not trust the IdP's certificate; see [How to Install a Private CA Certificate](../../how-to/sysadmin/install-ca-certificate.md).
 
 ---
 
@@ -48,12 +51,12 @@ Set the following values:
 | Field | Value |
 | :--- | :--- |
 | **Application type** | Web application (confidential client) |
+| **Token endpoint authentication** | `client_secret_post` (client ID and secret in the request body), if the IdP asks |
 | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
 | **Scopes** | `openid profile email` — add `groups` if you want group-based role mapping |
+| **Post-logout redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/`, if the IdP supports RP-Initiated Logout and asks for one |
 
-After saving, copy the generated **Client ID** and **Client Secret**.
-
-![Generic IdP client registration form showing fields for Client Name, Application Type (Web Application), Redirect URI, and Scopes, with a panel on the right showing the generated Client ID and Client Secret fields](../../assets/screenshots/oidc-client-registration.svg "Create a new OAuth client in your IdP — copy the Client ID and Client Secret shown on the right")
+Give the client any name you will recognise, such as `LuCI Router`. After saving, the IdP shows the generated **Client ID** and **Client Secret**; copy both.
 
 ---
 
@@ -61,7 +64,7 @@ After saving, copy the generated **Client ID** and **Client Secret**.
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     Fill in the **Settings** section:
 
@@ -106,9 +109,9 @@ After a successful login, `luci-sso` maps the user's OIDC claims to a LuCI role.
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the email address in **Email Addresses**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter the email address in **Email Addresses**, then click **Save**.
 
     Click **Save & Apply**.
 
@@ -119,15 +122,21 @@ After a successful login, `luci-sso` maps the user's OIDC claims to a LuCI role.
     uci commit luci-sso
     ```
 
+An email matches only if the IdP marks it as verified: `email_verified` is the JSON boolean `true`, not the string `"true"`, in the same response as the email, the ID Token or UserInfo. Many IdPs send `false` for an address an administrator entered, or leave the claim out. Check the IdP's settings for a per-user "email verified" flag, or a claim mapping that adds `email_verified`. If the IdP cannot send `true`, map by group instead, or turn the check off:
+
+--8<-- "email-verified-off.md"
+
+With the check off, an email rule matches any address the IdP sends, verified or not. Do this only if users cannot set their own address at the IdP; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
+
 ### Map by group
 
 If your IdP returns a `groups` claim (requires the `groups` scope and IdP-side group claim mapping):
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
 
-    Click **Edit** on the `admin` role (or **Add** to create it). In the modal, enter the group name in **Groups**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter the group name in **Groups**, then click **Save**.
 
     Click **Save & Apply**.
 
@@ -138,22 +147,19 @@ If your IdP returns a `groups` claim (requires the `groups` scope and IdP-side g
     uci commit luci-sso
     ```
 
-The role name (`admin` above) must match a `config role` section in `/etc/config/luci-sso`. The default installation creates an `admin` role with full read and write access. For fine-grained access control, see the [UCI Configuration Reference](../../reference/uci-config.md#role-mapping).
+The role name (`admin` above) must match a `config role` section in `/etc/config/luci-sso`. The default installation creates an `admin` role whose `rpcd` login entry grants full read and write access; check it with `ubus call luci-sso list_roles`. A user who matches several roles gets the first one. For other roles and their permissions, see [How to Configure Role-Based Access Control](../sysadmin/rbac.md).
 
 ---
 
 ## Step 5: Verify
 
-Check that the service is active:
+Check that the service is active. On the router:
 
-```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
-```
+--8<-- "probe-enabled.md"
 
 Then open the LuCI login page in a browser.
 
-![LuCI login page showing a prominent blue "Login with SSO" button above the standard username and password fields](../../assets/screenshots/luci-login-sso-button.svg "LuCI login page with SSO button visible")
+![LuCI login page: an Authorization Required box with Username and Password fields and a green Log in button, followed by "— or —" and a blue Login with SSO button](../../assets/screenshots/luci-login-sso-button.png "The LuCI login page with the Login with SSO button")
 
 The **Login with SSO** button should appear. Clicking it redirects to your IdP's login screen. After authenticating, you should be redirected back to the LuCI dashboard.
 
@@ -163,19 +169,20 @@ The **Login with SSO** button should appear. Clicking it redirects to your IdP's
 
 If the login fails, check the system log:
 
-=== "Browser (LuCI)"
-
-    Navigate to **Status > System Log** and filter for `luci-sso`.
-
-=== "Terminal (SSH)"
-
-    ```bash
-    logread -e luci-sso
-    ```
+--8<-- "check-log.md"
 
 Common errors and their meaning are listed in the [Log Messages Reference](../../reference/log-messages.md). The most frequent issues with new providers are:
 
-- **`DISCOVERY_ISSUER_MISMATCH`** — The `issuer_url` you configured doesn't exactly match the `issuer` field in the discovery document. Copy the value from the discovery JSON directly.
-- **`UNSUPPORTED_ALGORITHM`** — The IdP is signing tokens with HS256. Configure the client to use RS256 or ES256.
-- **`USER_NOT_AUTHORIZED`** — Authentication succeeded but no UCI role matched the user's email or groups (the log line before this code will say "matched no roles"). Add the user's email with `uci add_list luci-sso.admin.email='...'`.
-- **`OIDC_DISCOVERY_FAILED`** — The router cannot reach the IdP. Check DNS resolution and firewall rules from the router (not just from your laptop).
+- **A message under Login with SSO says "The identity provider is not responding"** — The browser cannot reach the IdP; the router has no error to log. Open `<issuer_url>/.well-known/openid-configuration` in the same browser, on the same device. See [The SSO button says the identity provider is not responding](../sysadmin/debugging.md#the-sso-button-says-the-identity-provider-is-not-responding).
+- **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_ISSUER_MISMATCH` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. The line shows both values; set `issuer_url` to the one the document declares, exactly. The line says so when a trailing slash, letter case or `:443` is the only difference.
+- **`[401] ID_TOKEN_VERIFICATION_FAILED`** — The `OAuth flow failed` line before it names the failed check. `UNSUPPORTED_ALGORITHM` means the IdP signs tokens with HS256 or another algorithm: configure the client to use RS256 or ES256. `AT_HASH_MISMATCH` means the ID Token's `at_hash` does not match the access token the IdP returned.
+- **`[403] USER_NOT_AUTHORIZED` after `User [sub_id: …] matched no roles`** — Authentication succeeded but no UCI role matched the user's email or groups. Email matching ignores case; group matching does not. Add the user's email with `uci add_list luci-sso.admin.email='...'`.
+- **`[403] USER_NOT_AUTHORIZED` after `Ignoring the unverified email of user [sub_id: …] for role matching`** — The IdP sent the email without `email_verified: true`, so it did not count. See [Map by email](#map-by-email).
+- **`[500] UBUS_LOGIN_FAILED` after a `MISSING_RPCD_LOGIN` line** — The matched role has no `rpcd` login entry, so it has no permissions. Save the role's permissions on the settings page, or with `ubus call luci-sso set_role`; see [How to Configure Role-Based Access Control](../sysadmin/rbac.md).
+- **`[502] OIDC_DISCOVERY_FAILED` after `Discovery fetch failed for [id: …]: …`** — The router cannot reach the IdP. The end of the line names the cause, such as `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`. Check DNS resolution and firewall rules from the router (not just from your laptop).
+- **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_MISSING_ENDPOINT` or `INSECURE_ENDPOINT` line** — The discovery document lacks `authorization_endpoint`, `token_endpoint` or `jwks_uri`, or one of them is not HTTPS. The line names the field.
+- **`[500] CONFIG_ERROR` after `Configuration rejected: <reason>`** — A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved. Set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`.
+- **`[502] TOKEN_EXCHANGE_FAILED` after `Token exchange HTTP 401`** (some IdPs answer 400) — The IdP rejected the client credentials. Check `client_id` and `client_secret`, and that the client accepts `client_secret_post`.
+- **The IdP shows its own error page instead of a login screen** — The IdP rejected the authorization request, so the browser never returns to the router and the log has no `OIDC callback received` line. The usual cause is a Redirect URI that does not exactly match the one registered in Step 2.
+- **`[400] IDP_ERROR` after `IDP_ERROR: the IdP returned error=<error> (<description>)`** — The IdP refused the login and sent the browser back with an error. The line gives the IdP's reason, for example `access_denied` when the user is not allowed to use the client.
+- **The IdP shows an error after LuCI's Log out** — For an SSO session, **Log out** ends the router session and sends the browser to the IdP's `end_session_endpoint` with `id_token_hint` and `post_logout_redirect_uri=https://<YOUR_ROUTER_IP_OR_DOMAIN>/` (the origin of `redirect_uri`). Register that URL at the IdP as a post-logout redirect URI. If the discovery document has no `end_session_endpoint`, the browser goes to `/` and the IdP session stays, so the next **Login with SSO** completes without asking for credentials.

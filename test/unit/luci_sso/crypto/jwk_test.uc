@@ -21,7 +21,7 @@ const EC_JWK = {
 	y:   '4Etl6SRW2YiLUrN5vfvVHuhp7x8PxltmWWlbbM4IFyM',
 };
 
-// Symmetric octet key — RFC 7516 Appendix C
+// Symmetric octet key — RFC 7516 Appendix C. Must be refused.
 const OCT_JWK = {
 	kty: 'oct',
 	k:   'AyM1SysPpbyDfgZld3umj1qzKObwVMkoqQ-EstJQLr_T-1qS0gZH75aKtMN3Yj0iPS4hcgUuTwjAzZr1Z9CAow',
@@ -141,25 +141,12 @@ describe('crypto.jwk: to_pem — EC', () => {
 });
 
 // ─── oct ─────────────────────────────────────────────────────────────────────
-// oct keys are decoded directly by the wrapper — native is never called.
+// Symmetric keys were accepted while HS256 ID tokens were. They are not any
+// more, so an oct JWK in a JWKS must be refused rather than turned into a
+// "key" that no RS256/ES256 verifier can use.
 
 describe('crypto.jwk: to_pem — oct', () => {
-	it('returns the raw decoded key bytes for a valid oct JWK', () => with_strict((native) => {
-		let res = jwk.to_pem(native, OCT_JWK);
-		// oct keys are returned as raw bytes, not PEM
-		assert.match(contains({ ok: true, data: is_type('string') }), res);
-		assert.match(not(equals('')), res.data);
-	}));
-
-	it('RFC 7516 Appendix C example key decodes to exactly 64 bytes (512-bit key)', () => with_strict((native) => {
-		assert.match(contains({ ok: true, data: has_length(64) }), jwk.to_pem(native, OCT_JWK));
-	}));
-
-	it('returns MISSING_OCT_PARAM when k is absent', () => with_strict((native) => {
-		assert.match(contains({ ok: false, error: 'MISSING_OCT_PARAM' }), jwk.to_pem(native, { kty: 'oct' }));
-	}));
-
-	it('returns INVALID_OCT_PARAM_ENCODING for non-base64url k', () => with_strict((native) => {
-		assert.match(contains({ ok: false, error: 'INVALID_OCT_PARAM_ENCODING' }), jwk.to_pem(native, { kty: 'oct', k: '!!!' }));
+	it('returns UNSUPPORTED_KTY for a symmetric (oct) JWK without calling native', () => with_strict((native) => {
+		assert.match(contains({ ok: false, error: 'UNSUPPORTED_KTY' }), jwk.to_pem(native, OCT_JWK));
 	}));
 });

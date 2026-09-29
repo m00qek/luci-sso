@@ -1,45 +1,9 @@
 #!/bin/sh
 
-# LuCI SSO - Semantic UI Integration
-# Targeting LuCI 24.10+ (ucode templates)
+# LuCI SSO - add the "Login with SSO" button to LuCI's login page.
+# The logic lives in /usr/sbin/luci-sso-repatch, which admins also run after a
+# LuCI upgrade replaces the login template.
 
-# 1. CLEANUP: Remove any legacy patches from header.ut
-CLEAN_HEADER() {
-    FILE="$1"
-    if [ -f "$FILE" ]; then
-        sed -i '/luci-sso-login.js/d' "$FILE"
-    fi
-}
-
-CLEAN_HEADER "/usr/share/ucode/luci/template/themes/bootstrap/header.ut"
-CLEAN_HEADER "/usr/share/ucode/luci/template/header.ut"
-
-# 2. SEMANTIC PATCH: Inject into sysauth.ut
-PATCH_SYSAUTH() {
-    FILE="$1"
-    [ -f "$FILE" ] || return 0
-    
-    # Remove old patches
-    sed -i '/luci-sso-login.js/d' "$FILE"
-    
-    # NEW STRATEGY: Use ABSOLUTE PATH to ensure loading
-    sed -i "/{% include('header'.* %}/a \
-<script src=\"/luci-static/resources/luci-sso-login.js\"></script>" "$FILE"
-}
-
-# Patch the generic template plus EVERY theme that ships its own override.
-# material, openwrt and openwrt-2020 fall back to the generic one; bootstrap and
-# footstrap override it, and a theme that overrides it never sees the generic
-# patch — that was issue #10. Enumerating themes by name is what caused the bug,
-# so glob instead: any theme installed now or later is covered automatically.
-# PATCH_SYSAUTH no-ops on a non-existent path, so an unmatched glob is harmless.
-PATCH_SYSAUTH "/usr/share/ucode/luci/template/sysauth.ut"
-for SYSAUTH in /usr/share/ucode/luci/template/themes/*/sysauth.ut; do
-    PATCH_SYSAUTH "$SYSAUTH"
-done
-
-# 3. Nuclear Cache Clear
-rm -rf /tmp/luci-modulecache/* 2>/dev/null
-rm -rf /tmp/luci-indexcache 2>/dev/null
+/usr/sbin/luci-sso-repatch >/dev/null
 
 exit 0

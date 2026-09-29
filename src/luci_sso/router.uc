@@ -1,5 +1,6 @@
+"use strict";
+
 import * as crypto from 'luci_sso.crypto';
-import * as oidc from 'luci_sso.oidc';
 import * as session from 'luci_sso.session';
 import * as ubus from 'luci_sso.ubus';
 import * as lucihttp from 'lucihttp';
@@ -8,61 +9,14 @@ import * as handshake from 'luci_sso.handshake';
 import * as config_mod from 'luci_sso.config';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
+import * as ratelimit from 'luci_sso.ratelimit';
+import * as rpcd_login from 'luci_sso.rpcd_login';
 import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'luci_sso.errors';
 
 /**
  * Main CGI Router for luci-sso.
  * deps = { fs, http, ubus, uci, log, clock }
  */
-
-const RATELIMIT_DIR = "/var/run/luci-sso";
-const RATELIMIT_FILE = RATELIMIT_DIR + "/ratelimit.json";
-const LIMIT_WINDOW = 60;   // 60 seconds
-const LIMIT_REQUESTS = 50; // 50 requests per window
-
-/**
- * Checks and updates the global rate limit state.
- * @private
- */
-function _check_rate_limit(deps) {
-	let now = deps.clock.time();
-	let state = { count: 0, window_start: now };
-
-	let raw = deps.fs.readfile(RATELIMIT_FILE);
-	if (raw) {
-		let res = encoding.safe_json(raw);
-		if (res.ok) {
-			state = res.data;
-		}
-	}
-
-	// Reset window if it has expired
-	if (now - state.window_start > LIMIT_WINDOW) {
-		state.count = 1;
-		state.window_start = now;
-	} else {
-		state.count++;
-	}
-
-	// Persist state atomically
-	let tmp_file = RATELIMIT_FILE + ".tmp";
-	if (deps.fs.writefile(tmp_file, sprintf("%J", state))) {
-		if (!deps.fs.rename(tmp_file, RATELIMIT_FILE)) {
-			deps.log("error", "Failed to atomically install rate limit state file");
-			deps.fs.unlink(tmp_file);
-		}
-	} else {
-		// Log but continue if we can't write (resilience)
-		deps.log("error", "Failed to write rate limit state file");
-	}
-
-	if (state.count > LIMIT_REQUESTS) {
-		deps.log("warn", `Rate limit exceeded: ${state.count} requests in current window [limit: ${LIMIT_REQUESTS}]`);
-		return false;
-	}
-
-	return true;
-};
 
 /**
  * Creates a response object.
@@ -74,7 +28,7 @@ function response(status, headers, body) {
 		headers: headers || {},
 		body: body || ""
 	};
-};
+}
 
 /**
  * Handles the initial login redirect.
@@ -93,14 +47,14 @@ function handle_login(deps, config) {
 		"Location": res.data.url,
 		"Set-Cookie": `__Host-luci_sso_state=${res.data.token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=300`
 	}));
-};
+}
 
 /**
  * Handles the OIDC callback path.
  * @private
  */
-function handle_callback(deps, config, request, policy) {
-	let res = handshake.authenticate(deps, config, request, policy);
+function handle_callback(deps, config, request) {
+	let res = handshake.authenticate(deps, config, request);
 	if (!res.ok) return res;
 
 	// SameSite=Lax, not Strict. This is hardening, NOT the fix for issue #11 --
@@ -114,6 +68,15 @@ function handle_callback(deps, config, request, policy) {
 	// reasoning already applied to __Host-luci_sso_state above.
 	return Result.ok(response(302, {
 		"Location": "/cgi-bin/luci/",
+		// LuCI's admin node accepts either sysauth_https or sysauth_http,
+		// whatever the scheme; HTTPS only decides which one its own password
+		// login sets. sysauth_http is deliberately NOT set: every cookie here
+		// is Secure, so the browser sends none of them over plain HTTP, and
+		// config.load() rejects a non-HTTPS issuer or redirect_uri outright.
+		// What must be HTTPS is the browser's connection; uhttpd may serve
+		// plain HTTP to a TLS-terminating reverse proxy (see
+		// docs/explanation/security-model.md). `sysauth` is the legacy name
+		// older LuCI still reads.
 		"Set-Cookie": [
 			`sysauth_https=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
 			`sysauth=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
@@ -132,7 +95,20 @@ function handle_callback(deps, config, request, policy) {
 			"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 		]
 	}));
-};
+}
+
+/**
+ * The `sub` of the ID Token stored in the session, for the logout log line,
+ * so it names the user the way the login lines do. The token was verified at
+ * login; here it is only read, never trusted. null when it cannot be read.
+ * @private
+ */
+function id_token_sub(id_token) {
+	let parts = (type(id_token) == "string") ? split(id_token, ".") : [];
+	if (length(parts) != 3 || !length(parts[1])) return null;
+	let claims = encoding.safe_json(encoding.b64url_decode(parts[1]));
+	return (claims.ok && type(claims.data) == "object") ? claims.data.sub : null;
+}
 
 /**
  * Handles the logout request.
@@ -154,7 +130,7 @@ function handle_logout(deps, config, request) {
 		return Result.ok(response(302, { "Location": "/" }));
 	}
 
-	// CSRF Protection: Verify that the 'stoken' parameter matches the session token
+	// CSRF Protection: Verify that the 'stoken' parameter matches the session's CSRF token
 	let provided_token = query.stoken || "";
 	let session_token = session_res.data.token || "";
 	if (!provided_token || !session_token || !crypto.constant_time_eq(provided_token, session_token)) {
@@ -164,6 +140,10 @@ function handle_logout(deps, config, request) {
 	id_token_hint = session_res.data.oidc_id_token;
 	ubus.destroy_session(deps, sid);
 
+	let role = rpcd_login.role_of(session_res.data.username);
+	deps.log("info", `Logout for [sub_id: ${crypto.safe_id(deps.native, id_token_sub(id_token_hint))}] ` +
+		(role != null ? `(role=${role})` : "(not an SSO session)"));
+
 	let logout_url = "/";
 
 	// OIDC RP-Initiated Logout
@@ -171,14 +151,14 @@ function handle_logout(deps, config, request) {
 	if (disc_res.ok && disc_res.data.end_session_endpoint) {
 		let end_session = disc_res.data.end_session_endpoint;
 
-		// BLOCKER FIX: Enforce HTTPS on end_session_endpoint (W2)
+		// The browser carries id_token_hint to this URL, so it must be HTTPS.
 		if (encoding.is_https(end_session)) {
-			let sep = (index(end_session, '?') == -1) ? '?' : '&';
+			let sep = (index(end_session, "?") == -1) ? "?" : "&";
 
 			logout_url = end_session;
 			if (id_token_hint) {
 				logout_url += `${sep}id_token_hint=${lucihttp.urlencode(id_token_hint, 1)}`;
-				sep = '&';
+				sep = "&";
 			}
 
 			let redirect_uri = config.redirect_uri || "";
@@ -202,18 +182,18 @@ function handle_logout(deps, config, request) {
 			"sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0"
 		]
 	}));
-};
+}
 
 /**
  * Main entry point for the router.
  * @param {object} deps - { fs, http, ubus, uci, log, clock }
  */
-export function handle(deps, config, request, policy) {
+export function handle(deps, config, request) {
 	let path = request.path || "/";
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
 
-	// SHORT-CIRCUIT: Action check (Does not require config or rate limit budget)
+	// ?action=enabled needs neither a valid config nor rate-limit budget.
 	if (path == "/") {
 		let query = request.query || {};
 		if (query.action == "enabled") {
@@ -223,19 +203,26 @@ export function handle(deps, config, request, policy) {
 		}
 	}
 
-	// MANDATORY: Rate limit (Protects handshake state generation and token exchange)
-	if (!_check_rate_limit(deps)) {
-		return Result.err(TOO_MANY_REQUESTS, { http_status: 429 });
+	// Per-client rate limit before anything that writes handshake state or
+	// calls the IdP. GET / (the action=enabled probe returned above) starts a
+	// login and also spends the client's login budget.
+	let rl = ratelimit.check(deps, ratelimit.client_key(request.client), path == "/");
+	if (!rl.allowed) {
+		return Result.err(TOO_MANY_REQUESTS, { http_status: 429, retry_after: rl.retry_after });
 	}
 
-	// MANDATORY: Config guard
+	// Every remaining path needs a loaded config. Unreachable today: entry.uc
+	// passes a null config only for ?action=enabled, answered above. The guard
+	// stays as defence in depth against a future caller, and returns what
+	// entry.uc renders for disabled SSO (500): 503 is reserved for
+	// HANDSHAKE_CAPACITY_EXCEEDED.
 	if (!config) {
-		return Result.err(SSO_DISABLED, { http_status: 503 });
+		return Result.err(SSO_DISABLED, { http_status: 500 });
 	}
 	if (path == "/") {
 		return handle_login(deps, config);
 	} else if (path == "/callback") {
-		return handle_callback(deps, config, request, policy);
+		return handle_callback(deps, config, request);
 	} else if (path == "/logout") {
 		return handle_logout(deps, config, request);
 	}

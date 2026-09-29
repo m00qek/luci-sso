@@ -9,13 +9,13 @@
 
 **Secure, Lightweight OIDC/OAuth2 Login for OpenWrt LuCI.**
 
-<img width="1119" height="588" alt="LuCI web interface login screen showing a blue 'Login with SSO' button prominently displayed above the standard OpenWrt password prompt." src="https://github.com/user-attachments/assets/cbe996a7-fc25-4f63-bd91-0d57dddcab75" />
+<img width="1119" height="588" alt="LuCI web interface login screen showing the standard OpenWrt username and password fields with a 'Login with SSO' button added below the Log in button." src="https://github.com/user-attachments/assets/cbe996a7-fc25-4f63-bd91-0d57dddcab75" />
 
 ---
 
 ## What is this?
 
-`luci-sso` replaces the standard LuCI password prompt with an **OpenID Connect (OIDC)** flow, letting you secure your router with identity providers like Google, GitHub, or Authelia.
+`luci-sso` adds an **OpenID Connect (OIDC)** sign-in option to the LuCI login page, so you can log in to your router through identity providers like Google, Keycloak, Authentik, Authelia or Pocket ID. The standard password login stays available.
 
 ## Documentation
 
@@ -28,15 +28,28 @@
 
 ---
 
-## Quick Build
+## Quick Install
 
-If you have Docker and `make`:
+Signed packages are published for OpenWrt 24.10 and 25.12 on `x86_64`, `aarch64_generic` and `aarch64_cortex-a53`. On an OpenWrt 24.10 router:
+
+```bash
+wget -O /tmp/feed.pub https://m00qek.github.io/packages.ucode.dev/24.10/feed.pub
+cp /tmp/feed.pub "/etc/opkg/keys/$(usign -F -p /tmp/feed.pub)"
+echo 'src/gz ucode.dev https://m00qek.github.io/packages.ucode.dev/24.10' >> /etc/opkg/customfeeds.conf
+opkg update && opkg install luci-sso luci-sso-crypto-mbedtls
+```
+
+For OpenWrt 25.12 (`apk`) and the other steps, see [How to Install luci-sso](https://m00qek.github.io/luci-sso/how-to/sysadmin/installation/).
+
+## Build from Source
+
+For other architectures, or to try your own changes, build the packages with Docker and `make`:
 
 ```bash
 make package SDK_ARCH=x86-64
 ```
 
-See [Building from Source](https://m00qek.github.io/luci-sso/tutorials/building/) for other architectures.
+See [How to Build the Packages from Source](https://m00qek.github.io/luci-sso/how-to/sysadmin/build-from-source/).
 
 ---
 

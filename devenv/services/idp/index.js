@@ -49,11 +49,23 @@ app.get('/.well-known/openid-configuration', (req, res) => {
         authorization_endpoint: `${ISSUER}/auth`,
         token_endpoint: `${ISSUER}/token`,
         jwks_uri: `${ISSUER}/jwks`,
+        end_session_endpoint: `${ISSUER}/logout`,
         response_types_supported: ['code'],
         subject_types_supported: ['public'],
         id_token_signing_alg_values_supported: ['RS256'],
         scopes_supported: ['openid', 'profile', 'email']
     });
+});
+
+// RP-Initiated Logout 1.0: end the (mock) IdP session and, if the RP sent a
+// post_logout_redirect_uri, send the browser back there.
+app.get('/logout', (req, res) => {
+    const { id_token_hint, post_logout_redirect_uri } = req.query;
+    log(`Logout request (id_token_hint: ${id_token_hint ? 'present' : 'absent'}, post_logout_redirect_uri: ${post_logout_redirect_uri || 'none'})`);
+    if (post_logout_redirect_uri) {
+        return res.redirect(post_logout_redirect_uri);
+    }
+    res.send('Logged out of the mock IdP.');
 });
 
 app.get('/jwks', (req, res) => {
@@ -62,7 +74,11 @@ app.get('/jwks', (req, res) => {
 
 app.get('/auth', (req, res) => {
     const { client_id, redirect_uri, state, nonce, code_challenge, code_challenge_method } = req.query;
-    log(`Auth request for ${client_id} (PKCE: ${code_challenge_method || 'none'})`);
+    // Test-only switch, never sent by luci-sso: a test adds omit_at_hash=1 to
+    // the authorization request to get an ID token without at_hash, as some
+    // IdPs issue in the code flow (OIDC Core 3.1.3.6 makes it optional).
+    const omit_at_hash = req.query.omit_at_hash === '1';
+    log(`Auth request for ${client_id} (PKCE: ${code_challenge_method || 'none'}${omit_at_hash ? ', no at_hash' : ''})`);
 
     if (!code_challenge || code_challenge_method !== 'S256') {
         log(`REJECTED: PKCE S256 required, got method=${code_challenge_method}`);
@@ -75,6 +91,7 @@ app.get('/auth', (req, res) => {
         client_id, 
         redirect_uri,
         code_challenge,
+        omit_at_hash,
         expires_at: Date.now() + 300000 // 5-minute TTL
     };
 
@@ -126,7 +143,7 @@ app.post('/token', async (req, res) => {
     const halfHash = fullHash.slice(0, fullHash.length / 2);
     const atHash = jose.base64url.encode(halfHash);
 
-    const idToken = await new jose.SignJWT({
+    const claims = {
         sub: '1234567890',
         name: 'John Doe',
         email: 'admin@example.com',
@@ -137,7 +154,10 @@ app.post('/token', async (req, res) => {
         iss: ISSUER,
         nonce: context.nonce,
         at_hash: atHash
-    })
+    };
+    if (context.omit_at_hash) delete claims.at_hash;
+
+    const idToken = await new jose.SignJWT(claims)
     .setProtectedHeader({ alg: 'RS256', kid: 'mock-key-1' })
     .sign(privateKey);
 

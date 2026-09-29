@@ -40,3 +40,13 @@ jobs:
 
       - name: Check cookie names are documented
         run: bash devenv/scripts/check-cookie-names.sh
+
+  code-style:
+    name: Code Style
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check indentation, function endings and quotes
+        run: bash devenv/scripts/check-code-style.sh

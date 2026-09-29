@@ -16,25 +16,29 @@ RESET := \033[0m
 # Docker Image (Pinned to 9.x to avoid MkDocs 2.0 breaking changes)
 MKDOCS_IMAGE := squidfunk/mkdocs-material:9.5.17
 
+# Run the container as the invoking user, so bin/site is never root-owned
+# (a root-owned bin/site makes the next build fail to clean it).
+DOCKER_USER := $(shell id -u):$(shell id -g)
+
 # --- 2. PUBLIC INTERFACE ---
 .PHONY: build serve dev clean help
 
 help:
 	@echo -e "$(BLUE)LuCI SSO Documentation Toolkit$(RESET)"
 	@echo -e "Usage:"
-	@echo -e "  make build  - Generate the static site in $(PROJECT_ROOT)/bin/site/"
+	@echo -e "  make build  - Generate the static site in $(PROJECT_ROOT)/bin/site/ (warnings fail the build)"
 	@echo -e "  make serve  - Run a live-reloading dev server on http://localhost:8000"
 	@echo -e "  make clean  - Remove the generated site directory"
 
 build:
 	@echo -e " $(BLUE)🔨$(RESET) Building static documentation..."
-	docker run --rm -v $(PROJECT_ROOT):/docs $(MKDOCS_IMAGE) build
+	docker run --rm --user $(DOCKER_USER) -v $(PROJECT_ROOT):/docs $(MKDOCS_IMAGE) build --strict
 
 serve: dev
 dev:
 	@echo -e " $(GREEN)🚀$(RESET) Starting documentation server on $(BLUE)http://localhost:8000$(RESET)..."
 	@echo -e " $(YELLOW)ℹ️$(RESET)  Press Ctrl+C to stop."
-	docker run --rm -it -p 8000:8000 -v $(PROJECT_ROOT):/docs $(MKDOCS_IMAGE)
+	docker run --rm -it --user $(DOCKER_USER) -p 8000:8000 -v $(PROJECT_ROOT):/docs $(MKDOCS_IMAGE)
 
 clean:
 	@echo -e " $(YELLOW)🧹$(RESET) Cleaning up generated documentation..."

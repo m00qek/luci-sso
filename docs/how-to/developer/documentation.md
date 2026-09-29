@@ -28,14 +28,36 @@ If you want to verify the final production output:
 make -C docs build
 ```
 
-The output will be generated in the `site/` directory in the project root.
+The output will be generated in the `bin/site/` directory in the project root. The build is strict: any warning, such as a link to a missing page, fails it. CI builds the site the same way.
 
 ### 3. Clean Up
-To remove the generated `site/` directory:
+To remove the generated `bin/site/` directory:
 
 ```bash
 make -C docs clean
 ```
+
+### 4. Update the Screenshots
+The LuCI screenshots in `docs/assets/screenshots/` are captured from the CI stack, not drawn. Retake them after a change to the LuCI pages they show:
+
+```bash
+make compile
+make up
+make screenshots
+```
+
+`make screenshots` runs `test/e2e/screenshots.capture.js` in the Playwright browser container, copies the PNGs into `docs/assets/screenshots/` and compresses them losslessly with `oxipng`. The script sets up the state each image needs, such as example SSO settings and a read-only role, and restores the router afterwards. It is not part of `make e2e-test`.
+
+Look at every image before committing it: the capture shows whatever the pages show, including dates and the uptime. If a page changes what an image shows, update the image's `alt` text and title too. To add or change a shot, edit the script; each shot is one function.
+
+The identity provider screenshots in `docs/assets/screenshots/idp/` come from real Keycloak, Authelia, Pocket ID and Authentik instances. Retake them when a provider guide moves to a newer IdP release:
+
+```bash
+make idp-screenshots                    # every IdP, one after the other
+make idp-screenshots IDP=authentik      # one IdP
+```
+
+The target needs no running stack, only the browser image (`make build-images`). For each IdP, `devenv/scripts/idp-screenshots/<idp>.sh` starts the pinned image in its own containers and network, under an `example.com` host name, with generated passwords and secrets. Then `<idp>.js` walks the admin pages through the guide's steps and crops each shot. Secrets are masked before a capture. The script removes the containers and network when it ends, even on failure. To move to a newer IdP release, change the image tag in `<idp>.sh`, retake the shots, check the guide's steps against the new UI, and update the release the guide names.
 
 ---
 
@@ -45,3 +67,18 @@ Before submitting a PR, ensure your changes follow our [Documentation Standards]
 - **Diataxis:** Place your file in the correct quadrant (Tutorial, How-to, Reference, or Explanation).
 - **Accessibility:** Add descriptive `alt` text to all images.
 - **Diagrams:** Use Mermaid.js for diagrams and provide a textual fallback.
+
+### Reuse a shared block
+
+Blocks that appear on many pages live in `docs/_snippets/` and are included with [pymdownx.snippets](https://facelessuser.github.io/pymdown-extensions/extensions/snippets/). Put the marker on a line of its own, at column 0. In the example below, the leading `;` only stops the marker from being expanded on this page; leave it out in yours:
+
+```text
+;--8<-- "check-log.md"
+```
+
+| Snippet | Content |
+| :--- | :--- |
+| `check-log.md` | The **Browser (LuCI)** / **Terminal (SSH)** tabs for reading the `luci-sso` log. |
+| `probe-enabled.md` | The `?action=enabled` probe run on the router, expecting `{"enabled": true}`. |
+
+Keep the page's own lead-in sentence and follow-up outside the snippet. If a page needs a different command (another filter, another expected answer), write the block inline rather than adding a variant. A missing snippet file fails the build (`check_paths: true`).

@@ -97,3 +97,18 @@ describe('result: is', () => {
 		assert.match(false, Result.is([]));
 	});
 });
+
+describe('result: describe', () => {
+	it('appends string details as the cause', () => {
+		assert.match('HTTP_REQUEST_FAILED (CERT_UNTRUSTED)', Result.describe(Result.err('HTTP_REQUEST_FAILED', 'CERT_UNTRUSTED')));
+	});
+
+	it('shows only the code when there are no details', () => {
+		assert.match('HTTPS_REQUIRED', Result.describe(Result.err('HTTPS_REQUIRED')));
+	});
+
+	it('shows only the code for empty or non-string details', () => {
+		assert.match('E', Result.describe(Result.err('E', '')));
+		assert.match('E', Result.describe(Result.err('E', { http_status: 500 })));
+	});
+});

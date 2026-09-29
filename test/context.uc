@@ -2,6 +2,56 @@
 import { mock } from 'utest';
 import * as Result from 'luci_sso.result';
 import * as real_native from 'luci_sso.native';
+import { ubus_channel } from 'luci_sso.deps';
+
+/**
+ * Reply value for a mocked ubus method that succeeds without data, the way
+ * rpcd answers `session set`, `grant` and `destroy`. The real ucode binding
+ * returns null for such a reply with error() unset; a mocked null cannot say
+ * that, because the utest proxy has no error(), so this marker stands in for it.
+ */
+export const UBUS_NO_DATA = { "__utest_ubus_no_data": true };
+
+/**
+ * Builds deps.ubus from a utest ubus connection through the PRODUCTION
+ * channel (luci_sso.deps.ubus_channel), so tests exercise the same
+ * null-reply handling as the router.
+ *
+ * The utest connection has no error(), so this adapter supplies one:
+ *   - a mocked null reply is a failed call: call() returns null and error()
+ *     reports it, as rpcd does for e.g. an unknown session;
+ *   - UBUS_NO_DATA is a successful call with no data: null with no error;
+ *   - any other reply is returned as-is.
+ */
+export function mock_ubus_channel(conn) {
+	if (!conn) return ubus_channel(null);
+	let last_error = null;
+	let channel = ubus_channel({
+		call: (obj, method, args) => {
+			let raw = conn.call(obj, method, args);
+			last_error = (raw === null) ? `mock: ${obj}.${method} failed` : null;
+			if (type(raw) == "object" && raw.__utest_ubus_no_data) return null;
+			return raw;
+		},
+		error: () => last_error
+	});
+	// Keep the connection's spy handle reachable as spy(deps.ubus).
+	channel.__utest__ = conn.__utest__;
+	return channel;
+};
+
+/**
+ * UCI data holding the rpcd login entries the luci-sso ubus object writes for
+ * the given roles, as { <role>: { read: [...], write: [...] } }: section
+ * luci_sso_<role>, username sso:<role>, no password. Pass it as `uci.data`
+ * (merged with other packages) to a test whose login must succeed.
+ */
+export function rpcd_logins(roles) {
+	let rpcd = {};
+	for (let name, lists in roles)
+		rpcd[`luci_sso_${name}`] = { ".type": "login", username: `sso:${name}`, read: lists.read || [], write: lists.write || [] };
+	return { rpcd };
+};
 
 function build_deps(proxies) {
 	let deps = {};
@@ -12,17 +62,8 @@ function build_deps(proxies) {
 	if (proxies.uci)
 		deps.uci = proxies.uci.cursor();
 
-	if (proxies.ubus) {
-		let conn = proxies.ubus.connect();
-		deps.ubus = {
-			__utest__: conn ? conn.__utest__ : null,
-			call: function(obj, method, args) {
-				let res = conn.call(obj, method, args);
-				if (res === null) return Result.err("UBUS_ERROR");
-				return Result.ok(res);
-			}
-		};
-	}
+	if (proxies.ubus)
+		deps.ubus = mock_ubus_channel(proxies.ubus.connect());
 
 	if (proxies.http_client)
 		deps.http = proxies.http_client.create(null, null, null);
@@ -48,7 +89,7 @@ function do_inject(cfg, remaining, proxies, cb) {
 	let state = cfg[name] || {};
 	let inject_state;
 	if (name === 'fs') {
-		// Seed ratelimit file as empty so router._check_rate_limit doesn't
+		// Seed the rate-limit state file as empty so ratelimit.check doesn't
 		// die in strict mode when it reads an uninitialized path.
 		// Seed ACL dir with an empty placeholder so _grant_all_luci_acls
 		// returns Result.ok(0) without trying to destroy the session.
@@ -57,6 +98,12 @@ function do_inject(cfg, remaining, proxies, cb) {
 			"/usr/share/rpcd/acl.d/luci-base.json": "",
 			...(state.data || {})
 		};
+		inject_state = { ...state, strict: true, data };
+	} else if (name === 'uci') {
+		// Every OpenWrt router ships /etc/config/luci; ubus.create_passwordless_session
+		// reads luci.sauth.sessiontime from it. Seed the stock value so strict uci
+		// mocks don't die on a package the test never meant to exercise.
+		let data = { luci: { sauth: { ".type": "internal", sessiontime: "3600" } }, ...(state.data || {}) };
 		inject_state = { ...state, strict: true, data };
 	} else if (name === 'native') {
 		if (state.behavior) {

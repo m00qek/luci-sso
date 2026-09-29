@@ -30,13 +30,13 @@ sequenceDiagram
     R->>B: 6. Session cookie
 ```
 
-The browser uses the public `issuer_url` for steps 1–3. The router uses `internal_issuer_url` for the back-channel token exchange (step 4), which never involves the browser.
+The browser uses the public `issuer_url` for steps 1–3. The router uses `internal_issuer_url` for its back-channel requests, which never involve the browser: the discovery document, the token exchange (step 4), the JWKS and UserInfo.
 
 ---
 
 ## What gets replaced
 
-When `internal_issuer_url` is set, `luci-sso` replaces the **origin** (scheme + host) of the following back-channel URLs with the internal address:
+`internal_issuer_url` is an **origin**: `https://host` or `https://host:port`, with no path. When it is set, `luci-sso` replaces the origin (scheme, host and port) of the following back-channel URLs with it:
 
 | URL | Replaced? |
 | :--- | :--- |
@@ -45,11 +45,24 @@ When `internal_issuer_url` is set, `luci-sso` replaces the **origin** (scheme + 
 | UserInfo endpoint | ✅ Yes |
 | Discovery document fetch | ✅ Yes |
 | Authorization endpoint (browser redirect) | ❌ No — the browser handles this |
+| End-session (logout) endpoint (browser redirect) | ❌ No — the browser handles this |
+| Any endpoint on a host other than `issuer_url`'s | ❌ No — e.g. Google's `googleapis.com` JWKS stays as published |
 | `iss` claim validation | ❌ No — always checked against `issuer_url` |
 
-Only the origin is swapped; the path is preserved. `https://auth.homelab.local/oauth/token` becomes `https://192.168.2.10:8443/oauth/token`.
+Only the origin is swapped; the path and query are kept exactly. `https://auth.homelab.local/oauth/token` becomes `https://192.168.2.10:8443/oauth/token`.
 
-The IdP's discovery document must still declare the public `issuer_url` as its `iss`. `luci-sso` validates the issuer claim against the public address regardless of the internal URL.
+This also works when `issuer_url` has a path, as with Keycloak realms or Authentik applications:
+
+| | Public | Internal |
+| :--- | :--- | :--- |
+| `issuer_url` / `internal_issuer_url` | `https://kc.example.com/realms/home` | `https://10.0.0.5:8443` |
+| Discovery fetch | — | `https://10.0.0.5:8443/realms/home/.well-known/openid-configuration` |
+| Token endpoint | `https://kc.example.com/realms/home/protocol/openid-connect/token` | `https://10.0.0.5:8443/realms/home/protocol/openid-connect/token` |
+
+!!! warning "The internal address must serve the same paths"
+    `internal_issuer_url` with a path, query or fragment (for example `https://10.0.0.5/realms/home`) is rejected with `CONFIG_ERROR`. Give only the origin; the path comes from `issuer_url`. A reverse proxy that exposes the IdP under a *different* path internally than publicly is not supported.
+
+The IdP's discovery document must still declare exactly the public `issuer_url` as its `issuer`. `luci-sso` validates the issuer claim against the public address regardless of the internal URL.
 
 ---
 
@@ -58,17 +71,13 @@ The IdP's discovery document must still declare the public `issuer_url` as its `
 The internal address must:
 
 - Use **HTTPS** — plain HTTP is rejected even for internal addresses.
-- Have a certificate the router trusts. If the IdP uses a self-signed or private CA certificate, install it on the router:
+- Have a certificate the router trusts, issued for the host name in `internal_issuer_url`. If the IdP uses a self-signed or private CA certificate, copy the CA certificate to the router. There is no store to rebuild afterwards; see [How to Install a Private CA Certificate](install-ca-certificate.md).
 
 ```bash
-# Copy your CA certificate to the router
 scp -O ca.crt root@192.168.1.1:/etc/ssl/certs/my-homelab-ca.crt
-
-# Update the CA bundle
-update-ca-certificates
 ```
 
-If the router cannot verify the IdP's certificate, the token exchange will fail with `SSL_INIT_FAILED` or a `TOKEN_ENDPOINT_NETWORK_ERROR`. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
+If the router cannot verify the IdP's certificate, discovery already fails when the user clicks the button: the log shows `[502] OIDC_DISCOVERY_FAILED`, and the line before it ends in `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`, or `(CERT_NAME_MISMATCH)` if the certificate does not cover the internal host name. See [How to Debug luci-sso](debugging.md) for log-based diagnosis.
 
 ---
 
@@ -78,7 +87,7 @@ Set `internal_issuer_url` alongside the standard configuration:
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > SSO Login**.
+    Navigate to **Services > Single Sign-On**.
 
     Fill in the **Settings** section with your standard provider credentials, then set **Internal Issuer URL** to the address the router uses to reach the IdP:
 
@@ -88,6 +97,7 @@ Set `internal_issuer_url` alongside the standard configuration:
     | **Issuer URL** | `https://auth.homelab.local` |
     | **Client ID** | `luci-router` |
     | **Client Secret** | Your secret |
+    | **Redirect URI** | `https://<router-host>/cgi-bin/luci-sso/callback` |
     | **Internal Issuer URL** | `https://192.168.2.10:8443` |
 
     Click **Save & Apply**.
@@ -99,6 +109,7 @@ Set `internal_issuer_url` alongside the standard configuration:
     uci set luci-sso.default.issuer_url='https://auth.homelab.local'
     uci set luci-sso.default.client_id='luci-router'
     uci set luci-sso.default.client_secret='YOUR_SECRET_HERE'
+    uci set luci-sso.default.redirect_uri='https://<router-host>/cgi-bin/luci-sso/callback'
     uci set luci-sso.default.enabled='1'
 
     # Split-horizon: the router reaches the IdP via this internal address
@@ -111,29 +122,25 @@ Set `internal_issuer_url` alongside the standard configuration:
 
 ## Verify
 
-After committing, confirm the back-channel is working:
+After committing, confirm the configuration is valid. On the router:
 
-```bash
-curl -sk https://localhost/cgi-bin/luci-sso?action=enabled
-# Expected: {"enabled":true}
-```
+--8<-- "probe-enabled.md"
 
 Then attempt a login from your browser. If the browser redirects to the IdP correctly but the router fails to exchange the code, the problem is in the back-channel. Check the log:
 
-=== "Browser (LuCI)"
+--8<-- "check-log.md"
 
-    Navigate to **Status > System Log** and filter for `luci-sso`.
+Back-channel connection failures end as `[502] OIDC_DISCOVERY_FAILED`, `[502] TOKEN_ENDPOINT_NETWORK_ERROR` or `[502] JWKS_FETCH_FAILED`, with a line ending in `HTTP_REQUEST_FAILED (<cause>)` before them. Check:
 
-=== "Terminal (SSH)"
+1. The router can reach the internal address and trusts its certificate. Fetch the discovery document through it from the router, adding the issuer's path if it has one:
 
     ```bash
-    logread -e luci-sso | tail -30
+    uclient-fetch -q -O - 'https://192.168.2.10:8443/.well-known/openid-configuration'
     ```
 
-Back-channel failures typically appear as `TOKEN_EXCHANGE_FAILED`, `OIDC_DISCOVERY_FAILED`, or `JWKS_FETCH_FAILED`. All three indicate the router cannot reach the internal address. Check:
-
-1. The router can reach `internal_issuer_url` — test with `curl -sk <internal_issuer_url>/.well-known/openid-configuration` from the router.
-2. The certificate is trusted — test with `curl -s` (without `-k`) to verify without skipping certificate checks.
-3. The internal URL's origin exactly matches what `replace_origin` expects — it must start with the same scheme and host as `issuer_url`, just with the origin swapped.
+    A JSON document means both work. `SSL verify error` means the certificate is not trusted, or does not cover that host name.
+2. The document's `issuer` is the public `issuer_url`, not the internal address.
+3. `internal_issuer_url` is only an origin. If the log shows `Configuration rejected: internal_issuer_url must be an origin`, remove its path: the issuer's path is added automatically.
+4. The internal address serves the IdP under the same paths as the public one.
 
 For the full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md).

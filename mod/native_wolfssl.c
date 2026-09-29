@@ -119,6 +119,13 @@ bool native_verify_es256(const unsigned char *msg, size_t msg_len,
 		return false;
 	}
 
+	/* SECURITY: ES256 means ECDSA on P-256 only, as in the OpenSSL backend.
+	 * wc_EccPublicKeyDecode accepts any supported curve. */
+	if (key.dp == NULL || key.dp->id != ECC_SECP256R1) {
+		wc_ecc_free(&key);
+		return false;
+	}
+
 	unsigned char der_sig[ECC_MAX_SIG_SIZE];
 	word32 der_sig_len = sizeof(der_sig);
 
@@ -194,8 +201,12 @@ int native_jwk_rsa_to_pem(const unsigned char *n, size_t n_len,
 	wc_FreeRsaKey(&key);
 	if (der_len < 0) return -1;
 
+	/* wc_DerToPem does not NUL-terminate. Callers treat `out` as a C string,
+	 * so terminate it here and refuse output that leaves no room. */
 	int pem_len = wc_DerToPem(der, der_len, (unsigned char *)out, out_len, PUBLICKEY_TYPE);
-	return (pem_len < 0) ? -1 : 0;
+	if (pem_len < 0 || (size_t)pem_len >= out_len) return -1;
+	out[pem_len] = '\0';
+	return 0;
 }
 
 int native_jwk_ec_p256_to_pem(const unsigned char *x, size_t x_len,
@@ -216,11 +227,25 @@ int native_jwk_ec_p256_to_pem(const unsigned char *x, size_t x_len,
 		return -1;
 	}
 
+	/* SECURITY: reject a point that is not on P-256. wc_ecc_import_x963 checks
+	 * this only when wolfSSL is built with ECC import validation: OpenWrt's
+	 * build is, Alpine's is not. Check explicitly, as the mbedtls
+	 * (mbedtls_ecp_check_pubkey) and OpenSSL (EVP_PKEY_public_check) backends
+	 * do, so the result does not depend on how the library was configured. */
+	if (wc_ecc_check_key(&key) != 0) {
+		wc_ecc_free(&key);
+		return -1;
+	}
+
 	unsigned char der[NATIVE_EC_PEM_MAX];
 	int der_len = wc_EccPublicKeyToDer(&key, der, sizeof(der), 1);
 	wc_ecc_free(&key);
 	if (der_len < 0) return -1;
 
+	/* wc_DerToPem does not NUL-terminate. Callers treat `out` as a C string,
+	 * so terminate it here and refuse output that leaves no room. */
 	int pem_len = wc_DerToPem(der, der_len, (unsigned char *)out, out_len, PUBLICKEY_TYPE);
-	return (pem_len < 0) ? -1 : 0;
+	if (pem_len < 0 || (size_t)pem_len >= out_len) return -1;
+	out[pem_len] = '\0';
+	return 0;
 }

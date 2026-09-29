@@ -1,7 +1,7 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-sso
-PKG_VERSION:=0.9.1
+PKG_VERSION:=0.10.0
 PKG_RELEASE:=1
 
 PKG_MAINTAINER:=António Móra <m00qek@gmail.com>
@@ -9,7 +9,7 @@ PKG_LICENSE:=MIT
 
 PKG_INSTALL:=1
 PKG_BUILD_DEPENDS:=libucode/host
-PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode
+PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucode-mod-math +ucode-mod-uclient +ucode-mod-uloop +ucode-mod-log +liblucihttp-ucode +rpcd-mod-ucode
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
@@ -63,12 +63,13 @@ define Package/$(PKG_NAME)/install
 	$(CP) ./src/luci_sso $(1)/usr/share/ucode/
 	$(INSTALL_DIR) $(1)/etc/config
 	$(CP) ./files/etc/config/luci-sso $(1)/etc/config/luci-sso
-	$(INSTALL_DIR) $(1)/etc/luci-sso
 	$(INSTALL_DIR) $(1)/etc/uci-defaults
 	$(INSTALL_BIN) ./files/etc/uci-defaults/10-luci-sso-setup $(1)/etc/uci-defaults/10-luci-sso-setup
+	$(INSTALL_BIN) ./files/etc/uci-defaults/20-luci-sso-rpcd $(1)/etc/uci-defaults/20-luci-sso-rpcd
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-luci-sso-ui $(1)/etc/uci-defaults/99-luci-sso-ui
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-cleanup $(1)/usr/sbin/luci-sso-cleanup
+	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-repatch $(1)/usr/sbin/luci-sso-repatch
 	$(INSTALL_DIR) $(1)/www/cgi-bin
 	$(INSTALL_BIN) ./files/www/cgi-bin/luci-sso $(1)/www/cgi-bin/luci-sso
 	$(INSTALL_DIR) $(1)/www/luci-static/resources
@@ -77,33 +78,68 @@ define Package/$(PKG_NAME)/install
 	$(CP) ./files/www/luci-static/resources/view/services/sso.js $(1)/www/luci-static/resources/view/services/
 	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
 	$(CP) ./files/usr/share/luci/menu.d/luci-app-sso.json $(1)/usr/share/luci/menu.d/
+	$(CP) ./files/usr/share/luci/menu.d/luci-sso-logout.json $(1)/usr/share/luci/menu.d/
+	$(INSTALL_DIR) $(1)/usr/share/ucode/luci/controller
+	$(CP) ./files/usr/share/ucode/luci/controller/sso.uc $(1)/usr/share/ucode/luci/controller/
 	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
 	$(CP) ./files/usr/share/rpcd/acl.d/luci-app-sso.json $(1)/usr/share/rpcd/acl.d/
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/ucode
+	$(CP) ./files/usr/share/rpcd/ucode/luci-sso.uc $(1)/usr/share/rpcd/ucode/
 endef
 
 define Package/$(PKG_NAME)/prerm
 #!/bin/sh
+# Shell variables are written $$name: this block is expanded by make first.
+
 # Clean up cron job
 sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
 [ -x "/etc/init.d/cron" ] && /etc/init.d/cron restart
 
-# Revert UI patches
-sed -i '/luci-sso-login.js/d' /usr/share/ucode/luci/template/sysauth.ut 2>/dev/null
-# Glob, to mirror 99-luci-sso-ui: revert every theme that was patched, including
-# ones that did not exist when this was written.
-for f in /usr/share/ucode/luci/template/themes/*/sysauth.ut; do
-	[ -f "$f" ] && sed -i '/luci-sso-login.js/d' "$f" 2>/dev/null
-done
+# Remove the login button from every LuCI login template. An upgrade puts it
+# back: the new package's uci-defaults script runs luci-sso-repatch again.
+[ -x /usr/sbin/luci-sso-repatch ] && /usr/sbin/luci-sso-repatch --remove >/dev/null 2>&1
 
-# Remove the SSO ACL entry and reload rpcd so the permission is revoked
-# immediately. opkg removes the file after prerm exits, so we delete it here
-# first; opkg's own removal becomes a harmless no-op.
-rm -f /usr/share/rpcd/acl.d/luci-app-sso.json 2>/dev/null
-[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd restart >/dev/null 2>&1 || true
+# Real removal only: take away everything luci-sso gave rpcd, and keep the
+# roles' permissions. luci_sso.rpcd_login.demigrate() copies each SSO role's
+# login entry (luci_sso_<role>) back onto its role in /etc/config/luci-sso as
+# the read/write lists earlier releases used, and deletes the entries; the
+# commit to luci-sso comes first, so an interruption loses nothing. A later
+# install moves the lists back into rpcd (uci-defaults 20-luci-sso-rpcd), with
+# the same entries. The settings ACL and the luci-sso ubus object are deleted
+# too, before the package manager removes the rest. Then rpcd reloads: it
+# re-executes itself and rebuilds each session's rights from /etc/config/rpcd
+# and the ACL files left, so password logins stay logged in without the SSO
+# settings ACL, and SSO sessions, whose entries are gone, keep no rights at
+# all. An upgrade or downgrade keeps all of this, so it skips it: opkg exports
+# PKG_UPGRADE=1 then, and apk does not run this script on upgrade at all. opkg
+# --force-reinstall looks like a removal (PKG_UPGRADE=0), so it goes through
+# here, and the new package's uci-defaults script recreates every entry.
+if [ "$${PKG_UPGRADE:-0}" != "1" ]; then
+	# A private delta directory, so the commits write only these changes,
+	# never changes to rpcd or luci-sso someone else staged in /tmp/.uci.
+	d=$$(mktemp -d)
+	LUCI_SSO_DELTA="$$d" ucode -e '
+import { cursor } from "uci";
+import { demigrate } from "luci_sso.rpcd_login";
+
+let uci = cursor("/etc/config", getenv("LUCI_SSO_DELTA"));
+let changed = demigrate(uci, (msg) => print(msg, "\n"));
+if (changed.luci_sso && !uci.commit("luci-sso"))
+	die("could not write /etc/config/luci-sso: the rpcd login entries are kept");
+if (changed.rpcd)
+	uci.commit("rpcd");
+' 2>&1 | while read -r line; do
+		logger -t luci-sso -p user.warn "$$line"
+		echo "luci-sso: $$line" >&2
+	done
+	rm -rf "$$d"
+	rm -f /usr/share/rpcd/acl.d/luci-app-sso.json /usr/share/rpcd/ucode/luci-sso.uc 2>/dev/null
+	[ -x "/etc/init.d/rpcd" ] && /etc/init.d/rpcd reload >/dev/null 2>&1 || true
+fi
 
 # Clear LuCI cache to reflect removal
 rm -rf /tmp/luci-modulecache/* 2>/dev/null
-rm -rf /tmp/luci-indexcache 2>/dev/null
+rm -rf /tmp/luci-indexcache* 2>/dev/null
 
 exit 0
 endef

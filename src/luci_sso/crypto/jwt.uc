@@ -1,6 +1,8 @@
+"use strict";
+
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
-import * as base from 'luci_sso.crypto.base';
+import { AUDIENCE_MISMATCH, INVALID_AUDIENCE, INVALID_EXP_CLAIM, INVALID_IAT_CLAIM, INVALID_NBF_CLAIM, INVALID_PAYLOAD_ENCODING, INVALID_PAYLOAD_JSON, INVALID_SIGNATURE, INVALID_SIGNATURE_ENCODING, ISSUER_MISMATCH, MALFORMED_AUDIENCE, MALFORMED_JWT, MISSING_EXP_CLAIM, MISSING_IAT_CLAIM, TOKEN_EXPIRED, TOKEN_ISSUED_IN_FUTURE, TOKEN_NOT_YET_VALID, TOKEN_TOO_LARGE, UNSUPPORTED_ALGORITHM } from 'luci_sso.errors';
 
 const LIMIT_TOKEN_SIZE = 16384; // 16 KB
 
@@ -18,7 +20,7 @@ function decode_header(raw_header, alg) {
 	}
 
 	return res_h;
-};
+}
 
 /**
  * Parses and validates an OIDC JWT (Public Key: RS256/ES256).
@@ -46,7 +48,7 @@ export function verify(native, token, pubkey, options) {
 		die("CONTRACT_VIOLATION: jwt.verify expects mandatory integer options.clock_tolerance");
 
 	if (length(token) > LIMIT_TOKEN_SIZE)
-		return Result.err("TOKEN_TOO_LARGE");
+		return Result.err(TOKEN_TOO_LARGE);
 
 	if (type(options.iss) != "string")
 		die("CONTRACT_VIOLATION: jwt.verify expects mandatory string options.iss");
@@ -59,7 +61,7 @@ export function verify(native, token, pubkey, options) {
 
 	let parts = split(token, ".", 4);
 	if (length(parts) != 3)
-		return Result.err("MALFORMED_JWT");
+		return Result.err(MALFORMED_JWT);
 
 	if (options.pre_parsed_header && type(options.pre_parsed_header) == "object") {
 		if (options.pre_parsed_header.alg != options.alg)
@@ -73,12 +75,12 @@ export function verify(native, token, pubkey, options) {
 	// 2. Decode Payload Encoding (Fail Fast)
 	let p_res = encoding.b64url_decode(parts[1]);
 	if (!p_res.ok)
-		return Result.err("INVALID_PAYLOAD_ENCODING");
+		return Result.err(INVALID_PAYLOAD_ENCODING);
 
 	// 4. Decode and Verify Signature
 	let s_res = encoding.b64url_decode(parts[2]);
 	if (!s_res.ok || length(s_res.data) == 0)
-		return Result.err("INVALID_SIGNATURE_ENCODING");
+		return Result.err(INVALID_SIGNATURE_ENCODING);
 
 	let signed_data = parts[0] + "." + parts[1];
 	let valid = false;
@@ -88,72 +90,71 @@ export function verify(native, token, pubkey, options) {
 	} else if (options.alg == "ES256") {
 		valid = native.verify_es256(signed_data, s_res.data, pubkey);
 	} else {
-		return Result.err("UNSUPPORTED_ALGORITHM", options.alg);
+		return Result.err(UNSUPPORTED_ALGORITHM, options.alg);
 	}
 
 	if (!valid)
-		return Result.err("INVALID_SIGNATURE");
+		return Result.err(INVALID_SIGNATURE);
 
 	// 5. Decode Payload JSON
 	let res_p = encoding.safe_json(p_res.data);
-	if (!res_p.ok) return Result.err("INVALID_PAYLOAD_JSON");
+	if (!res_p.ok) return Result.err(INVALID_PAYLOAD_JSON);
 	let payload = res_p.data;
 
 	// 6. Claims Validation
 	let clock_tolerance = options.clock_tolerance;
 	let now = options.now;
 
-	// MANDATORY: exp (Expiry) and iat (Issued At) MUST be present
+	// exp (Expiry) and iat (Issued At) MUST be present
 	// Both exp and iat are required for strict OIDC compliance and age validation.
 	if (payload.exp == null) 
-    return Result.err("MISSING_EXP_CLAIM");
+		return Result.err(MISSING_EXP_CLAIM);
 	if (payload.iat == null)
-    return Result.err("MISSING_IAT_CLAIM");
+		return Result.err(MISSING_IAT_CLAIM);
 
 	if (type(payload.exp) != "int")
-    return Result.err("INVALID_EXP_CLAIM");
+		return Result.err(INVALID_EXP_CLAIM);
 	if (payload.exp < (now - clock_tolerance))
-    return Result.err("TOKEN_EXPIRED");
+		return Result.err(TOKEN_EXPIRED);
 
 	if (payload.nbf != null) {
 		if (type(payload.nbf) != "int")
-      return Result.err("INVALID_NBF_CLAIM");
+			return Result.err(INVALID_NBF_CLAIM);
 
 		if (payload.nbf > (now + clock_tolerance))
-      return Result.err("TOKEN_NOT_YET_VALID");
+			return Result.err(TOKEN_NOT_YET_VALID);
 	}
 
 	if (type(payload.iat) != "int")
-    return Result.err("INVALID_IAT_CLAIM");
+		return Result.err(INVALID_IAT_CLAIM);
 	if (payload.iat > (now + clock_tolerance))
-    return Result.err("TOKEN_ISSUED_IN_FUTURE");
+		return Result.err(TOKEN_ISSUED_IN_FUTURE);
 
-	let p_iss = encoding.normalize_url(payload.iss);
-	let o_iss = encoding.normalize_url(options.iss);
-	if (!p_iss.ok || !o_iss.ok || !base.constant_time_eq(p_iss.data, o_iss.data))
-		return Result.err("ISSUER_MISMATCH");
+	// OIDC Core §3.1.3.7 (2): iss MUST exactly match the issuer identifier.
+	// No URL normalization: a trailing slash or a letter-case change names a
+	// different issuer.
+	if (type(payload.iss) != "string" || payload.iss !== options.iss)
+		return Result.err(ISSUER_MISMATCH);
 
+	// OIDC Core §3.1.3.7 (3): aud MUST list our client_id, and the token MUST
+	// be rejected if it lists additional audiences not trusted by the Client.
+	// luci-sso trusts no other audience, so aud is accepted only as the string
+	// client_id or the one-entry array [client_id] (RFC 7519 §4.1.3 allows
+	// both forms). Every array entry is type-checked before the comparison.
 	let aud = payload.aud;
-	let found = false;
 	if (type(aud) == "array") {
 		if (length(aud) == 0)
-			return Result.err("INVALID_AUDIENCE");
+			return Result.err(INVALID_AUDIENCE);
 
 		for (let a in aud) {
 			if (type(a) != "string")
-				return Result.err("MALFORMED_AUDIENCE");
-
-			if (base.constant_time_eq(a, options.aud)) {
-				found = true;
-				break;
-			}
+				return Result.err(MALFORMED_AUDIENCE);
 		}
-	} else {
-		found = base.constant_time_eq(aud, options.aud);
-	}
 
-	if (!found) {
-		return Result.err("AUDIENCE_MISMATCH");
+		if (length(aud) != 1 || aud[0] !== options.aud)
+			return Result.err(AUDIENCE_MISMATCH);
+	} else if (aud !== options.aud) {
+		return Result.err(AUDIENCE_MISMATCH);
 	}
 
 	return Result.ok(payload);

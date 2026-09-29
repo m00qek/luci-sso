@@ -1,4 +1,4 @@
-'use strict';
+"use strict";
 
 import * as crypto from 'luci_sso.crypto';
 import * as oidc from 'luci_sso.oidc';
@@ -8,11 +8,15 @@ import * as discovery from 'luci_sso.discovery';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_mod from 'luci_sso.config';
-import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISMATCH, OIDC_DISCOVERY_FAILED, JWKS_FETCH_FAILED, ID_TOKEN_VERIFICATION_FAILED, IDENTITY_MISMATCH, TOKEN_REPLAYED, TOKEN_REGISTRY_ERROR, USER_NOT_AUTHORIZED, UBUS_LOGIN_FAILED, SYSTEM_INIT_FAILED } from 'luci_sso.errors';
+import { IDP_ERROR, MISSING_CODE, MISSING_HANDSHAKE_COOKIE, STATE_PARAMETER_MISMATCH, OIDC_DISCOVERY_FAILED, JWKS_FETCH_FAILED, ID_TOKEN_VERIFICATION_FAILED, IDENTITY_MISMATCH, TOKEN_REPLAYED, TOKEN_REGISTRY_ERROR, USER_NOT_AUTHORIZED, UBUS_LOGIN_FAILED, INVALID_SIGNATURE, KEY_NOT_FOUND, HANDSHAKE_CAPACITY_EXCEEDED } from 'luci_sso.errors';
 
 /**
  * Orchestration logic for the OIDC Login Handshake.
  * deps = { fs, http, ubus, log, clock }
+ *
+ * A failed back-channel call to the IdP (discovery, token exchange, JWK Set)
+ * renders 502 Bad Gateway. The IdP's own HTTP status or transport cause is
+ * logged once, by the module that made the call, and never forwarded.
  */
 
 /**
@@ -23,7 +27,12 @@ function _validate_callback_request(deps, config, request) {
 	let query = request.query || {};
 	let cookies = request.cookies || {};
 
+	// The IdP's error and error_description arrive in the query string, so
+	// they are attacker-controlled: sanitise them for the log, and never echo
+	// them to the page (the page only shows IDP_ERROR's fixed message).
 	if (query.error) {
+		let desc = query.error_description ? ` (${encoding.log_safe(query.error_description)})` : "";
+		deps.log("warn", `IDP_ERROR: the IdP returned error=${encoding.log_safe(query.error)}${desc}`);
 		return Result.err(IDP_ERROR, { http_status: 400 });
 	}
 
@@ -36,67 +45,43 @@ function _validate_callback_request(deps, config, request) {
 		return Result.err(MISSING_HANDSHAKE_COOKIE, { http_status: 401 });
 	}
 
-	let handshake_res = session.verify_state(deps, state_token, config.clock_tolerance);
+	// session.verify_state compares query.state BEFORE consuming the handshake,
+	// so a forged callback cannot destroy a login that is still in progress.
+	let handshake_res = session.verify_state(deps, state_token, query.state, config.clock_tolerance);
 	if (!handshake_res.ok) {
-		return Result.err(handshake_res.error, { http_status: 401 });
+		let status = (handshake_res.error == STATE_PARAMETER_MISMATCH) ? 403 : 401;
+		return Result.err(handshake_res.error, { http_status: status });
 	}
 
-	let handshake = handshake_res.data;
-	if (!crypto.constant_time_eq(query.state, handshake.state)) {
-		return Result.err(STATE_PARAMETER_MISMATCH, { http_status: 403 });
-	}
-
-	return Result.ok({ code: query.code, handshake: handshake, token: state_token });
-};
+	return Result.ok({ code: query.code, handshake: handshake_res.data, token: state_token });
+}
 
 /**
  * Executes the full OIDC exchange and verification flow.
  * @private
  */
-function _complete_oauth_flow(deps, config, code, handshake, policy) {
+function _complete_oauth_flow(deps, config, code, handshake) {
 	let session_id = handshake.id;
 	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) {
-		return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
+		return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 502 });
 	}
 	// Create a shallow copy to avoid mutating the cached object
 	let discovery_doc = { ...disc_res.data };
 
-	// Back-Channel Override: The Router must talk to the IdP via the internal network
-	if (config.internal_issuer_url != config.issuer_url) {
-		let replace_origin = (url, old_origin, new_origin) => {
-			if (type(url) != "string") return url;
-			let norm_url_res = encoding.normalize_url(url);
-			let norm_old_res = encoding.normalize_url(old_origin);
-
-			if (!norm_url_res.ok || !norm_old_res.ok) return url;
-			let norm_url = norm_url_res.data;
-			let norm_old = norm_old_res.data;
-
-			// Check if the normalized URL starts with the normalized old origin
-			if (substr(norm_url, 0, length(norm_old)) == norm_old) {
-				// We need to find where norm_old ends in the ORIGINAL url
-				// Since normalize_url only lowercases scheme/host and strips trailing slashes,
-				// we can find the end of the host.
-				let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
-				if (m) {
-					let raw_origin = m[1] + m[2];
-					let norm_raw_origin_res = encoding.normalize_url(raw_origin);
-					if (norm_raw_origin_res.ok && norm_raw_origin_res.data == norm_old) {
-						return new_origin + m[3];
-					}
-				}
-			}
-			return url;
-		};
-
-		discovery_doc.token_endpoint = replace_origin(discovery_doc.token_endpoint, config.issuer_url, config.internal_issuer_url);
-		discovery_doc.jwks_uri = replace_origin(discovery_doc.jwks_uri, config.issuer_url, config.internal_issuer_url);
-		if (discovery_doc.userinfo_endpoint) {
-			discovery_doc.userinfo_endpoint = replace_origin(discovery_doc.userinfo_endpoint, config.issuer_url, config.internal_issuer_url);
+	// Split-horizon: the router reaches the IdP's back-channel endpoints on the
+	// internal origin. Only URLs on the issuer's own origin are moved, with
+	// path and query kept verbatim; endpoints on other hosts (e.g. Google's
+	// googleapis.com) are left alone. The authorization and end-session
+	// endpoints are browser redirects and are never rewritten.
+	if (config.internal_issuer_url) {
+		for (let k in [ "token_endpoint", "jwks_uri", "userinfo_endpoint" ]) {
+			if (type(discovery_doc[k]) == "string")
+				discovery_doc[k] = encoding.rebase_origin(discovery_doc[k], config.issuer_url, config.internal_issuer_url);
 		}
 	}
 
+	// Token-endpoint failures carry their own 502 from oidc.exchange_code.
 	let exchange_res = oidc.exchange_code(deps, config, discovery_doc, code, handshake.code_verifier, session_id);
 	if (!exchange_res.ok) {
 		return exchange_res;
@@ -105,17 +90,17 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 
 	let jwks_res = discovery.fetch_jwks(deps, discovery_doc.jwks_uri);
 	if (!jwks_res.ok) {
-		return Result.err(JWKS_FETCH_FAILED, { http_status: 500 });
+		return Result.err(JWKS_FETCH_FAILED, { http_status: 502 });
 	}
 
-	let verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time(), policy);
+	let verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time());
 
 	// Key Rotation Recovery
 	if (!verify_res.ok) {
 		let should_retry = false;
-		if (verify_res.error == "KEY_NOT_FOUND") {
+		if (verify_res.error == KEY_NOT_FOUND) {
 			should_retry = true;
-		} else if (verify_res.error == "INVALID_SIGNATURE") {
+		} else if (verify_res.error == INVALID_SIGNATURE) {
 			let parts = split(tokens.id_token, ".");
 			let res_h = encoding.safe_json(encoding.b64url_decode(parts[0]));
 			if (res_h.ok && res_h.data.kid) {
@@ -127,7 +112,7 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 			deps.log("info", `Unrecognized or stale key detected [session_id: ${session_id}]; forcing JWKS refresh`);
 			jwks_res = discovery.fetch_jwks(deps, discovery_doc.jwks_uri, { force: true });
 			if (jwks_res.ok) {
-				verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time(), policy);
+				verify_res = oidc.verify_id_token(deps, tokens, jwks_res.data, config, handshake, discovery_doc, deps.clock.time());
 			}
 		}
 	}
@@ -141,21 +126,22 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 
 	let user_data = verify_res.data;
 
-	// FALLBACK: If email is missing from ID Token, try UserInfo endpoint (OIDC §5.3)
+	// If the ID token carries no email, try the UserInfo endpoint (OIDC Core §5.3).
 	if (!user_data.email && discovery_doc.userinfo_endpoint) {
-		let ui_res = oidc.fetch_userinfo(deps, discovery_doc.userinfo_endpoint, tokens.access_token);
+		// fetch_userinfo returns the claims only when the UserInfo sub is
+		// exactly the ID token's (OIDC Core §5.3.2); any other sub refuses the
+		// login. A failed fetch is not about the sub: the login goes on with
+		// the ID token's claims alone.
+		let ui_res = oidc.fetch_userinfo(deps, discovery_doc.userinfo_endpoint, tokens.access_token, user_data.sub);
+		if (!ui_res.ok && ui_res.error == IDENTITY_MISMATCH) {
+			deps.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
+			return ui_res;
+		}
 		if (ui_res.ok) {
-			// SECURITY: sub MUST match (OIDC Core §5.3.2)
-			// MANDATORY: Use constant-time comparison for identity binding
-			// W1 Hardening: Use normalization to handle case-inconsistent IdPs
-			let res_norm_ui = encoding.normalize_sub(ui_res.data.sub);
-			let res_norm_id = encoding.normalize_sub(user_data.sub);
-
-			if (!res_norm_ui.ok || !res_norm_id.ok || !crypto.constant_time_eq(res_norm_ui.data, res_norm_id.data)) {
-				deps.log("error", `UserInfo 'sub' mismatch [session_id: ${session_id}]`);
-				return Result.err(IDENTITY_MISMATCH, { http_status: 403 });
-			}
+			// The email and its email_verified flag come from the same
+			// response, never one from the ID token and one from UserInfo.
 			user_data.email = ui_res.data.email;
+			user_data.email_verified = ui_res.data.email_verified;
 
 			if (!user_data.name && ui_res.data.name) {
 				user_data.name = ui_res.data.name;
@@ -173,11 +159,11 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 
 	deps.log("info", `ID Token successfully validated for [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}]`);
 
-	// MANDATORY: Register token AFTER verification (DoS Prevention)
+	// Register the token only after verification, so forged tokens cannot fill the registry.
 	let access_token = tokens.access_token;
 	let reg_res = ubus.register_token(deps, access_token);
 	if (!reg_res.ok) {
-		if (reg_res.error == "TOKEN_REPLAYED") {
+		if (reg_res.error == TOKEN_REPLAYED) {
 			deps.log("warn", `Replay attack detected: access token already registered [session_id: ${session_id}]`);
 			return Result.err(TOKEN_REPLAYED, { http_status: 403 });
 		}
@@ -185,7 +171,7 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 		return Result.err(TOKEN_REGISTRY_ERROR, { http_status: 500 });
 	}
 
-	// W2: Warn if access token lifetime exceeds the 24h replay protection window
+	// Warn if the access token outlives the 24h replay-registry window.
 	let a_parts = split(access_token, ".");
 	if (length(a_parts) == 3) {
 		let res_ap = encoding.safe_json(encoding.b64url_decode(a_parts[1]));
@@ -202,7 +188,7 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 		refresh_token: tokens.refresh_token,
 		id_token: tokens.id_token
 	});
-};
+}
 
 /**
  * Initiates the OIDC login flow.
@@ -214,14 +200,15 @@ function _complete_oauth_flow(deps, config, code, handshake, policy) {
 export function initiate(deps, config) {
 	deps.log("info", "Initiating OIDC login flow");
 	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
-	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 500 });
+	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 502 });
 
-	// Ensure system is initialized (bootstrap secret key if needed)
-	let key_res = session.get_secret_key(deps);
-	if (!key_res.ok) return Result.err(SYSTEM_INIT_FAILED, { http_status: 500 });
-
-	let handshake_res = session.create_state(deps);
-	if (!handshake_res.ok) return handshake_res;
+	let handshake_res = session.create_state(deps, config.clock_tolerance);
+	if (!handshake_res.ok) {
+		// Capacity is a temporary condition, not a server fault.
+		if (handshake_res.error == HANDSHAKE_CAPACITY_EXCEEDED)
+			return Result.err(HANDSHAKE_CAPACITY_EXCEEDED, { http_status: 503 });
+		return handshake_res;
+	}
 	let handshake = handshake_res.data;
 
 	let url_res = oidc.get_auth_url(deps, config, disc_res.data, handshake);
@@ -239,10 +226,9 @@ export function initiate(deps, config) {
  * @param {object} deps - { fs, http, ubus, log, clock }
  * @param {object} config - UCI configuration
  * @param {object} request - Parsed request context
- * @param {object} [policy] - Security policy
  * @returns {object} - Result Object {ok, data: {sid, email}}
  */
-export function authenticate(deps, config, request, policy) {
+export function authenticate(deps, config, request) {
 	deps.log("info", "OIDC callback received");
 
 	let val_res = _validate_callback_request(deps, config, request);
@@ -252,7 +238,7 @@ export function authenticate(deps, config, request, policy) {
 	let handshake = val_res.data.handshake;
 	let session_id = handshake.id;
 
-	let oauth_res = _complete_oauth_flow(deps, config, code, handshake, policy);
+	let oauth_res = _complete_oauth_flow(deps, config, code, handshake);
 	if (!oauth_res.ok) {
 		if (oauth_res.details) {
 			deps.log("error", `OAuth flow failed [session_id: ${session_id}]: ${oauth_res.error} (${oauth_res.details})`);
@@ -261,20 +247,32 @@ export function authenticate(deps, config, request, policy) {
 	}
 
 	let user_data = oauth_res.data.data;
-	let res_perms = config_mod.find_roles_for_user(config, user_data);
 
-	if (!res_perms.ok) {
+	// An unverified email is left out of role matching (require_email_verified);
+	// groups still match. Say so, since it can be why no role matched.
+	if (type(user_data.email) == "string" && length(user_data.email) && !config_mod.matchable_email(config, user_data)) {
+		deps.log("warn", `Ignoring the unverified email of user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] for role matching: email_verified is not true (require_email_verified) [session_id: ${session_id}]`);
+	}
+
+	let res_role = config_mod.find_role_for_user(config, user_data);
+
+	if (!res_role.ok) {
 		deps.log("warn", `User [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] matched no roles [session_id: ${session_id}]`);
 		return Result.err(USER_NOT_AUTHORIZED, { http_status: 403 });
 	}
 
-	let perms = res_perms.data;
+	let role = res_role.data.role_name;
+	let others = res_role.data.also_matched;
+	deps.log("info", `User [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] mapped to role '${role}'` +
+		(length(others) ? `, the first match; also matched: ${join(", ", others)}` : "") +
+		` [session_id: ${session_id}]`);
 
+	// The session's oidc_user label holds only a verified email
+	// (config.session_email), even with require_email_verified off.
 	let ubus_res = ubus.create_passwordless_session(
 		deps,
-		perms.role_name,
-		perms,
-		user_data.email,
+		role,
+		config_mod.session_email(user_data),
 		oauth_res.data.access_token,
 		oauth_res.data.refresh_token,
 		oauth_res.data.id_token
@@ -284,7 +282,7 @@ export function authenticate(deps, config, request, policy) {
 		return Result.err(UBUS_LOGIN_FAILED, { http_status: 500 });
 	}
 
-	deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}] (mapped to role=${perms.role_name})`);
+	deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}] (mapped to role=${role})`);
 
 	return Result.ok({
 		sid: ubus_res.data,

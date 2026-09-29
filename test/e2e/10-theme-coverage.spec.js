@@ -78,10 +78,11 @@ test.describe('UI: Login Button Injection Across Themes', () => {
   });
 
   test('No double injection on generic markup', async ({ page }) => {
-    // The fix copies primaryBtn.className onto the injected button, so on
-    // generic markup the SSO button itself now carries cbi-button-apply and
-    // matches the widened selector. Only the BTN_ID early-return stops it being
-    // re-selected as its own "primary" control; assert that holds.
+    // The SSO button is a button.important labelled "Login with SSO", so it
+    // matches the widened selector and the label heuristic. Only the finder
+    // skipping BTN_ID stops it being re-selected as its own "primary"
+    // control; assert that holds, and that each check (MutationObserver and
+    // polling) re-places the existing nodes rather than adding new ones.
     await page.goto(ORIGIN);
     await page.setContent(wrap(GENERIC_BTN));
     await page.addScriptTag({ path: scriptPath });

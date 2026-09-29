@@ -119,28 +119,34 @@ test.describe('UI: Login Button Injection', () => {
     expect(count).toBe(1);
   });
 
-  test('Logic: Correct Styling Enforcement', async ({ page }) => {
+  test('Styling: the button takes the theme\'s blue action look, with no colour overrides', async ({ page }) => {
     await page.goto('https://luci.luci-sso.test/mock-ui-test');
+    // A stand-in theme stylesheet, dark to make a forced light-theme colour
+    // obvious: a green positive button and a blue action button.
     await page.setContent(`
+      <style>
+        .cbi-button-positive { background: rgb(20, 60, 30); color: rgb(200, 210, 220); border-color: rgb(1, 2, 3); }
+        .cbi-button-action.important { background: rgb(20, 30, 90); color: rgb(210, 220, 230); border-color: rgb(4, 5, 6); }
+      </style>
       <div class="cbi-page-actions">
         <button class="cbi-button-positive">Log in</button>
       </div>
     `);
     await page.addScriptTag({ path: scriptPath });
 
-    const ssoBtn = page.locator('#luci-sso-login-btn');
-    const styles = await ssoBtn.evaluate((el) => {
+    const look = (sel) => page.locator(sel).evaluate((el) => {
       const s = window.getComputedStyle(el);
-      return {
-        background: s.background,
-        color: s.color
-      };
+      return { background: s.backgroundColor, color: s.color, border: s.borderTopColor };
     });
 
-    // Verify high-contrast blue gradient and white text
-    // rgb(51, 122, 183) is #337ab7
-    expect(styles.background).toContain('rgb(51, 122, 183)');
-    expect(styles.color).toBe('rgb(255, 255, 255)');
+    const sso = await look('#luci-sso-login-btn');
+    expect(sso).toEqual({ background: 'rgb(20, 30, 90)', color: 'rgb(210, 220, 230)', border: 'rgb(4, 5, 6)' });
+    expect(sso).not.toEqual(await look('.cbi-page-actions > button:not(#luci-sso-login-btn)'));
+
+    const inline = await page.locator('#luci-sso-login-btn').evaluate((el) => ({
+      background: el.style.background, color: el.style.color, border: el.style.borderColor,
+    }));
+    expect(inline).toEqual({ background: '', color: '', border: '' });
   });
 
   test('Logic: Redirect on Click', async ({ page }) => {
