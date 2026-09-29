@@ -144,7 +144,7 @@ The design is not free.
 
 Administrators who read `/etc/config/rpcd` will see `sso:` entries next to `root`. They can edit them over SSH, as long as they leave out the password option; `luci-sso` refuses an entry that has one. An entry edited by hand without `unauthenticated` gets the group back the next time the object saves it, or when the package is removed and installed again.
 
-And the configuration format changes. Upgrading converts each existing role into an `sso:` entry and removes the permission lists from the role, adopting `rpcd`'s meaning of `*` as described above. A user who matched several roles and used to get their combined rights now gets the first matching role's rights only, so role order needs a look after upgrading. Sessions that were open during the upgrade carry the old user name, which no entry matches, so they lose their rights at the reload the upgrade triggers, and their users log in again.
+And the configuration format changes. Upgrading converts each existing role into an `sso:` entry and removes the permission lists from the role, adopting `rpcd`'s meaning of `*` as described above. A user who matched several roles and used to get their combined rights now gets the first matching role's rights only, so role order needs a look after upgrading. Sessions that were open during the upgrade carry the old user name, which no entry matches, so they lose their rights at the reload the upgrade triggers, and their users log in again. On OpenWrt 24.10 the question does not arise: the old release's removal script, which the package manager runs during the upgrade, restarts `rpcd` and logs everyone out.
 
 ---
 
