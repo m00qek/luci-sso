@@ -14,6 +14,8 @@ This guide takes a release from a version bump to the packages in the [package f
 
 ## 1. Bump the version
 
+Before you start, go through the [open issues labelled `next-release`](https://github.com/m00qek/luci-sso/issues?q=is%3Aissue+is%3Aopen+label%3Anext-release). Ship each item in this release, or move it to a later one on purpose.
+
 1. Set `PKG_VERSION` in `openwrt/luci-sso/Makefile` to the new version. Reset `PKG_RELEASE` to `1`.
 2. Find the places that name the old version, such as package file names, and update them:
 
