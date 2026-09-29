@@ -179,8 +179,18 @@ async function mockInstalledLuciSso(page) {
       });
       return r.text();
     });
-    const entries = available.split(/\n\n+/).filter(block =>
-      /^Package: luci-sso(-crypto-mbedtls)?$/m.test(block) && /^Architecture: x86_64$/m.test(block));
+    // The feed keeps older releases next to the current one, so keep only the
+    // newest version of each package, as an install would pick.
+    const newest = {};
+    for (const block of available.split(/\n\n+/)) {
+      const name = (block.match(/^Package: (luci-sso(?:-crypto-mbedtls)?)$/m) || [])[1];
+      if (!name || !/^Architecture: x86_64$/m.test(block)) continue;
+      const version = (block.match(/^Version: (.+)$/m) || [])[1] || '';
+      const kept = newest[name];
+      if (!kept || version.localeCompare(kept.version, undefined, { numeric: true }) > 0)
+        newest[name] = { version, block };
+    }
+    const entries = Object.values(newest).map(entry => entry.block);
     if (entries.length !== 2)
       throw new Error(`expected 2 luci-sso feed entries, found ${entries.length}`);
     const installed = entries.map(block => block

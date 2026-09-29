@@ -201,6 +201,9 @@ SCREENSHOTS_DIR := $(PROJECT_ROOT)/docs/assets/screenshots
 .screenshots:
 	$(VALIDATE_SUITE_RUNNING)
 	docker compose $(COMPOSE_FLAGS) exec openwrt rm -f /var/run/luci-sso/ratelimit.json
+	@# The image fetched the package lists when it was built; refresh them so the
+	@# Software page shows what the feed serves now, not at build time.
+	docker compose $(COMPOSE_FLAGS) exec openwrt sh -c 'if command -v opkg >/dev/null; then opkg update; else apk update; fi' >/dev/null
 	docker compose $(COMPOSE_FLAGS) exec browser sh -c 'rm -rf /tmp/luci-sso-screenshots && node tests/screenshots.capture.js'
 	docker compose $(COMPOSE_FLAGS) cp browser:/tmp/luci-sso-screenshots/. $(SCREENSHOTS_DIR)/
 	docker run --rm -v $(SCREENSHOTS_DIR):/out alpine:$(ALPINE_VERSION) sh -c \
