@@ -802,7 +802,7 @@ The site publishes one version per minor release, at `https://m00qek.github.io/l
 | :--- | :--- | :--- |
 | Pages in `docs/` | None: link relatively | `../sysadmin/upgrade.md#rolling-back` |
 | `files/`, `src/`, `mod/` (shipped in the package) | The minor of `PKG_VERSION` | `https://m00qek.github.io/luci-sso/0.10/how-to/sysadmin/split-horizon/` |
-| `CHANGELOG.md` and release notes | The minor of the release they describe | `.../luci-sso/0.10/how-to/sysadmin/upgrade/` |
+| `CHANGELOG.md` and release notes | The minor of the release they describe; `latest` under `[Unreleased]` | `.../luci-sso/0.10/how-to/sysadmin/upgrade/` |
 | `README.md` and every other file | `latest` | `.../luci-sso/latest/tutorials/` |
 
 `devenv/scripts/check-docs-links.sh` (part of `make lint`) enforces the table, except for release notes, which live on GitHub. A link without a version still works, through the site's `404.html`, but always lands on `latest`.

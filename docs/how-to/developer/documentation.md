@@ -81,25 +81,75 @@ Then open **http://localhost:8000/dev/**. The selector lists `dev` with the rele
 
 ## Publish the Docs
 
-The site has one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, and `/latest/` points to the newest. The docs workflow publishes a version when a release tag is pushed, and at no other time. Merges to `main` only build the site, with `--strict`.
+The site has one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, and `/latest/` points to the newest. Only the newest release gets docs fixes. Each minor has a branch, `docs/X.Y`: its release tag plus docs fixes. The **Publish Docs** workflow publishes version `X.Y` when one of these is pushed:
+
+- a release tag, `vX.Y.Z`
+- the branch `docs/X.Y`
+
+Nothing else publishes. Merges to `main` only build the site, with `--strict`.
+
+The workflow runs `devenv/scripts/docs-publish.sh --push <tag or branch>`. The version is titled after the release, `X.Y.Z`. `latest` moves to it only if no newer minor is published, so a push to an older branch never takes `latest` away.
+
+### Fix the docs of the current release
+
+1. Commit the fix to `main` through a pull request, as for any docs change.
+2. Copy the commit onto the release's docs branch and push it:
+
+    ```bash
+    git fetch origin
+    git switch docs/0.10
+    git merge --ff-only origin/docs/0.10
+    git cherry-pick <sha>
+    git push origin docs/0.10
+    ```
+
+    Always cherry-pick. Never rebase `docs/X.Y` onto `main` or merge `main` into it: that brings in the docs of unreleased changes.
+
+3. When the workflow is done, check the page under `https://m00qek.github.io/luci-sso/0.10/`.
+
+The workflow refuses a `docs/X.Y` branch that changes any file outside `docs/`, `mkdocs.yml`, `mkdocs.mike.yml` and `.github/workflows/docs.yml` since its newest `vX.Y.*` tag, and publishes nothing:
+
+```text
+docs/0.10 changes files outside docs/: files/www/luci-static/resources/view/services/sso.js; code fixes need a release
+```
+
+Leave the code out of the cherry-pick, or split the commit on `main` into a docs commit and a code commit. A code fix reaches users only in a release. `devenv/scripts/check-docs-branch.sh docs/0.10` runs the same check locally.
 
 ### Publish a release
 
 1. Before the release commit, run `make lint`. The docs link check fails if a link in `files/`, `src/` or `mod/` names another minor than `PKG_VERSION`, or if a `CHANGELOG.md` link names another minor than its release. Change those links to the new minor, for example from `/luci-sso/0.10/` to `/luci-sso/0.11/`.
-2. Push the release tag, `vX.Y.Z`. The **Publish Docs** workflow runs `devenv/scripts/docs-publish.sh --push vX.Y.Z`. It publishes the docs of the tag as version `X.Y`, titled `X.Y.Z`, and moves `latest` to it if no newer minor is published.
-3. Open `https://m00qek.github.io/luci-sso/latest/` and check that the version selector shows the new release.
+2. Push the release tag, `vX.Y.Z`. The workflow publishes the docs of the tag as version `X.Y`.
+3. Move the docs branch:
 
-A patch release replaces the docs of its minor. A patch to an older minor, such as `v0.9.2` after `0.10` is out, replaces `0.9` and leaves `latest` on `0.10`.
+    - For a new minor, `vX.Y.0`, create `docs/X.Y` from the tag. Stop pushing to the previous `docs/*` branch: its version is frozen from now on.
 
-### Publish a release again
+        ```bash
+        git branch docs/0.11 v0.11.0
+        git push origin docs/0.11
+        ```
 
-To publish the docs of an existing tag again, for example after a failed run, start the workflow by hand:
+    - For a patch release, move `docs/X.Y` to the tag. If the branch has no fixes since its last tag, this is a fast-forward. Otherwise merge the tag: it holds the original commits of every fix cherry-picked from `main`, so the merge brings in the release and keeps the branch's history.
+
+        ```bash
+        git switch docs/0.10
+        git merge --ff-only v0.10.1 || git merge v0.10.1
+        git push origin docs/0.10
+        ```
+
+    Either push publishes the same docs as the tag again, so mike makes no new commit.
+
+4. Open `https://m00qek.github.io/luci-sso/latest/` and check that the version selector shows the new release.
+
+### Publish again
+
+To publish a tag or a docs branch again, for example after a failed run, start the workflow by hand:
 
 ```bash
-gh workflow run docs.yml -f tag=v0.10.0
+gh workflow run docs.yml -f ref=docs/0.10
+gh workflow run docs.yml -f ref=v0.10.0
 ```
 
-This builds the docs from the tag, not from `main`. A fix to the docs of a release reaches the site with the next patch release of that minor.
+The workflow builds the docs from the tag or branch, not from `main`.
 
 ### Link to the published docs
 
