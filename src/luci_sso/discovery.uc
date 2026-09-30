@@ -77,34 +77,22 @@ function _write_cache(deps, path, data) {
 }
 
 /**
- * Fetches and caches OIDC discovery document.
+ * The URL the discovery document is fetched from: the issuer's own, or, for
+ * split-horizon, the internal origin with the issuer's path kept
+ * (https://kc.example.com/realms/home + internal https://10.0.0.5:8443
+ * -> https://10.0.0.5:8443/realms/home/.well-known/openid-configuration).
+ *
+ * @param {string} issuer - The configured issuer_url
+ * @param {string} [internal_issuer_url] - The origin to fetch from instead
+ * @returns {object} - Result: ok(url), or err(INSECURE_ISSUER_URL or INSECURE_FETCH_URL)
  */
-export function discover(deps, issuer, options) {
+export function discovery_url(issuer, internal_issuer_url) {
 	if (!encoding.is_https(issuer)) return Result.err(INSECURE_ISSUER_URL);
 
-	options = options || {};
-
-	// OIDC Discovery §4.3: the document's issuer MUST be identical to the
-	// issuer URL we are configured with. The cache is keyed on, and every
-	// cached document is checked against, that exact string, so a document
-	// cached by an earlier version that compared normalized URLs is ignored
-	// (and refetched) unless its issuer is identical too.
-	let cache_path = options.cache_path || get_cache_path(deps.native, Result.ok(issuer), "discovery");
-	let ttl = options.ttl || 86400; // 24 hours default (production standard)
-
-	let cached = _read_cache(deps, cache_path, ttl);
-	if (cached && cached.issuer === issuer) {
-		return Result.ok(cached);
-	}
-
-	// Split-horizon: fetch from the internal origin, keeping the issuer's path
-	// (https://kc.example.com/realms/home + internal https://10.0.0.5:8443
-	// -> https://10.0.0.5:8443/realms/home/.well-known/openid-configuration).
-	// The cache key and the issuer check below still use the public issuer.
 	let fetch_url = issuer;
-	if (options.internal_issuer_url) {
-		if (!encoding.is_https(options.internal_issuer_url)) return Result.err(INSECURE_FETCH_URL);
-		let int_res = encoding.split_origin(options.internal_issuer_url);
+	if (internal_issuer_url) {
+		if (!encoding.is_https(internal_issuer_url)) return Result.err(INSECURE_FETCH_URL);
+		let int_res = encoding.split_origin(internal_issuer_url);
 		let iss_res = encoding.split_origin(issuer);
 		if (!int_res.ok || !iss_res.ok) return Result.err(INSECURE_FETCH_URL);
 		fetch_url = int_res.data.origin + iss_res.data.rest;
@@ -112,8 +100,72 @@ export function discover(deps, issuer, options) {
 	if (!encoding.is_https(fetch_url)) return Result.err(INSECURE_FETCH_URL);
 
 	if (substr(fetch_url, -1) != "/") fetch_url += "/";
-	fetch_url += ".well-known/openid-configuration";
+	return Result.ok(fetch_url + ".well-known/openid-configuration");
+};
 
+/**
+ * A copy of a discovery document for the router's back channel. With
+ * split-horizon, the endpoints the router itself calls (token, JWK Set,
+ * UserInfo) are moved from the issuer's origin to the internal one, with
+ * path and query kept verbatim; endpoints on other hosts (e.g. Google's
+ * googleapis.com) are left alone. The authorization and end-session
+ * endpoints are browser redirects and are never rewritten.
+ *
+ * @param {object} doc - A discovery document from discover()
+ * @param {string} issuer - The configured issuer_url
+ * @param {string} [internal_issuer_url] - The internal origin, or null
+ * @returns {object} - The copy; `doc` is not changed
+ */
+export function backchannel(doc, issuer, internal_issuer_url) {
+	let out = { ...doc };
+	if (internal_issuer_url) {
+		for (let k in [ "token_endpoint", "jwks_uri", "userinfo_endpoint" ]) {
+			if (type(out[k]) == "string")
+				out[k] = encoding.rebase_origin(out[k], issuer, internal_issuer_url);
+		}
+	}
+	return out;
+};
+
+/**
+ * Fetches and caches OIDC discovery document.
+ *
+ * options: { internal_issuer_url, cache_path, ttl, no_cache }. With no_cache,
+ * the cache is neither read, nor used as a stale fallback, nor written: the
+ * settings page's connection test fetches the document as it is now, and
+ * changes nothing on the router.
+ *
+ * A failure's details say what went wrong, for the connection test (a login
+ * only reports OIDC_DISCOVERY_FAILED): DISCOVERY_NETWORK_ERROR carries the
+ * transport cause ("HTTP_REQUEST_FAILED (TIMED_OUT)"), DISCOVERY_FAILED
+ * { http_status: 502, upstream_status }, DISCOVERY_ISSUER_MISMATCH
+ * { issuer_id, declared, near_miss }, where `declared` is the document's
+ * issuer (a string, or null) and near_miss says the two differ only in a
+ * trailing slash, letter case or default port.
+ */
+export function discover(deps, issuer, options) {
+	options = options || {};
+
+	let url_res = discovery_url(issuer, options.internal_issuer_url);
+	if (!url_res.ok) return url_res;
+	let fetch_url = url_res.data;
+
+	// OIDC Discovery §4.3: the document's issuer MUST be identical to the
+	// issuer URL we are configured with. The cache is keyed on, and every
+	// cached document is checked against, that exact string, so a document
+	// cached by an earlier version that compared normalized URLs is ignored
+	// (and refetched) unless its issuer is identical too.
+	let use_cache = !options.no_cache;
+	let cache_path = use_cache ? (options.cache_path || get_cache_path(deps.native, Result.ok(issuer), "discovery")) : null;
+	let ttl = options.ttl || 86400; // 24 hours default (production standard)
+
+	let cached = _read_cache(deps, cache_path, ttl);
+	if (cached && cached.issuer === issuer) {
+		return Result.ok(cached);
+	}
+
+	// The cache key and the issuer check below use the public issuer, also
+	// when the document is fetched from the internal origin.
 	let res_http = deps.http.get(fetch_url, { verify: true });
 	let issuer_id = crypto.safe_id(deps.native, issuer);
 
@@ -127,18 +179,18 @@ export function discover(deps, issuer, options) {
 
 		if (!res_http.ok) {
 			deps.log("warn", `Discovery fetch failed for [id: ${issuer_id}]: ${Result.describe(res_http)}`);
-			return Result.err(DISCOVERY_NETWORK_ERROR);
+			return Result.err(DISCOVERY_NETWORK_ERROR, Result.describe(res_http));
 		}
 
 		deps.log("warn", `Discovery fetch HTTP ${res_http.data.status} from [id: ${issuer_id}]`);
-		return Result.err(DISCOVERY_FAILED, { http_status: 502 });
+		return Result.err(DISCOVERY_FAILED, { http_status: 502, upstream_status: res_http.data.status });
 	}
 
 	let response = res_http.data;
 
 	let res = encoding.safe_json(response.body);
-	if (!res.ok) {
-		deps.log("error", `Discovery JSON parse error: ${res.details}`);
+	if (!res.ok || type(res.data) != "object") {
+		deps.log("error", `Discovery JSON parse error: ${res.details || "not a JSON object"}`);
 		return Result.err(INVALID_DISCOVERY_DOC);
 	}
 	let config = res.data;
@@ -157,11 +209,15 @@ export function discover(deps, issuer, options) {
 		// usual upgrade trap: say so, since the two can look identical.
 		let hint = "";
 		let conf_norm = encoding.normalize_url(issuer), doc_norm = encoding.normalize_url(config.issuer);
-		if (conf_norm.ok && doc_norm.ok && conf_norm.data === doc_norm.data)
+		let near_miss = (conf_norm.ok && doc_norm.ok && conf_norm.data === doc_norm.data);
+		if (near_miss)
 			hint = "; they differ only in a trailing slash, letter case or default port: set issuer_url to exactly the declared value";
 		deps.log("error", `DISCOVERY_ISSUER_MISMATCH: issuer_url is "${encoding.log_safe(issuer)}" but the discovery document declares ${doc_issuer}${hint} [id: ${issuer_id}]`);
-		return Result.err(DISCOVERY_ISSUER_MISMATCH,
-			 `Expected issuer_id ${issuer_id}` );
+		return Result.err(DISCOVERY_ISSUER_MISMATCH, {
+			issuer_id,
+			declared: (type(config.issuer) == "string") ? config.issuer : null,
+			near_miss
+		});
 	}
 
 	let required = ["authorization_endpoint", "token_endpoint", "jwks_uri"];
@@ -197,6 +253,12 @@ export function discover(deps, issuer, options) {
 
 /**
  * Fetches JWK Set from IdP with caching.
+ *
+ * options: { cache_path, ttl, force, no_cache }. force skips the fresh cache
+ * but keeps the stale fallback and the write; no_cache, for the connection
+ * test, neither reads nor writes the cache at all. A failure's details say
+ * what went wrong, as for discover(): JWKS_NETWORK_ERROR carries the
+ * transport cause, JWKS_FETCH_FAILED { http_status: 502, upstream_status }.
  */
 export function fetch_jwks(deps, jwks_uri, options) {
 	if (type(jwks_uri) != "string") die("CONTRACT_VIOLATION: jwks_uri must be a string");
@@ -208,7 +270,8 @@ export function fetch_jwks(deps, jwks_uri, options) {
 	if (!encoding.is_https(normalized_uri)) return Result.err(INSECURE_JWKS_URI);
 
 	options = options || {};
-	let cache_path = options.cache_path || get_cache_path(deps.native, normalized_uri_res, "jwks");
+	let use_cache = !options.no_cache;
+	let cache_path = use_cache ? (options.cache_path || get_cache_path(deps.native, normalized_uri_res, "jwks")) : null;
 	let ttl = options.ttl || 86400; // 24 hours default
 	let uri_id = crypto.safe_id(deps.native, normalized_uri);
 
@@ -231,17 +294,17 @@ export function fetch_jwks(deps, jwks_uri, options) {
 
 		if (!res_http.ok) {
 			deps.log("warn", `JWKS fetch failed for [id: ${uri_id}]: ${Result.describe(res_http)}`);
-			return Result.err(JWKS_NETWORK_ERROR);
+			return Result.err(JWKS_NETWORK_ERROR, Result.describe(res_http));
 		}
 
 		deps.log("warn", `JWKS fetch HTTP ${res_http.data.status} from [id: ${uri_id}]`);
-		return Result.err(JWKS_FETCH_FAILED, { http_status: 502 });
+		return Result.err(JWKS_FETCH_FAILED, { http_status: 502, upstream_status: res_http.data.status });
 	}
 
 	let response = res_http.data;
 
 	let res = encoding.safe_json(response.body);
-	if (!res.ok || type(res.data.keys) != "array") {
+	if (!res.ok || type(res.data) != "object" || type(res.data.keys) != "array") {
 		deps.log("error", `JWKS JSON parse error: ${res.details || "Invalid structure"}`);
 		return Result.err(INVALID_JWKS_FORMAT);
 	}

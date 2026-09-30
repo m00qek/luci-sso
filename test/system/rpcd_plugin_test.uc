@@ -273,8 +273,8 @@ describe('system: luci-sso ubus object — delete_role', () => {
 });
 
 describe('system: luci-sso ubus object — methods', () => {
-	it('offers list_roles, set_role and delete_role, and no way to reorder entries', () => {
+	it('offers list_roles, set_role, delete_role and the connection test, and no way to reorder entries', () => {
 		let conn = r.connect();
-		assert.match([ "delete_role", "list_roles", "set_role" ], sort(keys(conn.list("luci-sso")[0])));
+		assert.match([ "delete_role", "list_roles", "set_role", "test_connection", "test_connection_result" ], sort(keys(conn.list("luci-sso")[0])));
 	});
 });

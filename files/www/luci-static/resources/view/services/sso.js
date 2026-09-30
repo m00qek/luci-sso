@@ -5,6 +5,7 @@
 'require ui';
 'require rpc';
 'require request';
+'require dom';
 
 /*
  * A role has two halves:
@@ -35,6 +36,27 @@ var callDeleteRole = rpc.declare({
 	method: 'delete_role',
 	params: [ 'name' ]
 });
+
+var callTestConnection = rpc.declare({
+	object: 'luci-sso',
+	method: 'test_connection',
+	params: [ 'issuer_url', 'internal_issuer_url', 'client_id', 'client_secret', 'redirect_uri' ]
+});
+
+var callTestConnectionResult = rpc.declare({
+	object: 'luci-sso',
+	method: 'test_connection_result',
+	params: [ 'job' ]
+});
+
+/* The connection test runs in the background on the router (see the
+ * luci-sso rpcd plugin); the page asks for its result until it is there.
+ * The router stops a test after 25 s; the page waits a little longer. */
+var TEST_TIMEOUT_MS = 35000;
+var TEST_POLL_MS = 500;
+
+/* The provider settings the connection test checks. */
+var TEST_FIELDS = [ 'issuer_url', 'internal_issuer_url', 'client_id', 'client_secret', 'redirect_uri' ];
 
 /* Every role's read list grants this group (the ubus object adds it), so the
  * page neither shows it nor lets it be removed. */
@@ -89,6 +111,77 @@ function awaitReload() {
 	return new Promise(function(resolve) {
 		window.setTimeout(resolve, RELOAD_POLL_MS);
 	}).then(poll);
+}
+
+function sleep(ms) {
+	return new Promise(function(resolve) { window.setTimeout(resolve, ms); });
+}
+
+/* Each check's name, in the order the router runs them. */
+function checkTitle(id) {
+	switch (id) {
+	case 'issuer_https':       return _('Issuer URL');
+	case 'discovery':          return _('Discovery');
+	case 'issuer_match':       return _('Issuer');
+	case 'endpoints':          return _('Endpoints');
+	case 'jwks':               return _('Signing keys');
+	case 'redirect_uri':       return _('Redirect URI');
+	case 'client_credentials': return _('Client credentials');
+	default:                   return id;
+	}
+}
+
+function statusLabel(status) {
+	switch (status) {
+	case 'pass': return _('Pass');
+	case 'fail': return _('Fail');
+	case 'warn': return _('Warning');
+	default:     return _('Skipped');
+	}
+}
+
+/* Asks the router for the result of connection test `job` until it is done. */
+function awaitTest(job) {
+	var deadline = Date.now() + TEST_TIMEOUT_MS;
+	var poll = function() {
+		return callTestConnectionResult(job).then(function(reply) {
+			if (reply && (reply.done || reply.error))
+				return reply;
+			if (Date.now() > deadline)
+				return { error: 'TIMEOUT', message: _('the router did not report a result in time') };
+			return sleep(TEST_POLL_MS).then(poll);
+		});
+	};
+	return sleep(TEST_POLL_MS).then(poll);
+}
+
+/* The result list of a connection test, one line per check. */
+function renderTestResult(reply) {
+	if (!reply || reply.error || !Array.isArray(reply.checks))
+		return E('div', { 'class': 'alert-message warning luci-sso-test-summary' },
+			_('The connection test could not run: %s').format((reply && (reply.message || reply.error)) || _('no reply')));
+
+	var counts = { pass: 0, fail: 0, warn: 0, skip: 0 };
+	reply.checks.forEach(function(c) { counts[c.status] = (counts[c.status] || 0) + 1; });
+
+	var summary;
+	if (counts.fail)
+		summary = E('p', { 'class': 'luci-sso-test-summary' }, E('strong', _('%d of %d checks failed. Fix them before you enable SSO.').format(counts.fail, reply.checks.length)));
+	else if (counts.warn)
+		summary = E('p', { 'class': 'luci-sso-test-summary' }, E('strong', _('No check failed, but some could not be confirmed.')));
+	else
+		summary = E('p', { 'class': 'luci-sso-test-summary' }, E('strong', _('All checks passed.')));
+
+	return E('div', {}, [
+		summary,
+		E('ul', { 'class': 'luci-sso-test-results' }, reply.checks.map(function(c) {
+			return E('li', { 'class': 'luci-sso-check', 'data-check': c.id, 'data-status': c.status }, [
+				E('strong', { 'class': 'luci-sso-check-status' }, '[' + statusLabel(c.status) + ']'), ' ',
+				E('span', { 'class': 'luci-sso-check-title' }, checkTitle(c.id)), ': ',
+				E('span', { 'class': 'luci-sso-check-message' }, c.message)
+			]);
+		}))
+	]);
 }
 
 /* A reply of the luci-sso object: its own errors come back as a result. */
@@ -201,6 +294,28 @@ return view.extend({
 		return this.super('handleSave', [ ev ]).then(L.bind(this.saveAccess, this));
 	},
 
+	/* Checks the provider settings as the form holds them, saved or not. */
+	handleTestConnection: function(section_id, output, ev) {
+		var m = this._map;
+		var params = TEST_FIELDS.map(function(name) {
+			var opt = m.lookupOption(name, section_id);
+			var v = opt ? opt[0].formvalue(section_id) : null;
+			return (v == null) ? '' : String(v);
+		});
+
+		dom.content(output, E('p', { 'class': 'spinning' }, _('Testing the connection to the identity provider…')));
+
+		return callTestConnection.apply(null, params).then(function(reply) {
+			if (!reply || reply.error)
+				return reply || { error: 'NO_REPLY' };
+			return awaitTest(reply.job);
+		}).catch(function(e) {
+			return { error: 'RPC_FAILED', message: e.message };
+		}).then(function(reply) {
+			dom.content(output, renderTestResult(reply));
+		});
+	},
+
 	handleReset: function() {
 		this.edited = {};
 		this.deleted = {};
@@ -296,6 +411,24 @@ return view.extend({
 			return true;
 		};
 		o.placeholder = 'https://' + window.location.hostname + ':8443';
+
+		o = s.option(form.DummyValue, '_test_connection', _('Test Connection'),
+		        _('Checks the values in this form, including unsaved changes, against the identity provider: ' +
+		          'discovery, the issuer, the signing keys, the Redirect URI, and the Client ID and secret. ' +
+		          'Nothing is saved, and it works before SSO is enabled. ' +
+		          'See <a href="https://m00qek.github.io/luci-sso/0.10/how-to/sysadmin/configure-in-luci/#3-test-the-connection" target="_blank">testing the connection</a>.'));
+		o.renderWidget = function(section_id) {
+			var output = E('div', { 'class': 'luci-sso-test-output', 'aria-live': 'polite' });
+			return E('div', {}, [
+				E('button', {
+					'class': 'cbi-button cbi-button-action',
+					'type': 'button',
+					'id': 'luci-sso-test-connection',
+					'click': ui.createHandlerFn(page, 'handleTestConnection', section_id, output)
+				}, _('Test connection')),
+				output
+			]);
+		};
 
 		/* ------------------------------------------------------------------ */
 		/* Users                                                                */

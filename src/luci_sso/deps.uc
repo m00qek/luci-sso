@@ -92,3 +92,22 @@ export function create() {
 		log:    syslog_channel(log)
 	};
 };
+
+/**
+ * Constructs the `deps` of the settings page's connection test
+ * (luci_sso.connection): the IdP's back channel only, with no ubus, no UCI
+ * and no session. Every HTTP request gives up after `http_timeout_ms`, so the
+ * whole test stays well inside the time rpcd and LuCI allow a call.
+ *
+ * @param {number} http_timeout_ms - The timeout of each HTTP request
+ * @returns {object} - { fs, native, http, clock, log }
+ */
+export function create_probe(http_timeout_ms) {
+	return {
+		fs:     fs,
+		native: native,
+		http:   http_client.create(uclient, uloop, fs, { timeout: http_timeout_ms }),
+		clock:  clock_mod.create(uloop),
+		log:    syslog_channel(log)
+	};
+};

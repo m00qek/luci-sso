@@ -9,7 +9,7 @@
 		},
 		"write": {
 			"ubus": {
-				"luci-sso": [ "set_role", "delete_role" ]
+				"luci-sso": [ "set_role", "delete_role", "test_connection", "test_connection_result" ]
 			},
 			"uci": [ "luci-sso" ]
 		}

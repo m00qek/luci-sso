@@ -17,6 +17,9 @@ import { SSL_INIT_FAILED, HTTPS_REQUIRED, HTTP_REQUEST_FAILED } from 'luci_sso.e
 
 const LIMIT_RESPONSE_SIZE = 262144; // 256 KB
 
+/** How long a request may stay idle before it fails with TIMED_OUT. */
+const DEFAULT_TIMEOUT_MS = 10000;
+
 function get_system_ca_files(fs) {
 	let cas_map = {};
 
@@ -123,14 +126,18 @@ function do_request(uclient, uloop, fs, method, url, opts) {
  * @param {*} uclient uclient C library handle used to open TLS connections.
  * @param {module:uloop} uloop uloop module (or utest proxy) that drives the I/O event loop.
  * @param {module:fs} fs fs module (or utest proxy) used to discover system CA certificates.
+ * @param {object} [options] - { timeout }: the uclient timeout of every
+ *   request, in milliseconds (default 10000). A request that stays idle that
+ *   long fails with HTTP_REQUEST_FAILED (TIMED_OUT).
  * @returns {HttpClient}
  */
-export function create(uclient, uloop, fs) {
+export function create(uclient, uloop, fs, options) {
+	let timeout = (options && type(options.timeout) == "int" && options.timeout > 0) ? options.timeout : DEFAULT_TIMEOUT_MS;
 	return {
 		get: function(url, opts) {
 			if (!encoding.is_https(url)) return Result.err(HTTPS_REQUIRED);
 			let res = do_request(uclient, uloop, fs, "GET", url, {
-				timeout: 10000,
+				timeout: timeout,
 				headers: (opts && opts.headers) ? opts.headers : {}
 			});
 			if (!res.ok) return Result.err(HTTP_REQUEST_FAILED, res.error);
@@ -140,7 +147,7 @@ export function create(uclient, uloop, fs) {
 		post: function(url, opts) {
 			if (!encoding.is_https(url)) return Result.err(HTTPS_REQUIRED);
 			let res = do_request(uclient, uloop, fs, "POST", url, {
-				timeout: 10000,
+				timeout: timeout,
 				headers: (opts && opts.headers) ? opts.headers : {},
 				post_data: (opts && opts.body) ? opts.body : null
 			});

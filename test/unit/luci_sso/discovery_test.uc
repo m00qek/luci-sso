@@ -533,7 +533,7 @@ describe('discovery: an upstream non-200 is a 502, and its status is logged', ()
 			res = discovery.discover(deps, ISSUER);
 		});
 		assert.match(contains({ ok: false, error: 'DISCOVERY_FAILED' }), res);
-		assert.match({ http_status: 502 }, res.details);
+		assert.match({ http_status: 502, upstream_status: 404 }, res.details);
 		assert.match(1, length(filter(logs, (m) => index(m, "Discovery fetch HTTP 404 from [id: ") == 0)), sprintf("%J", logs));
 	});
 
@@ -548,7 +548,7 @@ describe('discovery: an upstream non-200 is a 502, and its status is logged', ()
 			res = discovery.fetch_jwks(deps, uri);
 		});
 		assert.match(contains({ ok: false, error: 'JWKS_FETCH_FAILED' }), res);
-		assert.match({ http_status: 502 }, res.details);
+		assert.match({ http_status: 502, upstream_status: 401 }, res.details);
 		assert.match(1, length(filter(logs, (m) => index(m, "JWKS fetch HTTP 401 from [id: ") == 0)), sprintf("%J", logs));
 	});
 });
@@ -660,3 +660,165 @@ describe('discovery: discover — validation failures name themselves in the log
 	});
 });
 
+
+// ─── no_cache: the connection test changes nothing ────────────────────────────
+
+describe('discovery: no_cache', () => {
+	const DISC = ISSUER + "/.well-known/openid-configuration";
+	const JWKS = ISSUER + "/jwks";
+
+	// Every fs call on a cache file: reads, writes, renames, unlinks.
+	function cache_calls(deps) {
+		let out = [];
+		for (let fn, calls in spy(deps.fs).calls)
+			for (let c in calls)
+				if (type(c[0]) == "string" && match(c[0], /oidc-(discovery|jwks)-/)) push(out, [ fn, c[0] ]);
+		return out;
+	}
+
+	it('discover with no_cache fetches, and neither reads nor writes the cache', () => {
+		with_context({
+			fs:          { data: {} },
+			http_client: { data: { [DISC]: { status: 200, body: f.MOCK_DISCOVERY } } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			assert.match(contains({ ok: true, data: contains({ issuer: ISSUER }) }), discovery.discover(deps, ISSUER, { no_cache: true }));
+			assert.match([], cache_calls(deps));
+			assert.match(1, length(spy(deps.http).calls.get));
+		});
+	});
+
+	it('discover with no_cache ignores a fresh cached document, and a stale one when the fetch fails', () => {
+		let cache_path = "/var/run/luci-sso/oidc-discovery-fresh.json";
+		let cached = { ...f.MOCK_DISCOVERY, token_endpoint: "https://trusted.idp/cached-token", cached_at: 1516239000 };
+		let fetch_ok = true;
+		with_context({
+			fs:          { data: { [cache_path]: sprintf("%J", cached) } },
+			http_client: { behavior: { get: (url, opts) => fetch_ok
+				? { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } }
+				: Result.err("HTTP_REQUEST_FAILED", "TIMED_OUT") } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			let res = discovery.discover(deps, ISSUER, { cache_path, no_cache: true });
+			assert.match(f.MOCK_DISCOVERY.token_endpoint, res.data.token_endpoint, "the fetched document, not the cached one");
+			fetch_ok = false;
+			assert.match({ ok: false, error: "DISCOVERY_NETWORK_ERROR", details: "HTTP_REQUEST_FAILED (TIMED_OUT)" },
+				{ ...discovery.discover(deps, ISSUER, { cache_path, no_cache: true }) }, "no stale fallback");
+			assert.match([], cache_calls(deps));
+			assert.match(sprintf("%J", cached), deps.fs.readfile(cache_path), "the cache file is unchanged");
+		});
+	});
+
+	it('fetch_jwks with no_cache fetches, and neither reads nor writes the cache', () => {
+		let cache_path = "/var/run/luci-sso/oidc-jwks-fresh.json";
+		let fetch_ok = true;
+		with_context({
+			fs:          { data: { [cache_path]: sprintf("%J", { keys: [ KEY_ES256 ], cached_at: 1516239000 }) } },
+			http_client: { behavior: { get: (url, opts) => fetch_ok
+				? { ok: true, data: { status: 200, body: sprintf("%J", { keys: [ KEY_RS256 ] }) } }
+				: Result.err("HTTP_REQUEST_FAILED", "CONNECTION_FAILED") } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			assert.match({ ok: true, data: [ KEY_RS256 ] }, { ...discovery.fetch_jwks(deps, JWKS, { cache_path, no_cache: true }) });
+			fetch_ok = false;
+			assert.match({ ok: false, error: "JWKS_NETWORK_ERROR", details: "HTTP_REQUEST_FAILED (CONNECTION_FAILED)" },
+				{ ...discovery.fetch_jwks(deps, JWKS, { cache_path, no_cache: true }) }, "no stale fallback");
+			assert.match([], cache_calls(deps));
+		});
+	});
+
+	it('without no_cache, discover and fetch_jwks still write the cache', () => {
+		with_context({
+			fs:          { data: {} },
+			http_client: { data: { [DISC]: { status: 200, body: f.MOCK_DISCOVERY }, [JWKS]: { status: 200, body: { keys: [ KEY_RS256 ] } } } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => {
+			discovery.discover(deps, ISSUER);
+			discovery.fetch_jwks(deps, JWKS);
+			assert.match(2, length(filter(spy(deps.fs).calls.rename || [], (c) => match(c[1], /oidc-(discovery|jwks)-/))));
+		});
+	});
+});
+
+// ─── failure details ──────────────────────────────────────────────────────────
+
+describe('discovery: discover — failure details', () => {
+	const DISC = ISSUER + "/.well-known/openid-configuration";
+
+	function discover_with(entry, issuer) {
+		let res;
+		with_context({
+			fs:          { data: {} },
+			http_client: { data: { [DISC]: entry } },
+			clock:       { data: { now: 1516239022 } }
+		}, (deps) => { res = discovery.discover(deps, issuer || ISSUER, { no_cache: true }); });
+		return res;
+	}
+
+	it('DISCOVERY_NETWORK_ERROR carries the transport cause', () => {
+		assert.match(contains({ error: "DISCOVERY_NETWORK_ERROR", details: "HTTP_REQUEST_FAILED (TIMED_OUT)" }),
+			discover_with({ error: "TIMED_OUT" }));
+	});
+
+	it('DISCOVERY_ISSUER_MISMATCH carries the declared issuer and whether it is a near miss', () => {
+		let near = discover_with({ status: 200, body: { ...f.MOCK_DISCOVERY, issuer: ISSUER + "/" } });
+		assert.match(contains({ error: "DISCOVERY_ISSUER_MISMATCH" }), near);
+		assert.match(contains({ declared: ISSUER + "/", near_miss: true }), near.details);
+		assert.match("string", type(near.details.issuer_id));
+
+		let far = discover_with({ status: 200, body: { ...f.MOCK_DISCOVERY, issuer: "https://other.idp" } });
+		assert.match(contains({ declared: "https://other.idp", near_miss: false }), far.details);
+
+		let odd = discover_with({ status: 200, body: { ...f.MOCK_DISCOVERY, issuer: 42 } });
+		assert.match(contains({ declared: null, near_miss: false }), odd.details);
+	});
+
+	it('INVALID_DISCOVERY_DOC for a body that is JSON but not an object', () => {
+		for (let body in [ "[1,2]", "\"x\"", "42" ])
+			assert.match(contains({ ok: false, error: "INVALID_DISCOVERY_DOC" }), discover_with({ status: 200, body }), body);
+	});
+});
+
+// ─── discovery_url and backchannel ────────────────────────────────────────────
+
+describe('discovery: discovery_url', () => {
+	it('is the issuer plus /.well-known/openid-configuration', () => {
+		assert.match({ ok: true, data: "https://trusted.idp/.well-known/openid-configuration" }, { ...discovery.discovery_url("https://trusted.idp") });
+		assert.match("https://trusted.idp/.well-known/openid-configuration", discovery.discovery_url("https://trusted.idp/").data);
+		assert.match("https://kc.example.com/realms/home/.well-known/openid-configuration", discovery.discovery_url("https://kc.example.com/realms/home").data);
+	});
+
+	it("moves to the internal origin, keeping the issuer's path", () => {
+		assert.match("https://10.0.0.5:8443/realms/home/.well-known/openid-configuration",
+			discovery.discovery_url("https://kc.example.com/realms/home", "https://10.0.0.5:8443").data);
+	});
+
+	it('refuses a non-HTTPS issuer or internal URL', () => {
+		assert.match(contains({ ok: false, error: "INSECURE_ISSUER_URL" }), discovery.discovery_url("http://trusted.idp"));
+		assert.match(contains({ ok: false, error: "INSECURE_FETCH_URL" }), discovery.discovery_url("https://trusted.idp", "http://10.0.0.5"));
+	});
+});
+
+describe('discovery: backchannel', () => {
+	const DOC = { ...f.MOCK_DISCOVERY, end_session_endpoint: "https://trusted.idp/logout" };
+
+	it('moves the token, JWK Set and UserInfo endpoints to the internal origin, and nothing else', () => {
+		let out = discovery.backchannel(DOC, ISSUER, "https://10.0.0.5:8443");
+		assert.match({
+			...DOC,
+			token_endpoint: "https://10.0.0.5:8443/token",
+			jwks_uri: "https://10.0.0.5:8443/jwks",
+			userinfo_endpoint: "https://10.0.0.5:8443/userinfo",
+		}, out);
+		assert.match(f.MOCK_DISCOVERY.token_endpoint, DOC.token_endpoint, "the document itself is not changed");
+	});
+
+	it('leaves endpoints on other hosts alone, and returns a copy without an internal URL', () => {
+		let doc = { ...DOC, jwks_uri: "https://www.googleapis.com/oauth2/v3/certs" };
+		assert.match("https://www.googleapis.com/oauth2/v3/certs", discovery.backchannel(doc, ISSUER, "https://10.0.0.5").jwks_uri);
+		let same = discovery.backchannel(DOC, ISSUER, null);
+		assert.match(DOC, same);
+		same.token_endpoint = "x";
+		assert.match(f.MOCK_DISCOVERY.token_endpoint, DOC.token_endpoint);
+	});
+});

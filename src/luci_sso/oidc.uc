@@ -12,7 +12,7 @@ import { INSECURE_AUTH_ENDPOINT, INVALID_AUTH_ENDPOINT, MISSING_STATE_PARAMETER,
  * UCI so a configuration change can never weaken it: symmetric algorithms such
  * as HS256 would allow the algorithm-confusion attack.
  */
-const ALLOWED_ALGS = ["RS256", "ES256"];
+export const ALLOWED_ALGS = ["RS256", "ES256"];
 
 /**
  * Browser-facing status (details.http_status) for every failed back-channel
@@ -74,7 +74,14 @@ export function get_auth_url(deps, config, discovery_doc, params) {
 };
 
 /**
- * Exchanges authorization code for tokens.
+ * Exchanges authorization code for tokens. The client authenticates with
+ * client_secret_post (RFC 6749 §2.3.1): client_id and client_secret in the
+ * form body.
+ *
+ * A refusal's details carry, besides http_status, the token endpoint's own
+ * status (`upstream_status`) and its OAuth `error` code (`oauth_error`, or
+ * null when the body has none), and a network failure's the transport cause
+ * (`cause`), for the connection test. A login shows the user none of them.
  */
 export function exchange_code(deps, config, discovery, code, verifier, session_id) {
 	if (!encoding.is_https(discovery.token_endpoint)) return Result.err(INSECURE_TOKEN_ENDPOINT);
@@ -112,18 +119,22 @@ export function exchange_code(deps, config, discovery, code, verifier, session_i
 
 	if (!res_http.ok) {
 		deps.log("warn", `Token exchange network error${sid_ctx}: ${Result.describe(res_http)}`);
-		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR, { http_status: BAD_GATEWAY });
+		return Result.err(TOKEN_ENDPOINT_NETWORK_ERROR, { http_status: BAD_GATEWAY, cause: Result.describe(res_http) });
 	}
 
 	let response = res_http.data;
 	if (response.status != 200) {
+		// The error code (RFC 6749 §5.2) comes from the IdP: only a short one
+		// made of the characters the registered codes use is kept.
 		let res_err = encoding.safe_json(response.body);
-		if (res_err.ok && res_err.data.error == "invalid_grant") {
+		let oauth_error = (res_err.ok && type(res_err.data) == "object" && type(res_err.data.error) == "string" &&
+			match(res_err.data.error, /^[A-Za-z0-9_.:-]{1,64}$/)) ? res_err.data.error : null;
+		if (oauth_error == "invalid_grant") {
 			deps.log("error", `Token exchange failed (invalid_grant, HTTP ${response.status})${sid_ctx}`);
-			return Result.err(OIDC_INVALID_GRANT, { http_status: BAD_GATEWAY });
+			return Result.err(OIDC_INVALID_GRANT, { http_status: BAD_GATEWAY, upstream_status: response.status, oauth_error });
 		}
 		deps.log("warn", `Token exchange HTTP ${response.status}${sid_ctx}`);
-		return Result.err(TOKEN_EXCHANGE_FAILED, { http_status: BAD_GATEWAY });
+		return Result.err(TOKEN_EXCHANGE_FAILED, { http_status: BAD_GATEWAY, upstream_status: response.status, oauth_error });
 	}
 
 	let res = encoding.safe_json(response.body);
