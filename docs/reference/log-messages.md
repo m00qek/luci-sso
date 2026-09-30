@@ -101,7 +101,7 @@ Values that come from the IdP or the browser, such as the declared issuer or the
 
 In discovery lines, `[id: …]` is the first 16 hex characters of the SHA-256 of `issuer_url`, exactly as configured. In JWKS lines, it is the same hash of the normalized `jwks_uri`: scheme and host in lower case, no `:443`, no trailing slash. In rate-limit lines, `[id: …]` is the same kind of hash of the client key, so no address is logged.
 
-Every hashed identifier (`[id: …]`, `[sub_id: …]`, `[oidc_id: …]`, `[session_id: …]`) reads `[INVALID]` when its value is missing, is not a string, or is shorter than 8 characters, and `[ERROR]` if hashing fails.
+Every hashed identifier (`[id: …]`, `[sub_id: …]`, `[oidc_id: …]`, `[session_id: …]`) reads `[INVALID]` when its value is missing, is not a string, or is shorter than 8 characters, and `[ERROR]` if hashing fails. One exception: `[oidc_id: …]` reads `(no email)` for a user without a verified email, which is not an error; a verified email shorter than 8 characters still reads `[INVALID]`.
 
 To check which URL an id belongs to, hash the candidate on the router:
 
@@ -392,7 +392,7 @@ Logged by the CGI script under `luci-sso[<pid>]`.
 | :--- | :--- | :--- |
 | `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | `require_email_verified` is on and the email arrived without `email_verified: true`, so only the user's groups were matched. Followed by `matched no roles` when no group matched. See [Provider Compatibility](provider-compatibility.md#verified-email). |
 | `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | The user got `<role>`. When other roles matched too, the line reads `mapped to role '<role>', the first match; also matched: <role>, <role>`. |
-| `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. `[oidc_id: …]` is a hash of the user's verified email, or `[INVALID]` for a user without one: the IdP sent no email, or did not mark it as verified. |
+| `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. `[oidc_id: …]` is a hash of the user's verified email, or `(no email)` for a user without one: the IdP sent no email, or did not mark it as verified. The user's other lines name them by `[sub_id: …]`. |
 | `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | A plain name in the entry's `read` or `write` list matches no access group. It grants nothing. Globs and negations are not checked. |
 | `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | The role in `/etc/config/luci-sso` still has `read` or `write` options, which grant nothing. |
 | `Ignoring role '<role>': missing email, group or sub list` | warn | The role has no `email`, `group` or `sub` value. |

@@ -11,7 +11,7 @@ This guide covers completely removing `luci-sso` from your router and restoring 
 
 Removing the `luci-sso` package deletes its files, including its override of LuCI's **Log out** entry, so LuCI's own logout is back. It also runs its removal script, which:
 
-- takes the cleanup job out of root's crontab,
+- takes the cleanup job out of root's crontab, and keeps any comment that mentions it,
 - removes the SSO button from LuCI's login templates, in every theme (`luci-sso-repatch --remove`),
 - copies each role's permissions from its `rpcd` login entry (`luci_sso_<role>`) back onto the role in `/etc/config/luci-sso`, as `list read` and `list write`, then deletes every `luci_sso_*` section from `/etc/config/rpcd`,
 - deletes the `luci-app-sso` access group and the `luci-sso` ubus object, then reloads `rpcd`, which rebuilds every session's rights,

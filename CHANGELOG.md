@@ -16,6 +16,11 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 - The documentation has one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, starting with 0.9 and 0.10. [`/latest/`](https://m00qek.github.io/luci-sso/latest/) shows the newest release, and a selector on every page switches between versions. Links to the old unversioned pages lead to the same page, and anchor, under `/latest/`.
 - The settings page links to the documentation of the installed release, `/0.10/`, instead of the unversioned site.
 
+### Fixed
+
+- The setup script adds the daily cleanup cron job even when a comment in `/etc/crontabs/root` mentions `/usr/sbin/luci-sso-cleanup`. Before, any line naming the script, a comment too, counted as the job, so the job was never added and expired token locks and handshakes were never removed. Removing the package now deletes only the job line, and keeps such comments. Both go through the new `luci-sso-cleanup --install-cron` and `--remove-cron`.
+- The login line `Successful Passwordless SSO login for [oidc_id: …]` says `(no email)` for a user without a verified email, instead of `[INVALID]`, which read like an error.
+
 ## [0.10.0] - 2026-09-29
 
 ### Upgrade actions
