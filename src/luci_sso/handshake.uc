@@ -258,7 +258,9 @@ export function authenticate(deps, config, request) {
 
 	if (!res_role.ok) {
 		deps.log("warn", `User [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] matched no roles [session_id: ${session_id}]`);
-		return Result.err(USER_NOT_AUTHORIZED, { http_status: 403 });
+		// The refused user's own sub goes to their error page (web.render_error),
+		// so they can give it to the administrator. The log keeps the hash.
+		return Result.err(USER_NOT_AUTHORIZED, { http_status: 403, subject: user_data.sub });
 	}
 
 	let role = res_role.data.role_name;

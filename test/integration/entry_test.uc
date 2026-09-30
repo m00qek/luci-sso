@@ -1,7 +1,12 @@
 import { describe, it, assert, truthy } from 'utest';
 import * as entry from 'luci_sso.entry';
 import * as session from 'luci_sso.session';
-import { with_context } from 'context';
+import * as encoding from 'luci_sso.encoding';
+import * as crypto from 'luci_sso.crypto';
+import * as native from 'luci_sso.native';
+import { with_context, rpcd_logins } from 'context';
+import * as f from 'fixtures.oidc';
+import * as h from 'lib.helpers';
 
 // Integration bucket — enter at entry.run(deps, web_deps), the CGI composition
 // root. Real web + config + router run against a deps graph built by
@@ -285,5 +290,64 @@ describe('entry: run — IdP back-channel failures render 502 Bad Gateway', () =
 	it('a discovery 404 at login renders 502 and logs the 404', () => {
 		let r = run_request("/", { [DISC_URL]: { status: 404, body: {} } });
 		assert_502(r, "OIDC_DISCOVERY_FAILED", "Discovery fetch HTTP 404 from [id: ");
+	});
+});
+
+describe('entry: run — a refused user sees their own sub', () => {
+	// A full callback through the CGI pipeline for a user whose sub, email and
+	// groups match no role. The ID token is genuinely signed, and its sub is
+	// markup, so the page must escape it.
+	function refused_login(sub) {
+		let wd;
+		let logs = [];
+		let uci = { ...ENABLED_UCI, default: { ...ENABLED_UCI.default, issuer_url: f.MOCK_CONFIG.issuer_url, client_id: f.MOCK_CONFIG.client_id } };
+		with_context({
+			fs:   { data: {} },
+			uci:  { data: { "luci-sso": uci, ...rpcd_logins({ r1: { read: [ "*" ] } }) } },
+			ubus: { data: {} },
+			http_client: {
+				data: {
+					[f.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: f.MOCK_DISCOVERY },
+					[f.MOCK_DISCOVERY.jwks_uri]: { status: 200, body: { keys: [ f.MOCK_JWK ] } },
+				},
+				behavior: {
+					post: (url, opts) => {
+						let access_token = "at-refused";
+						let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, access_token).data, 0, 16)).data;
+						let payload = { ...f.MOCK_CLAIMS, sub, email: "stranger@example.com", nonce: "test-nonce", at_hash };
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token, id_token: h.generate_id_token(payload, f.MOCK_PRIVKEY, "RS256") }) } };
+					}
+				}
+			},
+			clock: { data: { now: NOW } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, m);
+			let hs = session.create_state(deps, 300).data;
+			let path = "/var/run/luci-sso/handshake_" + hs.token + ".json";
+			let raw = encoding.safe_json(deps.fs.readfile(path)).data;
+			raw.nonce = "test-nonce";
+			deps.fs.writefile(path, sprintf("%J", raw));
+			wd = web_deps({ PATH_INFO: "/callback", QUERY_STRING: `code=c&state=${raw.state}`,
+				HTTP_COOKIE: `__Host-luci_sso_state=${hs.token}`, REMOTE_ADDR: "192.0.2.20" });
+			entry.run(deps, wd);
+		});
+		return { out: wd.out(), logs };
+	}
+
+	it('renders USER_NOT_AUTHORIZED (403) with the escaped sub and a line saying to give it to the administrator', () => {
+		let r = refused_login(`Ab<b>"1"</b>&'`);
+		assert.match(truthy(), index(r.out, "Status: 403 Forbidden\n") >= 0, r.out);
+		assert.match(truthy(), index(r.out, "<p>Your account is not allowed to manage this router.") >= 0, r.out);
+		assert.match(truthy(), index(r.out,
+			"<p>If you ask for access, give your administrator this account identifier: <code>Ab&lt;b&gt;&quot;1&quot;&lt;/b&gt;&amp;&#39;</code></p>") >= 0, r.out);
+		assert.match(-1, index(r.out, "<b>"), "no markup from the sub");
+	});
+
+	it('shows nothing else about the user, and logs only the hashed sub', () => {
+		let r = refused_login("248289761001");
+		assert.match(truthy(), index(r.out, "<code>248289761001</code>") >= 0, r.out);
+		assert.match(-1, index(r.out, "stranger@example.com"), "not the email");
+		assert.match(0, length(filter(r.logs, (m) => index(m, "248289761001") >= 0)), sprintf("%J", r.logs));
+		assert.match(1, length(filter(r.logs, (m) => match(m, /^User \[sub_id: [^\]]+\] matched no roles/))), sprintf("%J", r.logs));
 	});
 });

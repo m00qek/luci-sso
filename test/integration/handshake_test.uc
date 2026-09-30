@@ -734,6 +734,33 @@ describe('handshake: role selection', () => {
 		assert.match(1, length(filter(r.logs, (m) => match(m, /mapped to role 'staff' \[session_id: /))));
 	});
 
+	it('a login matched by sub only: the email and groups match no role', () => {
+		let roles = [
+			{ name: "staff", emails: [ "alice@example.com" ], groups: [ "admins" ], subs: [] },
+			{ name: "me", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ] },
+		];
+		let r = login(roles, entries, { email: "stranger@example.com", groups: [ "nobody" ] });
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:me", r.values.username);
+		assert.match(1, length(filter(r.logs, (m) => match(m, /mapped to role 'me' \[session_id: /))));
+		assert.match(0, length(filter(r.logs, (m) => index(m, f.MOCK_CLAIMS.sub) >= 0)), "the log never carries the raw sub");
+	});
+
+	it('a login whose email is not verified still matches by sub', () => {
+		let r = login([ { name: "me", emails: [ "alice@example.com" ], groups: [], subs: [ f.MOCK_CLAIMS.sub ] } ], entries,
+			{ email: "someone@example.com", email_verified: false });
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:me", r.values.username);
+	});
+
+	it('a sub that differs only in case is refused with USER_NOT_AUTHORIZED (403), which carries the sub for the error page', () => {
+		let r = login([ { name: "me", emails: [], groups: [], subs: [ uc(f.MOCK_CLAIMS.sub) ] } ], entries, { email: "stranger@example.com" });
+		assert.match(contains({ ok: false, error: "USER_NOT_AUTHORIZED" }), r.result);
+		assert.match({ http_status: 403, subject: f.MOCK_CLAIMS.sub }, r.result.details);
+		assert.match(false, r.created, "no session");
+		assert.match(0, length(filter(r.logs, (m) => index(m, f.MOCK_CLAIMS.sub) >= 0)), "the log never carries the raw sub");
+	});
+
 	it("fails with UBUS_LOGIN_FAILED (500) and no session when the chosen role has no rpcd login entry", () => {
 		// "root" is the stock rpcd login's user, never a role's entry.
 		let r = login([ { name: "root", emails: [ "alice@example.com" ], groups: [] } ],

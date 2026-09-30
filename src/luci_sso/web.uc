@@ -72,19 +72,49 @@ const GENERIC_MESSAGE = "Sign-in could not be completed. Please try again, or co
 const LOGIN_URL = "/cgi-bin/luci/";
 
 /**
+ * The one error whose page names the user: the account identifier (the ID
+ * token's sub) of the user who was refused, so that they can give it to the
+ * administrator, who can then add it to a role. It is the user's own
+ * identifier, shown only to them; nothing else about the user is shown.
+ * @private
+ */
+const SUBJECT_CODE = "USER_NOT_AUTHORIZED";
+
+/**
+ * Escapes a string for HTML text and attribute values.
+ * @private
+ */
+function _html_escape(str) {
+	return replace(str, /[&<>"']/g, (c) => {
+		if (c == "&") return "&amp;";
+		if (c == "<") return "&lt;";
+		if (c == ">") return "&gt;";
+		if (c == "\"") return "&quot;";
+		return "&#39;";
+	});
+}
+
+/**
  * Renders the body of an error page: a heading, one message and a link back
  * to the login page. No inline style or script, so the page satisfies the
  * default-src 'none' CSP applied to every response. The message is always one
  * of the fixed strings above, never request data or an internal error code.
+ * The only data from outside is `subject`, the refused user's own sub, which
+ * is HTML-escaped (see SUBJECT_CODE).
  * @private
  */
-function _error_page(message) {
+function _error_page(message, subject) {
+	let id_line = "";
+	if (type(subject) == "string" && length(subject))
+		id_line = "<p>If you ask for access, give your administrator this account identifier: " +
+			`<code>${_html_escape(subject)}</code></p>\n`;
 	return "<!DOCTYPE html>\n" +
 		'<html lang="en">\n' +
 		'<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Single sign-on</title></head>\n' +
 		"<body>\n" +
 		"<h1>Single sign-on</h1>\n" +
 		`<p>${message}</p>\n` +
+		id_line +
 		`<p><a href="${LOGIN_URL}">Back to the login page</a></p>\n` +
 		"</body>\n" +
 		"</html>\n";
@@ -266,8 +296,10 @@ export function render(deps, res) {
  * @param {string} code - Internal error code (SCREAMING_SNAKE_CASE)
  * @param {number} status - HTTP status code
  * @param {object} [extra] - Additional response headers, e.g. { "Retry-After": "42" }
+ * @param {string} [subject] - The refused user's sub: shown, escaped, on the
+ *   USER_NOT_AUTHORIZED page only, and ignored for every other code
  */
-export function render_error(deps, code, status, extra) {
+export function render_error(deps, code, status, extra, subject) {
 	let user_msg = ERROR_MAP[code] || GENERIC_MESSAGE;
 
 	deps.log("error", `[${status || 500}] ${code}`);
@@ -279,7 +311,7 @@ export function render_error(deps, code, status, extra) {
 	for (let k, v in (extra || {}))
 		headers[k] = v;
 	_apply_security_headers(headers);
-	_out(deps.stdout, headers, _error_page(user_msg));
+	_out(deps.stdout, headers, _error_page(user_msg, (code == SUBJECT_CODE) ? subject : null));
 };
 
 /**

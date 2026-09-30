@@ -280,6 +280,66 @@ describe('web: render_error', () => {
 	});
 });
 
+// ─── render_error: the refused user's account identifier ──────────────────────
+
+describe('web: render_error — the refused user\'s sub', () => {
+	// The body of the page: everything after the blank line ending the headers.
+	function body(d) {
+		let out = d.out();
+		return substr(out, index(out, "\n\n") + 2);
+	}
+
+	it('shows the sub on the USER_NOT_AUTHORIZED page, with a line saying to give it to the administrator', () => {
+		let d = web_deps({}); web.render_error(d, "USER_NOT_AUTHORIZED", 403, null, "248289761001");
+		assert.match(truthy(), index(d.out(), "Status: 403 Forbidden\n") >= 0);
+		assert.match(truthy(), index(body(d),
+			"<p>If you ask for access, give your administrator this account identifier: <code>248289761001</code></p>\n") >= 0, body(d));
+	});
+
+	it('shows the sub exactly as given, letter case included', () => {
+		let d = web_deps({}); web.render_error(d, "USER_NOT_AUTHORIZED", 403, null, "AbC-f81d4fae-7DEC");
+		assert.match(truthy(), index(body(d), "<code>AbC-f81d4fae-7DEC</code>") >= 0, body(d));
+	});
+
+	it('HTML-escapes the sub', () => {
+		let d = web_deps({}); web.render_error(d, "USER_NOT_AUTHORIZED", 403, null, `<script>alert("x")</script>&'`);
+		assert.match(truthy(), index(body(d), "<code>&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;&amp;&#39;</code>") >= 0, body(d));
+		assert.match(-1, index(body(d), "<script"));
+	});
+
+	prop('the page never contains a raw <, >, " or \' from the sub',
+		gen.string({ max_len: 40 }),
+		(sub) => {
+			let d = web_deps({}); web.render_error(d, "USER_NOT_AUTHORIZED", 403, null, `x${sub}`);
+			let b = body(d);
+			let code = substr(b, index(b, "<code>") + 6);
+			code = substr(code, 0, index(code, "</code>"));
+			assert.match(null, match(code, /[<>"']/), code);
+		}
+	);
+
+	it('keeps the sub out of the log', () => {
+		let d = web_deps({}); web.render_error(d, "USER_NOT_AUTHORIZED", 403, null, "248289761001");
+		assert.match(0, length(filter(d.logs(), (e) => index(e[1], "248289761001") >= 0)));
+	});
+
+	it('shows no identifier line without a sub, or with an empty or non-string one', () => {
+		for (let v in [ null, "", 42, [ "a" ] ]) {
+			let d = web_deps({}); web.render_error(d, "USER_NOT_AUTHORIZED", 403, null, v);
+			assert.match(-1, index(d.out(), "account identifier"), sprintf("%J", v));
+			assert.match(truthy(), index(d.out(), "Your account is not allowed to manage this router.") >= 0);
+		}
+	});
+
+	it('never shows a subject on any other error page', () => {
+		for (let code in [ "STATE_NOT_FOUND", "ID_TOKEN_VERIFICATION_FAILED", "UBUS_LOGIN_FAILED", "SSO_DISABLED" ]) {
+			let d = web_deps({}); web.render_error(d, code, 403, null, "248289761001");
+			assert.match(-1, index(d.out(), "248289761001"), code);
+			assert.match(-1, index(d.out(), "account identifier"), code);
+		}
+	});
+});
+
 // ─── error (crash handler) ────────────────────────────────────────────────────
 
 describe('web: error', () => {

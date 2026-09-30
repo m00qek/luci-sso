@@ -8,7 +8,7 @@
 
 /*
  * A role has two halves:
- *  - its matching rules (email, group) and its place in the order: a
+ *  - its matching rules (email, group, sub) and its place in the order: a
  *    `role` section of /etc/config/luci-sso, edited through UCI like any
  *    other LuCI form, and applied with Save & Apply;
  *  - its permissions (read, write): the rpcd login entry luci_sso_<role>,
@@ -301,10 +301,10 @@ return view.extend({
 		/* Users                                                                */
 		/* ------------------------------------------------------------------ */
 		s = m.section(form.GridSection, 'role', _('Users'),
-			_('A user gets the <strong>first</strong> role, from the top, whose emails or groups match. ' +
+			_('A user gets the <strong>first</strong> role, from the top, whose emails, groups or subjects match. ' +
 			  'Drag the rows to change the order; roles are not merged.') + '<br />' +
 			_('Read and write access are the role\'s rpcd login entry. They are written when you press Save or Save &amp; Apply, ' +
-			  'and are in force once rpcd has reloaded; emails, groups and order take effect with Save &amp; Apply.'));
+			  'and are in force once rpcd has reloaded; emails, groups, subjects and order take effect with Save &amp; Apply.'));
 		s.addremove = true;
 		s.anonymous = false;
 		s.sortable = true;
@@ -341,6 +341,12 @@ return view.extend({
 			return renderList(L.toArray(uci.get('luci-sso', section_id, 'group')));
 		};
 
+		o = s.option(form.DummyValue, '_subs', _('Subjects'));
+		o.modalonly = false;
+		o.textvalue = function(section_id) {
+			return renderList(L.toArray(uci.get('luci-sso', section_id, 'sub')));
+		};
+
 		o = s.option(form.DummyValue, '_read', _('Read Access'));
 		o.modalonly = false;
 		o.textvalue = function(section_id) {
@@ -361,6 +367,13 @@ return view.extend({
 
 		o = s.option(form.DynamicList, 'group', _('Groups'),
 			_('Match by OIDC <code>groups</code> claim (case-sensitive).'));
+		o.modalonly = true;
+		o.rmempty = true;
+
+		o = s.option(form.DynamicList, 'sub', _('Subjects (sub)'),
+			_('Match by OIDC <code>sub</code> claim: the account identifier your identity provider gives the user, which never changes. ' +
+			  'Compared exactly, including letter case. A user who is refused sees their own identifier on the error page. ' +
+			  'See <a href="https://m00qek.github.io/luci-sso/0.10/explanation/roles-and-permissions/#matching-by-subject" target="_blank">matching by subject</a>.'));
 		o.modalonly = true;
 		o.rmempty = true;
 

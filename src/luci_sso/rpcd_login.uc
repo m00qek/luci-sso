@@ -249,7 +249,7 @@ export const PLACEHOLDER_EMAIL = "admin@example.com";
 /**
  * Whether a luci-sso role section is the role the package ships, untouched:
  * named DEFAULT_ROLE, matching the email PLACEHOLDER_EMAIL and nothing else
- * (no other email, no group). Only that role may get full access without
+ * (no other email, no group, no sub). Only that role may get full access without
  * lists to take it from: a role an administrator has edited says who its users
  * are, and nothing says they should have every right.
  *
@@ -259,7 +259,7 @@ export const PLACEHOLDER_EMAIL = "admin@example.com";
 export function is_placeholder(s) {
 	let emails = old_list(s.email);
 	return s[".name"] == DEFAULT_ROLE && length(emails) == 1 && emails[0] == PLACEHOLDER_EMAIL &&
-		!length(old_list(s.group));
+		!length(old_list(s.group)) && !length(old_list(s.sub));
 };
 
 /**
