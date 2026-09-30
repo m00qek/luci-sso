@@ -23,7 +23,7 @@ async function addRole(page, name, { emails = [], read = [], write = [] }) {
     await expect(modal(page)).toBeVisible();
     // The dialog's own Save does not write the permissions: the page says so.
     await expect(modal(page).locator('.luci-sso-access-note'))
-        .toHaveText('Permission changes take effect when you click Save at the bottom of the page.');
+        .toHaveText('Changes here are kept on the page until you Save & Apply it.');
     await fillList(modal(page), 'email', emails);
     await fillList(modal(page), 'read', read);
     await fillList(modal(page), 'write', write);
@@ -100,6 +100,34 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         expect((await listRoles(page)).e2e_viewer).toEqual({
             read: ['luci-mod-status-*', 'luci-base', 'unauthenticated'], write: ['luci-mod-system-config'],
         });
+    });
+
+    // One save rule: Save stages UCI changes and keeps permission edits on the
+    // page; only Save & Apply writes the permissions to rpcd.
+    test('Save keeps permission edits on the page without writing them; Save & Apply writes them', async ({ page }) => {
+        await loginAsRoot(page);
+        await gotoSSOSettings(page);
+        const before = (await listRoles(page)).e2e_viewer;
+
+        await row(page, 'e2e_viewer').locator('.cbi-button-edit').click();
+        await expect(modal(page)).toBeVisible();
+        await fillList(modal(page), 'email', ['second@example.com']);
+        await fillList(modal(page), 'write', ['luci-mod-network-config']);
+        await modal(page).locator('button.cbi-button-positive').click();
+        await expect(modal(page)).toBeHidden();
+
+        await page.locator('.cbi-page-actions .cbi-button-save').click();
+        await expect(page.locator('.cbi-page-actions .cbi-button-save')).toBeEnabled({ timeout: 10000 });
+        // A write would make rpcd reload a second later; give it time to show.
+        await page.waitForTimeout(3000);
+        expect((await listRoles(page)).e2e_viewer).toEqual(before);
+        await expect(row(page, 'e2e_viewer').locator('td[data-name="_write"]'))
+            .toHaveText('luci-mod-system-config, luci-mod-network-config');
+
+        await saveAndApply(page);
+        expect((await listRoles(page)).e2e_viewer).toEqual({ read: before.read, write: ['luci-mod-system-config', 'luci-mod-network-config'] });
+        const email = await ubus(page, 'uci', 'get', { config: 'luci-sso', section: 'e2e_viewer', option: 'email' });
+        expect(email.data.value).toEqual(['viewer@example.com', 'second@example.com']);
     });
 
     test('a role with no access groups is saved with unauthenticated only, and the page warns about it', async ({ page }) => {

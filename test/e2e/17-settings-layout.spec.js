@@ -52,13 +52,14 @@ test.describe('SSO settings: layout', () => {
         await expect(page.locator('div[data-tab="advanced"]')).toHaveAttribute('data-tab-active', 'true');
     });
 
-    test('the Roles section says who can log in', async ({ page }) => {
+    test('the Roles section says who can log in and the one save rule', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
         const section = page.locator('#cbi-luci-sso-role');
         await expect(section.locator('h3')).toHaveText('Roles');
         await expect(section.locator('.cbi-section-descr')).toContainText(
             'Who can log in, and what they can do. A user gets the first role, from the top, that matches; drag rows to reorder.');
+        await expect(section.locator('.cbi-section-descr')).toContainText('Changes take effect with Save & Apply.');
     });
 
     test('the table shows read * as Everything, write * as Full admin, and an em dash for an empty list', async ({ page }) => {

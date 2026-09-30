@@ -103,19 +103,24 @@ async function fillList(scope, name, values) {
     }
 }
 
-// Save & Apply: the page writes the permissions and waits for rpcd to reload
-// (when `access` changed), then LuCI applies the UCI changes, confirms them
-// and reloads the page. The apply must be confirmed before the test moves on,
-// or LuCI rolls it back.
+// Save & Apply. With permission edits (`access`), LuCI applies the UCI
+// changes, the page then writes the permissions and waits for rpcd to reload,
+// and reloads itself. Without, LuCI applies and reloads, or says there is
+// nothing to apply. The apply must be confirmed before the test moves on, or
+// LuCI rolls it back.
 async function saveAndApply(page, { access = true } = {}) {
     await page.locator('.cbi-page-actions .cbi-button-apply').first().click();
-    if (access)
-        await expect(page.locator('.alert-message', { hasText: 'Role permissions saved and in force.' })).toBeVisible({ timeout: RELOAD_WAIT_MS });
-    const applied = page.getByText('Configuration changes applied.');
-    const none = page.getByText('There are no changes to apply');
-    await expect(applied.or(none)).toBeVisible({ timeout: 60000 });
-    if (await applied.isVisible())
+    if (access) {
+        await expect(page.locator('.alert-message', { hasText: 'Role permissions saved and in force.' }))
+            .toBeVisible({ timeout: RELOAD_WAIT_MS + 60000 });
         await page.waitForEvent('load', { timeout: 30000 });
+    } else {
+        const applied = page.getByText('Configuration changes applied.');
+        const none = page.getByText('There are no changes to apply');
+        await expect(applied.or(none)).toBeVisible({ timeout: 60000 });
+        if (await applied.isVisible())
+            await page.waitForEvent('load', { timeout: 30000 });
+    }
     await page.waitForSelector('.cbi-map');
     await expect(page.getByText('Session expired')).toHaveCount(0);
 }

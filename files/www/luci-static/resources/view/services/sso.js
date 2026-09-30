@@ -8,16 +8,21 @@
 'require dom';
 
 /*
+ * One rule: changes take effect with Save & Apply.
+ *
  * A role has two halves:
  *  - its matching rules (email, group, sub) and its place in the order: a
  *    `role` section of /etc/config/luci-sso, edited through UCI like any
- *    other LuCI form, and applied with Save & Apply;
+ *    other LuCI form. Save stages them; Save & Apply applies them;
  *  - its permissions (read, write): the rpcd login entry luci_sso_<role>,
- *    which only the `luci-sso` ubus object may write. The page loads them
- *    with list_roles and, when the form is saved, writes the roles edited
- *    since with set_role and removes the deleted ones with delete_role.
- *    Each write makes rpcd reload; the page waits for it before it reports
- *    the save done.
+ *    which only the `luci-sso` ubus object may write, and which LuCI's
+ *    staged changes cannot hold. The page loads them with list_roles and
+ *    keeps edits to them on the page, across a plain Save, until Save &
+ *    Apply. Then it writes the roles edited since with set_role, removes the
+ *    deleted ones with delete_role, and waits for rpcd to reload with them.
+ *    With UCI changes pending, that happens only once LuCI has applied and
+ *    confirmed them (its `uci-applied` event): an apply that is rolled back
+ *    writes no permissions. With none pending, it happens at once.
  */
 
 var callListRoles = rpc.declare({
@@ -328,7 +333,7 @@ return view.extend({
 		var a = this.accessOf(name);
 		if (!a)
 			return list == 'read'
-				? E('em', { 'class': 'luci-sso-no-entry' }, _('Not set: edit and save this role, or its users cannot log in'))
+				? E('em', { 'class': 'luci-sso-no-entry' }, _('Not set: edit this role and Save & Apply, or its users cannot log in'))
 				: NONE;
 		var read = withoutBaseline(a.read);
 		if (list == 'read' && !read.length && !a.write.length)
@@ -339,12 +344,19 @@ return view.extend({
 		return renderList(items);
 	},
 
-	/* Writes the edited and deleted roles' permissions, then waits for rpcd
-	 * to reload with them. */
-	saveAccess: function() {
+	/* Whether the page holds permission edits that rpcd does not have yet. */
+	hasAccessEdits: function() {
 		if (!this.accessAvailable)
-			return Promise.resolve();
+			return false;
+		var roles = uci.sections('luci-sso', 'role').map(function(s) { return s['.name']; });
+		return Object.keys(this.deleted).some(function(n) { return roles.indexOf(n) < 0; }) ||
+			Object.keys(this.edited).some(function(n) { return roles.indexOf(n) >= 0; });
+	},
 
+	/* Writes the edited and deleted roles' permissions, then waits for rpcd
+	 * to reload with them. Resolves true once they are in force, false when
+	 * the reload did not finish in time; rejects when rpcd refuses one. */
+	writeAccess: function() {
 		var roles = uci.sections('luci-sso', 'role').map(function(s) { return s['.name']; });
 		var tasks = [];
 
@@ -364,29 +376,77 @@ return view.extend({
 		}, this));
 
 		if (!tasks.length)
-			return Promise.resolve();
-
-		var note = ui.addNotification(null,
-			E('p', { 'class': 'spinning' }, _('Saving role permissions; rpcd is reloading to apply them…')), 'info');
-
-		return Promise.all(tasks).then(awaitReload).then(L.bind(function(done) {
-			return callListRoles().then(L.bind(function(data) {
-				this.loadAccess(data);
-				note.remove();
-				if (!done)
-					throw new Error(_('rpcd did not finish reloading; the new permissions may not be in force yet.'));
-				ui.addTimeLimitedNotification(null, E('p', _('Role permissions saved and in force.')), 5000, 'info');
-				return this._map.reset();
-			}, this));
-		}, this)).catch(function(e) {
-			note.remove();
-			ui.addNotification(null, E('p', e.message), 'danger');
-			throw e;
-		});
+			return Promise.resolve(true);
+		return Promise.all(tasks).then(awaitReload);
 	},
 
-	handleSave: function(ev) {
-		return this.super('handleSave', [ ev ]).then(L.bind(this.saveAccess, this));
+	/* The permission half of Save & Apply, shown in LuCI's apply dialog. On
+	 * success the page reloads, as after any apply; on failure the edits stay
+	 * on the page, to fix and apply again. */
+	applyAccess: function() {
+		var reload = function() { window.location = window.location.href.split('#')[0]; };
+
+		ui.changes.displayStatus('notice spinning',
+			E('p', _('Saving role permissions; rpcd is reloading to apply them…')));
+
+		return this.writeAccess().then(L.bind(function(done) {
+			if (!done)
+				throw new Error(_('rpcd did not finish reloading; the new permissions may not be in force yet.'));
+			this.edited = {};
+			this.deleted = {};
+			ui.changes.displayStatus('notice', E('p', _('Role permissions saved and in force.')));
+			return sleep(1500).then(reload);
+		}, this)).catch(L.bind(function(e) {
+			ui.changes.displayStatus('warning', [
+				E('h4', _('Role permissions not saved')),
+				E('p', e.message),
+				E('div', { 'class': 'right' }, E('button', {
+					'class': 'btn cbi-button',
+					'click': L.bind(function() {
+						ui.changes.displayStatus(false);
+						return callListRoles().then(L.bind(function(data) {
+							var edited = this.edited, deleted = this.deleted;
+							this.loadAccess(data);
+							this.edited = edited;
+							this.deleted = deleted;
+							return this._map.load().then(L.bind(this._map.reset, this._map));
+						}, this));
+					}, this)
+				}, _('Dismiss')))
+			]);
+		}, this));
+	},
+
+	/* Save & Apply: stage and apply the UCI changes as LuCI does, and write
+	 * the permissions only once the apply has gone through (see the comment
+	 * at the top). */
+	handleSaveApply: function(ev, mode) {
+		var page = this;
+		var checked = (mode == '0');
+
+		return this.handleSave(ev).then(function() {
+			if (!page.hasAccessEdits())
+				return ui.changes.apply(checked);
+
+			return uci.changes().then(function(changes) {
+				var pending = Object.keys(changes || {}).some(function(c) { return L.toArray(changes[c]).length > 0; });
+				if (!pending)
+					return page.applyAccess();
+
+				if (!page.applyArmed) {
+					page.applyArmed = true;
+					document.addEventListener('uci-applied', function() {
+						page.applyArmed = false;
+						/* LuCI reloads the page L.env.apply_display seconds
+						 * after this event; hold it until the permissions are
+						 * written, then reload here. */
+						L.env.apply_display = RELOAD_TIMEOUT_MS / 1000 + 60;
+						Promise.resolve().then(L.bind(page.applyAccess, page));
+					}, { once: true });
+				}
+				ui.changes.apply(checked);
+			});
+		});
 	},
 
 	/* Checks the provider settings as the form holds them, saved or not. */
@@ -587,8 +647,7 @@ return view.extend({
 		/* ------------------------------------------------------------------ */
 		s = m.section(form.GridSection, 'role', _('Roles'),
 			_('Who can log in, and what they can do. A user gets the first role, from the top, that matches; drag rows to reorder.') + '<br />' +
-			_('Read and write access are the role\'s rpcd login entry. They are written when you press Save or Save &amp; Apply, ' +
-			  'and are in force once rpcd has reloaded; emails, groups, subjects and order take effect with Save &amp; Apply.'));
+			_('Changes take effect with Save &amp; Apply.'));
 		s.addremove = true;
 		s.anonymous = false;
 		s.sortable = true;
@@ -681,7 +740,7 @@ return view.extend({
 
 		/* Read and write access live in rpcd, not in /etc/config/luci-sso:
 		 * these options load from and write to the page's copy, which
-		 * saveAccess() sends to the luci-sso object. The router's access
+		 * Save & Apply sends to the luci-sso object. The router's access
 		 * groups are offered as suggestions; any name or pattern can be
 		 * typed. */
 		var accessOption = function(list, title, description, everything) {
@@ -715,7 +774,7 @@ return view.extend({
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			return '<em class="luci-sso-access-note">' +
-				_('Permission changes take effect when you click Save at the bottom of the page.') + '</em>';
+				_('Changes here are kept on the page until you Save &amp; Apply it.') + '</em>';
 		};
 
 		accessOption('read', _('Read access'),
