@@ -4,12 +4,12 @@ Two questions decide what happens when someone signs in with SSO: *who is this p
 
 ```mermaid
 flowchart LR
-    IdP["Identity provider<br/>(email, groups)"] --> Role["luci-sso role 'ops'<br/>/etc/config/luci-sso"]
+    IdP["Identity provider<br/>(sub, email, groups)"] --> Role["luci-sso role 'ops'<br/>/etc/config/luci-sso"]
     Role --> Login["rpcd login 'sso:ops'<br/>/etc/config/rpcd"]
     Login --> Session["LuCI session<br/>(rights = rpcd's expansion)"]
 ```
 
-**Textual summary:** The identity provider (IdP) vouches for a user and sends claims such as an email address and group memberships. `luci-sso` matches those claims against its roles in `/etc/config/luci-sso`. Each role has exactly one partner entry in `/etc/config/rpcd`, a login named `sso:` followed by the role's name, which holds the role's permissions. The LuCI session the user receives gets the rights `rpcd` derives from that entry, exactly as it would for a password user.
+**Textual summary:** The identity provider (IdP) vouches for a user and sends claims such as the account identifier (`sub`), an email address and group memberships. `luci-sso` matches those claims against its roles in `/etc/config/luci-sso`. Each role has exactly one partner entry in `/etc/config/rpcd`, a login named `sso:` followed by the role's name, which holds the role's permissions. The LuCI session the user receives gets the rights `rpcd` derives from that entry, exactly as it would for a password user.
 
 ---
 
@@ -43,7 +43,7 @@ Every role has exactly one partner entry, and the partner's user name is always 
 
 The work is split between the two files along a clear line:
 
-- **`/etc/config/luci-sso`** holds what is specific to single sign-on: the role's name and how to recognise its members, by `email` and `group` claims.
+- **`/etc/config/luci-sso`** holds what is specific to single sign-on: the role's name and how to recognise its members, by `sub`, `email` and `group` claims.
 - **`/etc/config/rpcd`** holds what OpenWrt needs to authorise a session: the access groups the role may read and write.
 
 `rpcd` matches user names exactly. A session named `sso:root` gets the rights of the `sso:root` entry, or none if there isn't one; it never gets the rights of `root`. This, too, was checked against `rpcd` on both supported OpenWrt releases.
@@ -68,7 +68,7 @@ The settings page never lists the group, and nobody can remove it there. A role 
 
 ## When a user matches more than one role
 
-People often match several roles. They belong to more than one group at the IdP, a personal `email` rule overlaps a team's `group` rule, or groups are nested so that everyone in `admins` is also in `staff`.
+People often match several roles. They belong to more than one group at the IdP, a personal `sub` or `email` rule overlaps a team's `group` rule, or groups are nested so that everyone in `admins` is also in `staff`.
 
 A session has one user name, and `rpcd` rebuilds it from one login entry. So a session can carry only one role's rights. `luci-sso` uses the **first** role that matches, in the order the roles appear on the settings page and in `/etc/config/luci-sso`. The system log names the role that was chosen, and says when the user matched others too.
 
@@ -89,6 +89,22 @@ Not every IdP sends `true` by default, even for addresses an administrator typed
 An `email` rule ignores letter case in the whole address, local part included. That is `luci-sso`'s own matching policy, not a rule of a standard: RFC 5321 §2.4 lets a mail server treat the local part as case-sensitive, but discourages relying on it, and mail providers treat `Alice@` and `alice@` as the same mailbox. Matching exactly would lock users out over a capital letter.
 
 Even a verified email is a weaker identifier than the account itself. OIDC Core §5.7 says that only the pair of `iss` and `sub` identifies a user reliably, and that claims such as `email` "MUST NOT be used as unique identifiers". An address can be reassigned: when someone leaves, their address may later go to someone else. A role that matches by email therefore trusts the IdP never to hand an address to a different person. Requiring `email_verified` narrows that risk, because the IdP vouches for the address today, but it does not remove it. Group matching avoids it: membership of a group is managed at the IdP, not inferred from an address.
+
+---
+
+## Matching by subject
+
+Every ID Token carries a `sub` (subject) claim: the IdP's identifier for the account. OIDC Core §2 requires it in every ID Token, and §5.7 makes the pair of `iss` (the issuer) and `sub` the only stable identifier of a user. The IdP never reuses a `sub` for another account and never changes it for the same account, unlike an email address or a display name. `luci-sso` talks to exactly one issuer, the `issuer_url` it is configured with, and checks every ID Token's `iss` against it, so the issuer half of the pair is implied: a role lists subjects only.
+
+A `sub` rule is compared exactly, as a case-sensitive string. `AbC-123` and `abc-123` are two different accounts, as §2 defines the claim. There are no patterns, no prefixes and no trimming, and a `sub` that is missing, empty or not a string matches nothing. The email verification check does not apply, because the `sub` is the account itself, not a claim about it.
+
+Choose between the three kinds of rule by what should decide access:
+
+- **`sub`** names one account, for as long as that account exists. It is the right rule for a single person, such as the router's owner or a break-glass account, and the only rule that survives an email change or a reassigned address. Its cost is readability: the value is often a number or a UUID, so name the role after the person.
+- **`group`** delegates the decision to the IdP. It is the right rule for teams, and when people come and go: adding someone to the group at the IdP is enough.
+- **`email`** is the most readable, and the weakest, for the reasons in [Verified email addresses](#verified-email-addresses).
+
+The value is hard to guess, and many IdPs never show it. So a user who signs in and matches no role sees their own `sub` on the refusal page, with a line asking them to give it to the administrator. That page is shown only to that user, after the IdP has authenticated them, and carries nothing else about them. The system log still records only a hash of the `sub`, as it does for every login. [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#match-one-account-by-its-subject) lists where some IdPs show it.
 
 ---
 

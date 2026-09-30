@@ -8,10 +8,10 @@ This guide describes how to decide who can access the router and what they can d
 
 A role has two halves:
 
-- **Who it matches.** A `config role '<name>'` section in `/etc/config/luci-sso`, with `email` and `group` rules. A role with neither is ignored.
+- **Who it matches.** A `config role '<name>'` section in `/etc/config/luci-sso`, with `email`, `group` and `sub` rules. A role with none of them is ignored.
 - **What it grants.** The role's `rpcd` login entry, `luci_sso_<name>` in `/etc/config/rpcd`, with `read` and `write` lists of access groups. `rpcd` is the OpenWrt daemon that holds LuCI sessions and their rights.
 
-When a user logs in, `luci-sso` checks their email and groups against the roles **in order**, from the top. The user gets the **first** role that matches, and only that one: roles are not merged. The session gets exactly the rights of that role's entry. An email counts only if the IdP marks it as verified (`email_verified`); see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
+When a user logs in, `luci-sso` checks their subject (`sub`), email and groups against the roles **in order**, from the top. The user gets the **first** role that matches, and only that one: roles are not merged. The session gets exactly the rights of that role's entry. An email counts only if the IdP marks it as verified (`email_verified`); see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
 
 A fresh install ships one role, `admin`. It matches the placeholder `admin@example.com`, and its entry grants full access (`*` in both lists). Replace the placeholder with a real address before you enable SSO.
 
@@ -200,6 +200,42 @@ A member of both groups gets `ops_admin`. The login's log line names the other m
 
 ---
 
+## Match one account by its subject
+
+A `sub` rule matches one account at the IdP, whatever its email address or groups, and keeps matching if the address changes. Use it for a single person, such as the router's owner. Why it is the most stable rule is explained in [About Roles and Permissions](../../explanation/roles-and-permissions.md#matching-by-subject).
+
+1. Find the user's `sub`. The simplest way works with every IdP: ask the user to click **Login with SSO**. Until a role matches them, the refusal page says "Your account is not allowed to manage this router" and, below it, "give your administrator this account identifier", followed by their `sub`. Some IdPs also show it:
+
+    | IdP | Where the `sub` is |
+    | :--- | :--- |
+    | Pocket ID | The user's ID, a UUID: in the address of the user's page, **Settings > Users >** the user (`/settings/admin/users/<id>`). |
+    | Keycloak | The **ID** field on the user's **Details** tab, under **Users**. Keycloak's default `sub` is that ID. |
+    | Authentik | Depends on the provider's **Subject mode**. The default, a hash of the user's ID, is not shown anywhere: use the refusal page. |
+    | Authelia | An opaque UUID per user. `authelia storage user identifiers export` writes them to a file; the refusal page is simpler. |
+    | Google | A number that Google does not show in its user interfaces: use the refusal page. |
+
+    An IdP not listed here may also use a value it does not show. The refusal page always shows the value `luci-sso` compares.
+
+2. Add the value to a role, exactly as shown. Letter case matters: `AbC` and `abc` are different accounts.
+
+    === "Browser (LuCI)"
+
+        In the **Users** section, click **Edit** in the role's row, or add a role. In **Subjects (sub)**, enter the value, and click **Save** in the editor, then **Save & Apply**.
+
+    === "Terminal (SSH)"
+
+        ```bash
+        uci set luci-sso.owner=role
+        uci add_list luci-sso.owner.sub='f81d4fae-7dec-11d0-a765-00a0c91e6bf6'
+        uci reorder luci-sso.owner=1
+        uci commit luci-sso
+        ubus call luci-sso set_role '{"name": "owner", "read": ["*"], "write": ["*"]}'
+        ```
+
+3. Ask the user to log in again. The system log line names the role: `User [sub_id: …] mapped to role 'owner'`. The log records a hash of the `sub`, never the value itself.
+
+---
+
 ## A user who needs two sets of rights
 
 A session carries one role's rights. When some users need what two roles grant, create a role that grants both, and put it above the narrower roles.
@@ -250,7 +286,7 @@ Then log in as the user and confirm the LuCI menus match what you expect. Each l
 luci-sso[1234]: User [sub_id: c775e7b757ede630] mapped to role 'viewer' [session_id: 8e25f313865ad01a]
 ```
 
-- **`[403] USER_NOT_AUTHORIZED`**, after `matched no roles`: the user's email or groups match no role. Check the exact values the IdP sends. Email matching ignores case, but must otherwise be exact; group matching is case-sensitive. An `Ignoring the unverified email` line before it means the IdP did not mark the email as verified, so it was not matched; see [Provider Compatibility](../../reference/provider-compatibility.md#verified-email).
+- **`[403] USER_NOT_AUTHORIZED`**, after `matched no roles`: the user's `sub`, email and groups match no role. Check the exact values the IdP sends; the error page shows the user their `sub`. Email matching ignores case, but must otherwise be exact; group and `sub` matching are case-sensitive. An `Ignoring the unverified email` line before it means the IdP did not mark the email as verified, so it was not matched; see [Provider Compatibility](../../reference/provider-compatibility.md#verified-email).
 - **`[500] UBUS_LOGIN_FAILED`**, after a `MISSING_RPCD_LOGIN` line: the role has no `rpcd` entry. Save its permissions on the settings page, or with `set_role`.
 - **The wrong role**: the line says `the first match; also matched: …`. Move the role you expect higher up.
 

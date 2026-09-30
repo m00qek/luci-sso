@@ -45,7 +45,7 @@ Fallible functions return a **Result** instead of throwing:
 }
 ```
 
-Error codes are usually constants from `luci_sso.errors` (see [Log Messages](log-messages.md)); a few internal codes, such as `NO_ROLES_MATCHED` or `CSPRNG_FAILURE`, never leave their module. When `details` is an object with `http_status` (and optionally `retry_after`), `entry.uc` uses it for the HTTP response.
+Error codes are usually constants from `luci_sso.errors` (see [Log Messages](log-messages.md)); a few internal codes, such as `NO_ROLES_MATCHED` or `CSPRNG_FAILURE`, never leave their module. When `details` is an object with `http_status` (and optionally `retry_after`), `entry.uc` uses it for the HTTP response, and for `USER_NOT_AUTHORIZED` it passes `details.subject` to `web.render_error`.
 
 Functions `die()` on contract violations (wrong argument types), which the CGI entry turns into a logged crash and a generic `500` page.
 
@@ -104,9 +104,9 @@ Parses a `Cookie` header into an object. Strips surrounding double quotes from v
 
 Writes `res` (`{ status, headers, body }`) to `deps.stdout` with the security headers. A `302` gets a fixed HTML body.
 
-### `render_error(deps, code, status, extra)` → `void`
+### `render_error(deps, code, status, extra, subject)` → `void`
 
-Logs `[<status>] <code>` through `deps.log` and writes an HTML error page with a fixed user message for `code`. `status` defaults to `500`; `extra` adds headers, such as `Retry-After`.
+Logs `[<status>] <code>` through `deps.log` and writes an HTML error page with a fixed user message for `code`. `status` defaults to `500`; `extra` adds headers, such as `Retry-After`. `subject`, the refused user's `sub`, is shown HTML-escaped on the `USER_NOT_AUTHORIZED` page only, and never logged; for any other code, or when it is not a non-empty string, it is ignored.
 
 ### `error(deps, e)` → `void`
 
@@ -161,7 +161,7 @@ Processes the callback. `deps`: all fields. In order, it:
 6. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
 7. fetches UserInfo when the ID Token has no `email`, and then takes `email` and `email_verified` both from UserInfo;
 8. registers the access token against replay;
-9. logs a warning when `config.matchable_email` sets an unverified email aside, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches;
+9. logs a warning when `config.matchable_email` sets an unverified email aside, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches. No match fails with `USER_NOT_AUTHORIZED` and `details` `{ http_status: 403, subject: <the ID Token's sub> }`, for the error page;
 10. creates the `rpcd` session from the role's `rpcd` login entry, labelled with the email `config.session_email` returns. Any failure there, including `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN`, ends as `UBUS_LOGIN_FAILED` (500).
 
 | Field | Type | Description |
@@ -252,11 +252,15 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
-| `roles` | array | Every `config role` section with an email or group, in config order: `{ name, emails, groups }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
+| `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
 
 ### `find_role_for_user(config, claims)` → `Result<{role_name, also_matched}>`
 
-Matches the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+Matches the sub `matchable_sub` returns (exact, case-sensitive), the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+
+### `matchable_sub(claims)` → `string` or `null`
+
+`claims.sub` when it is a non-empty string, as written. Otherwise `null`.
 
 ### `email_is_verified(claims)` → `bool`
 

@@ -44,22 +44,24 @@ The connection to the IdP. A missing or invalid required option makes every requ
 
 Each `config role '<name>'` section says which users get the role. What the role grants is its `rpcd` login entry, described in [Role Permissions (rpcd login entry)](#role-permissions-rpcd-login-entry). `rpcd` is the OpenWrt daemon that holds LuCI sessions and their rights.
 
-A role matches a user if ANY of its `email` or `group` values matches. Roles are tried in the order of their sections in `/etc/config/luci-sso`; the user gets the **first** role that matches, and only that one.
+A role matches a user if ANY of its `email`, `group` or `sub` values matches. Roles are tried in the order of their sections in `/etc/config/luci-sso`; the user gets the **first** role that matches, and only that one.
 
 | Option | Type | Description |
 | :--- | :--- | :--- |
 | `email` | list (string) | Match by OIDC `email` claim, ignoring letter case in the whole address. Only a verified email matches while `require_email_verified` is on (the default). See [notes](#role-mapping-notes). |
 | `group` | list (string) | Match by a value of the OIDC `groups` claim, which must be a JSON array. Case-sensitive. |
+| `sub` | list (string) | Match by the OIDC `sub` claim of the ID Token: exact, case-sensitive string equality. The issuer is implied: it is always `issuer_url`. See [notes](#role-mapping-notes). |
 
 ### Role mapping notes
 
 - **Section name.** The role's name. `default` is taken by the OIDC section. The role's `rpcd` entry needs a name of 1–32 letters, digits and underscores; a role with a longer name can exist in UCI, but it cannot get permissions, and its users cannot log in.
 - **Email case.** `Alice@Example.com` and `alice@example.com` match the same rule. Ignoring case in the local part too is `luci-sso`'s policy, not a standard's rule; see [About Roles and Permissions](../explanation/roles-and-permissions.md#verified-email-addresses).
-- **No match.** A user who matches no role is refused with `USER_NOT_AUTHORIZED`.
+- **Subject.** A `sub` value matches only the identical string: no letter-case folding, trimming, prefix or pattern. A `sub` claim that is missing, empty or not a string matches no rule. `require_email_verified` does not affect it. Why: [Matching by subject](../explanation/roles-and-permissions.md#matching-by-subject).
+- **No match.** A user who matches no role is refused with `USER_NOT_AUTHORIZED`. The error page shows that user their own `sub`, HTML-escaped, and asks them to give it to the administrator. The log records only its hash (`sub_id`).
 - **Several matches.** Rights are never merged. The login's log line names the role chosen and the other matches.
-- **Invalid roles.** A role that has neither an `email` nor a `group` entry is ignored, and the log says `Ignoring role '<name>': missing email or group list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).
+- **Invalid roles.** A role that has no `email`, `group` or `sub` entry is ignored, and the log says `Ignoring role '<name>': missing email, group or sub list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).
 - **Leftover `read`/`write`.** Releases before role permissions moved to `rpcd` kept `read` and `write` lists on the role. They grant nothing now, and the log says `Ignoring read/write on role '<name>': its permissions are the rpcd login entry 'luci_sso_<name>'`. The package's install and upgrade script moves them into the entry.
-- **Shipped role.** The package ships `config role 'admin'` with `list email 'admin@example.com'`. On install, if that role still matches only that address and has no entry, its entry gets `read '*'` and `write '*'`.
+- **Shipped role.** The package ships `config role 'admin'` with `list email 'admin@example.com'`. On install, if that role still matches only that address (no other email, no group, no sub) and has no entry, its entry gets `read '*'` and `write '*'`.
 
 For worked examples, see [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md).
 
@@ -155,7 +157,7 @@ Edits `config oidc 'default'`.
 
 Each row is a `config role '<name>'` section and its `rpcd` login entry. The rows are in the order roles are tried; dragging a row reorders the sections. **Add** takes the role name, which becomes the section name; the name `default` is refused, because it belongs to the OIDC section. Each row's **Edit** button opens the role's editor; its **Delete** button deletes the section and the entry.
 
-The table's **Emails** and **Groups** columns list the role's values, or `(none)`. **Read Access** and **Write Access** list the entry's lists, without `unauthenticated`:
+The table's **Emails**, **Groups** and **Subjects** columns list the role's values, or `(none)`. **Read Access** and **Write Access** list the entry's lists, without `unauthenticated`:
 
 | Cell | Meaning |
 | :--- | :--- |
@@ -168,10 +170,11 @@ The table's **Emails** and **Groups** columns list the role's values, or `(none)
 | :--- | :--- | :--- |
 | **Email Addresses** | `email` | List; one address per entry. |
 | **Groups** | `group` | List; one group per entry. |
+| **Subjects (sub)** | `sub` | List; one `sub` value per entry, compared exactly. |
 | **Read Access** | `read` of `luci_sso_<name>` | List of access groups. `unauthenticated` is not shown, and is always stored. |
 | **Write Access** | `write` of `luci_sso_<name>` | List of access groups. |
 
-The editor says "Permission changes take effect when you click Save at the bottom of the page." Its own **Save** keeps the edit on the page only. The page's **Save** (and **Save & Apply**) stages the UCI changes, then sends each edited role to `set_role` and each deleted one to `delete_role`, and waits for `rpcd` to reload. A new role always gets an entry, even with both lists empty. An error from the object is shown and stops **Save & Apply**. Emails, groups and the order take effect with **Save & Apply**.
+The editor says "Permission changes take effect when you click Save at the bottom of the page." Its own **Save** keeps the edit on the page only. The page's **Save** (and **Save & Apply**) stages the UCI changes, then sends each edited role to `set_role` and each deleted one to `delete_role`, and waits for `rpcd` to reload. A new role always gets an entry, even with both lists empty. An error from the object is shown and stops **Save & Apply**. Emails, groups, subjects and the order take effect with **Save & Apply**.
 
 Matching rules are in [Role Mapping](#role-mapping-config-role); permission rules in [Role Permissions](#role-permissions-rpcd-login-entry).
 

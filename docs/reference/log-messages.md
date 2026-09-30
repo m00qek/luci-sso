@@ -350,7 +350,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `USER_NOT_AUTHORIZED` | The user's email and groups match no `config role` section | The user has no role (see notes). | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` |
+| `USER_NOT_AUTHORIZED` | The user's `sub`, email and groups match no `config role` section | The user has no role (see notes). | `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` |
 | `TOKEN_REPLAYED` | The access token is already in the local replay-protection registry | A previously used token was submitted again: a replay attack, or an IdP that reissues access tokens. | `[403] TOKEN_REPLAYED`, preceded by `Replay attack detected: access token already registered` |
 | `TOKEN_REGISTRY_ERROR` | The router could not write the access token to the replay-protection registry | Check free space and permissions on `/var/run/luci-sso/tokens/`. | `[500] TOKEN_REGISTRY_ERROR`, preceded by `Access token registry write failed [session_id: …]: <CODE>` naming `INVALID_TOKEN`, `SYSTEM_ERROR` or `CRYPTO_ERROR` |
 | `INVALID_TOKEN` | The access token to register is missing or not a string | The IdP's token response has no usable `access_token`. | In `Access token registry write failed` |
@@ -359,7 +359,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 Notes:
 
-- `USER_NOT_AUTHORIZED`: an email without `email_verified: true` does not count while `require_email_verified` is on; an `Ignoring the unverified email` line says so. A role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
+- `USER_NOT_AUTHORIZED`: the error page shows the refused user their own `sub`, so they can give it to the administrator for a `sub` rule; the log has only its hash. An email without `email_verified: true` does not count while `require_email_verified` is on; an `Ignoring the unverified email` line says so. A role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
 
 ---
 
@@ -395,7 +395,7 @@ Logged by the CGI script under `luci-sso[<pid>]`.
 | `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. `[oidc_id: …]` is a hash of the user's verified email, or `[INVALID]` for a user without one: the IdP sent no email, or did not mark it as verified. |
 | `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | A plain name in the entry's `read` or `write` list matches no access group. It grants nothing. Globs and negations are not checked. |
 | `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | The role in `/etc/config/luci-sso` still has `read` or `write` options, which grant nothing. |
-| `Ignoring role '<role>': missing email or group list` | warn | The role has neither an `email` nor a `group` value. |
+| `Ignoring role '<role>': missing email, group or sub list` | warn | The role has no `email`, `group` or `sub` value. |
 
 ### At install, upgrade and removal
 
@@ -573,7 +573,7 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | Line | Level | Meaning |
 | :--- | :--- | :--- |
 | `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
-| `Ignoring role '<role>': missing email or group list` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Ignoring role '<role>': missing email, group or sub list` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
 
 ### Logout
 

@@ -171,6 +171,13 @@ Content-Type: text/html; charset=utf-8
 
 An unexpected crash returns the same page with status `500` and a generic message; the exception text is logged, never sent.
 
+The `USER_NOT_AUTHORIZED` page has one more paragraph, before the link: the refused user's own `sub` claim, HTML-escaped, which they can give to the administrator. No other page carries data about the user, and the log records only the hash of the `sub`.
+
+```
+<p>Your account is not allowed to manage this router. Please contact your administrator if you need access.</p>
+<p>If you ask for access, give your administrator this account identifier: <code>248289761001</code></p>
+```
+
 | HTTP status | When it occurs | Error codes |
 | :--- | :--- | :--- |
 | `400 Bad Request` | The IdP sent the browser back with an error or without a code | `IDP_ERROR`, `MISSING_CODE` |

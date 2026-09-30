@@ -123,7 +123,9 @@ The log shows `[403] USER_NOT_AUTHORIZED`, preceded by:
 luci-sso[1234]: User [sub_id: c775e7b757ede630] matched no roles [session_id: 8e25f313865ad01a]
 ```
 
-The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching ignores letter case; group matching is case-sensitive. A role with neither an email nor a group is ignored.
+The user's `sub`, email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email, group name or `sub` appears in a role. Email matching ignores letter case; group and `sub` matching are case-sensitive. A role with no email, group or `sub` is ignored.
+
+The error page the user sees shows their own `sub` ("give your administrator this account identifier"). To let that one account in whatever its email and groups, add the value to a role: see [Match one account by its subject](rbac.md#match-one-account-by-its-subject).
 
 If the lines before it include:
 

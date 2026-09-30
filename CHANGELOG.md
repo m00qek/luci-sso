@@ -4,6 +4,10 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 
 ## [Unreleased]
 
+### Added
+
+- A role can match users by their OIDC `sub` claim, the account identifier that never changes, with `list sub '<value>'` next to `email` and `group`, or the **Subjects (sub)** field of the role editor. The value is compared exactly, letter case included; the issuer is always `issuer_url`. A user who matches no role sees their own `sub` on the error page, to give to the administrator; the log still records only its hash. See [Match one account by its subject](https://m00qek.github.io/luci-sso/latest/how-to/sysadmin/rbac/#match-one-account-by-its-subject).
+
 ### Changed
 
 - The documentation has one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, starting with 0.9 and 0.10. [`/latest/`](https://m00qek.github.io/luci-sso/latest/) shows the newest release, and a selector on every page switches between versions. Links to the old unversioned pages lead to the same page, and anchor, under `/latest/`.

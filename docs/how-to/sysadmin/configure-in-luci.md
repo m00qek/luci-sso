@@ -28,7 +28,7 @@ Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading r
 
 ## 3. Add or change roles in the Users section
 
-A role says who may log in (by email or group) and which LuCI access groups they get. Roles are tried from the top of the table, and a user gets the **first** role that matches. Rights from several roles are never merged.
+A role says who may log in (by email, group or subject) and which LuCI access groups they get. Roles are tried from the top of the table, and a user gets the **first** role that matches. Rights from several roles are never merged.
 
 To add a role:
 
