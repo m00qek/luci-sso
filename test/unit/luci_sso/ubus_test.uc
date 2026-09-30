@@ -2,6 +2,7 @@ import { describe, it, assert, contains, mock, spy } from 'utest';
 import * as ubus_mod from 'luci_sso.ubus';
 import * as Result from 'luci_sso.result';
 import * as native from 'luci_sso.native';
+import * as crypto from 'luci_sso.crypto';
 import { mock_ubus_channel, UBUS_NO_DATA } from 'context';
 
 const SID     = 'aabbccdd11223344aabbccdd11223344';
@@ -374,6 +375,30 @@ describe('ubus: create_passwordless_session — session values', () => {
 			assert.match('sso:guest', values.username);
 			assert.match(false, exists(values, 'oidc_user'), 'no placeholder email');
 		});
+	});
+
+	it('logs the success line with the hashed email, or (no email) for a user without one', () => {
+		for (let email in [ 'u@example.com', null, '' ]) {
+			let logs = [];
+			mock.inject_all({
+				ubus: { strict: true, data: {
+					"session:create": { ubus_rpc_session: SID },
+					"session:grant":  UBUS_NO_DATA,
+					"session:set":    UBUS_NO_DATA,
+				} },
+				fs: ACL_FS,
+				uci: USER_UCI,
+			}, (proxies) => {
+				let deps = build_deps(proxies);
+				deps.log = (l, m) => push(logs, [ l, m ]);
+				assert.match(contains({ ok: true }),
+					ubus_mod.create_passwordless_session(deps, 'guest', email, 'at', 'rt', 'it'));
+			});
+			let id = email ? crypto.safe_id(native, email) : '(no email)';
+			assert.match([ [ 'info', `Successful Passwordless SSO login for [oidc_id: ${id}] mapped to sso:guest` ] ],
+				filter(logs, (l) => index(l[1], 'Successful') == 0), `${email}`);
+			assert.match(true, email == null || length(email) == 0 || match(id, /^[0-9a-f]{16}$/) != null, 'a real email is hashed, never logged');
+		}
 	});
 
 	it('destroys the session and returns UBUS_SESSION_FAILED when session set fails', () => {

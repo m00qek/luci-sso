@@ -287,7 +287,10 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 	if (!_grant_all(deps, sid, _expand_role(acl_res.data.entries, perms)))
 		return _abort_session(deps, sid, UBUS_SESSION_FAILED);
 
-	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${crypto.safe_id(deps.native, oidc_email)}] mapped to ${rpcd_login.username(role)}`);
+	// oidc_id is the hashed verified email; a user without one is said so
+	// plainly, not as safe_id's [INVALID], which reads like an error.
+	let oidc_id = (type(oidc_email) == "string" && length(oidc_email)) ? crypto.safe_id(deps.native, oidc_email) : "(no email)";
+	deps.log("info", `Successful Passwordless SSO login for [oidc_id: ${oidc_id}] mapped to ${rpcd_login.username(role)}`);
 
 	return Result.ok(sid);
 };
