@@ -14,11 +14,15 @@ PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucod
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
+# luci-sso itself installs only ucode, shell scripts, JavaScript, JSON and its
+# config, so one package serves every architecture (PKGARCH:=all). The native
+# code, native.so, is in the luci-sso-crypto-* packages, built per architecture.
 define Package/$(PKG_NAME)
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=OIDC/OAuth2 SSO for LuCI
   DEPENDS:=$(PKG_DEPENDS) +luci-sso-crypto +luci-base
+  PKGARCH:=all
 endef
 
 define Package/$(PKG_NAME)/description

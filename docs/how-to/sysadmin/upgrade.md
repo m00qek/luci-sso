@@ -145,7 +145,7 @@ apk list --installed luci-sso
 
     ```bash
     # OpenWrt 24.10
-    scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso_<version>_<arch>.ipk root@192.168.1.1:/tmp/
+    scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso_<version>_all.ipk root@192.168.1.1:/tmp/
     # OpenWrt 25.12
     scp -O bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/luci-sso-<version>.apk root@192.168.1.1:/tmp/
     ```
@@ -155,7 +155,7 @@ apk list --installed luci-sso
     On OpenWrt 24.10, install the new file. `opkg install` upgrades a package that is already installed; `opkg upgrade` does not accept a file name.
 
     ```bash
-    opkg install /tmp/luci-sso_<version>_<arch>.ipk
+    opkg install /tmp/luci-sso_<version>_all.ipk
     ```
 
     `opkg` reports `Upgrading luci-sso on root from <old> to <new>...`. To also upgrade the crypto backend:
@@ -332,6 +332,8 @@ On OpenWrt 24.10:
 scp -O luci-sso_<old-version>_<arch>.ipk root@192.168.1.1:/tmp/
 opkg install --force-downgrade /tmp/luci-sso_<old-version>_<arch>.ipk
 ```
+
+`<arch>` is the router's architecture for releases up to 0.10.0, which were built per architecture, and `all` for later ones.
 
 On OpenWrt 25.12, add the old file:
 
