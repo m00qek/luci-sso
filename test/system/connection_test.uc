@@ -45,6 +45,20 @@ function statuses(reply) {
 	return out;
 }
 
+// rpcd's process ID, and how many pipes it holds open.
+function rpcd_state() {
+	for (let pid in fs.lsdir("/proc")) {
+		if (!match(pid, /^[0-9]+$/)) continue;
+		let cmd = fs.readfile(`/proc/${pid}/cmdline`) || "";
+		if (index(cmd, "/sbin/rpcd") != 0) continue;
+		let pipes = 0;
+		for (let fd in (fs.lsdir(`/proc/${pid}/fd`) || []))
+			if (index(fs.readlink(`/proc/${pid}/fd/${fd}`) || "", "pipe:") == 0) pipes++;
+		return { pid, pipes };
+	}
+	return null;
+}
+
 // The cache files, with their modification times.
 function cache_state() {
 	let out = {};
@@ -112,6 +126,14 @@ describe('system: luci-sso ubus object — test_connection', () => {
 			if (call(conn, "test_connection_result", { job: second.job }).done) break;
 			sleep(100);
 		}
+	});
+
+	it('twenty tests in a row leave rpcd running, with no more open pipes than before', () => {
+		let conn = r.connect();
+		let before = rpcd_state();
+		for (let i = 0; i < 20; i++)
+			run_test(conn, devenv_params());
+		assert.match(before, rpcd_state());
 	});
 
 	it('answers NOT_FOUND for an unknown job, and rpcd refuses arguments of the wrong type', () => {

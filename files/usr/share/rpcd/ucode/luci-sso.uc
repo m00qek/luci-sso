@@ -105,8 +105,8 @@ const RELOAD_DELAY_MS = 1000;
 // Where LuCI packages define their access groups.
 const ACL_DIR = "/usr/share/rpcd/acl.d";
 
-// Well inside LuCI's 20 s call timeout for each poll, and above the three
-// requests' 5 s timeouts.
+// Above the three requests' 5 s timeouts. Each poll of the result answers
+// at once, so LuCI's call timeout never applies to the test itself.
 const TEST_TIMEOUT_MS = 25000;
 
 let reload_timer = null;
@@ -173,15 +173,17 @@ function job_id() {
 	return length(id) ? id : sprintf("%x", time());
 }
 
+// Called from the task's or the timer's callback. The task object is kept:
+// dropping the last reference to it inside its own callback lets ucode free
+// it while uloop still uses it, which crashes rpcd. It goes when the next
+// test replaces this one, outside any callback; the closure holding the
+// secret is released as soon as uloop has cleaned the task up.
 function finish_test(t, reply) {
 	if (t.reply != null)
 		return;
 	t.reply = reply;
 	if (t.timer)
 		t.timer.cancel();
-	t.timer = null;
-	// Drop the task, and with it the closure that holds the secret.
-	t.task = null;
 }
 
 function start_test(params) {
@@ -193,11 +195,16 @@ function start_test(params) {
 		return res.ok ? { done: true, checks: res.data.checks } : { done: true, error: "TEST_FAILED", message: `${res.error}` };
 	}, function(msg) {
 		finish_test(t, (type(msg) == "object") ? msg : { done: true, error: "TEST_FAILED", message: "the test returned no result" });
+	}, function() {
+		// Never called: the task asks for no input. Passing it makes ucode
+		// close the task's pipes when it ends, which it skips for a task
+		// without an input callback, leaking a pipe per test.
+		return null;
 	});
 	if (!t.task)
 		return null;
 	t.timer = uloop.timer(TEST_TIMEOUT_MS, () => {
-		if (t.task) t.task.kill();
+		if (!t.task.finished()) t.task.kill();
 		finish_test(t, { done: true, error: "TIMEOUT", message: `the test did not finish within ${TEST_TIMEOUT_MS / 1000} seconds and was stopped` });
 	});
 	return t;
@@ -300,7 +307,7 @@ const methods = {
 			if (!t || t.id !== req.args.job)
 				return fail("NOT_FOUND", "no such connection test: a newer one replaced it, or rpcd restarted");
 			// A child that died without a result.
-			if (t.reply == null && t.task && t.task.finished())
+			if (t.reply == null && t.task.finished())
 				finish_test(t, { done: true, error: "TEST_FAILED", message: "the test stopped without a result" });
 			return (t.reply != null) ? t.reply : { done: false };
 		}
