@@ -4,9 +4,17 @@ This guide describes how to diagnose and resolve authentication failures in `luc
 
 ---
 
+## Test the connection first
+
+If logins fail, or SSO is not enabled yet, start on the settings page: **Services > Single Sign-On**, **Test connection**. It checks the provider settings, including unsaved changes, and names the first thing that is wrong: an unreachable or untrusted provider, an issuer that does not match exactly, missing signing keys, a malformed Redirect URI, or a wrong Client ID or secret. It changes nothing. See [Test the connection](configure-in-luci.md#3-test-the-connection).
+
+A test that passes rules out the provider settings. The failure is then in what only a real login exercises, such as the redirect URI registered at the provider, the roles, or the router's clock: read the log.
+
+---
+
 ## Read the system log first
 
-All authentication events are written to syslog. Check this before anything else.
+All authentication events are written to syslog. Check this after the connection test, or when it passes.
 
 --8<-- "check-log.md"
 

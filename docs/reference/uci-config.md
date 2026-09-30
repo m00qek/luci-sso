@@ -104,13 +104,15 @@ Access groups are the top-level keys of the JSON files in `/usr/share/rpcd/acl.d
 
 ## The `luci-sso` ubus object
 
-The `luci-sso` ubus object, an `rpcd` plugin at `/usr/share/rpcd/ucode/luci-sso.uc`, is the interface that writes the role entries. The settings page uses it; so can `ubus call` on the router. It touches only `luci_sso_*` sections, and stages its changes in a private UCI delta directory, so it never commits changes to `rpcd` that someone else staged.
+The `luci-sso` ubus object, an `rpcd` plugin at `/usr/share/rpcd/ucode/luci-sso.uc`, is the interface that writes the role entries, and runs the settings page's connection test. The settings page uses it; so can `ubus call` on the router. It touches only `luci_sso_*` sections, and stages its changes in a private UCI delta directory, so it never commits changes to `rpcd` that someone else staged.
 
 | Method | Arguments | Reply |
 | :--- | :--- | :--- |
 | `list_roles` | none | `{ "roles": [ { "name", "read", "write" } ], "reload_pending": <bool> }`: every `luci_sso_*` login entry with a valid role name, in file order. |
 | `set_role` | `name` (string), `read` (array), `write` (array) | `{ "role": { "name", "read", "write" } }`, with the lists as stored. Creates or replaces the entry, and removes any `password` option. |
 | `delete_role` | `name` (string) | `{ "result": true }` |
+| `test_connection` | `issuer_url`, `internal_issuer_url`, `client_id`, `client_secret`, `redirect_uri` (strings; missing counts as empty) | `{ "job": "<id>" }`. Starts a [connection test](#connection-test) in the background and answers at once. |
+| `test_connection_result` | `job` (string) | `{ "done": false }` while the test runs; then `{ "done": true, "checks": [ { "id", "status", "message" } ] }`, or `{ "done": true, "error", "message" }` when the test itself failed. |
 
 | Rule | Limit |
 | :--- | :--- |
@@ -124,12 +126,31 @@ Errors come back as a reply `{ "error": "<CODE>", "message": "<text>" }`. `rpcd`
 | :--- | :--- |
 | `INVALID_NAME` | The name is missing, too long, or has other characters. |
 | `INVALID_LIST` | A list is not an array of strings, is too long, has an empty, too long or control-character entry, or its `read` list denies `unauthenticated`. |
-| `NOT_FOUND` | `delete_role`: the role has no entry. |
+| `NOT_FOUND` | `delete_role`: the role has no entry. `test_connection_result`: no test with that `job`; only the latest test is kept, in memory, and an `rpcd` restart drops it. |
 | `COMMIT_FAILED` | `/etc/config/rpcd` could not be written. |
+| `BUSY` | `test_connection`: a test is already running. One runs at a time. |
+| `TIMEOUT` | `test_connection_result`: the test did not finish within 25 seconds and was stopped. |
+| `TEST_FAILED` | `test_connection` could not start the test, or it stopped without a result. |
 
 After a successful write, the plugin makes `rpcd` reload one second after the reply, as `/etc/init.d/rpcd reload` does. Writes in that second share the reload. `list_roles` reports `"reload_pending": true` from the write until `rpcd` has restarted. While `rpcd` restarts, a `/ubus/` request that reaches it at the moment it re-executes itself is never answered: `uhttpd` waits for its session check up to half its script timeout (30 s by default) and serves no page meanwhile. Every `rpcd` reload can do this, whatever triggers it. The settings page waits up to 45 seconds for the reload.
 
-Access through LuCI needs the `luci-app-sso` access group: its `read` section grants `list_roles`, its `write` section `set_role` and `delete_role`. It grants no UCI access to `rpcd`.
+Access through LuCI needs the `luci-app-sso` access group: its `read` section grants `list_roles`, its `write` section `set_role`, `delete_role`, `test_connection` and `test_connection_result`. A user who may only read the settings page cannot run the connection test, since it sends the client secret to the provider. The group grants no UCI access to `rpcd`.
+
+### Connection test
+
+`test_connection` runs these checks in order, through the same discovery, JWK Set and token-request code as a login, and returns one entry for each, always in this order. `status` is `pass`, `fail`, `warn` (could not tell) or `skip` (a check it depends on failed); `message` is an English sentence for the administrator.
+
+| `id` | Passes when |
+| :--- | :--- |
+| `issuer_https` | `issuer_url` is set and starts with `https://`. |
+| `discovery` | The discovery document is fetched with status 200 and is a JSON object. With `internal_issuer_url`, from its origin plus the issuer's path, as at login. `internal_issuer_url` must be an HTTPS origin with no path. |
+| `issuer_match` | The document's `issuer` is exactly `issuer_url`. A failure's message says when the two differ only in a trailing slash, letter case or default port. |
+| `endpoints` | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. |
+| `jwks` | The JWK Set has at least one key with no `use` or `use` `sig`, no `alg` or an `alg` of `RS256` (RSA) or `ES256` (EC), and a public key the router can build: RSA, or EC on P-256. |
+| `redirect_uri` | `redirect_uri` is set, starts with `https://`, and ends in `/cgi-bin/luci-sso/callback`. |
+| `client_credentials` | A token request with a made-up authorization code, `client_id` and `client_secret` in the form body (`client_secret_post`, as at login) and a new PKCE verifier gets `invalid_grant`. `invalid_client`, or HTTP 401, fails; any other answer is `warn`, and the message quotes the OAuth `error` or the HTTP status. |
+
+With `internal_issuer_url`, the JWK Set and token requests go to the internal origin too, as at login. Each HTTP request gives up after 5 seconds, and the test after 25. It runs in a child process of `rpcd`, so `rpcd` keeps answering meanwhile. It reads no cache and writes nothing on the router; its log lines start with `Connection test:`. `client_secret` is never part of a reply or a log line.
 
 ---
 
@@ -152,6 +173,7 @@ Edits `config oidc 'default'`.
 | **Require Verified Email** | `require_email_verified` | Checkbox; saved as `1` or `0`. Ticked when the option is unset, and then saved as `1`. |
 | **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
 | **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
+| **Test Connection** | none | A **Test connection** button. Sends the form's Issuer URL, Internal Issuer URL, Client ID, Client Secret and Redirect URI, saved or not, to [`test_connection`](#connection-test), and lists each check's result as `[Pass]`, `[Fail]`, `[Warning]` or `[Skipped]`, with a summary line. Saves nothing; works while **Enable SSO** is off. Needs write access to the `luci-app-sso` group. |
 
 ### Users section
 

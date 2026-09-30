@@ -10,6 +10,7 @@ For the rationale behind the module boundaries, see [About the Architecture](../
 | [`luci_sso.web`](#luci_ssoweb) | HTTP request parsing and response rendering. |
 | [`luci_sso.router`](#luci_ssorouter) | Dispatches one request by path. |
 | [`luci_sso.handshake`](#luci_ssohandshake) | The OIDC orchestrator for both legs of the authorization code flow. |
+| [`luci_sso.connection`](#luci_ssoconnection) | The settings page's connection test. |
 | [`luci_sso.oidc`](#luci_ssooidc) | OIDC protocol steps. |
 | [`luci_sso.discovery`](#luci_ssodiscovery) | Discovery document and JWK Set fetching, with a cache. |
 | [`luci_sso.config`](#luci_ssoconfig) | UCI configuration loader and role mapper. |
@@ -173,6 +174,16 @@ The HTTP status of each failure is listed in the [HTTP API Reference](http-api.m
 
 ---
 
+## `luci_sso.connection`
+
+The settings page's connection test, run by the `luci-sso` rpcd plugin's `test_connection` method. It calls `discovery.discover()` and `discovery.fetch_jwks()` with `no_cache`, and `oidc.exchange_code()` with a made-up code, so it runs a login's own code and writes nothing on the router. Its log lines start with `Connection test: `. `HTTP_TIMEOUT_MS` (`5000`) is the timeout of each request; `CALLBACK_PATH` is `/cgi-bin/luci-sso/callback`.
+
+### `check(deps, params)` → `Result<{checks}>`
+
+Runs every check on `params` (`issuer_url`, `internal_issuer_url`, `client_id`, `client_secret`, `redirect_uri`; anything but a string counts as empty) and returns `checks`, one `{ id, status, message }` per check, in a fixed order. Always succeeds. The checks and their statuses are listed in [Connection test](uci-config.md#connection-test). `client_secret` is never part of a message or a log line.
+
+---
+
 ## `luci_sso.oidc`
 
 OIDC protocol steps. `exchange_code()` and `fetch_userinfo()` perform HTTP requests through `deps.http`.
@@ -183,7 +194,7 @@ Builds the authorization URL with `response_type=code`, `client_id`, `redirect_u
 
 ### `exchange_code(deps, config, discovery, code, verifier, session_id)` → `Result<object>`
 
-POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the client credentials to `discovery.token_endpoint`. Returns the parsed token response. `session_id` only correlates log lines. Fails with `INSECURE_TOKEN_ENDPOINT`, `INVALID_PKCE_VERIFIER`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `OIDC_INVALID_GRANT`, `TOKEN_EXCHANGE_FAILED` or `TOKEN_RESPONSE_INVALID_JSON`. The last four are failures of the IdP and carry `details.http_status` `502`; the token endpoint's own status is only logged.
+POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the client credentials to `discovery.token_endpoint`. Returns the parsed token response. `session_id` only correlates log lines. Fails with `INSECURE_TOKEN_ENDPOINT`, `INVALID_PKCE_VERIFIER`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `OIDC_INVALID_GRANT`, `TOKEN_EXCHANGE_FAILED` or `TOKEN_RESPONSE_INVALID_JSON`. The last four are failures of the IdP and carry `details.http_status` `502`. The client authenticates with `client_secret_post`: `client_id` and `client_secret` in the form body. For the connection test, `OIDC_INVALID_GRANT` and `TOKEN_EXCHANGE_FAILED` also carry the token endpoint's status (`details.upstream_status`) and its OAuth `error` code (`details.oauth_error`, kept only when it is 1–64 letters, digits, `_`, `.`, `:` or `-`, else `null`), and `TOKEN_ENDPOINT_NETWORK_ERROR` the transport cause (`details.cause`). A login shows the browser none of them.
 
 ### `verify_id_token(deps, tokens, keys, config, handshake, discovery, now)` → `Result<{sub, email, email_verified, name, groups}>`
 
@@ -210,6 +221,14 @@ GETs the UserInfo endpoint with the access token as a Bearer token and returns t
 
 Discovery document and JWK Set fetching, with a 24-hour cache in `/var/run/luci-sso/` keyed by a hash of the URL. When a fetch fails, an expired cache entry is used instead. `deps: { fs, http, native, clock, log }`.
 
+### `discovery_url(issuer, internal_issuer_url)` → `Result<string>`
+
+The URL `discover()` fetches: `<issuer>/.well-known/openid-configuration`, or, with `internal_issuer_url`, that origin plus the issuer's path. Fails with `INSECURE_ISSUER_URL` or `INSECURE_FETCH_URL`.
+
+### `backchannel(doc, issuer, internal_issuer_url)` → `object`
+
+A shallow copy of a discovery document in which `token_endpoint`, `jwks_uri` and `userinfo_endpoint` on the issuer's origin are moved to `internal_issuer_url`'s origin, path and query kept. Endpoints on other hosts, and the browser-facing ones, are left alone. Without `internal_issuer_url`, a plain copy.
+
 ### `discover(deps, issuer, options)` → `Result<discovery_doc>`
 
 Fetches `<issuer>/.well-known/openid-configuration`, checks that its `issuer` is identical to `issuer`, and that `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. Drops a non-HTTPS `userinfo_endpoint` or `end_session_endpoint`.
@@ -219,10 +238,13 @@ Fetches `<issuer>/.well-known/openid-configuration`, checks that its `issuer` is
 | `internal_issuer_url` | Fetch from this origin instead, keeping the issuer's path. |
 | `cache_path` | Override the cache file. |
 | `ttl` | Cache lifetime in seconds (default `86400`). |
+| `no_cache` | Neither read, nor fall back to, nor write the cache. The connection test uses it. |
+
+Failure details, used by the connection test: `DISCOVERY_NETWORK_ERROR` carries the transport cause as a string (`HTTP_REQUEST_FAILED (TIMED_OUT)`); `DISCOVERY_FAILED` `{ http_status: 502, upstream_status }`; `DISCOVERY_ISSUER_MISMATCH` `{ issuer_id, declared, near_miss }`, where `declared` is the document's `issuer` when it is a string, else `null`, and `near_miss` is true when the two are equal after normalization (trailing slash, letter case, default port); `DISCOVERY_MISSING_ENDPOINT` and `INSECURE_ENDPOINT` the field name. A body that is not a JSON object is `INVALID_DISCOVERY_DOC`.
 
 ### `fetch_jwks(deps, jwks_uri, options)` → `Result<array>`
 
-Returns the `keys` array of the JWK Set. Options: `force` (skip the cache), `cache_path`, `ttl`.
+Returns the `keys` array of the JWK Set. Options: `force` (skip the fresh cache), `no_cache` (no cache at all, as for `discover()`), `cache_path`, `ttl`. `JWKS_NETWORK_ERROR` carries the transport cause, `JWKS_FETCH_FAILED` `{ http_status: 502, upstream_status }`.
 
 ### `find_jwk(keys, kid)` → `Result<jwk>`
 
@@ -548,6 +570,10 @@ The production wiring of [the `deps` object](#the-deps-object).
 
 Builds the production `deps` object. Called once by the CGI script; never in tests.
 
+### `create_probe(http_timeout_ms)` → `{ fs, native, http, clock, log }`
+
+The `deps` of the connection test: no `ubus` and no `uci`, and an HTTP client whose requests time out after `http_timeout_ms`. Called by the `luci-sso` rpcd plugin, in the child process that runs the test.
+
 ### `ubus_channel(conn)` → `{ call(obj, method, args) → Result }`
 
 Wraps a ubus connection. A `null` reply is a success unless `conn.error()` reports one (`UBUS_ERROR`); a missing connection gives `UBUS_CONNECT_FAILED`.
@@ -562,13 +588,13 @@ Opens syslog with the tag `luci-sso` and returns the `deps.log` function.
 
 The HTTPS client behind `deps.http`, used for every request from the router to the IdP.
 
-### `create(uclient, uloop, fs)` → `HttpClient`
+### `create(uclient, uloop, fs, options)` → `HttpClient`
 
 Returns `{ get(url, opts), post(url, opts) }`. `opts.headers` sets request headers; `post` sends `opts.body`. Both return `Result<{status, body}>`.
 
 - Only HTTPS URLs are accepted (`HTTPS_REQUIRED`).
 - Certificates are verified against every `*.crt` and `*.pem` file in `/etc/ssl/certs/` plus the usual bundle paths.
-- Requests time out after 10 seconds and bodies are capped at 256 KB.
+- Requests time out after `options.timeout` milliseconds, 10 seconds by default, and bodies are capped at 256 KB.
 - A failed request is `HTTP_REQUEST_FAILED` with the cause in `details`: `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE` or `UCLIENT_ERROR_<n>`, among others.
 
 ---

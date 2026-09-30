@@ -646,6 +646,7 @@ luci-sso/
 │   ├── router.uc          # Endpoint dispatch, logout
 │   ├── ratelimit.uc       # Per-client rate limits
 │   ├── handshake.uc       # OIDC login orchestration
+│   ├── connection.uc      # The settings page's connection test
 │   ├── oidc.uc            # Authorization URL, token exchange, ID-token checks, UserInfo
 │   ├── discovery.uc       # Discovery document and JWKS fetching/caching
 │   ├── config.uc          # UCI loading and role matching
@@ -670,7 +671,7 @@ luci-sso/
 ├── test/
 │   ├── native/            # The compiled crypto module's contract
 │   ├── unit/luci_sso/     # One module at a time (mirrors src/)
-│   ├── integration/       # Orchestrators and wiring (handshake, router, logout, entry, bootstrap, LuCI logout)
+│   ├── integration/       # Orchestrators and wiring (handshake, connection, router, logout, entry, bootstrap, LuCI logout)
 │   ├── system/            # Checks against the container's real rpcd
 │   ├── e2e/               # Playwright browser tests
 │   ├── fixtures/          # Shared keys, tokens, discovery documents

@@ -22,11 +22,33 @@ Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading r
 4.  Leave **Require Verified Email** ticked. Clear it only if your IdP cannot send `email_verified: true` and users cannot set their own address; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
 5.  If the router reaches the IdP at a different address than browsers do, set **Internal Issuer URL** to that origin (`https://host[:port]`, no path). Otherwise leave it empty. See [How to Configure Split-Horizon Networking](split-horizon.md).
 6.  Leave **Clock Tolerance** at `60` unless logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` while the clocks look right.
-7.  Tick **Enable SSO** when the settings and at least one role are ready.
+7.  Tick **Enable SSO** only when the connection test passes and at least one role is ready.
 
 ---
 
-## 3. Add or change roles in the Users section
+## 3. Test the connection
+
+Before you enable SSO, click **Test connection**, below **Internal Issuer URL**. The router checks the values in the form, including changes you have not saved, against the identity provider. It saves nothing, and it works while SSO is disabled. The test takes a few seconds; each request to the provider gives up after 5 seconds.
+
+The page lists one line per check, each marked **Pass**, **Fail**, **Warning** (the router could not tell) or **Skipped** (an earlier check failed):
+
+| Check | What it verifies | If it fails |
+| :--- | :--- | :--- |
+| **Issuer URL** | The Issuer URL is set and starts with `https://`. | Enter the provider's issuer. |
+| **Discovery** | The router can fetch `<issuer>/.well-known/openid-configuration`, from the Internal Issuer URL's origin when that is set. | The line names the cause: no answer in time, a certificate the router does not trust, a refused connection, or the provider's HTTP status. See [A back-channel request to the IdP failed](debugging.md#a-back-channel-request-to-the-idp-failed). |
+| **Issuer** | The document's `issuer` is exactly the Issuer URL. | Set **Issuer URL** to the value the line quotes. When the two differ only in a trailing slash, letter case or default port, the line says so. |
+| **Endpoints** | The document has an authorization, token and JWK Set endpoint, all HTTPS. | The provider is misconfigured, or the Issuer URL points at the wrong service. |
+| **Signing keys** | The JWK Set loads and holds at least one key `luci-sso` can verify ID tokens with: RS256 (RSA), or ES256 (EC P-256). | Configure an RS256 or ES256 signing key at the provider. |
+| **Redirect URI** | The Redirect URI is set, uses HTTPS, and ends in `/cgi-bin/luci-sso/callback`. | Correct it, and register the same address with the provider. |
+| **Client credentials** | The provider accepts the Client ID and Client Secret. | **Fail** (`invalid_client`, or HTTP 401): copy both again from the provider. **Warning**: the provider's answer did not say; the line quotes it. |
+
+The client credentials check is a standard, harmless probe. The router sends the provider's token endpoint a token request, authenticated exactly as at login (`client_secret_post`: the ID and secret in the form body), with an authorization code it made up and a new PKCE verifier. A provider checks the client before the code, so it answers `invalid_grant` when the credentials are right, and `invalid_client` when they are wrong. The made-up code cannot be redeemed, no token is issued, and the provider's log may show one refused token request. The secret is never shown on the page or written to the log, and the test writes nothing on the router: not the settings, and not the discovery or key caches a login uses.
+
+The test does not check the roles, and it cannot tell whether the Redirect URI is registered at the provider: only a real login shows that.
+
+---
+
+## 4. Add or change roles in the Users section
 
 A role says who may log in (by email, group or subject) and which LuCI access groups they get. Roles are tried from the top of the table, and a user gets the **first** role that matches. Rights from several roles are never merged.
 
@@ -52,7 +74,7 @@ For which access groups to grant, see [How to Configure Role-Based Access Contro
 
 ---
 
-## 4. Save and apply
+## 5. Save and apply
 
 Click **Save & Apply**.
 
@@ -65,7 +87,7 @@ To discard unsaved edits, click **Reset**.
 
 ---
 
-## 5. Check the result
+## 6. Check the result
 
 On the router:
 

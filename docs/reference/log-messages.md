@@ -585,6 +585,18 @@ These lines appear at login start, at the callback and at logout, whenever the d
 
 A logout that goes through LuCI's own logout, as it does for a password session, is not logged by `luci-sso`.
 
+### Connection test
+
+The settings page's **Test connection** runs in a child process of `rpcd`, which logs as `luci-sso[<pid>]` too. Every line it writes starts with `Connection test: `.
+
+| Line | Level | Meaning |
+| :--- | :--- | :--- |
+| `Connection test: started from the settings page` | info | An administrator started the test. |
+| `Connection test: <line>` | as the line | Any line of [Discovery and JWK Set](#discovery-and-jwk-set) or [Token exchange](#token-exchange), written while the test ran the same code a login runs. `Connection test: Token exchange failed (invalid_grant, HTTP 400)` is the expected result of the credentials check: the provider accepted the client and refused the made-up code. |
+| `Connection test: finished: <n> passed, <n> failed, <n> undetermined, <n> skipped` | info | The test is over; the settings page shows each check. |
+
+The test never logs the client secret, and does not end with a `[<status>] <CODE>` line.
+
 ### Package scripts
 
 The lines of the install, upgrade and removal scripts are in [At install, upgrade and removal](#at-install-upgrade-and-removal).

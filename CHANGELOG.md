@@ -7,6 +7,7 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 ### Added
 
 - A role can match users by their OIDC `sub` claim, the account identifier that never changes, with `list sub '<value>'` next to `email` and `group`, or the **Subjects (sub)** field of the role editor. The value is compared exactly, letter case included; the issuer is always `issuer_url`. A user who matches no role sees their own `sub` on the error page, to give to the administrator; the log still records only its hash. See [Match one account by its subject](https://m00qek.github.io/luci-sso/latest/how-to/sysadmin/rbac/#match-one-account-by-its-subject).
+- A **Test connection** button on the settings page checks the provider settings in the form, saved or not, before you enable SSO: that the issuer is HTTPS and matches the discovery document exactly (with the trailing-slash hint the log gives), that the endpoints are HTTPS, that the JWK Set has a key luci-sso can verify, that the Redirect URI is well formed, and that the provider accepts the Client ID and secret, with a harmless token request for a made-up code. It writes nothing on the router and never shows the secret. It is the `luci-sso` ubus object's new `test_connection` and `test_connection_result` methods, which need write access to the `luci-app-sso` access group. See [Test the connection](https://m00qek.github.io/luci-sso/latest/how-to/sysadmin/configure-in-luci/#3-test-the-connection).
 
 ### Changed
 
