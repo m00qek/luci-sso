@@ -1,6 +1,6 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { loginAsRoot, gotoSSOSettings } = require('./helpers');
+const { loginAsRoot, gotoSSOSettings, fillList } = require('./helpers');
 
 /**
  * Advanced Ubus Mocking for CRUD operations.
@@ -92,12 +92,9 @@ test.describe('SSO Settings: Pristine CRUD Lifecycle', () => {
         const groupField = modal.locator('[data-name="group"]');
         await groupField.locator('input[type="text"]').last().fill('DevOps');
 
-        // 4. Set Permissions
-        const readField = modal.locator('[data-name="read"]');
-        await readField.locator('input[type="text"]').last().fill('superuser');
-
-        const writeField = modal.locator('[data-name="write"]');
-        await writeField.locator('input[type="text"]').last().fill('superuser');
+        // 4. Set Permissions: a name the router does not define can be typed
+        await fillList(modal, 'read', ['superuser']);
+        await fillList(modal, 'write', ['superuser']);
 
         // 5. Close modal
         await modal.locator('button.cbi-button-positive').click();
@@ -124,18 +121,15 @@ test.describe('SSO Settings: Pristine CRUD Lifecycle', () => {
         await expect(internalIssuer).toHaveAttribute('placeholder', /https:\/\/.*:8443/);
     });
 
-    test('Guard: Role named "default" is rejected with an error notification', async ({ page }) => {
+    test('Guard: Role named "default" is refused before it is added, with the reason next to the box', async ({ page }) => {
         await setupPristineMocks(page);
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
         await page.locator('.cbi-section-create-name').pressSequentially('default');
-        await page.locator('.cbi-section-create .cbi-button-add').click();
-
-        // The guard fires before uci.add — no modal should open.
-        await expect(page.locator('.modal, [role="dialog"]')).not.toBeVisible({ timeout: 2000 });
-        // A danger notification must tell the user the name is reserved.
-        await expect(page.locator('.alert-message.danger')).toBeVisible({ timeout: 3000 });
+        await expect(page.locator('.luci-sso-name-error')).toHaveText('"default" is reserved for the identity provider settings.');
+        await expect(page.locator('.cbi-section-create .cbi-button-add')).toBeDisabled();
+        await expect(page.locator('.modal, [role="dialog"]')).not.toBeVisible();
     });
 
 });

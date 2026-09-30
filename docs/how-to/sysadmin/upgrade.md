@@ -198,7 +198,7 @@ Releases up to 0.9.1 kept a role's permissions as `read` and `write` lists on th
 - **The first matching role wins.** A user who matches several roles gets the first one, in the order of `/etc/config/luci-sso` and of the settings page. Earlier releases merged every matching role's rights.
 - **`*` has rpcd's meaning.** `*` matches every access group, not only LuCI's. A role with `*` in both lists gets exactly what a `root` password login gets. Earlier, `read '*'` read only LuCI's groups, and `write '*'` added raw grants of its own.
 - **Every read list includes `unauthenticated`.** LuCI needs that access group on every page, so it is always stored, and the settings page does not list it.
-- **Permissions take effect at Save.** On the settings page, read and write access are written to `rpcd` when you click **Save** (or **Save & Apply**), and are in force about a second later, once `rpcd` has reloaded. Emails, groups and role order still take effect with **Save & Apply**. The role editor shows a note saying so.
+- **Permissions are stored in `rpcd`, written from the settings page.** In 0.10.0, read and write access are written to `rpcd` when you click **Save**, while emails, groups and role order take effect with **Save & Apply**. Later releases have one rule: every change on the page, permissions included, takes effect with **Save & Apply**, and permissions are written only once LuCI has applied and confirmed the rest. Either way they are in force about a second later, once `rpcd` has reloaded.
 - **SSO sessions survive `rpcd` reloads.** Installing a LuCI package that reloads `rpcd` no longer strips SSO users of their rights.
 - **An ID Token without `at_hash` is accepted.** OIDC Core makes it optional in the authorization code flow, and `luci-sso` now follows it, so IdPs that never send it, such as Authentik, work. A present `at_hash` is still checked, and a wrong one is refused with `AT_HASH_MISMATCH`. The `MISSING_AT_HASH` code is gone.
 - **The ID Token's `sub` must be a non-empty string.** A `sub` that is missing, empty, a number or `null` fails the login with `ID_TOKEN_VERIFICATION_FAILED` and the detail `MISSING_SUB_CLAIM`, as OIDC Core §2 requires.
@@ -242,7 +242,7 @@ If a role has the same name as an `rpcd` login, such as `root`, its open session
     ubus call luci-sso list_roles
     ```
 
-3.  Open **Services > Single Sign-On**. A role whose **Read Access** shows "(none): this role grants no access" lets its users log in to an empty LuCI. A role that shows "Not set: edit and save this role, or its users cannot log in" has no entry. Edit each one, set its access, and click **Save**.
+3.  Open **Services > Single Sign-On**. A role whose **Read access** shows "None: this role grants no access" lets its users log in to an empty LuCI. A role that shows "Not set: edit this role and Save & Apply, or its users cannot log in" has no entry. Edit each one, set its access, click **Save** in the editor, and then **Save & Apply**.
 
 4.  Check the order of the roles. If a user matches several, only the first counts. Drag the most privileged or most specific role to the top, then click **Save & Apply**. A user who used to combine two roles needs one role that grants both; see [How to Configure Role-Based Access Control](rbac.md).
 

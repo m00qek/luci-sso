@@ -66,19 +66,20 @@ Give the client any name you will recognise, such as `LuCI Router`. After saving
 
     Navigate to **Services > Single Sign-On**.
 
-    Fill in the **Settings** section:
+    Fill in the **Identity provider** section:
 
     | Field | Value |
     | :--- | :--- |
-    | **Enable SSO** | On |
     | **Issuer URL** | `https://<your-issuer-url>` |
     | **Client ID** | Your Client ID from Step 2 |
     | **Client Secret** | Your Client Secret from Step 2 |
     | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
     | **Scopes** | `openid profile email` |
-    | **Clock Tolerance** | `60` |
+    | **Enable SSO** | On |
 
     For split-horizon setups, also fill in **Internal Issuer URL**. See [How to Configure Split-Horizon Networking](../../how-to/sysadmin/split-horizon.md).
+
+    Before you save, click **Test connection**, above **Enable SSO**, and check that every line reads **Pass**; a line that fails says what to fix. See [Test the connection](../sysadmin/configure-in-luci.md#3-test-the-connection).
 
     Click **Save & Apply**.
 
@@ -109,9 +110,9 @@ After a successful login, `luci-sso` maps the user's OIDC claims to a LuCI role.
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
-    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter the email address in **Email Addresses**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read access** and **Write access**.) In the modal, enter the email address in **Emails**, then click **Save**.
 
     Click **Save & Apply**.
 
@@ -134,9 +135,9 @@ If your IdP returns a `groups` claim (requires the `groups` scope and IdP-side g
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
-    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter the group name in **Groups**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read access** and **Write access**.) In the modal, enter the group name in **Groups**, then click **Save**.
 
     Click **Save & Apply**.
 
@@ -176,7 +177,7 @@ Common errors and their meaning are listed in the [Log Messages Reference](../..
 - **A message under Login with SSO says "The identity provider is not responding"** — The browser cannot reach the IdP; the router has no error to log. Open `<issuer_url>/.well-known/openid-configuration` in the same browser, on the same device. See [The SSO button says the identity provider is not responding](../sysadmin/debugging.md#the-sso-button-says-the-identity-provider-is-not-responding).
 - **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_ISSUER_MISMATCH` line** — The `issuer_url` you configured doesn't match the `issuer` field in the discovery document. The line shows both values; set `issuer_url` to the one the document declares, exactly. The line says so when a trailing slash, letter case or `:443` is the only difference.
 - **`[401] ID_TOKEN_VERIFICATION_FAILED`** — The `OAuth flow failed` line before it names the failed check. `UNSUPPORTED_ALGORITHM` means the IdP signs tokens with HS256 or another algorithm: configure the client to use RS256 or ES256. `AT_HASH_MISMATCH` means the ID Token's `at_hash` does not match the access token the IdP returned.
-- **`[403] USER_NOT_AUTHORIZED` after `User [sub_id: …] matched no roles`** — Authentication succeeded but no UCI role matched the user's email or groups. Email matching ignores case; group matching does not. Add the user's email with `uci add_list luci-sso.admin.email='...'`.
+- **`[403] USER_NOT_AUTHORIZED` after `User [sub_id: …] matched no roles`** — Authentication succeeded but no UCI role matched the user's `sub`, email or groups. Email matching ignores case; group and `sub` matching do not. Add the user's email with `uci add_list luci-sso.admin.email='...'`, or the `sub` the error page shows with `uci add_list luci-sso.admin.sub='...'`.
 - **`[403] USER_NOT_AUTHORIZED` after `Ignoring the unverified email of user [sub_id: …] for role matching`** — The IdP sent the email without `email_verified: true`, so it did not count. See [Map by email](#map-by-email).
 - **`[500] UBUS_LOGIN_FAILED` after a `MISSING_RPCD_LOGIN` line** — The matched role has no `rpcd` login entry, so it has no permissions. Save the role's permissions on the settings page, or with `ubus call luci-sso set_role`; see [How to Configure Role-Based Access Control](../sysadmin/rbac.md).
 - **`[502] OIDC_DISCOVERY_FAILED` after `Discovery fetch failed for [id: …]: …`** — The router cannot reach the IdP. The end of the line names the cause, such as `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`. Check DNS resolution and firewall rules from the router (not just from your laptop).

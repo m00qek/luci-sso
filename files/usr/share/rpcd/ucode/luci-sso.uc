@@ -36,8 +36,35 @@
 //   set_role { name, read, write }           -> { role: { name, read, write } },
 //                                               the lists as stored
 //   delete_role { name }                     -> { result: true }
+//   list_acl_groups {}                       -> { groups: [ "<access group>" ] },
+//                                               the top-level keys of every
+//                                               /usr/share/rpcd/acl.d/*.json,
+//                                               sorted, each once; the settings
+//                                               page offers them as suggestions
+//   test_connection { issuer_url, internal_issuer_url, client_id,
+//                     client_secret, redirect_uri }
+//                                            -> { job: "<id>" }
+//   test_connection_result { job }           -> { done: false }, or
+//                                               { done: true, checks: [ { id, status, message } ] }
 //
-// Error codes: INVALID_NAME, INVALID_LIST, NOT_FOUND, COMMIT_FAILED.
+// Error codes: INVALID_NAME, INVALID_LIST, NOT_FOUND, COMMIT_FAILED, BUSY,
+// TIMEOUT, TEST_FAILED.
+//
+// Connection test: test_connection checks the settings page's provider
+// values, saved or not, with luci_sso.connection, which runs the login's own
+// discovery, JWK Set and token-request code without touching any cache. The
+// checks make up to three HTTPS requests to the IdP, which would block rpcd
+// if they ran here, and uclient's event loop cannot run nested inside rpcd's:
+// ending it would end rpcd's own loop too. So they run in a child process
+// (uloop.task, a fork of rpcd), and rpcd stays responsive meanwhile. rpcd on
+// OpenWrt 24.10 cannot defer a ucode plugin's reply, so test_connection
+// answers at once with a job ID, and the page asks test_connection_result
+// until the result is there. One test runs at a time (BUSY otherwise); only
+// the latest is kept, in memory, never on disk. A test that has not finished
+// after TEST_TIMEOUT_MS is killed and reported as TIMEOUT; each HTTP request
+// already gives up after connection.HTTP_TIMEOUT_MS. The client secret is
+// passed to the child in memory only, never logged and never part of a
+// reply.
 //
 // Order: list_roles returns the entries in the order of /etc/config/rpcd,
 // which means nothing: rpcd matches login entries by exact username, and
@@ -59,9 +86,11 @@
 "use strict";
 
 import { cursor } from 'uci';
-import { mkdir, readlink } from 'fs';
+import { mkdir, readlink, readfile, lsdir } from 'fs';
 import * as uloop from 'uloop';
 import * as rpcd_login from 'luci_sso.rpcd_login';
+import * as connection from 'luci_sso.connection';
+import { create_probe } from 'luci_sso.deps';
 
 const CONFIG = rpcd_login.CONFIG;
 const SECTION_PREFIX = rpcd_login.SECTION_PREFIX;
@@ -73,7 +102,18 @@ const DELTA_DIR = "/var/run/luci-sso/rpcd-uci";
 
 const RELOAD_DELAY_MS = 1000;
 
+// Where LuCI packages define their access groups.
+const ACL_DIR = "/usr/share/rpcd/acl.d";
+
+// Above the three requests' 5 s timeouts. Each poll of the result answers
+// at once, so LuCI's call timeout never applies to the test itself.
+const TEST_TIMEOUT_MS = 25000;
+
 let reload_timer = null;
+
+// The latest connection test: { id, task, timer, reply }, reply null while
+// it runs.
+let conn_test = null;
 
 function fail(code, message) {
 	return { error: code, message };
@@ -123,6 +163,53 @@ function schedule_reload() {
 	});
 }
 
+// A random job ID. Only the latest test is kept, so the ID just tells a stale
+// poll from a current one.
+function job_id() {
+	let raw = readfile("/dev/urandom", 8) || "";
+	let id = "";
+	for (let i = 0; i < length(raw); i++)
+		id += sprintf("%02x", ord(raw, i));
+	return length(id) ? id : sprintf("%x", time());
+}
+
+// Called from the task's or the timer's callback. The task object is kept:
+// dropping the last reference to it inside its own callback lets ucode free
+// it while uloop still uses it, which crashes rpcd. It goes when the next
+// test replaces this one, outside any callback; the closure holding the
+// secret is released as soon as uloop has cleaned the task up.
+function finish_test(t, reply) {
+	if (t.reply != null)
+		return;
+	t.reply = reply;
+	if (t.timer)
+		t.timer.cancel();
+}
+
+function start_test(params) {
+	let t = { id: job_id(), task: null, timer: null, reply: null };
+	// Runs in the child, a fork of rpcd, whose own event loop the HTTP
+	// client may start and end.
+	t.task = uloop.task(function() {
+		let res = connection.check(create_probe(connection.HTTP_TIMEOUT_MS), params);
+		return res.ok ? { done: true, checks: res.data.checks } : { done: true, error: "TEST_FAILED", message: `${res.error}` };
+	}, function(msg) {
+		finish_test(t, (type(msg) == "object") ? msg : { done: true, error: "TEST_FAILED", message: "the test returned no result" });
+	}, function() {
+		// Never called: the task asks for no input. Passing it makes ucode
+		// close the task's pipes when it ends, which it skips for a task
+		// without an input callback, leaking a pipe per test.
+		return null;
+	});
+	if (!t.task)
+		return null;
+	t.timer = uloop.timer(TEST_TIMEOUT_MS, () => {
+		if (!t.task.finished()) t.task.kill();
+		finish_test(t, { done: true, error: "TIMEOUT", message: `the test did not finish within ${TEST_TIMEOUT_MS / 1000} seconds and was stopped` });
+	});
+	return t;
+}
+
 function commit(uci) {
 	if (!uci.commit(CONFIG))
 		return fail("COMMIT_FAILED", `could not write /etc/config/${CONFIG}`);
@@ -170,6 +257,59 @@ const methods = {
 			let err = commit(uci);
 			if (err) return err;
 			return { result: true };
+		}
+	},
+
+	list_acl_groups: {
+		call: function() {
+			let seen = {};
+			for (let f in (lsdir(ACL_DIR) || [])) {
+				if (!match(f, /\.json$/))
+					continue;
+				let data = null;
+				try { data = json(readfile(`${ACL_DIR}/${f}`) || "null"); } catch (e) { continue; }
+				if (type(data) != "object")
+					continue;
+				// Only names a role's list could store (rpcd_login.check_list).
+				for (let k in keys(data))
+					if (rpcd_login.check_list("group", [ k ]).ok && substr(k, 0, 1) != "!")
+						seen[k] = true;
+			}
+			return { groups: sort(keys(seen)) };
+		}
+	},
+
+	test_connection: {
+		args: { issuer_url: "", internal_issuer_url: "", client_id: "", client_secret: "", redirect_uri: "" },
+		call: function(req) {
+			if (conn_test && conn_test.reply == null)
+				return fail("BUSY", "a connection test is already running");
+			let a = req.args;
+			let params = {
+				issuer_url: a.issuer_url,
+				internal_issuer_url: a.internal_issuer_url,
+				client_id: a.client_id,
+				client_secret: a.client_secret,
+				redirect_uri: a.redirect_uri
+			};
+			let t = start_test(params);
+			if (!t)
+				return fail("TEST_FAILED", "could not start the test");
+			conn_test = t;
+			return { job: t.id };
+		}
+	},
+
+	test_connection_result: {
+		args: { job: "" },
+		call: function(req) {
+			let t = conn_test;
+			if (!t || t.id !== req.args.job)
+				return fail("NOT_FOUND", "no such connection test: a newer one replaced it, or rpcd restarted");
+			// A child that died without a result.
+			if (t.reply == null && t.task.finished())
+				finish_test(t, { done: true, error: "TEST_FAILED", message: "the test stopped without a result" });
+			return (t.reply != null) ? t.reply : { done: false };
 		}
 	}
 };

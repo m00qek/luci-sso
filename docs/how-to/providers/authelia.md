@@ -65,19 +65,20 @@ The **Client Secret** is the **plaintext** secret — Authelia stores the hash, 
 
     Navigate to **Services > Single Sign-On**.
 
-    Fill in the **Settings** section:
+    Fill in the **Identity provider** section:
 
     | Field | Value |
     | :--- | :--- |
-    | **Enable SSO** | On |
     | **Issuer URL** | `https://auth.example.com` |
     | **Client ID** | `luci-router` |
     | **Client Secret** | Your plaintext secret |
     | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
     | **Scopes** | `openid profile email groups` |
-    | **Clock Tolerance** | `60` |
+    | **Enable SSO** | On |
 
     The Redirect URI must exactly match the value in the Authelia client config.
+
+    Before you save, click **Test connection**, above **Enable SSO**, and check that every line reads **Pass**; a line that fails says what to fix. See [Test the connection](../sysadmin/configure-in-luci.md#3-test-the-connection).
 
     Click **Save & Apply**.
 
@@ -102,15 +103,15 @@ The **Issuer URL** is the `authelia_url` of the session cookie that covers Authe
 
 ## 3. Configure role mapping
 
-A role says which users it matches, by email or by group. What the role may do on the router is its `rpcd` login entry. On a fresh install, the shipped `admin` role grants full access. To give some users less, add a role with its own **Read Access** and **Write Access**, as described in [How to Configure Role-Based Access Control](../sysadmin/rbac.md). A user gets the first role that matches, from the top.
+A role says which users it matches, by email or by group. What the role may do on the router is its `rpcd` login entry. On a fresh install, the shipped `admin` role grants full access. To give some users less, add a role with its own **Read access** and **Write access**, as described in [How to Configure Role-Based Access Control](../sysadmin/rbac.md). A user gets the first role that matches, from the top.
 
 ### Map by email
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
-    Click **Edit** in the `admin` row. In **Email Addresses**, replace the placeholder `admin@example.com` with the user's email address, then click **Save** in the editor.
+    Click **Edit** in the `admin` row. In **Emails**, replace the placeholder `admin@example.com` with the user's email address, then click **Save** in the editor.
 
     Click **Save & Apply**.
 
@@ -130,7 +131,7 @@ Authelia returns the user's groups from its authentication backend (file or LDAP
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
     Click **Edit** in the `admin` row. In **Groups**, enter the group name, then click **Save** in the editor.
 
@@ -172,6 +173,6 @@ Authelia has no end-session endpoint, so LuCI's **Log out** ends the router sess
 | `[502] TOKEN_EXCHANGE_FAILED`, preceded by `Token exchange HTTP 401` | Authelia rejected the client credentials: the client secret is wrong (UCI needs the plaintext, Authelia the hash), or the client config has no `token_endpoint_auth_method: client_secret_post` line (Authelia logs `… is configured to only support 'token_endpoint_auth_method' method 'client_secret_basic'`). |
 | `UserInfo fallback failed [session_id: …]: USERINFO_INVALID_JSON`, then `[403] USER_NOT_AUTHORIZED` | Authelia returned a signed UserInfo response, which `luci-sso` cannot read, so the email and groups it carries are lost. Set `userinfo_signed_response_alg: none` on the client, or add the `luci_sso` claims policy from Step 1 so that UserInfo is not needed, and restart Authelia. |
 | `[403] USER_NOT_AUTHORIZED`, preceded by `Ignoring the unverified email of user [sub_id: …] for role matching` | The claims policy puts `email` in the ID Token without `email_verified`. Add `'email_verified'` to its `id_token` list, as in Step 1, and restart Authelia. |
-| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | The user's email or group does not match any configured role. Email matching ignores case; group matching is case-sensitive, so check the group name exactly. |
+| `[403] USER_NOT_AUTHORIZED`, preceded by `User [sub_id: …] matched no roles` | The user's email, group or `sub` does not match any configured role. Email matching ignores case; group and `sub` matching are case-sensitive, so check the group name exactly. The error page shows the user their `sub`. |
 
 For a full list of error codes, see the [Log Messages Reference](../../reference/log-messages.md). For every check `luci-sso` makes of an identity provider, and the error each failure logs, see [Provider Compatibility](../../reference/provider-compatibility.md).

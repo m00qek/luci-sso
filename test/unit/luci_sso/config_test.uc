@@ -129,6 +129,93 @@ describe('config: find_role_for_user', () => {
 	);
 });
 
+// ─── find_role_for_user: sub ─────────────────────────────────────────────────
+
+describe('config: find_role_for_user — sub', () => {
+	const SUB = '248289761001';
+	const ROLE_SUB = { name: 'bysub', emails: [], groups: [], subs: [ SUB ] };
+
+	it('matches by an exact sub', () => {
+		assert.match({ ok: true, data: { role_name: 'bysub', also_matched: [] } },
+			config.find_role_for_user({ roles: [ROLE_SUB] }, { sub: SUB }));
+	});
+
+	it('matches by sub whatever the email says: unverified, missing or someone else\'s', () => {
+		for (let claims in [
+			{ sub: SUB, email: 'x@test.com', email_verified: false },
+			{ sub: SUB },
+			{ sub: SUB, email: 'stranger@example.com', email_verified: true },
+		])
+			assert.match(contains({ ok: true, data: { role_name: 'bysub' } }),
+				config.find_role_for_user({ roles: [ROLE_SUB] }, claims), sprintf('%J', claims));
+	});
+
+	it('compares the sub case-sensitively: a sub that differs only in case is refused', () => {
+		let role = { name: 'r', emails: [], groups: [], subs: [ 'AbC-12' ] };
+		for (let sub in [ 'abc-12', 'ABC-12', 'Abc-12' ])
+			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
+				config.find_role_for_user({ roles: [role] }, { sub }), sub);
+		assert.match(true, config.find_role_for_user({ roles: [role] }, { sub: 'AbC-12' }).ok);
+	});
+
+	it('compares the whole sub: no prefix, suffix, whitespace or pattern match', () => {
+		for (let sub in [ '24828976100', '2482897610011', ` ${SUB}`, `${SUB} `, `${SUB}\n`, '*', '.*' ])
+			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
+				config.find_role_for_user({ roles: [ROLE_SUB] }, { sub }), sprintf('%J', sub));
+		let glob = { name: 'glob', emails: [], groups: [], subs: [ '*' ] };
+		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
+			config.find_role_for_user({ roles: [glob] }, { sub: SUB }), 'a role sub is not a pattern');
+	});
+
+	it('refuses a sub that is not a non-empty string (OIDC Core §2)', () => {
+		let roles = [
+			{ name: 'num', emails: [], groups: [], subs: [ '248289761001' ] },
+			{ name: 'empty', emails: [], groups: [], subs: [ '' ] },
+			{ name: 'bool', emails: [], groups: [], subs: [ 'true' ] },
+		];
+		for (let sub in [ 248289761001, '', null, true, [ '248289761001' ], { v: '248289761001' } ])
+			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
+				config.find_role_for_user({ roles }, { sub }), sprintf('%J', sub));
+		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), config.find_role_for_user({ roles }, {}), 'no sub claim');
+	});
+
+	it('the first matching role in config order wins, whether it matches by sub, email or group', () => {
+		let claims = { sub: SUB, email: 'alice@example.com', email_verified: true, groups: [ 'developers' ] };
+		assert.match({ ok: true, data: { role_name: 'bysub', also_matched: [ 'readers', 'writers' ] } },
+			config.find_role_for_user({ roles: [ ROLE_SUB, ROLE_READERS, ROLE_WRITERS ] }, claims));
+		assert.match({ ok: true, data: { role_name: 'writers', also_matched: [ 'bysub', 'readers' ] } },
+			config.find_role_for_user({ roles: [ ROLE_WRITERS, ROLE_SUB, ROLE_READERS ] }, claims));
+	});
+
+	it('a role without subs never matches by sub', () => {
+		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
+			config.find_role_for_user({ roles: [ ROLE_READERS, ROLE_WRITERS ] }, { sub: SUB }));
+	});
+
+	prop('a role matches by sub iff the claim is exactly one of its subs',
+		gen.tuple(gen.elements('a', 'A', 'ab', 'aB', ''), gen.elements('a', 'A', 'ab', 'aB', '')),
+		(pair, ctx) => {
+			let role_sub = pair[0], claim_sub = pair[1];
+			let same = (role_sub === claim_sub && length(claim_sub) > 0);
+			ctx.classify('equal', same);
+			let res = config.find_role_for_user({ roles: [ { name: 'r', emails: [], groups: [], subs: [ role_sub ] } ] }, { sub: claim_sub });
+			assert.match(same, res.ok);
+		}
+	);
+});
+
+describe('config: matchable_sub', () => {
+	it('returns the sub when it is a non-empty string, as written', () => {
+		assert.match('Ab-12', config.matchable_sub({ sub: 'Ab-12' }));
+	});
+
+	it('returns null for an empty, missing or non-string sub', () => {
+		for (let v in [ '', null, 42, true, [ 'a' ], { a: 1 } ])
+			assert.match(null, config.matchable_sub({ sub: v }), sprintf('%J', v));
+		assert.match(null, config.matchable_sub({}));
+	});
+});
+
 // ─── find_role_for_user: email_verified (require_email_verified) ─────────────
 
 describe('config: find_role_for_user — email_verified', () => {
@@ -266,9 +353,37 @@ describe('config: load — success', () => {
 		});
 		assert.match(contains({ ok: true }), res);
 		assert.match([
-			{ name: 'r1', emails: ['admin@test.com'], groups: [] },
-			{ name: 'r2', emails: ['jane@test.com'], groups: ['staff'] },
+			{ name: 'r1', emails: ['admin@test.com'], groups: [], subs: [] },
+			{ name: 'r2', emails: ['jane@test.com'], groups: ['staff'], subs: [] },
 		], res.data.roles);
+	});
+
+	it('loads a sub list, normalizing a single sub string to an array, and keeps each sub as written', () => {
+		let res = load_sections({
+			default: { ...OIDC },
+			one: { ".type": "role", sub: 'Ab-12' },
+			many: { ".type": "role", sub: [ '248289761001', 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6' ], email: 'x@test.com' },
+		});
+		assert.match(contains({ ok: true }), res);
+		assert.match([
+			{ name: 'one', emails: [], groups: [], subs: [ 'Ab-12' ] },
+			{ name: 'many', emails: [ 'x@test.com' ], groups: [], subs: [ '248289761001', 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6' ] },
+		], res.data.roles);
+	});
+
+	it('a role with only a sub is valid', () => {
+		let res = load_sections({ default: { ...OIDC }, subonly: { ".type": "role", sub: [ '248289761001' ] } });
+		assert.match(contains({ ok: true }), res);
+		assert.match([ 'subonly' ], map(res.data.roles, (r) => r.name));
+	});
+
+	it('ignores a role with no email, no group and no sub, with a warning', () => {
+		let logs = [];
+		let res = load_sections({ default: { ...OIDC }, empty: { ".type": "role" }, r1: { ...ROLE } }, logs);
+		assert.match(contains({ ok: true }), res);
+		assert.match([ 'r1' ], map(res.data.roles, (r) => r.name));
+		assert.match([ [ 'warn', "Ignoring role 'empty': missing email, group or sub list" ] ],
+			filter(logs, (l) => index(l[1], 'Ignoring role') == 0));
 	});
 
 	it('ignores read/write lists left on a role, with a warning naming its rpcd login entry', () => {

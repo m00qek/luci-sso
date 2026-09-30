@@ -28,19 +28,20 @@ Google rejects redirect URIs whose host is an IP address or does not end in a pu
 
     Navigate to **Services > Single Sign-On**.
 
-    Fill in the **Settings** section:
+    Fill in the **Identity provider** section:
 
     | Field | Value |
     | :--- | :--- |
-    | **Enable SSO** | On |
     | **Issuer URL** | `https://accounts.google.com` |
     | **Client ID** | Your Client ID from Step 1 |
     | **Client Secret** | Your Client Secret from Step 1 |
     | **Redirect URI** | `https://<YOUR_ROUTER_DOMAIN>/cgi-bin/luci-sso/callback` |
     | **Scopes** | `openid profile email` |
-    | **Clock Tolerance** | `60` |
+    | **Enable SSO** | On |
 
     The Redirect URI must exactly match the authorized redirect URI registered in Step 1.
+
+    Before you save, click **Test connection**, above **Enable SSO**, and check that every line reads **Pass**; a line that fails says what to fix. See [Test the connection](../sysadmin/configure-in-luci.md#3-test-the-connection).
 
     Click **Save & Apply**.
 
@@ -67,9 +68,9 @@ Google does not provide a `groups` claim for personal accounts. Map access by em
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
-    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter your Gmail address in **Email Addresses**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read access** and **Write access**.) In the modal, enter your Gmail address in **Emails**, then click **Save**.
 
     Click **Save & Apply**.
 

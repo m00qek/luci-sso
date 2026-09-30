@@ -65,21 +65,22 @@ The router matches us by our email address, and it trusts only an address Pocket
 
 Navigate to **Services > Single Sign-On**.
 
-Fill in the **Settings** section with the values from Step 1:
+Fill in the **Identity provider** section with the values from Step 1:
 
 | Field | Value |
 | :--- | :--- |
-| **Enable SSO** | On |
 | **Issuer URL** | `https://id.example.com` |
 | **Client ID** | Our Client ID from Step 1 |
 | **Client Secret** | Our Client Secret from Step 1 |
 | **Redirect URI** | `https://192.168.1.1/cgi-bin/luci-sso/callback` |
 | **Scopes** | `openid profile email` |
-| **Clock Tolerance** | `60` |
+| **Enable SSO** | On |
 
 Replace `https://id.example.com` with our Pocket ID's `APP_URL`, exactly as it is set there, with no trailing slash. The **Redirect URI** field suggests a callback URL built from the address in our browser; we make sure it is exactly the callback URL we set in Step 1.
 
-Scroll to the **Users** section and click **Edit** on the `admin` role. In **Email Addresses**, remove the placeholder `admin@example.com`, add our email address, and click **Save**.
+Before we save, we click **Test connection**, above **Enable SSO**. Every line should read **Pass**; a line that fails says what to fix. See [Test the connection](../how-to/sysadmin/configure-in-luci.md#3-test-the-connection).
+
+Scroll to the **Roles** section and click **Edit** on the `admin` role. In **Emails**, remove the placeholder `admin@example.com`, add our email address, and click **Save**.
 
 Click **Save & Apply**.
 

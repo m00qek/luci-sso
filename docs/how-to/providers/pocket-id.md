@@ -43,17 +43,19 @@ Open the **Allowed User Groups** tab and choose who may sign in. A new client al
 
     Navigate to **Services > Single Sign-On**.
 
-    Fill in the **Settings** section:
+    Fill in the **Identity provider** section:
 
     | Field | Value |
     | :--- | :--- |
-    | **Enable SSO** | On |
     | **Issuer URL** | `https://id.example.com` |
     | **Client ID** | Your Client ID from Step 1 |
     | **Client Secret** | Your Client Secret from Step 1 |
     | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
+    | **Enable SSO** | On |
 
     Replace `https://id.example.com` with Pocket ID's `APP_URL` setting, exactly as set there and with no trailing slash. The Redirect URI must exactly match the callback URL set in Step 1. The field suggests one built from your browser's address; check it before you save.
+
+    Before you save, click **Test connection**, above **Enable SSO**, and check that every line reads **Pass**; a line that fails says what to fix. See [Test the connection](../sysadmin/configure-in-luci.md#3-test-the-connection).
 
     Click **Save & Apply**.
 
@@ -74,15 +76,15 @@ Open the **Allowed User Groups** tab and choose who may sign in. A new client al
 
 ## 3. Configure role mapping
 
-A role says which users it matches, by email or by group. What the role may do on the router is its `rpcd` login entry. On a fresh install, the shipped `admin` role grants full access. To give some users less, add a role with its own **Read Access** and **Write Access**, as described in [How to Configure Role-Based Access Control](../sysadmin/rbac.md). A user gets the first role that matches, from the top.
+A role says which users it matches, by email or by group. What the role may do on the router is its `rpcd` login entry. On a fresh install, the shipped `admin` role grants full access. To give some users less, add a role with its own **Read access** and **Write access**, as described in [How to Configure Role-Based Access Control](../sysadmin/rbac.md). A user gets the first role that matches, from the top.
 
 ### Map by email
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
-    Click **Edit** in the `admin` row. In **Email Addresses**, replace the placeholder `admin@example.com` with the user's email address, then click **Save** in the editor.
+    Click **Edit** in the `admin` row. In **Emails**, replace the placeholder `admin@example.com` with the user's email address, then click **Save** in the editor.
 
     Click **Save & Apply**.
 
@@ -118,9 +120,9 @@ Pocket ID sends a user's groups in the `groups` claim of the ID Token when the `
 
     Navigate to **Services > Single Sign-On**.
 
-    In **Settings**, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
+    In the **Identity provider** section, update **Scopes** to `openid profile email groups` and click **Save & Apply**.
 
-    Scroll to **Users** and click **Edit** in the `admin` row. In **Groups**, enter the group's Name (for example `router-admins`), then click **Save** in the editor.
+    Scroll to **Roles** and click **Edit** in the `admin` row. In **Groups**, enter the group's Name (for example `router-admins`), then click **Save** in the editor.
 
     Click **Save & Apply**.
 

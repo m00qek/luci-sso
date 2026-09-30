@@ -3,13 +3,13 @@
 		"description": "Grant access to SSO configuration",
 		"read": {
 			"ubus": {
-				"luci-sso": [ "list_roles" ]
+				"luci-sso": [ "list_roles", "list_acl_groups" ]
 			},
 			"uci": [ "luci-sso" ]
 		},
 		"write": {
 			"ubus": {
-				"luci-sso": [ "set_role", "delete_role" ]
+				"luci-sso": [ "set_role", "delete_role", "test_connection", "test_connection_result" ]
 			},
 			"uci": [ "luci-sso" ]
 		}

@@ -10,6 +10,7 @@ For the rationale behind the module boundaries, see [About the Architecture](../
 | [`luci_sso.web`](#luci_ssoweb) | HTTP request parsing and response rendering. |
 | [`luci_sso.router`](#luci_ssorouter) | Dispatches one request by path. |
 | [`luci_sso.handshake`](#luci_ssohandshake) | The OIDC orchestrator for both legs of the authorization code flow. |
+| [`luci_sso.connection`](#luci_ssoconnection) | The settings page's connection test. |
 | [`luci_sso.oidc`](#luci_ssooidc) | OIDC protocol steps. |
 | [`luci_sso.discovery`](#luci_ssodiscovery) | Discovery document and JWK Set fetching, with a cache. |
 | [`luci_sso.config`](#luci_ssoconfig) | UCI configuration loader and role mapper. |
@@ -45,7 +46,7 @@ Fallible functions return a **Result** instead of throwing:
 }
 ```
 
-Error codes are usually constants from `luci_sso.errors` (see [Log Messages](log-messages.md)); a few internal codes, such as `NO_ROLES_MATCHED` or `CSPRNG_FAILURE`, never leave their module. When `details` is an object with `http_status` (and optionally `retry_after`), `entry.uc` uses it for the HTTP response.
+Error codes are usually constants from `luci_sso.errors` (see [Log Messages](log-messages.md)); a few internal codes, such as `NO_ROLES_MATCHED` or `CSPRNG_FAILURE`, never leave their module. When `details` is an object with `http_status` (and optionally `retry_after`), `entry.uc` uses it for the HTTP response, and for `USER_NOT_AUTHORIZED` it passes `details.subject` to `web.render_error`.
 
 Functions `die()` on contract violations (wrong argument types), which the CGI entry turns into a logged crash and a generic `500` page.
 
@@ -104,9 +105,9 @@ Parses a `Cookie` header into an object. Strips surrounding double quotes from v
 
 Writes `res` (`{ status, headers, body }`) to `deps.stdout` with the security headers. A `302` gets a fixed HTML body.
 
-### `render_error(deps, code, status, extra)` → `void`
+### `render_error(deps, code, status, extra, subject)` → `void`
 
-Logs `[<status>] <code>` through `deps.log` and writes an HTML error page with a fixed user message for `code`. `status` defaults to `500`; `extra` adds headers, such as `Retry-After`.
+Logs `[<status>] <code>` through `deps.log` and writes an HTML error page with a fixed user message for `code`. `status` defaults to `500`; `extra` adds headers, such as `Retry-After`. `subject`, the refused user's `sub`, is shown HTML-escaped on the `USER_NOT_AUTHORIZED` page only, and never logged; for any other code, or when it is not a non-empty string, it is ignored.
 
 ### `error(deps, e)` → `void`
 
@@ -161,7 +162,7 @@ Processes the callback. `deps`: all fields. In order, it:
 6. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
 7. fetches UserInfo when the ID Token has no `email`, and then takes `email` and `email_verified` both from UserInfo;
 8. registers the access token against replay;
-9. logs a warning when `config.matchable_email` sets an unverified email aside, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches;
+9. logs a warning when `config.matchable_email` sets an unverified email aside, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches. No match fails with `USER_NOT_AUTHORIZED` and `details` `{ http_status: 403, subject: <the ID Token's sub> }`, for the error page;
 10. creates the `rpcd` session from the role's `rpcd` login entry, labelled with the email `config.session_email` returns. Any failure there, including `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN`, ends as `UBUS_LOGIN_FAILED` (500).
 
 | Field | Type | Description |
@@ -170,6 +171,16 @@ Processes the callback. `deps`: all fields. In order, it:
 | `email` | string or `null` | The user's email address, verified or not; `null` when the IdP sent none. |
 
 The HTTP status of each failure is listed in the [HTTP API Reference](http-api.md#error-responses).
+
+---
+
+## `luci_sso.connection`
+
+The settings page's connection test, run by the `luci-sso` rpcd plugin's `test_connection` method. It calls `discovery.discover()` and `discovery.fetch_jwks()` with `no_cache`, and `oidc.exchange_code()` with a made-up code, so it runs a login's own code and writes nothing on the router. Its log lines start with `Connection test: `. `HTTP_TIMEOUT_MS` (`5000`) is the timeout of each request; `CALLBACK_PATH` is `/cgi-bin/luci-sso/callback`.
+
+### `check(deps, params)` → `Result<{checks}>`
+
+Runs every check on `params` (`issuer_url`, `internal_issuer_url`, `client_id`, `client_secret`, `redirect_uri`; anything but a string counts as empty) and returns `checks`, one `{ id, status, message }` per check, in a fixed order. Always succeeds. The checks and their statuses are listed in [Connection test](uci-config.md#connection-test). `client_secret` is never part of a message or a log line.
 
 ---
 
@@ -183,7 +194,7 @@ Builds the authorization URL with `response_type=code`, `client_id`, `redirect_u
 
 ### `exchange_code(deps, config, discovery, code, verifier, session_id)` → `Result<object>`
 
-POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the client credentials to `discovery.token_endpoint`. Returns the parsed token response. `session_id` only correlates log lines. Fails with `INSECURE_TOKEN_ENDPOINT`, `INVALID_PKCE_VERIFIER`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `OIDC_INVALID_GRANT`, `TOKEN_EXCHANGE_FAILED` or `TOKEN_RESPONSE_INVALID_JSON`. The last four are failures of the IdP and carry `details.http_status` `502`; the token endpoint's own status is only logged.
+POSTs the authorization code, the PKCE `verifier` (43–128 characters) and the client credentials to `discovery.token_endpoint`. Returns the parsed token response. `session_id` only correlates log lines. Fails with `INSECURE_TOKEN_ENDPOINT`, `INVALID_PKCE_VERIFIER`, `TOKEN_ENDPOINT_NETWORK_ERROR`, `OIDC_INVALID_GRANT`, `TOKEN_EXCHANGE_FAILED` or `TOKEN_RESPONSE_INVALID_JSON`. The last four are failures of the IdP and carry `details.http_status` `502`. The client authenticates with `client_secret_post`: `client_id` and `client_secret` in the form body. For the connection test, `OIDC_INVALID_GRANT` and `TOKEN_EXCHANGE_FAILED` also carry the token endpoint's status (`details.upstream_status`) and its OAuth `error` code (`details.oauth_error`, kept only when it is 1–64 letters, digits, `_`, `.`, `:` or `-`, else `null`), and `TOKEN_ENDPOINT_NETWORK_ERROR` the transport cause (`details.cause`). A login shows the browser none of them.
 
 ### `verify_id_token(deps, tokens, keys, config, handshake, discovery, now)` → `Result<{sub, email, email_verified, name, groups}>`
 
@@ -210,6 +221,14 @@ GETs the UserInfo endpoint with the access token as a Bearer token and returns t
 
 Discovery document and JWK Set fetching, with a 24-hour cache in `/var/run/luci-sso/` keyed by a hash of the URL. When a fetch fails, an expired cache entry is used instead. `deps: { fs, http, native, clock, log }`.
 
+### `discovery_url(issuer, internal_issuer_url)` → `Result<string>`
+
+The URL `discover()` fetches: `<issuer>/.well-known/openid-configuration`, or, with `internal_issuer_url`, that origin plus the issuer's path. Fails with `INSECURE_ISSUER_URL` or `INSECURE_FETCH_URL`.
+
+### `backchannel(doc, issuer, internal_issuer_url)` → `object`
+
+A shallow copy of a discovery document in which `token_endpoint`, `jwks_uri` and `userinfo_endpoint` on the issuer's origin are moved to `internal_issuer_url`'s origin, path and query kept. Endpoints on other hosts, and the browser-facing ones, are left alone. Without `internal_issuer_url`, a plain copy.
+
 ### `discover(deps, issuer, options)` → `Result<discovery_doc>`
 
 Fetches `<issuer>/.well-known/openid-configuration`, checks that its `issuer` is identical to `issuer`, and that `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. Drops a non-HTTPS `userinfo_endpoint` or `end_session_endpoint`.
@@ -219,10 +238,13 @@ Fetches `<issuer>/.well-known/openid-configuration`, checks that its `issuer` is
 | `internal_issuer_url` | Fetch from this origin instead, keeping the issuer's path. |
 | `cache_path` | Override the cache file. |
 | `ttl` | Cache lifetime in seconds (default `86400`). |
+| `no_cache` | Neither read, nor fall back to, nor write the cache. The connection test uses it. |
+
+Failure details, used by the connection test: `DISCOVERY_NETWORK_ERROR` carries the transport cause as a string (`HTTP_REQUEST_FAILED (TIMED_OUT)`); `DISCOVERY_FAILED` `{ http_status: 502, upstream_status }`; `DISCOVERY_ISSUER_MISMATCH` `{ issuer_id, declared, near_miss }`, where `declared` is the document's `issuer` when it is a string, else `null`, and `near_miss` is true when the two are equal after normalization (trailing slash, letter case, default port); `DISCOVERY_MISSING_ENDPOINT` and `INSECURE_ENDPOINT` the field name. A body that is not a JSON object is `INVALID_DISCOVERY_DOC`.
 
 ### `fetch_jwks(deps, jwks_uri, options)` → `Result<array>`
 
-Returns the `keys` array of the JWK Set. Options: `force` (skip the cache), `cache_path`, `ttl`.
+Returns the `keys` array of the JWK Set. Options: `force` (skip the fresh cache), `no_cache` (no cache at all, as for `discover()`), `cache_path`, `ttl`. `JWKS_NETWORK_ERROR` carries the transport cause, `JWKS_FETCH_FAILED` `{ http_status: 502, upstream_status }`.
 
 ### `find_jwk(keys, kid)` → `Result<jwk>`
 
@@ -252,11 +274,15 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
-| `roles` | array | Every `config role` section with an email or group, in config order: `{ name, emails, groups }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
+| `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
 
 ### `find_role_for_user(config, claims)` → `Result<{role_name, also_matched}>`
 
-Matches the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+Matches the sub `matchable_sub` returns (exact, case-sensitive), the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+
+### `matchable_sub(claims)` → `string` or `null`
+
+`claims.sub` when it is a non-empty string, as written. Otherwise `null`.
 
 ### `email_is_verified(claims)` → `bool`
 
@@ -544,6 +570,10 @@ The production wiring of [the `deps` object](#the-deps-object).
 
 Builds the production `deps` object. Called once by the CGI script; never in tests.
 
+### `create_probe(http_timeout_ms)` → `{ fs, native, http, clock, log }`
+
+The `deps` of the connection test: no `ubus` and no `uci`, and an HTTP client whose requests time out after `http_timeout_ms`. Called by the `luci-sso` rpcd plugin, in the child process that runs the test.
+
 ### `ubus_channel(conn)` → `{ call(obj, method, args) → Result }`
 
 Wraps a ubus connection. A `null` reply is a success unless `conn.error()` reports one (`UBUS_ERROR`); a missing connection gives `UBUS_CONNECT_FAILED`.
@@ -558,13 +588,13 @@ Opens syslog with the tag `luci-sso` and returns the `deps.log` function.
 
 The HTTPS client behind `deps.http`, used for every request from the router to the IdP.
 
-### `create(uclient, uloop, fs)` → `HttpClient`
+### `create(uclient, uloop, fs, options)` → `HttpClient`
 
 Returns `{ get(url, opts), post(url, opts) }`. `opts.headers` sets request headers; `post` sends `opts.body`. Both return `Result<{status, body}>`.
 
 - Only HTTPS URLs are accepted (`HTTPS_REQUIRED`).
 - Certificates are verified against every `*.crt` and `*.pem` file in `/etc/ssl/certs/` plus the usual bundle paths.
-- Requests time out after 10 seconds and bodies are capped at 256 KB.
+- Requests time out after `options.timeout` milliseconds, 10 seconds by default, and bodies are capped at 256 KB.
 - A failed request is `HTTP_REQUEST_FAILED` with the cause in `details`: `CONNECT_NOT_STARTED`, `CONNECTION_FAILED`, `TIMED_OUT`, `CERT_UNTRUSTED`, `CERT_NAME_MISMATCH`, `SSL_INIT_FAILED`, `RESPONSE_TOO_LARGE` or `UCLIENT_ERROR_<n>`, among others.
 
 ---

@@ -4,9 +4,17 @@ This guide describes how to diagnose and resolve authentication failures in `luc
 
 ---
 
+## Test the connection first
+
+If logins fail, or SSO is not enabled yet, start on the settings page: **Services > Single Sign-On**, **Test connection**. It checks the provider settings, including unsaved changes, and names the first thing that is wrong: an unreachable or untrusted provider, an issuer that does not match exactly, missing signing keys, a malformed Redirect URI, or a wrong Client ID or secret. It changes nothing. See [Test the connection](configure-in-luci.md#3-test-the-connection).
+
+A test that passes rules out the provider settings. The failure is then in what only a real login exercises, such as the redirect URI registered at the provider, the roles, or the router's clock: read the log.
+
+---
+
 ## Read the system log first
 
-All authentication events are written to syslog. Check this before anything else.
+All authentication events are written to syslog. Check this after the connection test, or when it passes.
 
 --8<-- "check-log.md"
 
@@ -123,7 +131,9 @@ The log shows `[403] USER_NOT_AUTHORIZED`, preceded by:
 luci-sso[1234]: User [sub_id: c775e7b757ede630] matched no roles [session_id: 8e25f313865ad01a]
 ```
 
-The user's email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email or group name appears in a role. Email matching ignores letter case; group matching is case-sensitive. A role with neither an email nor a group is ignored.
+The user's `sub`, email and groups match no `config role` section. Run `uci show luci-sso` and check that the user's exact email, group name or `sub` appears in a role. Email matching ignores letter case; group and `sub` matching are case-sensitive. A role with no email, group or `sub` is ignored.
+
+The error page the user sees shows their own `sub` ("give your administrator this account identifier"). To let that one account in whatever its email and groups, add the value to a role: see [Match one account by its subject](rbac.md#match-one-account-by-its-subject).
 
 If the lines before it include:
 
@@ -196,7 +206,7 @@ The valid range is `0`–`3600` seconds.
 
 The log shows `[500] UBUS_LOGIN_FAILED`. The line before it says why:
 
-- `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`: the role has no permissions in `rpcd`, or its entry was edited by hand into something else. The settings page shows `Not set: edit and save this role, or its users cannot log in` in the role's row. Edit the role and save the page, or run `ubus call luci-sso set_role` (see [How to Configure Role-Based Access Control](rbac.md#where-to-change-a-role)). After restoring a backup, restore `/etc/config/rpcd` too.
+- `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`: the role has no permissions in `rpcd`, or its entry was edited by hand into something else. The settings page shows `Not set: edit this role and Save & Apply, or its users cannot log in` in the role's row. Edit the role and save the page, or run `ubus call luci-sso set_role` (see [How to Configure Role-Based Access Control](rbac.md#where-to-change-a-role)). After restoring a backup, restore `/etc/config/rpcd` too.
 - `INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_<role>' of role '<role>' has a password option; remove it`: someone added a `password` option to the entry. Remove it, or save the role again through the settings page, which removes it:
 
     ```bash
@@ -210,7 +220,7 @@ The log shows `[500] UBUS_LOGIN_FAILED`. The line before it says why:
 
 ## The user gets the wrong role
 
-A user gets the **first** role that matches, from the top of the **Users** table; rights are never merged. The login logs which role it chose, and the other roles the user matched:
+A user gets the **first** role that matches, from the top of the **Roles** table; rights are never merged. The login logs which role it chose, and the other roles the user matched:
 
 ```
 luci-sso[1234]: User [sub_id: c775e7b757ede630] mapped to role 'viewer', the first match; also matched: admin [session_id: 8e25f313865ad01a]
@@ -230,7 +240,7 @@ The login completes, but pages are missing or refuse access.
     ubus call luci-sso list_roles
     ```
 
-    A role whose lists hold only `unauthenticated` grants nothing: its users can log in but see nothing. The settings page shows `(none): this role grants no access`. An upgrade gives such an entry to a role it found without permissions, and logs `role '<role>' had no permissions to move`; see [How to Upgrade luci-sso](upgrade.md).
+    A role whose lists hold only `unauthenticated` grants nothing: its users can log in but see nothing. The settings page shows `None: this role grants no access`. An upgrade gives such an entry to a role it found without permissions, and logs `role '<role>' had no permissions to move`; see [How to Upgrade luci-sso](upgrade.md).
 
 - Look in the lines from that login for `Role '<role>' grants unknown access group '<name>'; no ACL file defines it`, which means a role names a group no ACL file defines; see [How to Configure Role-Based Access Control](rbac.md#verify-a-role-is-working).
 - Verify LuCI ACL files are present: `ls /usr/share/rpcd/acl.d/`. Missing files indicate an incomplete LuCI installation.

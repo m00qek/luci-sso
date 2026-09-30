@@ -16,12 +16,14 @@
 import * as web from 'luci_sso.web';
 import * as config from 'luci_sso.config';
 import * as router from 'luci_sso.router';
-import { SSO_DISABLED } from 'luci_sso.errors';
+import { SSO_DISABLED, USER_NOT_AUTHORIZED } from 'luci_sso.errors';
 
 /**
  * Emits a router Result to the client: renders the response on success, or a
  * sanitised error page (HTTP status taken from `details.http_status`, default
- * 500) on failure.
+ * 500) on failure. A refused user's page also shows their own sub
+ * (`details.subject`, set by handshake.authenticate), so that they can give it
+ * to the administrator.
  */
 function emit(web_deps, res) {
 	if (!res.ok) {
@@ -29,7 +31,8 @@ function emit(web_deps, res) {
 		let extra = null;
 		if (type(res.details) == "object" && type(res.details.retry_after) == "int" && res.details.retry_after > 0)
 			extra = { "Retry-After": `${res.details.retry_after}` };
-		web.render_error(web_deps, res.error, status, extra);
+		let subject = (res.error == USER_NOT_AUTHORIZED && type(res.details) == "object") ? res.details.subject : null;
+		web.render_error(web_deps, res.error, status, extra, subject);
 	} else {
 		web.render(web_deps, res.data);
 	}

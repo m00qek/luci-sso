@@ -167,7 +167,7 @@ describe('oidc: back-channel failures map to 502 Bad Gateway', () => {
 		it(`TOKEN_EXCHANGE_FAILED is 502 for an upstream ${upstream}, which is logged once`, () => {
 			let r = exchange({ status: upstream, body: { error: "invalid_client" } });
 			assert.match(contains({ ok: false, error: 'TOKEN_EXCHANGE_FAILED' }), r.res);
-			assert.match({ http_status: 502 }, r.res.details);
+			assert.match({ http_status: 502, upstream_status: upstream, oauth_error: "invalid_client" }, r.res.details);
 			assert.match([ `Token exchange HTTP ${upstream} [session_id: sess1]` ],
 				filter(r.logs, (m) => index(m, `${upstream}`) >= 0));
 		});
@@ -176,14 +176,36 @@ describe('oidc: back-channel failures map to 502 Bad Gateway', () => {
 	it('OIDC_INVALID_GRANT is 502, and the upstream status is logged', () => {
 		let r = exchange({ status: 400, body: { error: "invalid_grant" } });
 		assert.match(contains({ ok: false, error: 'OIDC_INVALID_GRANT' }), r.res);
-		assert.match({ http_status: 502 }, r.res.details);
+		assert.match({ http_status: 502, upstream_status: 400, oauth_error: "invalid_grant" }, r.res.details);
 		assert.match(1, length(filter(r.logs, (m) => m == "Token exchange failed (invalid_grant, HTTP 400) [session_id: sess1]")), sprintf("%J", r.logs));
 	});
 
 	it('TOKEN_ENDPOINT_NETWORK_ERROR is 502', () => {
 		let r = exchange({ error: "CONNECTION_FAILED" });
 		assert.match(contains({ ok: false, error: 'TOKEN_ENDPOINT_NETWORK_ERROR' }), r.res);
-		assert.match({ http_status: 502 }, r.res.details);
+		assert.match({ http_status: 502, cause: "HTTP_REQUEST_FAILED (CONNECTION_FAILED)" }, r.res.details);
+	});
+
+	it('the OAuth error code is kept only when it is a short code, never free text', () => {
+		for (let body in [ {}, "not json", [ "invalid_client" ], { error: 42 }, { error: "" },
+		                   { error: "invalid client <script>" }, { error: "x\nforged" }, { error: "a" + sprintf("%064d", 0) } ]) {
+			let r = exchange({ status: 400, body });
+			assert.match(contains({ error: 'TOKEN_EXCHANGE_FAILED' }), r.res, sprintf("%J", body));
+			assert.match(null, r.res.details.oauth_error, sprintf("%J", body));
+			assert.match(400, r.res.details.upstream_status);
+		}
+		assert.match("unauthorized_client", exchange({ status: 400, body: { error: "unauthorized_client" } }).res.details.oauth_error);
+	});
+
+	it('sends client_id and client_secret in the form body (client_secret_post)', () => {
+		let sent;
+		with_context({ http_client: { data: { [f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "invalid_grant" } } } } }, (deps) => {
+			oidc.exchange_code(deps, { ...f.MOCK_CONFIG, redirect_uri: "https://r/cb" }, f.MOCK_DISCOVERY, "c 1", V, null);
+			sent = spy(deps.http).calls.post[0];
+		});
+		assert.match(f.MOCK_DISCOVERY.token_endpoint, sent[0]);
+		assert.match({ "Content-Type": "application/x-www-form-urlencoded" }, sent[1].headers);
+		assert.match(`grant_type=authorization_code&client_id=luci-app&client_secret=top-secret&redirect_uri=https%3A%2F%2Fr%2Fcb&code=c%201&code_verifier=${V}`, sent[1].body);
 	});
 
 	it('TOKEN_RESPONSE_INVALID_JSON is 502', () => {

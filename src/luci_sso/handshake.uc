@@ -66,20 +66,10 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 	if (!disc_res.ok) {
 		return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 502 });
 	}
-	// Create a shallow copy to avoid mutating the cached object
-	let discovery_doc = { ...disc_res.data };
-
-	// Split-horizon: the router reaches the IdP's back-channel endpoints on the
-	// internal origin. Only URLs on the issuer's own origin are moved, with
-	// path and query kept verbatim; endpoints on other hosts (e.g. Google's
-	// googleapis.com) are left alone. The authorization and end-session
-	// endpoints are browser redirects and are never rewritten.
-	if (config.internal_issuer_url) {
-		for (let k in [ "token_endpoint", "jwks_uri", "userinfo_endpoint" ]) {
-			if (type(discovery_doc[k]) == "string")
-				discovery_doc[k] = encoding.rebase_origin(discovery_doc[k], config.issuer_url, config.internal_issuer_url);
-		}
-	}
+	// A copy, so the cached object is not changed. Split-horizon: the router
+	// reaches the IdP's back-channel endpoints on the internal origin
+	// (discovery.backchannel says which).
+	let discovery_doc = discovery.backchannel(disc_res.data, config.issuer_url, config.internal_issuer_url);
 
 	// Token-endpoint failures carry their own 502 from oidc.exchange_code.
 	let exchange_res = oidc.exchange_code(deps, config, discovery_doc, code, handshake.code_verifier, session_id);
@@ -258,7 +248,9 @@ export function authenticate(deps, config, request) {
 
 	if (!res_role.ok) {
 		deps.log("warn", `User [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] matched no roles [session_id: ${session_id}]`);
-		return Result.err(USER_NOT_AUTHORIZED, { http_status: 403 });
+		// The refused user's own sub goes to their error page (web.render_error),
+		// so they can give it to the administrator. The log keeps the hash.
+		return Result.err(USER_NOT_AUTHORIZED, { http_status: 403, subject: user_data.sub });
 	}
 
 	let role = res_role.data.role_name;

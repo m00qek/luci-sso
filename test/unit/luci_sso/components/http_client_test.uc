@@ -23,6 +23,7 @@ function with_http_suite(behavior, cb) {
 	let uclient_beh = {
 		ssl_init: (opts) => { ssl_opts_captured = opts; return behavior.ssl_init !== false; },
 	};
+	if (behavior.on_timeout) uclient_beh.set_timeout = behavior.on_timeout;
 	if (behavior.connect === false) uclient_beh.connect = () => false;
 	if (behavior.request === false) uclient_beh.request = () => false;
 	if (behavior.alloc_fail)       uclient_beh['new']  = () => null;
@@ -55,7 +56,7 @@ function with_http_suite(behavior, cb) {
 		uloop:   { strict: true },
 		fs:      { strict: true, behavior: fs_beh },
 	}, (deps) => {
-		cb(http_client.create(deps.uclient, deps.uloop, deps.fs), () => ssl_opts_captured);
+		cb(http_client.create(deps.uclient, deps.uloop, deps.fs, behavior.options), () => ssl_opts_captured);
 	});
 }
 
@@ -245,5 +246,31 @@ describe('components.http_client: CA file discovery', () => {
 		let count = 0;
 		for (let f in files) if (f === '/etc/ssl/certs/ca-certificates.crt') count++;
 		assert.match(1, count);
+	});
+});
+
+// ─── timeout ──────────────────────────────────────────────────────────────────
+
+describe('components.http_client: timeout', () => {
+	function timeouts(options) {
+		let seen = [];
+		with_http_suite({ options, on_timeout: (ms) => { push(seen, ms); return true; } }, (client) => {
+			client.get(URL, {});
+			client.post(URL, { body: 'a=1' });
+		});
+		return seen;
+	}
+
+	it('sets a 10 s timeout on every request by default', () => {
+		assert.match([ 10000, 10000 ], timeouts(null));
+	});
+
+	it('uses the timeout given to create()', () => {
+		assert.match([ 5000, 5000 ], timeouts({ timeout: 5000 }));
+	});
+
+	it('ignores a timeout that is not a positive integer', () => {
+		for (let t in [ 0, -1, "5000", 1.5 ])
+			assert.match([ 10000, 10000 ], timeouts({ timeout: t }), sprintf("%J", t));
 	});
 });

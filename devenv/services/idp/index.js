@@ -10,6 +10,10 @@ app.use(express.urlencoded({ extended: true }));
 
 const APP_NAME = process.env.APP_NAME;
 const ISSUER = process.env.ISSUER
+// The one registered client, as devenv/services/openwrt/setup-uci.sh
+// configures the router.
+const CLIENT_ID = process.env.CLIENT_ID || 'luci-router';
+const CLIENT_SECRET = process.env.CLIENT_SECRET || 'secret-key-123';
 
 let privateKey;
 let publicKey;
@@ -103,12 +107,39 @@ app.get('/auth', (req, res) => {
     res.redirect(callbackUrl.toString());
 });
 
+// Client authentication (RFC 6749 §2.3.1): client_secret_post, as luci-sso
+// sends it, or client_secret_basic. Returns the client_id, or null.
+function authenticateClient(req) {
+    let id = req.body.client_id, secret = req.body.client_secret;
+    const auth = req.get('authorization') || '';
+    if (auth.startsWith('Basic ')) {
+        const decoded = Buffer.from(auth.slice(6), 'base64').toString();
+        const i = decoded.indexOf(':');
+        if (i >= 0) {
+            id = decodeURIComponent(decoded.slice(0, i));
+            secret = decodeURIComponent(decoded.slice(i + 1));
+        }
+    }
+    return (id === CLIENT_ID && secret === CLIENT_SECRET) ? id : null;
+}
+
 app.post('/token', async (req, res) => {
     const { code, code_verifier } = req.body;
     log(`Token exchange for code: ${code}`);
 
+    // The client is authenticated before the code is looked at (RFC 6749
+    // §3.2.1), so a made-up code with the right credentials gets
+    // invalid_grant, and wrong credentials get invalid_client: the settings
+    // page's connection test relies on that, as on a real IdP.
+    if (!authenticateClient(req)) {
+        log(`REJECTED: client authentication failed for ${req.body.client_id}`);
+        res.set('WWW-Authenticate', 'Basic realm="token"');
+        return res.status(401).json({ error: 'invalid_client' });
+    }
+
+    // RFC 6749 §5.2: an unknown, used or expired code is invalid_grant.
     const context = app.locals[code];
-    if (!context) return res.status(400).json({ error: 'invalid_code' });
+    if (!context) return res.status(400).json({ error: 'invalid_grant', error_description: 'unknown authorization code' });
 
     // Single-use enforcement and TTL check (Blocker #4 in 1770661270)
     delete app.locals[code];
@@ -133,7 +164,7 @@ app.post('/token', async (req, res) => {
 
     if (Date.now() > context.expires_at) {
         log(`Authorization code expired for ${context.client_id}`);
-        return res.status(400).json({ error: 'code_expired' });
+        return res.status(400).json({ error: 'invalid_grant', error_description: 'authorization code expired' });
     }
 
     const accessToken = crypto.randomBytes(32).toString('hex');

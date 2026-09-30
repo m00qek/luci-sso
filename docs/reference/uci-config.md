@@ -44,22 +44,24 @@ The connection to the IdP. A missing or invalid required option makes every requ
 
 Each `config role '<name>'` section says which users get the role. What the role grants is its `rpcd` login entry, described in [Role Permissions (rpcd login entry)](#role-permissions-rpcd-login-entry). `rpcd` is the OpenWrt daemon that holds LuCI sessions and their rights.
 
-A role matches a user if ANY of its `email` or `group` values matches. Roles are tried in the order of their sections in `/etc/config/luci-sso`; the user gets the **first** role that matches, and only that one.
+A role matches a user if ANY of its `email`, `group` or `sub` values matches. Roles are tried in the order of their sections in `/etc/config/luci-sso`; the user gets the **first** role that matches, and only that one.
 
 | Option | Type | Description |
 | :--- | :--- | :--- |
 | `email` | list (string) | Match by OIDC `email` claim, ignoring letter case in the whole address. Only a verified email matches while `require_email_verified` is on (the default). See [notes](#role-mapping-notes). |
 | `group` | list (string) | Match by a value of the OIDC `groups` claim, which must be a JSON array. Case-sensitive. |
+| `sub` | list (string) | Match by the OIDC `sub` claim of the ID Token: exact, case-sensitive string equality. The issuer is implied: it is always `issuer_url`. See [notes](#role-mapping-notes). |
 
 ### Role mapping notes
 
 - **Section name.** The role's name. `default` is taken by the OIDC section. The role's `rpcd` entry needs a name of 1–32 letters, digits and underscores; a role with a longer name can exist in UCI, but it cannot get permissions, and its users cannot log in.
 - **Email case.** `Alice@Example.com` and `alice@example.com` match the same rule. Ignoring case in the local part too is `luci-sso`'s policy, not a standard's rule; see [About Roles and Permissions](../explanation/roles-and-permissions.md#verified-email-addresses).
-- **No match.** A user who matches no role is refused with `USER_NOT_AUTHORIZED`.
+- **Subject.** A `sub` value matches only the identical string: no letter-case folding, trimming, prefix or pattern. A `sub` claim that is missing, empty or not a string matches no rule. `require_email_verified` does not affect it. Why: [Matching by subject](../explanation/roles-and-permissions.md#matching-by-subject).
+- **No match.** A user who matches no role is refused with `USER_NOT_AUTHORIZED`. The error page shows that user their own `sub`, HTML-escaped, and asks them to give it to the administrator. The log records only its hash (`sub_id`).
 - **Several matches.** Rights are never merged. The login's log line names the role chosen and the other matches.
-- **Invalid roles.** A role that has neither an `email` nor a `group` entry is ignored, and the log says `Ignoring role '<name>': missing email or group list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).
+- **Invalid roles.** A role that has no `email`, `group` or `sub` entry is ignored, and the log says `Ignoring role '<name>': missing email, group or sub list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).
 - **Leftover `read`/`write`.** Releases before role permissions moved to `rpcd` kept `read` and `write` lists on the role. They grant nothing now, and the log says `Ignoring read/write on role '<name>': its permissions are the rpcd login entry 'luci_sso_<name>'`. The package's install and upgrade script moves them into the entry.
-- **Shipped role.** The package ships `config role 'admin'` with `list email 'admin@example.com'`. On install, if that role still matches only that address and has no entry, its entry gets `read '*'` and `write '*'`.
+- **Shipped role.** The package ships `config role 'admin'` with `list email 'admin@example.com'`. On install, if that role still matches only that address (no other email, no group, no sub) and has no entry, its entry gets `read '*'` and `write '*'`.
 
 For worked examples, see [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md).
 
@@ -102,13 +104,16 @@ Access groups are the top-level keys of the JSON files in `/usr/share/rpcd/acl.d
 
 ## The `luci-sso` ubus object
 
-The `luci-sso` ubus object, an `rpcd` plugin at `/usr/share/rpcd/ucode/luci-sso.uc`, is the interface that writes the role entries. The settings page uses it; so can `ubus call` on the router. It touches only `luci_sso_*` sections, and stages its changes in a private UCI delta directory, so it never commits changes to `rpcd` that someone else staged.
+The `luci-sso` ubus object, an `rpcd` plugin at `/usr/share/rpcd/ucode/luci-sso.uc`, is the interface that writes the role entries, and runs the settings page's connection test. The settings page uses it; so can `ubus call` on the router. It touches only `luci_sso_*` sections, and stages its changes in a private UCI delta directory, so it never commits changes to `rpcd` that someone else staged.
 
 | Method | Arguments | Reply |
 | :--- | :--- | :--- |
 | `list_roles` | none | `{ "roles": [ { "name", "read", "write" } ], "reload_pending": <bool> }`: every `luci_sso_*` login entry with a valid role name, in file order. |
 | `set_role` | `name` (string), `read` (array), `write` (array) | `{ "role": { "name", "read", "write" } }`, with the lists as stored. Creates or replaces the entry, and removes any `password` option. |
 | `delete_role` | `name` (string) | `{ "result": true }` |
+| `list_acl_groups` | none | `{ "groups": [ ... ] }`: the top-level keys of every `/usr/share/rpcd/acl.d/*.json`, sorted, each once. Names a list could not store are left out. Changes nothing. |
+| `test_connection` | `issuer_url`, `internal_issuer_url`, `client_id`, `client_secret`, `redirect_uri` (strings; missing counts as empty) | `{ "job": "<id>" }`. Starts a [connection test](#connection-test) in the background and answers at once. |
+| `test_connection_result` | `job` (string) | `{ "done": false }` while the test runs; then `{ "done": true, "checks": [ { "id", "status", "message" } ] }`, or `{ "done": true, "error", "message" }` when the test itself failed. |
 
 | Rule | Limit |
 | :--- | :--- |
@@ -122,56 +127,91 @@ Errors come back as a reply `{ "error": "<CODE>", "message": "<text>" }`. `rpcd`
 | :--- | :--- |
 | `INVALID_NAME` | The name is missing, too long, or has other characters. |
 | `INVALID_LIST` | A list is not an array of strings, is too long, has an empty, too long or control-character entry, or its `read` list denies `unauthenticated`. |
-| `NOT_FOUND` | `delete_role`: the role has no entry. |
+| `NOT_FOUND` | `delete_role`: the role has no entry. `test_connection_result`: no test with that `job`; only the latest test is kept, in memory, and an `rpcd` restart drops it. |
 | `COMMIT_FAILED` | `/etc/config/rpcd` could not be written. |
+| `BUSY` | `test_connection`: a test is already running. One runs at a time. |
+| `TIMEOUT` | `test_connection_result`: the test did not finish within 25 seconds and was stopped. |
+| `TEST_FAILED` | `test_connection` could not start the test, or it stopped without a result. |
 
 After a successful write, the plugin makes `rpcd` reload one second after the reply, as `/etc/init.d/rpcd reload` does. Writes in that second share the reload. `list_roles` reports `"reload_pending": true` from the write until `rpcd` has restarted. While `rpcd` restarts, a `/ubus/` request that reaches it at the moment it re-executes itself is never answered: `uhttpd` waits for its session check up to half its script timeout (30 s by default) and serves no page meanwhile. Every `rpcd` reload can do this, whatever triggers it. The settings page waits up to 45 seconds for the reload.
 
-Access through LuCI needs the `luci-app-sso` access group: its `read` section grants `list_roles`, its `write` section `set_role` and `delete_role`. It grants no UCI access to `rpcd`.
+Access through LuCI needs the `luci-app-sso` access group: its `read` section grants `list_roles` and `list_acl_groups`, its `write` section `set_role`, `delete_role`, `test_connection` and `test_connection_result`. A user who may only read the settings page cannot run the connection test, since it sends the client secret to the provider. The group grants no UCI access to `rpcd`.
+
+### Connection test
+
+`test_connection` runs these checks in order, through the same discovery, JWK Set and token-request code as a login, and returns one entry for each, always in this order. `status` is `pass`, `fail`, `warn` (could not tell) or `skip` (a check it depends on failed); `message` is an English sentence for the administrator.
+
+| `id` | Passes when |
+| :--- | :--- |
+| `issuer_https` | `issuer_url` is set and starts with `https://`. |
+| `discovery` | The discovery document is fetched with status 200 and is a JSON object. With `internal_issuer_url`, from its origin plus the issuer's path, as at login. `internal_issuer_url` must be an HTTPS origin with no path. |
+| `issuer_match` | The document's `issuer` is exactly `issuer_url`. A failure's message says when the two differ only in a trailing slash, letter case or default port. |
+| `endpoints` | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. |
+| `jwks` | The JWK Set has at least one key with no `use` or `use` `sig`, no `alg` or an `alg` of `RS256` (RSA) or `ES256` (EC), and a public key the router can build: RSA, or EC on P-256. |
+| `redirect_uri` | `redirect_uri` is set, starts with `https://`, and ends in `/cgi-bin/luci-sso/callback`. |
+| `client_credentials` | A token request with a made-up authorization code, `client_id` and `client_secret` in the form body (`client_secret_post`, as at login) and a new PKCE verifier gets `invalid_grant`. `invalid_client`, or HTTP 401, fails; any other answer is `warn`, and the message quotes the OAuth `error` or the HTTP status. |
+
+With `internal_issuer_url`, the JWK Set and token requests go to the internal origin too, as at login. Each HTTP request gives up after 5 seconds, and the test after 25. It runs in a child process of `rpcd`, so `rpcd` keeps answering meanwhile. It reads no cache and writes nothing on the router; its log lines start with `Connection test:`. `client_secret` is never part of a reply or a log line.
 
 ---
 
 ## LuCI Form ↔ UCI Option
 
-The settings page at **Services > Single Sign-On** (view `services/sso`, heading **SSO Login**) edits `/etc/config/luci-sso`, and the roles' `rpcd` login entries through the [`luci-sso` ubus object](#the-luci-sso-ubus-object). Opening it needs the `luci-app-sso` access group. **Save & Apply** writes the form with `uci`; **Reset** reloads the last saved values without writing.
+The settings page at **Services > Single Sign-On** (view `services/sso`, heading **Single Sign-On**) edits `/etc/config/luci-sso`, and the roles' `rpcd` login entries through the [`luci-sso` ubus object](#the-luci-sso-ubus-object). Opening it needs the `luci-app-sso` access group. It has two sections, **Identity provider** and **Roles**.
 
-### Settings section
+Changes take effect with **Save & Apply**:
 
-Edits `config oidc 'default'`.
-
-| Field | UCI option | Form behaviour |
+| Button | UCI changes (`/etc/config/luci-sso`) | Role permissions (`rpcd` login entries) |
 | :--- | :--- | :--- |
-| **Enable SSO** | `enabled` | Checkbox; saved as `1` or `0`. While `0`, the login page shows no SSO button, the `?action=enabled` probe answers `{"enabled": false}`, and other requests to `/cgi-bin/luci-sso` get an error page (`SSO_DISABLED`). Password login is unaffected. |
-| **Issuer URL** | `issuer_url` | Required. Rejects a value that does not start with `https://` (`Must use HTTPS`). Placeholder: `https://accounts.google.com`. |
-| **Client ID** | `client_id` | Required. |
-| **Client Secret** | `client_secret` | Required. Masked password field. |
-| **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host name in the browser's address bar without its port; when it is set, the saved value. |
-| **Scopes** | `scope` | Optional. Placeholder: `openid profile email`, which is also what the login requests when the option is empty. |
-| **Require Verified Email** | `require_email_verified` | Checkbox; saved as `1` or `0`. Ticked when the option is unset, and then saved as `1`. |
-| **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
-| **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
+| **Save** | Staged in the session, as on any LuCI page. | Kept on the page; nothing is sent. Lost if the page is reloaded or left. |
+| **Save & Apply** | Staged, then applied with LuCI's checked apply (or unchecked, from the button's menu). | With UCI changes pending: sent after LuCI's `uci-applied` event, when the apply is confirmed; not sent if it is rolled back. With none pending: sent at once. Each edited role goes to `set_role`, each deleted one to `delete_role`, and the page waits up to 45 s for `rpcd` to reload, then reloads itself. A refusal is shown, with the edits kept on the page. |
+| **Reset** | The form goes back to the saved values. | Edits on the page are discarded. |
 
-### Users section
+### Identity provider section
 
-Each row is a `config role '<name>'` section and its `rpcd` login entry. The rows are in the order roles are tried; dragging a row reorders the sections. **Add** takes the role name, which becomes the section name; the name `default` is refused, because it belongs to the OIDC section. Each row's **Edit** button opens the role's editor; its **Delete** button deletes the section and the entry.
+Edits `config oidc 'default'`. Two tabs; the **Provider** tab is in the order of setting up.
 
-The table's **Emails** and **Groups** columns list the role's values, or `(none)`. **Read Access** and **Write Access** list the entry's lists, without `unauthenticated`:
+| Tab | Field | UCI option | Form behaviour |
+| :--- | :--- | :--- | :--- |
+| Provider | **Issuer URL** | `issuer_url` | Required. Rejects a value that does not start with `https://` (`Must use HTTPS`). Placeholder: `https://accounts.google.com`. |
+| Provider | **Client ID** | `client_id` | Required. |
+| Provider | **Client Secret** | `client_secret` | Required. Masked password field. |
+| Provider | **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host name in the browser's address bar without its port, and a **Save** writes it; when it is set, the saved value. Wide enough for the whole address. **Copy** copies the field's value, with the Clipboard API or, where it is missing, a selected text area; "Copied" confirms it. |
+| Provider | **Scopes** | `scope` | Optional. Placeholder: `openid profile email`, which is also what the login requests when the option is empty. Warns, without blocking, when a role has a `group` rule and the scopes (or the default) do not include `groups`. |
+| Provider | **Test Connection** | none | A **Test connection** button. Sends the form's Issuer URL, Internal Issuer URL, Client ID, Client Secret and Redirect URI, saved or not, to [`test_connection`](#connection-test), and lists each check's result as `[Pass]`, `[Fail]`, `[Warning]` or `[Skipped]`, with a summary line. Saves nothing; works while **Enable SSO** is off. Needs write access to the `luci-app-sso` group. |
+| Provider | **Enable SSO** | `enabled` | Checkbox; saved as `1` or `0`. While `0`, the login page shows no SSO button, the `?action=enabled` probe answers `{"enabled": false}`, and other requests to `/cgi-bin/luci-sso` get an error page (`SSO_DISABLED`). Password login is unaffected. |
+| Advanced | **Require Verified Email** | `require_email_verified` | Checkbox; saved as `1` or `0`. Ticked when the option is unset, and then saved as `1`. While ticked, warns, without blocking, about the roles that have an `email` rule and neither a `group` nor a `sub` rule. |
+| Advanced | **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
+| Advanced | **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
+
+The warnings are computed from the roles as the page holds them, and follow edits to **Scopes**, **Require Verified Email** and the roles.
+
+### Roles section
+
+Each row is a `config role '<name>'` section and its `rpcd` login entry. The rows are in the order roles are tried; dragging a row reorders the sections. Each row's **Edit** button opens the role's editor, titled **Role: `<name>`**; its **Delete** button deletes the section and, on **Save & Apply**, the entry.
+
+The box next to **Add** (placeholder `New role name, e.g. viewers`) takes the role name, which becomes the section name. While you type, it refuses, with the reason under the box and **Add** disabled: characters other than letters, digits and underscores; more than 32 characters (the length an `rpcd` entry allows); `default`, which belongs to the OIDC section; and the name of an existing section.
+
+The table's **Emails**, **Groups** and **Subjects** columns list the role's values. **Read access** and **Write access** list the entry's lists, without `unauthenticated`:
 
 | Cell | Meaning |
 | :--- | :--- |
-| `(none)` | The list is empty. |
-| `(none): this role grants no access` | Both lists are empty apart from `unauthenticated`. The role's users can log in but see nothing. Shown in both cells. |
-| `Not set: edit and save this role, or its users cannot log in` | The role has no entry. Shown in both cells. |
+| `—` | The list is empty. |
+| **Everything** | **Read access** is exactly `*`. |
+| **Full admin** | **Write access** is exactly `*`. |
+| `None: this role grants no access` | Both lists are empty apart from `unauthenticated`. The role's users can log in but see nothing. Shown under **Read access**. |
+| `Not set: edit this role and Save & Apply, or its users cannot log in` | The role has no entry. Shown under **Read access**. |
 | `(unavailable)` | `list_roles` failed. The access fields are read-only, and nothing is written to `rpcd`. |
 
 | Field (role editor) | Stored in | Form behaviour |
 | :--- | :--- | :--- |
-| **Email Addresses** | `email` | List; one address per entry. |
+| **Emails** | `email` | List; one address per entry. |
 | **Groups** | `group` | List; one group per entry. |
-| **Read Access** | `read` of `luci_sso_<name>` | List of access groups. `unauthenticated` is not shown, and is always stored. |
-| **Write Access** | `write` of `luci_sso_<name>` | List of access groups. |
+| **Subjects** | `sub` | List; one `sub` value per entry, compared exactly. |
+| **Read access** | `read` of `luci_sso_<name>` | List of access groups. Suggests `*` and every group [`list_acl_groups`](#the-luci-sso-ubus-object) returns, except `unauthenticated`; any other name or pattern can be typed. `unauthenticated` is not shown, and is always stored. |
+| **Write access** | `write` of `luci_sso_<name>` | List of access groups, with the same suggestions. |
 
-The editor says "Permission changes take effect when you click Save at the bottom of the page." Its own **Save** keeps the edit on the page only. The page's **Save** (and **Save & Apply**) stages the UCI changes, then sends each edited role to `set_role` and each deleted one to `delete_role`, and waits for `rpcd` to reload. A new role always gets an entry, even with both lists empty. An error from the object is shown and stops **Save & Apply**. Emails, groups and the order take effect with **Save & Apply**.
+The editor says "Changes here are kept on the page until you Save & Apply it." Its own **Save** keeps the edit on the page only. A new role always gets an entry, even with both lists empty.
 
 Matching rules are in [Role Mapping](#role-mapping-config-role); permission rules in [Role Permissions](#role-permissions-rpcd-login-entry).
 

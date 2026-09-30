@@ -5,18 +5,24 @@
 'require ui';
 'require rpc';
 'require request';
+'require dom';
 
 /*
+ * One rule: changes take effect with Save & Apply.
+ *
  * A role has two halves:
- *  - its matching rules (email, group) and its place in the order: a
+ *  - its matching rules (email, group, sub) and its place in the order: a
  *    `role` section of /etc/config/luci-sso, edited through UCI like any
- *    other LuCI form, and applied with Save & Apply;
+ *    other LuCI form. Save stages them; Save & Apply applies them;
  *  - its permissions (read, write): the rpcd login entry luci_sso_<role>,
- *    which only the `luci-sso` ubus object may write. The page loads them
- *    with list_roles and, when the form is saved, writes the roles edited
- *    since with set_role and removes the deleted ones with delete_role.
- *    Each write makes rpcd reload; the page waits for it before it reports
- *    the save done.
+ *    which only the `luci-sso` ubus object may write, and which LuCI's
+ *    staged changes cannot hold. The page loads them with list_roles and
+ *    keeps edits to them on the page, across a plain Save, until Save &
+ *    Apply. Then it writes the roles edited since with set_role, removes the
+ *    deleted ones with delete_role, and waits for rpcd to reload with them.
+ *    With UCI changes pending, that happens only once LuCI has applied and
+ *    confirmed them (its `uci-applied` event): an apply that is rolled back
+ *    writes no permissions. With none pending, it happens at once.
  */
 
 var callListRoles = rpc.declare({
@@ -36,6 +42,33 @@ var callDeleteRole = rpc.declare({
 	params: [ 'name' ]
 });
 
+var callListAclGroups = rpc.declare({
+	object: 'luci-sso',
+	method: 'list_acl_groups',
+	expect: { groups: [] }
+});
+
+var callTestConnection = rpc.declare({
+	object: 'luci-sso',
+	method: 'test_connection',
+	params: [ 'issuer_url', 'internal_issuer_url', 'client_id', 'client_secret', 'redirect_uri' ]
+});
+
+var callTestConnectionResult = rpc.declare({
+	object: 'luci-sso',
+	method: 'test_connection_result',
+	params: [ 'job' ]
+});
+
+/* The connection test runs in the background on the router (see the
+ * luci-sso rpcd plugin); the page asks for its result until it is there.
+ * The router stops a test after 25 s; the page waits a little longer. */
+var TEST_TIMEOUT_MS = 35000;
+var TEST_POLL_MS = 500;
+
+/* The provider settings the connection test checks. */
+var TEST_FIELDS = [ 'issuer_url', 'internal_issuer_url', 'client_id', 'client_secret', 'redirect_uri' ];
+
 /* Every role's read list grants this group (the ubus object adds it), so the
  * page neither shows it nor lets it be removed. */
 var BASELINE = 'unauthenticated';
@@ -49,9 +82,94 @@ var BASELINE = 'unauthenticated';
 var RELOAD_TIMEOUT_MS = 45000;
 var RELOAD_POLL_MS = 500;
 
+/* A role name becomes part of the rpcd section name luci_sso_<role>. */
+var NAME_MAX = 32;
+
+/* The documentation of this release. */
+var DOCS = 'https://m00qek.github.io/luci-sso/0.10/';
+
+/* Shown for an empty list. */
+var NONE = '\u2014';
+
 function renderList(items) {
-	if (!items || !items.length) return _('(none)');
+	if (!items || !items.length) return NONE;
 	return items.join(', ');
+}
+
+function docLink(path, text) {
+	return '<a href="' + DOCS + path + '" target="_blank">' + text + '</a>';
+}
+
+/* Why a new role's name cannot be used, or true. */
+function checkRoleName(name) {
+	if (!/^[A-Za-z0-9_]+$/.test(name))
+		return _('Use only letters, digits and underscores.');
+	if (name.length > NAME_MAX)
+		return _('Use at most %d characters.').format(NAME_MAX);
+	if (name === 'default')
+		return _('"default" is reserved for the identity provider settings.');
+	if (uci.get('luci-sso', name) != null)
+		return _('There is already a role with this name.');
+	return true;
+}
+
+/* Copies text with the Clipboard API, or a selected text area where the
+ * API is missing. */
+function copyText(text) {
+	if (navigator.clipboard && window.isSecureContext)
+		return navigator.clipboard.writeText(text);
+	return new Promise(function(resolve, reject) {
+		var ta = E('textarea', { 'readonly': '', 'aria-hidden': 'true', 'style': 'position:fixed;top:0;left:0;opacity:0' }, [ text ]);
+		document.body.appendChild(ta);
+		ta.select();
+		var ok = false;
+		try { ok = document.execCommand('copy'); } catch (e) {}
+		document.body.removeChild(ta);
+		if (ok) resolve(); else reject(new Error('copy'));
+	});
+}
+
+/* The roles' matching rules, as the page holds them. */
+function roleRules() {
+	return uci.sections('luci-sso', 'role').map(function(s) {
+		return { name: s['.name'], email: L.toArray(s.email), group: L.toArray(s.group), sub: L.toArray(s.sub) };
+	});
+}
+
+/* A warning for Scopes: roles match by group, but the scopes do not ask
+ * for groups. */
+function scopeWarning(scope) {
+	var scopes = String(scope || 'openid profile email').trim().split(/\s+/);
+	if (scopes.indexOf('groups') >= 0) return null;
+	var names = roleRules().filter(function(r) { return r.group.length; }).map(function(r) { return r.name; });
+	if (!names.length) return null;
+	return _('Roles %s match by group, but Scopes does not ask for <code>groups</code>. Most providers then send no groups, and those rules match nobody.')
+		.format(names.join(', '));
+}
+
+/* A warning for Require Verified Email: roles that match by email alone. */
+function verifiedWarning(on) {
+	if (!on) return null;
+	var names = roleRules().filter(function(r) { return r.email.length && !r.group.length && !r.sub.length; })
+		.map(function(r) { return r.name; });
+	if (!names.length) return null;
+	return _('Roles %s match by email only. They let a user in only if your identity provider sends <code>email_verified: true</code> for the address; otherwise match those users by group or subject.')
+		.format(names.join(', '));
+}
+
+/* Fills or empties a warning slot under a field. */
+function setWarning(slot, html) {
+	if (!slot) return;
+	if (html) {
+		slot.className = 'alert-message warning luci-sso-warning';
+		slot.innerHTML = html;
+		slot.removeAttribute('hidden');
+	}
+	else {
+		slot.className = 'luci-sso-warning';
+		slot.innerHTML = '';
+		slot.setAttribute('hidden', '');
+	}
 }
 
 function withoutBaseline(list) {
@@ -91,6 +209,77 @@ function awaitReload() {
 	}).then(poll);
 }
 
+function sleep(ms) {
+	return new Promise(function(resolve) { window.setTimeout(resolve, ms); });
+}
+
+/* Each check's name, in the order the router runs them. */
+function checkTitle(id) {
+	switch (id) {
+	case 'issuer_https':       return _('Issuer URL');
+	case 'discovery':          return _('Discovery');
+	case 'issuer_match':       return _('Issuer');
+	case 'endpoints':          return _('Endpoints');
+	case 'jwks':               return _('Signing keys');
+	case 'redirect_uri':       return _('Redirect URI');
+	case 'client_credentials': return _('Client credentials');
+	default:                   return id;
+	}
+}
+
+function statusLabel(status) {
+	switch (status) {
+	case 'pass': return _('Pass');
+	case 'fail': return _('Fail');
+	case 'warn': return _('Warning');
+	default:     return _('Skipped');
+	}
+}
+
+/* Asks the router for the result of connection test `job` until it is done. */
+function awaitTest(job) {
+	var deadline = Date.now() + TEST_TIMEOUT_MS;
+	var poll = function() {
+		return callTestConnectionResult(job).then(function(reply) {
+			if (reply && (reply.done || reply.error))
+				return reply;
+			if (Date.now() > deadline)
+				return { error: 'TIMEOUT', message: _('the router did not report a result in time') };
+			return sleep(TEST_POLL_MS).then(poll);
+		});
+	};
+	return sleep(TEST_POLL_MS).then(poll);
+}
+
+/* The result list of a connection test, one line per check. */
+function renderTestResult(reply) {
+	if (!reply || reply.error || !Array.isArray(reply.checks))
+		return E('div', { 'class': 'alert-message warning luci-sso-test-summary' },
+			_('The connection test could not run: %s').format((reply && (reply.message || reply.error)) || _('no reply')));
+
+	var counts = { pass: 0, fail: 0, warn: 0, skip: 0 };
+	reply.checks.forEach(function(c) { counts[c.status] = (counts[c.status] || 0) + 1; });
+
+	var summary;
+	if (counts.fail)
+		summary = E('p', { 'class': 'luci-sso-test-summary' }, E('strong', _('%d of %d checks failed. Fix them before you enable SSO.').format(counts.fail, reply.checks.length)));
+	else if (counts.warn)
+		summary = E('p', { 'class': 'luci-sso-test-summary' }, E('strong', _('No check failed, but some could not be confirmed.')));
+	else
+		summary = E('p', { 'class': 'luci-sso-test-summary' }, E('strong', _('All checks passed.')));
+
+	return E('div', {}, [
+		summary,
+		E('ul', { 'class': 'luci-sso-test-results' }, reply.checks.map(function(c) {
+			return E('li', { 'class': 'luci-sso-check', 'data-check': c.id, 'data-status': c.status }, [
+				E('strong', { 'class': 'luci-sso-check-status' }, '[' + statusLabel(c.status) + ']'), ' ',
+				E('span', { 'class': 'luci-sso-check-title' }, checkTitle(c.id)), ': ',
+				E('span', { 'class': 'luci-sso-check-message' }, c.message)
+			]);
+		}))
+	]);
+}
+
 /* A reply of the luci-sso object: its own errors come back as a result. */
 function checkReply(name, reply) {
 	if (reply && reply.error)
@@ -100,9 +289,10 @@ function checkReply(name, reply) {
 
 return view.extend({
 	load: function() {
-		return callListRoles().catch(function(e) {
-			return { failed: e };
-		});
+		return Promise.all([
+			callListRoles().catch(function(e) { return { failed: e }; }),
+			callListAclGroups().catch(function() { return null; })
+		]);
 	},
 
 	/* Permissions as rpcd holds them, by role name, and the edits since. */
@@ -136,27 +326,37 @@ return view.extend({
 		this.edited[name] = next;
 	},
 
-	/* The Read Access / Write Access cell of a role. */
+	/* The Read access / Write access cell of a role. */
 	accessCell: function(name, list) {
 		if (!this.accessAvailable)
 			return E('em', _('(unavailable)'));
 		var a = this.accessOf(name);
 		if (!a)
 			return list == 'read'
-				? E('em', { 'class': 'luci-sso-no-entry' }, _('Not set: edit and save this role, or its users cannot log in'))
-				: E('em', _('(none)'));
+				? E('em', { 'class': 'luci-sso-no-entry' }, _('Not set: edit this role and Save & Apply, or its users cannot log in'))
+				: NONE;
 		var read = withoutBaseline(a.read);
 		if (list == 'read' && !read.length && !a.write.length)
-			return E('em', { 'class': 'luci-sso-no-access' }, _('(none): this role grants no access'));
-		return renderList(list == 'read' ? read : a.write);
+			return E('em', { 'class': 'luci-sso-no-access' }, _('None: this role grants no access'));
+		var items = (list == 'read') ? read : L.toArray(a.write);
+		if (items.length == 1 && items[0] === '*')
+			return E('span', { 'title': '*' }, (list == 'read') ? _('Everything') : _('Full admin'));
+		return renderList(items);
+	},
+
+	/* Whether the page holds permission edits that rpcd does not have yet. */
+	hasAccessEdits: function() {
+		if (!this.accessAvailable)
+			return false;
+		var roles = uci.sections('luci-sso', 'role').map(function(s) { return s['.name']; });
+		return Object.keys(this.deleted).some(function(n) { return roles.indexOf(n) < 0; }) ||
+			Object.keys(this.edited).some(function(n) { return roles.indexOf(n) >= 0; });
 	},
 
 	/* Writes the edited and deleted roles' permissions, then waits for rpcd
-	 * to reload with them. */
-	saveAccess: function() {
-		if (!this.accessAvailable)
-			return Promise.resolve();
-
+	 * to reload with them. Resolves true once they are in force, false when
+	 * the reload did not finish in time; rejects when rpcd refuses one. */
+	writeAccess: function() {
 		var roles = uci.sections('luci-sso', 'role').map(function(s) { return s['.name']; });
 		var tasks = [];
 
@@ -176,29 +376,99 @@ return view.extend({
 		}, this));
 
 		if (!tasks.length)
-			return Promise.resolve();
+			return Promise.resolve(true);
+		return Promise.all(tasks).then(awaitReload);
+	},
 
-		var note = ui.addNotification(null,
-			E('p', { 'class': 'spinning' }, _('Saving role permissions; rpcd is reloading to apply them…')), 'info');
+	/* The permission half of Save & Apply, shown in LuCI's apply dialog. On
+	 * success the page reloads, as after any apply; on failure the edits stay
+	 * on the page, to fix and apply again. */
+	applyAccess: function() {
+		var reload = function() { window.location = window.location.href.split('#')[0]; };
 
-		return Promise.all(tasks).then(awaitReload).then(L.bind(function(done) {
-			return callListRoles().then(L.bind(function(data) {
-				this.loadAccess(data);
-				note.remove();
-				if (!done)
-					throw new Error(_('rpcd did not finish reloading; the new permissions may not be in force yet.'));
-				ui.addTimeLimitedNotification(null, E('p', _('Role permissions saved and in force.')), 5000, 'info');
-				return this._map.reset();
-			}, this));
-		}, this)).catch(function(e) {
-			note.remove();
-			ui.addNotification(null, E('p', e.message), 'danger');
-			throw e;
+		ui.changes.displayStatus('notice spinning',
+			E('p', _('Saving role permissions; rpcd is reloading to apply them…')));
+
+		return this.writeAccess().then(L.bind(function(done) {
+			if (!done)
+				throw new Error(_('rpcd did not finish reloading; the new permissions may not be in force yet.'));
+			this.edited = {};
+			this.deleted = {};
+			ui.changes.displayStatus('notice', E('p', _('Role permissions saved and in force.')));
+			return sleep(1500).then(reload);
+		}, this)).catch(L.bind(function(e) {
+			ui.changes.displayStatus('warning', [
+				E('h4', _('Role permissions not saved')),
+				E('p', e.message),
+				E('div', { 'class': 'right' }, E('button', {
+					'class': 'btn cbi-button',
+					'click': L.bind(function() {
+						ui.changes.displayStatus(false);
+						return callListRoles().then(L.bind(function(data) {
+							var edited = this.edited, deleted = this.deleted;
+							this.loadAccess(data);
+							this.edited = edited;
+							this.deleted = deleted;
+							return this._map.load().then(L.bind(this._map.reset, this._map));
+						}, this));
+					}, this)
+				}, _('Dismiss')))
+			]);
+		}, this));
+	},
+
+	/* Save & Apply: stage and apply the UCI changes as LuCI does, and write
+	 * the permissions only once the apply has gone through (see the comment
+	 * at the top). */
+	handleSaveApply: function(ev, mode) {
+		var page = this;
+		var checked = (mode == '0');
+
+		return this.handleSave(ev).then(function() {
+			if (!page.hasAccessEdits())
+				return ui.changes.apply(checked);
+
+			return uci.changes().then(function(changes) {
+				var pending = Object.keys(changes || {}).some(function(c) { return L.toArray(changes[c]).length > 0; });
+				if (!pending)
+					return page.applyAccess();
+
+				if (!page.applyArmed) {
+					page.applyArmed = true;
+					document.addEventListener('uci-applied', function() {
+						page.applyArmed = false;
+						/* LuCI reloads the page L.env.apply_display seconds
+						 * after this event; hold it until the permissions are
+						 * written, then reload here. */
+						L.env.apply_display = RELOAD_TIMEOUT_MS / 1000 + 60;
+						Promise.resolve().then(L.bind(page.applyAccess, page));
+					}, { once: true });
+				}
+				ui.changes.apply(checked);
+			});
 		});
 	},
 
-	handleSave: function(ev) {
-		return this.super('handleSave', [ ev ]).then(L.bind(this.saveAccess, this));
+	/* Checks the provider settings as the form holds them, saved or not. */
+	handleTestConnection: function(section_id, output, ev) {
+		var m = this._map;
+		var params = TEST_FIELDS.map(function(name) {
+			var opt = m.lookupOption(name, section_id);
+			var v = opt ? opt[0].formvalue(section_id) : null;
+			return (v == null) ? '' : String(v);
+		});
+
+		dom.content(output, E('p', { 'class': 'spinning' }, _('Testing the connection to the identity provider…')));
+
+		return callTestConnection.apply(null, params).then(function(reply) {
+			if (!reply || reply.error)
+				return reply || { error: 'NO_REPLY' };
+			return awaitTest(reply.job);
+		}).catch(function(e) {
+			return { error: 'RPC_FAILED', message: e.message };
+		}).then(function(reply) {
+			dom.content(output, renderTestResult(reply));
+		});
 	},
 
 	handleReset: function() {
@@ -211,25 +481,26 @@ return view.extend({
 		var m, s, o;
 		var page = this;
 
-		this.loadAccess(data);
+		this.loadAccess(data[0]);
+		this.aclGroups = Array.isArray(data[1]) ? data[1] : null;
 		if (!this.accessAvailable)
 			ui.addNotification(null, E('p', _('The role permissions could not be loaded from rpcd (luci-sso object): they are shown as unavailable and cannot be changed. Is the luci-sso package fully installed?')), 'warning');
 
 		m = this._map = new form.Map('luci-sso',
-			_('SSO Login'),
-			_('Configure OpenID Connect (OIDC) Single Sign-On for LuCI.'));
+			_('Single Sign-On'),
+			_('Log in to LuCI with your identity provider, using OpenID Connect (OIDC).'));
 
 		/* ------------------------------------------------------------------ */
-		/* OIDC Provider                                                        */
+		/* Identity provider                                                    */
 		/* ------------------------------------------------------------------ */
-		s = m.section(form.NamedSection, 'default', 'oidc', _('Settings'));
+		s = m.section(form.NamedSection, 'default', 'oidc', _('Identity provider'));
 		s.addremove = false;
+		s.tab('provider', _('Provider'));
+		s.tab('advanced', _('Advanced'));
 
-		o = s.option(form.Flag, 'enabled', _('Enable SSO'));
-		o.rmempty = false;
-
-		o = s.option(form.Value, 'issuer_url', _('Issuer URL'),
-		        _('OIDC discovery base URL. Must use HTTPS and exactly match the issuer your provider declares.'));
+		/* Provider: in the order of setting up. Connect, test, switch on. */
+		o = s.taboption('provider', form.Value, 'issuer_url', _('Issuer URL'),
+		        _('Your identity provider\'s address, exactly as it identifies itself (its issuer). Must use HTTPS.'));
 		o.rmempty = false;
 		o.validate = function(section_id, value) {
 			if (value && !value.match(/^https:\/\//))
@@ -238,15 +509,17 @@ return view.extend({
 		};
 		o.placeholder = 'https://accounts.google.com';
 
-		o = s.option(form.Value, 'client_id', _('Client ID'));
+		o = s.taboption('provider', form.Value, 'client_id', _('Client ID'),
+		        _('From the client (application) you created for this router at your identity provider.'));
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'client_secret', _('Client Secret'));
+		o = s.taboption('provider', form.Value, 'client_secret', _('Client Secret'),
+		        _('From the same client.'));
 		o.password = true;
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'redirect_uri', _('Redirect URI'),
-		        _('Callback URL registered with the identity provider. Must use HTTPS.'));
+		o = s.taboption('provider', form.Value, 'redirect_uri', _('Redirect URI'),
+		        _('Register this exact address with your identity provider. Must use HTTPS.'));
 		o.rmempty = false;
 		o.validate = function(section_id, value) {
 			if (value && !value.match(/^https:\/\//))
@@ -263,31 +536,103 @@ return view.extend({
 		 * save formvalue equals cfgvalue and LuCI's form.save() would skip the
 		 * write, leaving redirect_uri unset. forcewrite persists it regardless. */
 		o.forcewrite = true;
+		/* Shown in full, with a Copy button: it has to be pasted into the
+		 * identity provider exactly. */
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			var node = form.Value.prototype.renderWidget.apply(this, [ section_id, option_index, cfgvalue ]);
+			var input = node.querySelector('input');
+			/* Wide enough for the whole address; layout only, the theme's
+			 * look is kept. */
+			node.style.maxWidth = '100%';
+			if (input) {
+				input.style.width = '34em';
+				input.style.maxWidth = '100%';
+			}
+			var status = E('span', { 'class': 'luci-sso-copy-status', 'aria-live': 'polite' });
+			var btn = E('button', {
+				'class': 'cbi-button cbi-button-neutral luci-sso-copy',
+				'type': 'button',
+				'title': _('Copy the Redirect URI'),
+				'click': function(ev) {
+					ev.preventDefault();
+					return copyText(input ? input.value : '').then(function() {
+						status.textContent = _('Copied');
+					}, function() {
+						status.textContent = _('Could not copy: select the address and copy it by hand.');
+					}).then(function() {
+						window.setTimeout(function() { status.textContent = ''; }, 3000);
+					});
+				}
+			}, _('Copy'));
+			return E('div', { 'class': 'control-group luci-sso-redirect' }, [ node, btn, ' ', status ]);
+		};
 
-		o = s.option(form.Value, 'scope', _('Scopes'),
-		        _('Space-separated OIDC scopes. Add <code>groups</code> if your provider supports group claims.'));
+		o = s.taboption('provider', form.Value, 'scope', _('Scopes'),
+		        _('What the router asks your identity provider to send, separated by spaces. Add <code>groups</code> if roles match by group.'));
 		o.placeholder = 'openid profile email';
 		o.rmempty = true;
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			var node = form.Value.prototype.renderWidget.apply(this, [ section_id, option_index, cfgvalue ]);
+			var slot = E('div', { 'class': 'luci-sso-warning', 'data-warning': 'scope', 'hidden': '' });
+			setWarning(slot, scopeWarning(cfgvalue != null ? cfgvalue : uci.get('luci-sso', section_id, 'scope')));
+			return E('div', {}, [ node, slot ]);
+		};
+		o.onchange = function(ev, section_id, value) {
+			setWarning(document.querySelector('[data-warning="scope"]'), scopeWarning(value));
+		};
 
-		o = s.option(form.Flag, 'require_email_verified', _('Require Verified Email'),
-		        _('Match a user by email address only if the provider marks it as verified (<code>email_verified</code>). ' +
-		          'Group matching is not affected. ' +
-		          'See <a href="https://m00qek.github.io/luci-sso/0.10/explanation/roles-and-permissions/#verified-email-addresses" target="_blank">verified email addresses</a>.'));
+		o = s.taboption('provider', form.DummyValue, '_test_connection', _('Test Connection'),
+		        _('Checks the values in this form, including unsaved changes, against the identity provider: ' +
+		          'discovery, the issuer, the signing keys, the Redirect URI, and the Client ID and secret. ' +
+		          'Nothing is saved, and it works before SSO is enabled. See %s.')
+		            .format(docLink('how-to/sysadmin/configure-in-luci/#3-test-the-connection', _('testing the connection'))));
+		o.renderWidget = function(section_id) {
+			var output = E('div', { 'class': 'luci-sso-test-output', 'aria-live': 'polite' });
+			return E('div', {}, [
+				E('button', {
+					'class': 'cbi-button cbi-button-action',
+					'type': 'button',
+					'id': 'luci-sso-test-connection',
+					'click': ui.createHandlerFn(page, 'handleTestConnection', section_id, output)
+				}, _('Test connection')),
+				output
+			]);
+		};
+
+		o = s.taboption('provider', form.Flag, 'enabled', _('Enable SSO'),
+		        _('Shows the SSO button on the LuCI login page. Test the connection first. Password login keeps working either way.'));
+		o.rmempty = false;
+
+		/* Advanced */
+		o = s.taboption('advanced', form.Flag, 'require_email_verified', _('Require Verified Email'),
+		        _('Match a user by email address only if the identity provider says it has checked the address (<code>email_verified</code>). ' +
+		          'Groups and subjects are not affected. See %s.')
+		            .format(docLink('explanation/roles-and-permissions/#verified-email-addresses', _('verified email addresses'))));
 		/* On when the option is unset, as the backend treats it. */
 		o.default = o.enabled;
 		o.rmempty = false;
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			var node = form.Flag.prototype.renderWidget.apply(this, [ section_id, option_index, cfgvalue ]);
+			var on = ((cfgvalue != null) ? cfgvalue : this.default) == this.enabled;
+			var slot = E('div', { 'class': 'luci-sso-warning', 'data-warning': 'verified', 'hidden': '' });
+			setWarning(slot, verifiedWarning(on));
+			return E('div', {}, [ node, slot ]);
+		};
+		o.onchange = function(ev, section_id, value) {
+			setWarning(document.querySelector('[data-warning="verified"]'), verifiedWarning(value == this.enabled));
+		};
 
-		o = s.option(form.Value, 'clock_tolerance', _('Clock Tolerance'),
-		        _('Allowed clock skew in seconds applied to JWT validation (0–3600).'));
+		o = s.taboption('advanced', form.Value, 'clock_tolerance', _('Clock Tolerance'),
+		        _('How far the router\'s clock may differ from the provider\'s, in seconds (0–3600).'));
 		o.datatype = 'range(0,3600)';
 		o.default = '60';
 		o.placeholder = '60';
 		o.rmempty = false;
 
-		o = s.option(form.Value, 'internal_issuer_url', _('Internal Issuer URL'),
-		        _('Physical URL the router uses for back-channel requests (token exchange, JWKS fetch). ' +
-		          'Leave empty if the router can reach the Issuer URL directly. ' +
-		          'See <a href="https://m00qek.github.io/luci-sso/0.10/how-to/sysadmin/split-horizon/" target="_blank">split-horizon networking</a>.'));
+		o = s.taboption('advanced', form.Value, 'internal_issuer_url', _('Internal Issuer URL'),
+		        _('Only if the router must reach the provider at a different address than your browser does. ' +
+		          'An address such as <code>https://10.0.0.5:8443</code>, with no path. Leave it empty otherwise. See %s.')
+		            .format(docLink('how-to/sysadmin/split-horizon/', _('split-horizon networking'))));
 		o.optional = true;
 		o.rmempty = true;
 		o.validate = function(section_id, value) {
@@ -298,29 +643,50 @@ return view.extend({
 		o.placeholder = 'https://' + window.location.hostname + ':8443';
 
 		/* ------------------------------------------------------------------ */
-		/* Users                                                                */
+		/* Roles                                                                */
 		/* ------------------------------------------------------------------ */
-		s = m.section(form.GridSection, 'role', _('Users'),
-			_('A user gets the <strong>first</strong> role, from the top, whose emails or groups match. ' +
-			  'Drag the rows to change the order; roles are not merged.') + '<br />' +
-			_('Read and write access are the role\'s rpcd login entry. They are written when you press Save or Save &amp; Apply, ' +
-			  'and are in force once rpcd has reloaded; emails, groups and order take effect with Save &amp; Apply.'));
+		s = m.section(form.GridSection, 'role', _('Roles'),
+			_('Who can log in, and what they can do. A user gets the first role, from the top, that matches; drag rows to reorder.') + '<br />' +
+			_('Changes take effect with Save &amp; Apply.'));
 		s.addremove = true;
 		s.anonymous = false;
 		s.sortable = true;
 		s.modaledit = true;
 		s.nodescriptions = true;
 		s.modaltitle = function(section_id) {
-			return _('User Role: %s').format(section_id);
+			return _('Role: %s').format(section_id);
 		};
 		s.handleAdd = function(ev, name) {
-			if (name && name.trim() === 'default') {
-				ui.addNotification(null,
-					E('p', {}, _('The name "default" is reserved for OIDC provider settings. Choose a different role name.')),
-					'danger');
+			var ok = checkRoleName(name ? name.trim() : '');
+			if (ok !== true) {
+				ui.addNotification(null, E('p', {}, ok), 'danger');
 				return;
 			}
-			return form.GridSection.prototype.handleAdd.call(this, ev, name);
+			return form.GridSection.prototype.handleAdd.call(this, ev, name.trim());
+		};
+		/* The Add box: a placeholder, and the role name rules checked as you
+		 * type, with the reason next to the box. */
+		s.renderSectionAdd = function(extra_class) {
+			var el = form.GridSection.prototype.renderSectionAdd.apply(this, [ extra_class ]);
+			var input = el.querySelector('.cbi-section-create-name');
+			var button = el.querySelector('.cbi-button-add');
+			if (!input || !button)
+				return el;
+			var msg = E('div', { 'class': 'cbi-value-description luci-sso-name-error', 'aria-live': 'polite' });
+			input.setAttribute('placeholder', _('New role name, e.g. viewers'));
+			input.setAttribute('aria-label', _('New role name'));
+			var check = function() {
+				var v = input.value.trim();
+				var ok = (v === '') ? true : checkRoleName(v);
+				msg.textContent = (ok === true) ? '' : ok;
+				input.classList.toggle('cbi-input-invalid', ok !== true);
+				button.disabled = (v === '' || ok !== true) ? true : null;
+			};
+			input.addEventListener('keyup', check);
+			input.addEventListener('blur', check);
+			input.addEventListener('input', check);
+			el.appendChild(msg);
+			return el;
 		};
 		s.handleRemove = function(section_id, ev) {
 			delete page.edited[section_id];
@@ -329,49 +695,66 @@ return view.extend({
 		};
 
 		/* --- Table columns (visible inline) --- */
-		o = s.option(form.DummyValue, '_emails', _('Emails'));
-		o.modalonly = false;
-		o.textvalue = function(section_id) {
-			return renderList(L.toArray(uci.get('luci-sso', section_id, 'email')));
+		var column = function(name, title, option) {
+			o = s.option(form.DummyValue, name, title);
+			o.modalonly = false;
+			o.textvalue = function(section_id) {
+				return renderList(L.toArray(uci.get('luci-sso', section_id, option)));
+			};
 		};
+		column('_emails', _('Emails'), 'email');
+		column('_groups', _('Groups'), 'group');
+		column('_subs', _('Subjects'), 'sub');
 
-		o = s.option(form.DummyValue, '_groups', _('Groups'));
-		o.modalonly = false;
-		o.textvalue = function(section_id) {
-			return renderList(L.toArray(uci.get('luci-sso', section_id, 'group')));
-		};
-
-		o = s.option(form.DummyValue, '_read', _('Read Access'));
+		o = s.option(form.DummyValue, '_read', _('Read access'));
 		o.modalonly = false;
 		o.textvalue = function(section_id) {
 			return page.accessCell(section_id, 'read');
 		};
 
-		o = s.option(form.DummyValue, '_write', _('Write Access'));
+		o = s.option(form.DummyValue, '_write', _('Write access'));
 		o.modalonly = false;
 		o.textvalue = function(section_id) {
 			return page.accessCell(section_id, 'write');
 		};
 
 		/* --- Modal fields (edit popup only) --- */
-		o = s.option(form.DynamicList, 'email', _('Email Addresses'),
-			_('Match by OIDC <code>email</code> claim (case-insensitive).'));
+		o = s.option(form.DynamicList, 'email', _('Emails'),
+			_('Users whose email address is one of these. Letter case is ignored. ' +
+			  'While Require Verified Email is on, the provider must mark the address as verified.'));
 		o.modalonly = true;
 		o.rmempty = true;
 
 		o = s.option(form.DynamicList, 'group', _('Groups'),
-			_('Match by OIDC <code>groups</code> claim (case-sensitive).'));
+			_('Users in one of these groups, from the provider\'s <code>groups</code> claim. Letter case matters. ' +
+			  'Needs <code>groups</code> in Scopes.'));
+		o.modalonly = true;
+		o.rmempty = true;
+
+		o = s.option(form.DynamicList, 'sub', _('Subjects'),
+			_('Users whose account identifier, the OIDC <code>sub</code> claim, is one of these. It never changes, unlike an email address. ' +
+			  'Compared exactly, including letter case. A user who is refused sees their own identifier on the error page. See %s.')
+			    .format(docLink('explanation/roles-and-permissions/#matching-by-subject', _('matching by subject'))));
 		o.modalonly = true;
 		o.rmempty = true;
 
 		/* Read and write access live in rpcd, not in /etc/config/luci-sso:
 		 * these options load from and write to the page's copy, which
-		 * saveAccess() sends to the luci-sso object. */
-		var accessOption = function(list, title, description) {
+		 * Save & Apply sends to the luci-sso object. The router's access
+		 * groups are offered as suggestions; any name or pattern can be
+		 * typed. */
+		var accessOption = function(list, title, description, everything) {
 			o = s.option(form.DynamicList, list, title, description);
 			o.modalonly = true;
 			o.rmempty = true;
 			o.readonly = !page.accessAvailable || null;
+			o.placeholder = _('-- choose or type a group --');
+			if (page.aclGroups) {
+				o.value('*', everything);
+				page.aclGroups.forEach(function(g) {
+					if (g !== BASELINE) o.value(g);
+				});
+			}
 			o.load = function(section_id) {
 				var a = page.accessOf(section_id);
 				return a ? (list == 'read' ? withoutBaseline(a.read) : a.write) : [];
@@ -391,16 +774,19 @@ return view.extend({
 		o.rawhtml = true;
 		o.cfgvalue = function() {
 			return '<em class="luci-sso-access-note">' +
-				_('Permission changes take effect when you click Save at the bottom of the page.') + '</em>';
+				_('Changes here are kept on the page until you Save &amp; Apply it.') + '</em>';
 		};
 
-		accessOption('read', _('Read Access'),
-			_('LuCI access groups granted read access. <code>*</code> reads every group. ' +
+		accessOption('read', _('Read access'),
+			_('LuCI access groups the role can see. <code>*</code> is everything. Patterns such as <code>luci-mod-status-*</code> work too. ' +
 			  '<code>unauthenticated</code> is always included, since LuCI needs it on every page, and is not listed here. ' +
-			  'With no other group, the role\'s users can log in but see nothing.'));
+			  'With nothing here, the role\'s users can log in but see nothing.'),
+			_('* (everything)'));
 
-		accessOption('write', _('Write Access'),
-			_('LuCI access groups granted write access, which includes read access. <code>*</code> makes the role a full admin.'));
+		accessOption('write', _('Write access'),
+			_('LuCI access groups the role can change; changing includes seeing. Include <code>luci-base</code> to save settings. ' +
+			  '<code>*</code> makes the role a full admin.'),
+			_('* (full admin)'));
 
 		return m.render();
 	}

@@ -8,10 +8,10 @@ This guide describes how to decide who can access the router and what they can d
 
 A role has two halves:
 
-- **Who it matches.** A `config role '<name>'` section in `/etc/config/luci-sso`, with `email` and `group` rules. A role with neither is ignored.
+- **Who it matches.** A `config role '<name>'` section in `/etc/config/luci-sso`, with `email`, `group` and `sub` rules. A role with none of them is ignored.
 - **What it grants.** The role's `rpcd` login entry, `luci_sso_<name>` in `/etc/config/rpcd`, with `read` and `write` lists of access groups. `rpcd` is the OpenWrt daemon that holds LuCI sessions and their rights.
 
-When a user logs in, `luci-sso` checks their email and groups against the roles **in order**, from the top. The user gets the **first** role that matches, and only that one: roles are not merged. The session gets exactly the rights of that role's entry. An email counts only if the IdP marks it as verified (`email_verified`); see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
+When a user logs in, `luci-sso` checks their subject (`sub`), email and groups against the roles **in order**, from the top. The user gets the **first** role that matches, and only that one: roles are not merged. The session gets exactly the rights of that role's entry. An email counts only if the IdP marks it as verified (`email_verified`); see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
 
 A fresh install ships one role, `admin`. It matches the placeholder `admin@example.com`, and its entry grants full access (`*` in both lists). Replace the placeholder with a real address before you enable SSO.
 
@@ -41,7 +41,7 @@ The lists have the meaning `rpcd` gives them for a password login, because they 
 | `*` | empty | **Read-only.** Every page can load its data; nothing can be saved. |
 | `*` | specific groups | Read everything; change only what the listed groups allow (include `luci-base`). |
 | specific groups | specific groups | Exactly the groups listed. |
-| empty | empty | **No access.** The user can log in but sees nothing. The settings page shows `(none): this role grants no access`. |
+| empty | empty | **No access.** The user can log in but sees nothing. The settings page shows `None: this role grants no access`. |
 
 A CI test logs in both ways, through SSO and with a password, against the real `rpcd`, and fails if the two ever differ.
 
@@ -51,15 +51,15 @@ A CI test logs in both ways, through SSO and with a password, against the real `
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section. The table lists the roles in the order they are tried. Drag a row to move it.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section. The table lists the roles in the order they are tried. Drag a row to move it.
 
-    - To add a role, type its name in the field next to **Add** and click **Add**.
+    - To add a role, type its name in the box next to **Add** and click **Add**.
     - To change a role, click **Edit** in its row.
     - To remove a role, click **Delete** in its row.
 
-    In the role editor, the note above **Read Access** says: "Permission changes take effect when you click Save at the bottom of the page." The editor's own **Save** only keeps your edit on the page.
+    **Read access** and **Write access** offer the router's access groups, and take any name or pattern you type. In the role editor, the note above them says: "Changes here are kept on the page until you Save & Apply it." The editor's own **Save** only keeps your edit on the page.
 
-    When you click **Save** or **Save & Apply** at the bottom of the page, the read and write access go to `rpcd` straight away. The page shows "Saving role permissions; rpcd is reloading to apply them…", then "Role permissions saved and in force." Emails, groups and the order take effect only with **Save & Apply**.
+    Every change takes effect with **Save & Apply** at the bottom of the page. LuCI applies the matching rules and the order first; once it has confirmed the apply, the page writes the read and write access to `rpcd`, showing "Saving role permissions; rpcd is reloading to apply them…", then "Role permissions saved and in force." **Save** alone writes nothing to `rpcd`.
 
 === "Terminal (SSH)"
 
@@ -82,7 +82,7 @@ A CI test logs in both ways, through SSO and with a password, against the real `
 
     `set_role` answers with the lists as stored. After a write, `rpcd` reloads one second later; `list_roles` shows `"reload_pending": true` until it has.
 
-A new role needs both halves. Without its `rpcd` entry, its users are refused at login with `MISSING_RPCD_LOGIN`, and the settings page shows `Not set: edit and save this role, or its users cannot log in`.
+A new role needs both halves. Without its `rpcd` entry, its users are refused at login with `MISSING_RPCD_LOGIN`, and the settings page shows `Not set: edit this role and Save & Apply, or its users cannot log in`.
 
 ---
 
@@ -92,7 +92,7 @@ The shipped `admin` role already grants full access. Make it match the real admi
 
 === "Browser (LuCI)"
 
-    In the **Users** section, click **Edit** in the `admin` row. In **Email Addresses**, replace `admin@example.com` with `alice@example.com`. Check that **Read Access** and **Write Access** hold `*`. Click **Save** in the editor, then **Save & Apply**.
+    In the **Roles** section, click **Edit** in the `admin` row. In **Emails**, replace `admin@example.com` with `alice@example.com`. Check that **Read access** and **Write access** hold `*`. Click **Save** in the editor, then **Save & Apply**.
 
 === "Terminal (SSH)"
 
@@ -113,17 +113,17 @@ The shipped `admin` role already grants full access. Make it match the real admi
 
 ## Read-only access
 
-Leave **Write Access** empty and list the access groups the user may view. `*` in **Read Access** shows everything; to narrow it, name groups or globs.
+Leave **Write access** empty and list the access groups the user may view. `*` in **Read access** shows everything; to narrow it, name groups or globs.
 
 A common starting point: status and network views, but no changes.
 
 === "Browser (LuCI)"
 
-    In the **Users** section, type `viewer` in the field next to **Add** and click **Add**. Fill in the editor:
+    In the **Roles** section, type `viewer` in the field next to **Add** and click **Add**. Fill in the editor:
 
-    - **Email Addresses**: `bob@example.com`
-    - **Read Access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
-    - Leave **Write Access** empty.
+    - **Emails**: `bob@example.com`
+    - **Read access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
+    - Leave **Write access** empty.
 
     Click **Save** in the editor, then **Save & Apply**.
 
@@ -152,7 +152,7 @@ If your IdP returns a `groups` claim, you can match roles by group instead of, o
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On**. In **Settings**, set **Scopes** to `openid profile email groups` and click **Save & Apply**.
+    Navigate to **Services > Single Sign-On**. In the **Identity provider** section, set **Scopes** to `openid profile email groups` and click **Save & Apply**.
 
 === "Terminal (SSH)"
 
@@ -165,16 +165,16 @@ Then create one role per group. Put the more privileged role first: a user in bo
 
 === "Browser (LuCI)"
 
-    In the **Users** section, add a role `ops_admin`:
+    In the **Roles** section, add a role `ops_admin`:
 
     - **Groups**: `network-ops`
-    - **Read Access**: `*`
-    - **Write Access**: `*`
+    - **Read access**: `*`
+    - **Write access**: `*`
 
     Click **Save** in the editor. Add a role `sec_viewer`:
 
     - **Groups**: `security-team`
-    - **Read Access**: `luci-base`, `luci-mod-status-*`
+    - **Read access**: `luci-base`, `luci-mod-status-*`
 
     Click **Save** in the editor. Drag `ops_admin` above `sec_viewer` if it is not already, then click **Save & Apply**.
 
@@ -200,6 +200,42 @@ A member of both groups gets `ops_admin`. The login's log line names the other m
 
 ---
 
+## Match one account by its subject
+
+A `sub` rule matches one account at the IdP, whatever its email address or groups, and keeps matching if the address changes. Use it for a single person, such as the router's owner. Why it is the most stable rule is explained in [About Roles and Permissions](../../explanation/roles-and-permissions.md#matching-by-subject).
+
+1. Find the user's `sub`. The simplest way works with every IdP: ask the user to click **Login with SSO**. Until a role matches them, the refusal page says "Your account is not allowed to manage this router" and, below it, "give your administrator this account identifier", followed by their `sub`. Some IdPs also show it:
+
+    | IdP | Where the `sub` is |
+    | :--- | :--- |
+    | Pocket ID | The user's ID, a UUID: in the address of the user's page, **Settings > Users >** the user (`/settings/admin/users/<id>`). |
+    | Keycloak | The **ID** field on the user's **Details** tab, under **Users**. Keycloak's default `sub` is that ID. |
+    | Authentik | Depends on the provider's **Subject mode**. The default, a hash of the user's ID, is not shown anywhere: use the refusal page. |
+    | Authelia | An opaque UUID per user. `authelia storage user identifiers export` writes them to a file; the refusal page is simpler. |
+    | Google | A number that Google does not show in its user interfaces: use the refusal page. |
+
+    An IdP not listed here may also use a value it does not show. The refusal page always shows the value `luci-sso` compares.
+
+2. Add the value to a role, exactly as shown. Letter case matters: `AbC` and `abc` are different accounts.
+
+    === "Browser (LuCI)"
+
+        In the **Roles** section, click **Edit** in the role's row, or add a role. In **Subjects**, enter the value, and click **Save** in the editor, then **Save & Apply**.
+
+    === "Terminal (SSH)"
+
+        ```bash
+        uci set luci-sso.owner=role
+        uci add_list luci-sso.owner.sub='f81d4fae-7dec-11d0-a765-00a0c91e6bf6'
+        uci reorder luci-sso.owner=1
+        uci commit luci-sso
+        ubus call luci-sso set_role '{"name": "owner", "read": ["*"], "write": ["*"]}'
+        ```
+
+3. Ask the user to log in again. The system log line names the role: `User [sub_id: …] mapped to role 'owner'`. The log records a hash of the `sub`, never the value itself.
+
+---
+
 ## A user who needs two sets of rights
 
 A session carries one role's rights. When some users need what two roles grant, create a role that grants both, and put it above the narrower roles.
@@ -210,9 +246,9 @@ For example, `viewer` reads status and network pages, and a few users should als
 
     Add a role `net_operator`:
 
-    - **Email Addresses**: `charlie@example.com`
-    - **Read Access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
-    - **Write Access**: `luci-base`, `luci-mod-network-config`
+    - **Emails**: `charlie@example.com`
+    - **Read access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
+    - **Write access**: `luci-base`, `luci-mod-network-config`
 
     Click **Save** in the editor. Drag `net_operator` above `viewer`, then click **Save & Apply**.
 
@@ -250,7 +286,7 @@ Then log in as the user and confirm the LuCI menus match what you expect. Each l
 luci-sso[1234]: User [sub_id: c775e7b757ede630] mapped to role 'viewer' [session_id: 8e25f313865ad01a]
 ```
 
-- **`[403] USER_NOT_AUTHORIZED`**, after `matched no roles`: the user's email or groups match no role. Check the exact values the IdP sends. Email matching ignores case, but must otherwise be exact; group matching is case-sensitive. An `Ignoring the unverified email` line before it means the IdP did not mark the email as verified, so it was not matched; see [Provider Compatibility](../../reference/provider-compatibility.md#verified-email).
+- **`[403] USER_NOT_AUTHORIZED`**, after `matched no roles`: the user's `sub`, email and groups match no role. Check the exact values the IdP sends; the error page shows the user their `sub`. Email matching ignores case, but must otherwise be exact; group and `sub` matching are case-sensitive. An `Ignoring the unverified email` line before it means the IdP did not mark the email as verified, so it was not matched; see [Provider Compatibility](../../reference/provider-compatibility.md#verified-email).
 - **`[500] UBUS_LOGIN_FAILED`**, after a `MISSING_RPCD_LOGIN` line: the role has no `rpcd` entry. Save its permissions on the settings page, or with `set_role`.
 - **The wrong role**: the line says `the first match; also matched: …`. Move the role you expect higher up.
 

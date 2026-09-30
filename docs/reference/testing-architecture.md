@@ -36,13 +36,14 @@ See [How to Run Tests](../how-to/developer/testing.md) for the options of each c
 | `crypto/*`, `crypto`, `encoding`, `result`, `config`, `web` | itself (+ pure leaves) | unit | `unit/luci_sso/<module>_test.uc`, `unit/luci_sso/crypto/*_test.uc` |
 | `discovery`, `oidc`, `ubus`, `ratelimit`, `session`, `session/*`, `components/*` | itself + pure leaves | unit | `unit/luci_sso/…` (mirrors `src/`) |
 | `handshake` | real `oidc`, `discovery`, `session`, `ubus`, `config` | integration | `handshake_test.uc` |
+| `connection` (the settings page's connection test) | real `discovery`, `oidc`, `crypto` | integration | `connection_test.uc` |
 | `router` | real `handshake`, `session`, `ubus`, `discovery`, `config`, `ratelimit` | integration | `router_test.uc`, `logout_test.uc` |
 | `entry` (CGI `run()` pipeline) | real `web`, `config`, `router` and everything below it | integration | `entry_test.uc` |
 | `deps` (`create()` and its channel builders) | the production wiring | integration | `bootstrap_test.uc` |
 | `luci.controller.sso` (`files/usr/share/ucode/luci/controller/sso.uc`, `action_logout`) | the controller, with LuCI's `ctx`, `http` and `ubus` globals faked | integration | `luci_logout_test.uc` |
 | `errors` | n/a | none | `make lint` checks it against [Log Messages](log-messages.md) |
 
-`handshake`, `router`, `entry` and `deps` have no unit file. `session.uc` re-exports `session/handshake.uc` (`create_state = handshake.create`, `verify_state = handshake.verify`, …); `unit/luci_sso/session_test.uc` covers that wiring and `unit/luci_sso/session/{handshake,common}_test.uc` cover the behaviour.
+`handshake`, `connection`, `router`, `entry` and `deps` have no unit file. `session.uc` re-exports `session/handshake.uc` (`create_state = handshake.create`, `verify_state = handshake.verify`, …); `unit/luci_sso/session_test.uc` covers that wiring and `unit/luci_sso/session/{handshake,common}_test.uc` cover the behaviour.
 
 ---
 
@@ -69,7 +70,8 @@ The system bucket drives the container's real `rpcd`. Its files run one at a tim
 | :--- | :--- |
 | `test/system/rpcd_parity_test.uc` | SSO sessions against `rpcd` password logins. For each role shape (read `*`; a specific read group; a specific write group; read `*` with one write group; globs with a negation; read and write `*`; a restricted read list with `unauthenticated`; `unauthenticated` only; a read negation against the write list; single options instead of lists), it creates a password login and a `luci_sso_<role>` entry with the same lists, logs in both ways through the real code, and requires identical ACLs, printing every entry that differs. |
 | `test/system/sso_session_test.uc` | SSO sessions across an `rpcd` reload keep exactly their rights. A login interrupted by a reload before any of its `ubus` calls still ends with the role's full rights. A session named `sso:root` gets no rights, although a `root` login exists. `luci-sso` refuses to create a session for a role whose entry is missing (`MISSING_RPCD_LOGIN`) or has a password (`INSECURE_RPCD_LOGIN`). |
-| `test/system/rpcd_plugin_test.uc` | The `luci-sso` ubus object inside the real `rpcd`: `set_role`, `list_roles` and `delete_role`; the `unauthenticated` rule; password removal; validation errors; `reload_pending`; existing sessions getting new rights after the reload; the exact method list. Its roles are named `systest_*`. |
+| `test/system/rpcd_plugin_test.uc` | The `luci-sso` ubus object inside the real `rpcd`: `set_role`, `list_roles` and `delete_role`; `list_acl_groups` against the `acl.d` files; the `unauthenticated` rule; password removal; validation errors; `reload_pending`; existing sessions getting new rights after the reload; the exact method list. Its roles are named `systest_*`. |
+| `test/system/connection_test.uc` | The `luci-sso` ubus object's connection test inside the real `rpcd`, against the devenv's mock IdP over real HTTPS: every check passes with the devenv settings; a wrong secret fails the credentials check with `invalid_client`; a trailing slash gets the near-miss hint; the secret never comes back; no cache file is written or changed; one test at a time (`BUSY`), with `rpcd` answering meanwhile; `NOT_FOUND` for an unknown or replaced job; twenty tests in a row leave `rpcd` running, with no more open pipes. |
 | `test/system/migration_test.uc` | `rpcd_login.migrate()` and `demigrate()` on real UCI files in a scratch configuration directory: an old-style configuration, the shipped `admin` role and edited ones, second runs, interrupted runs, and the migrate, demigrate, migrate round trip, byte for byte. |
 
 CI runs the bucket on every OpenWrt release in the matrix.

@@ -201,6 +201,9 @@ describe('rpcd_login: is_placeholder — the shipped admin role', () => {
 			{ ".name": "admin", email: [ "admin@example.com" ], group: "admins" },
 			{ ".name": "admin", email: [ "Admin@example.com" ] },
 			{ ".name": "admin", group: [ "admins" ] },
+			{ ".name": "admin", email: [ "admin@example.com" ], sub: [ "248289761001" ] },
+			{ ".name": "admin", email: [ "admin@example.com" ], sub: "248289761001" },
+			{ ".name": "admin", sub: [ "248289761001" ] },
 			{ ".name": "admin" },
 		])
 			assert.match(false, rpcd_login.is_placeholder(s), sprintf("%J", s));

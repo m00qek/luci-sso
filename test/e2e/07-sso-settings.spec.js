@@ -1,6 +1,6 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { loginAsRoot, gotoSSOSettings } = require('./helpers');
+const { loginAsRoot, gotoSSOSettings, openTab } = require('./helpers');
 
 // Calls rpcd over /ubus/ with the page's own (root) LuCI session and returns
 // { status, data }. Used to read/stage/commit UCI directly, so a test can
@@ -37,17 +37,17 @@ test.describe('SSO Settings: Admin Panel', () => {
         ).toBeVisible({ timeout: 5000 });
     });
 
-    test('Page: renders Settings section and Users table', async ({ page }) => {
+    test('Page: renders the Identity provider section and the Roles table', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
-        // Settings section fields
+        // Identity provider section, Provider tab
         await expect(page.locator('[id="cbid.luci-sso.default.enabled"]')).toBeVisible();
         await expect(page.locator('[id="cbid.luci-sso.default.issuer_url"]')).toBeVisible();
 
-        // Users GridSection table
+        // Roles GridSection table
         await expect(page.locator('th:has-text("Emails")')).toBeVisible();
-        await expect(page.locator('th:has-text("Read Access")')).toBeVisible();
+        await expect(page.locator('th:has-text("Read access")')).toBeVisible();
     });
 
     test('Field: redirect_uri auto-fills with the current hostname as an HTTPS callback URL', async ({ page }) => {
@@ -73,6 +73,7 @@ test.describe('SSO Settings: Admin Panel', () => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
+        await openTab(page, 'advanced');
         const clockWidget = page.locator('[id="widget.cbid.luci-sso.default.clock_tolerance"]');
         await clockWidget.fill('9999');
         await page.locator('.cbi-button-save').click();
@@ -106,19 +107,21 @@ test.describe('SSO Settings: Admin Panel', () => {
         ).toBeVisible({ timeout: 3000 });
     });
 
-    test('Users table: shows Emails, Groups, Read Access, Write Access columns', async ({ page }) => {
+    test('Roles table: shows Emails, Groups, Subjects, Read access, Write access columns', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
-        await expect(page.locator('th:has-text("Emails")')).toBeVisible();
-        await expect(page.locator('th:has-text("Groups")')).toBeVisible();
-        await expect(page.locator('th:has-text("Read Access")')).toBeVisible();
-        await expect(page.locator('th:has-text("Write Access")')).toBeVisible();
+        const headers = page.locator('.cbi-section-table-titles th');
+        await expect(headers.filter({ hasText: /^Emails$/ })).toBeVisible();
+        await expect(headers.filter({ hasText: /^Groups$/ })).toBeVisible();
+        await expect(headers.filter({ hasText: /^Subjects$/ })).toBeVisible();
+        await expect(headers.filter({ hasText: /^Read access$/ })).toBeVisible();
+        await expect(headers.filter({ hasText: /^Write access$/ })).toBeVisible();
         // devenv pre-seeds an 'admin' role with this email
         await expect(page.locator('td:has-text("admin@example.com")')).toBeVisible();
     });
 
-    test('Users table: Add button opens modal with email, group, read, write fields', async ({ page }) => {
+    test('Roles table: Add button opens the role editor with email, group, subject, read, write fields', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
@@ -128,10 +131,9 @@ test.describe('SSO Settings: Admin Panel', () => {
         const modal = page.locator('.modal, [role="dialog"]');
         await expect(modal).toBeVisible({ timeout: 10000 });
         
-        await expect(modal.locator('label:has-text("Email Addresses")')).toBeVisible();
-        await expect(modal.locator('label:has-text("Groups")')).toBeVisible();
-        await expect(modal.locator('label:has-text("Read Access")')).toBeVisible();
-        await expect(modal.locator('label:has-text("Write Access")')).toBeVisible();
+        await expect(modal.locator('h4')).toHaveText('Role: testrole');
+        for (const label of ['Emails', 'Groups', 'Subjects', 'Read access', 'Write access'])
+            await expect(modal.locator('label.cbi-value-title', { hasText: new RegExp(`^${label}$`) })).toBeVisible();
     });
 
     // A config from before the option existed has no require_email_verified,
@@ -146,6 +148,7 @@ test.describe('SSO Settings: Admin Panel', () => {
         expect(await get()).toBeFalsy();
 
         await gotoSSOSettings(page);
+        await openTab(page, 'advanced');
         await expect(page.locator('[id="cbid.luci-sso.default.require_email_verified"] input[type="checkbox"]')).toBeChecked();
 
         await page.locator('.cbi-button-save').click();

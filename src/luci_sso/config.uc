@@ -78,9 +78,10 @@ export function load(deps) {
 	cursor.foreach("luci-sso", "role", (s) => {
 		let emails = (type(s.email) == "array") ? s.email : (s.email ? [ s.email ] : []);
 		let groups = (type(s.group) == "array") ? s.group : (s.group ? [ s.group ] : []);
+		let subs = (type(s.sub) == "array") ? s.sub : (s.sub ? [ s.sub ] : []);
 
-		if (length(emails) == 0 && length(groups) == 0) {
-			deps.log("warn", `Ignoring role '${s[".name"]}': missing email or group list`);
+		if (length(emails) == 0 && length(groups) == 0 && length(subs) == 0) {
+			deps.log("warn", `Ignoring role '${s[".name"]}': missing email, group or sub list`);
 			return;
 		}
 
@@ -92,7 +93,8 @@ export function load(deps) {
 		push(roles, {
 			name: s[".name"],
 			emails: emails,
-			groups: groups
+			groups: groups,
+			subs: subs
 		});
 	});
 
@@ -161,8 +163,23 @@ export function session_email(claims) {
 };
 
 /**
- * Returns true when the claims match a role, by email (case-insensitive) or
- * by group (exact).
+ * Returns the sub that role matching may use, or null. The sub is a
+ * non-empty, case-sensitive string (OIDC Core §2); anything else is not a
+ * subject and matches no role.
+ */
+export function matchable_sub(claims) {
+	let sub = claims.sub;
+	if (type(sub) != "string" || sub == "") return null;
+	return sub;
+};
+
+/**
+ * Returns true when the claims match a role, by sub (exact), by email
+ * (case-insensitive) or by group (exact).
+ *
+ * The sub is compared as an exact, case-sensitive string: OIDC Core §5.7
+ * makes the sub, together with the issuer, the only stable identifier of a
+ * user, and luci-sso talks to one issuer, so the issuer is implied.
  *
  * Ignoring case in the whole email address is luci-sso's own matching
  * policy, not a standard's rule: RFC 5321 §2.4 lets the local part be
@@ -170,7 +187,12 @@ export function session_email(claims) {
  * providers treat it as case-insensitive.
  * @private
  */
-function _role_matches(role, email, groups) {
+function _role_matches(role, sub, email, groups) {
+	if (sub != null) {
+		for (let s in role.subs) {
+			if (s === sub) return true;
+		}
+	}
 	if (email) {
 		let lc_email = lc(email);
 		for (let e in role.emails) {
@@ -186,23 +208,25 @@ function _role_matches(role, email, groups) {
 }
 
 /**
- * Finds the role a user gets: the FIRST role, in config order, whose emails
- * or groups match the claims (matchable_email says when the email counts).
+ * Finds the role a user gets: the FIRST role, in config order, whose subs,
+ * emails or groups match the claims (matchable_sub and matchable_email say
+ * when the sub and the email count).
  * A session carries one role's rights, because rpcd rebuilds it from a
  * single login entry; roles are not merged.
  *
  * @param {object} config - The loaded config
- * @param {object} claims - OIDC ID Token claims (email, groups, etc)
+ * @param {object} claims - OIDC ID Token claims (sub, email, groups, etc)
  * @returns {object} - Result Object {ok, data: {role_name, also_matched}/error},
  *   where also_matched lists the other matching roles, in order
  */
 export function find_role_for_user(config, claims) {
+	let sub = matchable_sub(claims);
 	let email = matchable_email(config, claims);
 	let groups = (type(claims.groups) == "array") ? claims.groups : [];
 	let matched = [];
 
 	for (let role in config.roles) {
-		if (_role_matches(role, email, groups))
+		if (_role_matches(role, sub, email, groups))
 			push(matched, role.name);
 	}
 
