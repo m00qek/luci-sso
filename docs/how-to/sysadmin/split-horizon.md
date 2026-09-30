@@ -89,16 +89,18 @@ Set `internal_issuer_url` alongside the standard configuration:
 
     Navigate to **Services > Single Sign-On**.
 
-    Fill in the **Settings** section with your standard provider credentials, then set **Internal Issuer URL** to the address the router uses to reach the IdP:
+    Fill in the **Identity provider** section with your standard provider credentials, then set **Internal Issuer URL** to the address the router uses to reach the IdP:
 
     | Field | Value |
     | :--- | :--- |
-    | **Enable SSO** | On |
     | **Issuer URL** | `https://auth.homelab.local` |
     | **Client ID** | `luci-router` |
     | **Client Secret** | Your secret |
     | **Redirect URI** | `https://<router-host>/cgi-bin/luci-sso/callback` |
-    | **Internal Issuer URL** | `https://192.168.2.10:8443` |
+    | **Internal Issuer URL** (on the **Advanced** tab) | `https://192.168.2.10:8443` |
+    | **Enable SSO** | On |
+
+    Before you save, click **Test connection**, above **Enable SSO**, and check that every line reads **Pass**; a line that fails says what to fix. See [Test the connection](configure-in-luci.md#3-test-the-connection).
 
     Click **Save & Apply**.
 

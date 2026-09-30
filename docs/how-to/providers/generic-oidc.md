@@ -66,19 +66,20 @@ Give the client any name you will recognise, such as `LuCI Router`. After saving
 
     Navigate to **Services > Single Sign-On**.
 
-    Fill in the **Settings** section:
+    Fill in the **Identity provider** section:
 
     | Field | Value |
     | :--- | :--- |
-    | **Enable SSO** | On |
     | **Issuer URL** | `https://<your-issuer-url>` |
     | **Client ID** | Your Client ID from Step 2 |
     | **Client Secret** | Your Client Secret from Step 2 |
     | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
     | **Scopes** | `openid profile email` |
-    | **Clock Tolerance** | `60` |
+    | **Enable SSO** | On |
 
     For split-horizon setups, also fill in **Internal Issuer URL**. See [How to Configure Split-Horizon Networking](../../how-to/sysadmin/split-horizon.md).
+
+    Before you save, click **Test connection**, above **Enable SSO**, and check that every line reads **Pass**; a line that fails says what to fix. See [Test the connection](../sysadmin/configure-in-luci.md#3-test-the-connection).
 
     Click **Save & Apply**.
 
@@ -109,9 +110,9 @@ After a successful login, `luci-sso` maps the user's OIDC claims to a LuCI role.
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
-    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter the email address in **Email Addresses**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read access** and **Write access**.) In the modal, enter the email address in **Emails**, then click **Save**.
 
     Click **Save & Apply**.
 
@@ -134,9 +135,9 @@ If your IdP returns a `groups` claim (requires the `groups` scope and IdP-side g
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
-    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read Access** and **Write Access**.) In the modal, enter the group name in **Groups**, then click **Save**.
+    Click **Edit** on the `admin` role. (If it is gone, type `admin` next to **Add**, click **Add**, and put `*` in **Read access** and **Write access**.) In the modal, enter the group name in **Groups**, then click **Save**.
 
     Click **Save & Apply**.
 

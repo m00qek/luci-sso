@@ -8,27 +8,28 @@ If you are connecting to a provider for the first time, use the [provider guides
 
 ## 1. Open the settings page
 
-Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading reads **SSO Login**. It has two sections: **Settings** and **Users**.
+Log in to LuCI and navigate to **Services > Single Sign-On**. The page heading reads **Single Sign-On**. It has two sections: **Identity provider**, with a **Provider** and an **Advanced** tab, and **Roles**.
 
-![The SSO Login page filled in with example values. Settings: Enable SSO ticked, Issuer URL https://auth.example.com, Client ID luci-router, Client Secret masked as dots, Redirect URI starting https://router.example.com/cgi-bin/, Scopes openid profile email groups, Require Verified Email ticked with a note that a user is matched by email address only if the provider marks it as verified and that group matching is not affected, Clock Tolerance 60, and an empty Internal Issuer URL showing a placeholder. Users: a line saying a user gets the first role, from the top, whose emails or groups match, and that rows can be dragged to change the order; a line saying read and write access are written when you press Save or Save & Apply, while emails, groups and order take effect with Save & Apply; then a table with Name, Emails, Groups, Read Access and Write Access columns. The admin row has admin@example.com, (none) for groups, and * for read and write; the viewer row has bob@example.com, group network-viewers, read luci-base, luci-mod-status-* and luci-mod-network-*, and (none) for write. Each row has a drag handle and Edit and Delete buttons. Below are a name field with an Add button and the Save & Apply, Save and Reset buttons.](../../assets/screenshots/luci-sso-settings.png "Services > Single Sign-On: the Settings and Users sections")
+![The Single Sign-On page filled in with example values. The Identity provider section shows its Provider tab, next to an Advanced tab: Issuer URL https://auth.example.com, described as your identity provider's address, exactly as it identifies itself; Client ID luci-router; Client Secret masked as dots; Redirect URI https://router.example.com/cgi-bin/luci-sso/callback in full, with a Copy button and the note to register this exact address with your identity provider; Scopes openid profile email groups; a Test connection button with a note that it checks the values in the form, including unsaved changes, and saves nothing; and Enable SSO ticked, last. The Roles section says who can log in and what they can do, that a user gets the first role from the top that matches, that rows can be dragged to reorder, and that changes take effect with Save & Apply. Its table has Name, Emails, Groups, Subjects, Read access and Write access columns. The admin row has admin@example.com, a dash for groups and subjects, Everything for read access and Full admin for write access; the viewer row has bob@example.com, group network-viewers, a dash for subjects, read access luci-base, luci-mod-status-* and luci-mod-network-*, and a dash for write access. Each row has a drag handle and Edit and Delete buttons. Below are a box with the placeholder New role name, e.g. viewers, an Add button, and the Save & Apply, Save and Reset buttons.](../../assets/screenshots/luci-sso-settings.png "Services > Single Sign-On: the Identity provider and Roles sections")
+
+The page has one rule: changes take effect with **Save & Apply**. **Save** keeps your changes, including role permissions, on the page and in LuCI's list of unsaved changes, without applying them.
 
 ---
 
-## 2. Fill in the Settings section
+## 2. Fill in the Provider tab
+
+The **Provider** tab lists the fields in the order you set them up: connect, test, switch on.
 
 1.  Enter the **Issuer URL**, **Client ID** and **Client Secret** from your identity provider. The Issuer URL must be exactly the `issuer` your provider declares.
-2.  Check the **Redirect URI**. If none is saved yet, the field suggests `https://<host>/cgi-bin/luci-sso/callback` with the host name you opened LuCI at, without its port. Keep it only if users will open LuCI at that same host name; otherwise, replace the host. Behind a reverse proxy, use the proxy's public host name; see [How to Run LuCI Behind a Reverse Proxy](reverse-proxy.md#3-use-the-public-host-name-in-the-sso-settings). The value must match the redirect URI registered with the IdP exactly.
-3.  If you map users by group, add `groups` to **Scopes** (for example `openid profile email groups`), provided your IdP supports it. See [How to Configure Role-Based Access Control](rbac.md).
-4.  Leave **Require Verified Email** ticked. Clear it only if your IdP cannot send `email_verified: true` and users cannot set their own address; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses).
-5.  If the router reaches the IdP at a different address than browsers do, set **Internal Issuer URL** to that origin (`https://host[:port]`, no path). Otherwise leave it empty. See [How to Configure Split-Horizon Networking](split-horizon.md).
-6.  Leave **Clock Tolerance** at `60` unless logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` while the clocks look right.
-7.  Tick **Enable SSO** only when the connection test passes and at least one role is ready.
+2.  Check the **Redirect URI**. If none is saved yet, the field suggests `https://<host>/cgi-bin/luci-sso/callback` with the host name you opened LuCI at, without its port. Keep it only if users will open LuCI at that same host name; otherwise, replace the host. Behind a reverse proxy, use the proxy's public host name; see [How to Run LuCI Behind a Reverse Proxy](reverse-proxy.md#3-use-the-public-host-name-in-the-sso-settings). Register this exact address with your identity provider: **Copy** next to the field copies it.
+3.  If you map users by group, add `groups` to **Scopes** (for example `openid profile email groups`), provided your IdP supports it. See [How to Configure Role-Based Access Control](rbac.md). While a role matches by group and **Scopes** lacks `groups`, a warning under **Scopes** says so.
+4.  Leave **Enable SSO**, the last field, for after the connection test.
 
 ---
 
 ## 3. Test the connection
 
-Before you enable SSO, click **Test connection**, below **Internal Issuer URL**. The router checks the values in the form, including changes you have not saved, against the identity provider. It saves nothing, and it works while SSO is disabled. The test takes a few seconds; each request to the provider gives up after 5 seconds.
+Before you enable SSO, click **Test connection**, above **Enable SSO** on the **Provider** tab. The router checks the values in the form, including changes you have not saved, against the identity provider. It saves nothing, and it works while SSO is disabled. The test takes a few seconds; each request to the provider gives up after 5 seconds.
 
 The page lists one line per check, each marked **Pass**, **Fail**, **Warning** (the router could not tell) or **Skipped** (an earlier check failed):
 
@@ -46,48 +47,62 @@ The client credentials check is a standard, harmless probe. The router sends the
 
 The test does not check the roles, and it cannot tell whether the Redirect URI is registered at the provider: only a real login shows that.
 
+When every check passes and at least one role is ready, tick **Enable SSO**.
+
 ---
 
-## 4. Add or change roles in the Users section
+## 4. Check the Advanced tab
+
+The defaults suit most setups.
+
+1.  Leave **Require Verified Email** ticked. Clear it only if your IdP cannot send `email_verified: true` and users cannot set their own address; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses). While it is ticked, a warning under it names the roles that match by email only: they let a user in only if the IdP marks the address as verified.
+2.  Leave **Clock Tolerance** at `60` unless logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` while the clocks look right.
+3.  If the router reaches the IdP at a different address than browsers do, set **Internal Issuer URL** to that origin (`https://host[:port]`, no path). Otherwise leave it empty. See [How to Configure Split-Horizon Networking](split-horizon.md).
+
+---
+
+## 5. Add or change roles in the Roles section
 
 A role says who may log in (by email, group or subject) and which LuCI access groups they get. Roles are tried from the top of the table, and a user gets the **first** role that matches. Rights from several roles are never merged.
 
 To add a role:
 
-1.  Type a name (letters, digits and underscores, at most 32; not `default`) and click **Add**.
-2.  In the role editor, add entries to **Email Addresses**, **Groups**, or both. A role with neither is ignored.
-3.  Add access groups to **Read Access** and **Write Access**. For a full administrator, put `*` in both. For a role that may save settings, include `luci-base` in **Write Access**. Leave `unauthenticated` out: it is always included.
-4.  Click **Save** to close the editor. As the note in the editor says, the permissions are written only when you click **Save** at the bottom of the page.
+1.  Type a name in the box next to **Add**, and click **Add**. A name has letters, digits and underscores only, at most 32 of them, and cannot be `default` or an existing role's; the box says what is wrong while you type, and **Add** stays disabled until the name is valid.
+2.  In the role editor, add entries to **Emails**, **Groups** or **Subjects**. A role with none is ignored.
+3.  Add access groups to **Read access** and **Write access**. Each list offers the access groups installed on the router, and takes any name or pattern you type, such as `luci-mod-status-*`. For a full administrator, pick `*` in both. For a role that may save settings, include `luci-base` in **Write access**. Leave `unauthenticated` out: it is always included.
+4.  Click **Save** to close the editor. As the note in the editor says, your changes stay on the page until you click **Save & Apply**.
 
-![The role editor for a role named viewer, titled "User Role: viewer". Email Addresses holds bob@example.com and Groups holds network-viewers. Below them, the note "Permission changes take effect when you click Save at the bottom of the page." Read Access holds luci-base, luci-mod-status-* and luci-mod-network-*, and Write Access is empty. Each list has an empty field with a + button for another entry, and the editor has Dismiss and Save buttons.](../../assets/screenshots/luci-sso-role-editor.png "The role editor, opened with Edit on the viewer row")
+![The role editor for a role named viewer, titled "Role: viewer". Emails holds bob@example.com, Groups holds network-viewers, and Subjects is empty, each with a short explanation; the Subjects note says the sub claim is compared exactly and links to matching by subject. Below them, the note "Changes here are kept on the page until you Save & Apply it." Read access holds luci-base, luci-mod-status-* and luci-mod-network-*, with a drop-down to choose or type another group; Write access is empty, with the same drop-down. The editor has Dismiss and Save buttons.](../../assets/screenshots/luci-sso-role-editor.png "The role editor, opened with Edit on the viewer row")
 
 To change a role, click **Edit** in its row. To remove one, click **Delete**; a user who matched only that role gets `USER_NOT_AUTHORIZED` at their next login.
 
 To change the order, drag a row by its handle. Put the most privileged or most specific role at the top.
 
-Check the **Read Access** column for warnings:
+The table shows `*` in **Read access** as **Everything**, `*` in **Write access** as **Full admin**, and an empty list as a dash. Check the **Read access** column for warnings:
 
-- `(none): this role grants no access`: the role's users can log in but see nothing.
-- `Not set: edit and save this role, or its users cannot log in`: the role has no permissions in `rpcd`. Click **Edit**, then **Save**, and save the page.
+- `None: this role grants no access`: the role's users can log in but see nothing.
+- `Not set: edit this role and Save & Apply, or its users cannot log in`: the role has no permissions in `rpcd`. Click **Edit**, then **Save** in the editor, then **Save & Apply**.
 
 For which access groups to grant, see [How to Configure Role-Based Access Control](rbac.md).
 
 ---
 
-## 5. Save and apply
+## 6. Save and apply
 
 Click **Save & Apply**.
 
-- **Read Access** and **Write Access** go to `rpcd` as soon as the page is saved. The page shows "Saving role permissions; rpcd is reloading to apply them…", then "Role permissions saved and in force." Users already logged in with that role get the new rights at once.
-- Everything else, including emails, groups and the order of the roles, applies from the next login. There is no service to restart: `luci-sso` reads the configuration on every request.
+1.  LuCI applies the settings, the matching rules and the order of the roles, as for any page, and confirms that the router is still reachable.
+2.  Only once LuCI has confirmed the apply, the page writes **Read access** and **Write access** to `rpcd`. It shows "Saving role permissions; rpcd is reloading to apply them…", then "Role permissions saved and in force.", and reloads. Users already logged in with that role get the new rights at once.
 
-If `rpcd` refuses a role's permissions, the page shows the error and does not apply the rest. Fix the role and save again.
+If the apply is rolled back, no permissions are written: your permission changes stay on the page, to apply again. If `rpcd` refuses a role's permissions, the page shows the error, with the settings already applied; fix the role and click **Save & Apply** again.
 
-To discard unsaved edits, click **Reset**.
+Everything but permissions applies from the next login. There is no service to restart: `luci-sso` reads the configuration on every request.
+
+**Save** alone applies nothing. It keeps the settings and roles in LuCI's unsaved changes and the permission changes on the page, until **Save & Apply**. Permission changes live only in the open page: reload or leave it, and they are gone, while the other unsaved changes stay. To discard unsaved changes, click **Reset**.
 
 ---
 
-## 6. Check the result
+## 7. Check the result
 
 On the router:
 

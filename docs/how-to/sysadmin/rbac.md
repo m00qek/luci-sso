@@ -41,7 +41,7 @@ The lists have the meaning `rpcd` gives them for a password login, because they 
 | `*` | empty | **Read-only.** Every page can load its data; nothing can be saved. |
 | `*` | specific groups | Read everything; change only what the listed groups allow (include `luci-base`). |
 | specific groups | specific groups | Exactly the groups listed. |
-| empty | empty | **No access.** The user can log in but sees nothing. The settings page shows `(none): this role grants no access`. |
+| empty | empty | **No access.** The user can log in but sees nothing. The settings page shows `None: this role grants no access`. |
 
 A CI test logs in both ways, through SSO and with a password, against the real `rpcd`, and fails if the two ever differ.
 
@@ -51,15 +51,15 @@ A CI test logs in both ways, through SSO and with a password, against the real `
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section. The table lists the roles in the order they are tried. Drag a row to move it.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section. The table lists the roles in the order they are tried. Drag a row to move it.
 
-    - To add a role, type its name in the field next to **Add** and click **Add**.
+    - To add a role, type its name in the box next to **Add** and click **Add**.
     - To change a role, click **Edit** in its row.
     - To remove a role, click **Delete** in its row.
 
-    In the role editor, the note above **Read Access** says: "Permission changes take effect when you click Save at the bottom of the page." The editor's own **Save** only keeps your edit on the page.
+    **Read access** and **Write access** offer the router's access groups, and take any name or pattern you type. In the role editor, the note above them says: "Changes here are kept on the page until you Save & Apply it." The editor's own **Save** only keeps your edit on the page.
 
-    When you click **Save** or **Save & Apply** at the bottom of the page, the read and write access go to `rpcd` straight away. The page shows "Saving role permissions; rpcd is reloading to apply them…", then "Role permissions saved and in force." Emails, groups and the order take effect only with **Save & Apply**.
+    Every change takes effect with **Save & Apply** at the bottom of the page. LuCI applies the matching rules and the order first; once it has confirmed the apply, the page writes the read and write access to `rpcd`, showing "Saving role permissions; rpcd is reloading to apply them…", then "Role permissions saved and in force." **Save** alone writes nothing to `rpcd`.
 
 === "Terminal (SSH)"
 
@@ -82,7 +82,7 @@ A CI test logs in both ways, through SSO and with a password, against the real `
 
     `set_role` answers with the lists as stored. After a write, `rpcd` reloads one second later; `list_roles` shows `"reload_pending": true` until it has.
 
-A new role needs both halves. Without its `rpcd` entry, its users are refused at login with `MISSING_RPCD_LOGIN`, and the settings page shows `Not set: edit and save this role, or its users cannot log in`.
+A new role needs both halves. Without its `rpcd` entry, its users are refused at login with `MISSING_RPCD_LOGIN`, and the settings page shows `Not set: edit this role and Save & Apply, or its users cannot log in`.
 
 ---
 
@@ -92,7 +92,7 @@ The shipped `admin` role already grants full access. Make it match the real admi
 
 === "Browser (LuCI)"
 
-    In the **Users** section, click **Edit** in the `admin` row. In **Email Addresses**, replace `admin@example.com` with `alice@example.com`. Check that **Read Access** and **Write Access** hold `*`. Click **Save** in the editor, then **Save & Apply**.
+    In the **Roles** section, click **Edit** in the `admin` row. In **Emails**, replace `admin@example.com` with `alice@example.com`. Check that **Read access** and **Write access** hold `*`. Click **Save** in the editor, then **Save & Apply**.
 
 === "Terminal (SSH)"
 
@@ -113,17 +113,17 @@ The shipped `admin` role already grants full access. Make it match the real admi
 
 ## Read-only access
 
-Leave **Write Access** empty and list the access groups the user may view. `*` in **Read Access** shows everything; to narrow it, name groups or globs.
+Leave **Write access** empty and list the access groups the user may view. `*` in **Read access** shows everything; to narrow it, name groups or globs.
 
 A common starting point: status and network views, but no changes.
 
 === "Browser (LuCI)"
 
-    In the **Users** section, type `viewer` in the field next to **Add** and click **Add**. Fill in the editor:
+    In the **Roles** section, type `viewer` in the field next to **Add** and click **Add**. Fill in the editor:
 
-    - **Email Addresses**: `bob@example.com`
-    - **Read Access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
-    - Leave **Write Access** empty.
+    - **Emails**: `bob@example.com`
+    - **Read access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
+    - Leave **Write access** empty.
 
     Click **Save** in the editor, then **Save & Apply**.
 
@@ -152,7 +152,7 @@ If your IdP returns a `groups` claim, you can match roles by group instead of, o
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On**. In **Settings**, set **Scopes** to `openid profile email groups` and click **Save & Apply**.
+    Navigate to **Services > Single Sign-On**. In the **Identity provider** section, set **Scopes** to `openid profile email groups` and click **Save & Apply**.
 
 === "Terminal (SSH)"
 
@@ -165,16 +165,16 @@ Then create one role per group. Put the more privileged role first: a user in bo
 
 === "Browser (LuCI)"
 
-    In the **Users** section, add a role `ops_admin`:
+    In the **Roles** section, add a role `ops_admin`:
 
     - **Groups**: `network-ops`
-    - **Read Access**: `*`
-    - **Write Access**: `*`
+    - **Read access**: `*`
+    - **Write access**: `*`
 
     Click **Save** in the editor. Add a role `sec_viewer`:
 
     - **Groups**: `security-team`
-    - **Read Access**: `luci-base`, `luci-mod-status-*`
+    - **Read access**: `luci-base`, `luci-mod-status-*`
 
     Click **Save** in the editor. Drag `ops_admin` above `sec_viewer` if it is not already, then click **Save & Apply**.
 
@@ -220,7 +220,7 @@ A `sub` rule matches one account at the IdP, whatever its email address or group
 
     === "Browser (LuCI)"
 
-        In the **Users** section, click **Edit** in the role's row, or add a role. In **Subjects (sub)**, enter the value, and click **Save** in the editor, then **Save & Apply**.
+        In the **Roles** section, click **Edit** in the role's row, or add a role. In **Subjects**, enter the value, and click **Save** in the editor, then **Save & Apply**.
 
     === "Terminal (SSH)"
 
@@ -246,9 +246,9 @@ For example, `viewer` reads status and network pages, and a few users should als
 
     Add a role `net_operator`:
 
-    - **Email Addresses**: `charlie@example.com`
-    - **Read Access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
-    - **Write Access**: `luci-base`, `luci-mod-network-config`
+    - **Emails**: `charlie@example.com`
+    - **Read access**: `luci-base`, `luci-mod-status-*`, `luci-mod-network-*`
+    - **Write access**: `luci-base`, `luci-mod-network-config`
 
     Click **Save** in the editor. Drag `net_operator` above `viewer`, then click **Save & Apply**.
 

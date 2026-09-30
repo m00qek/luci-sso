@@ -111,6 +111,7 @@ The `luci-sso` ubus object, an `rpcd` plugin at `/usr/share/rpcd/ucode/luci-sso.
 | `list_roles` | none | `{ "roles": [ { "name", "read", "write" } ], "reload_pending": <bool> }`: every `luci_sso_*` login entry with a valid role name, in file order. |
 | `set_role` | `name` (string), `read` (array), `write` (array) | `{ "role": { "name", "read", "write" } }`, with the lists as stored. Creates or replaces the entry, and removes any `password` option. |
 | `delete_role` | `name` (string) | `{ "result": true }` |
+| `list_acl_groups` | none | `{ "groups": [ ... ] }`: the top-level keys of every `/usr/share/rpcd/acl.d/*.json`, sorted, each once. Names a list could not store are left out. Changes nothing. |
 | `test_connection` | `issuer_url`, `internal_issuer_url`, `client_id`, `client_secret`, `redirect_uri` (strings; missing counts as empty) | `{ "job": "<id>" }`. Starts a [connection test](#connection-test) in the background and answers at once. |
 | `test_connection_result` | `job` (string) | `{ "done": false }` while the test runs; then `{ "done": true, "checks": [ { "id", "status", "message" } ] }`, or `{ "done": true, "error", "message" }` when the test itself failed. |
 
@@ -134,7 +135,7 @@ Errors come back as a reply `{ "error": "<CODE>", "message": "<text>" }`. `rpcd`
 
 After a successful write, the plugin makes `rpcd` reload one second after the reply, as `/etc/init.d/rpcd reload` does. Writes in that second share the reload. `list_roles` reports `"reload_pending": true` from the write until `rpcd` has restarted. While `rpcd` restarts, a `/ubus/` request that reaches it at the moment it re-executes itself is never answered: `uhttpd` waits for its session check up to half its script timeout (30 s by default) and serves no page meanwhile. Every `rpcd` reload can do this, whatever triggers it. The settings page waits up to 45 seconds for the reload.
 
-Access through LuCI needs the `luci-app-sso` access group: its `read` section grants `list_roles`, its `write` section `set_role`, `delete_role`, `test_connection` and `test_connection_result`. A user who may only read the settings page cannot run the connection test, since it sends the client secret to the provider. The group grants no UCI access to `rpcd`.
+Access through LuCI needs the `luci-app-sso` access group: its `read` section grants `list_roles` and `list_acl_groups`, its `write` section `set_role`, `delete_role`, `test_connection` and `test_connection_result`. A user who may only read the settings page cannot run the connection test, since it sends the client secret to the provider. The group grants no UCI access to `rpcd`.
 
 ### Connection test
 
@@ -156,47 +157,61 @@ With `internal_issuer_url`, the JWK Set and token requests go to the internal or
 
 ## LuCI Form ↔ UCI Option
 
-The settings page at **Services > Single Sign-On** (view `services/sso`, heading **SSO Login**) edits `/etc/config/luci-sso`, and the roles' `rpcd` login entries through the [`luci-sso` ubus object](#the-luci-sso-ubus-object). Opening it needs the `luci-app-sso` access group. **Save & Apply** writes the form with `uci`; **Reset** reloads the last saved values without writing.
+The settings page at **Services > Single Sign-On** (view `services/sso`, heading **Single Sign-On**) edits `/etc/config/luci-sso`, and the roles' `rpcd` login entries through the [`luci-sso` ubus object](#the-luci-sso-ubus-object). Opening it needs the `luci-app-sso` access group. It has two sections, **Identity provider** and **Roles**.
 
-### Settings section
+Changes take effect with **Save & Apply**:
 
-Edits `config oidc 'default'`.
-
-| Field | UCI option | Form behaviour |
+| Button | UCI changes (`/etc/config/luci-sso`) | Role permissions (`rpcd` login entries) |
 | :--- | :--- | :--- |
-| **Enable SSO** | `enabled` | Checkbox; saved as `1` or `0`. While `0`, the login page shows no SSO button, the `?action=enabled` probe answers `{"enabled": false}`, and other requests to `/cgi-bin/luci-sso` get an error page (`SSO_DISABLED`). Password login is unaffected. |
-| **Issuer URL** | `issuer_url` | Required. Rejects a value that does not start with `https://` (`Must use HTTPS`). Placeholder: `https://accounts.google.com`. |
-| **Client ID** | `client_id` | Required. |
-| **Client Secret** | `client_secret` | Required. Masked password field. |
-| **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host name in the browser's address bar without its port; when it is set, the saved value. |
-| **Scopes** | `scope` | Optional. Placeholder: `openid profile email`, which is also what the login requests when the option is empty. |
-| **Require Verified Email** | `require_email_verified` | Checkbox; saved as `1` or `0`. Ticked when the option is unset, and then saved as `1`. |
-| **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
-| **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
-| **Test Connection** | none | A **Test connection** button. Sends the form's Issuer URL, Internal Issuer URL, Client ID, Client Secret and Redirect URI, saved or not, to [`test_connection`](#connection-test), and lists each check's result as `[Pass]`, `[Fail]`, `[Warning]` or `[Skipped]`, with a summary line. Saves nothing; works while **Enable SSO** is off. Needs write access to the `luci-app-sso` group. |
+| **Save** | Staged in the session, as on any LuCI page. | Kept on the page; nothing is sent. Lost if the page is reloaded or left. |
+| **Save & Apply** | Staged, then applied with LuCI's checked apply (or unchecked, from the button's menu). | With UCI changes pending: sent after LuCI's `uci-applied` event, when the apply is confirmed; not sent if it is rolled back. With none pending: sent at once. Each edited role goes to `set_role`, each deleted one to `delete_role`, and the page waits up to 45 s for `rpcd` to reload, then reloads itself. A refusal is shown, with the edits kept on the page. |
+| **Reset** | The form goes back to the saved values. | Edits on the page are discarded. |
 
-### Users section
+### Identity provider section
 
-Each row is a `config role '<name>'` section and its `rpcd` login entry. The rows are in the order roles are tried; dragging a row reorders the sections. **Add** takes the role name, which becomes the section name; the name `default` is refused, because it belongs to the OIDC section. Each row's **Edit** button opens the role's editor; its **Delete** button deletes the section and the entry.
+Edits `config oidc 'default'`. Two tabs; the **Provider** tab is in the order of setting up.
 
-The table's **Emails**, **Groups** and **Subjects** columns list the role's values, or `(none)`. **Read Access** and **Write Access** list the entry's lists, without `unauthenticated`:
+| Tab | Field | UCI option | Form behaviour |
+| :--- | :--- | :--- | :--- |
+| Provider | **Issuer URL** | `issuer_url` | Required. Rejects a value that does not start with `https://` (`Must use HTTPS`). Placeholder: `https://accounts.google.com`. |
+| Provider | **Client ID** | `client_id` | Required. |
+| Provider | **Client Secret** | `client_secret` | Required. Masked password field. |
+| Provider | **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host name in the browser's address bar without its port, and a **Save** writes it; when it is set, the saved value. Wide enough for the whole address. **Copy** copies the field's value, with the Clipboard API or, where it is missing, a selected text area; "Copied" confirms it. |
+| Provider | **Scopes** | `scope` | Optional. Placeholder: `openid profile email`, which is also what the login requests when the option is empty. Warns, without blocking, when a role has a `group` rule and the scopes (or the default) do not include `groups`. |
+| Provider | **Test Connection** | none | A **Test connection** button. Sends the form's Issuer URL, Internal Issuer URL, Client ID, Client Secret and Redirect URI, saved or not, to [`test_connection`](#connection-test), and lists each check's result as `[Pass]`, `[Fail]`, `[Warning]` or `[Skipped]`, with a summary line. Saves nothing; works while **Enable SSO** is off. Needs write access to the `luci-app-sso` group. |
+| Provider | **Enable SSO** | `enabled` | Checkbox; saved as `1` or `0`. While `0`, the login page shows no SSO button, the `?action=enabled` probe answers `{"enabled": false}`, and other requests to `/cgi-bin/luci-sso` get an error page (`SSO_DISABLED`). Password login is unaffected. |
+| Advanced | **Require Verified Email** | `require_email_verified` | Checkbox; saved as `1` or `0`. Ticked when the option is unset, and then saved as `1`. While ticked, warns, without blocking, about the roles that have an `email` rule and neither a `group` nor a `sub` rule. |
+| Advanced | **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
+| Advanced | **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
+
+The warnings are computed from the roles as the page holds them, and follow edits to **Scopes**, **Require Verified Email** and the roles.
+
+### Roles section
+
+Each row is a `config role '<name>'` section and its `rpcd` login entry. The rows are in the order roles are tried; dragging a row reorders the sections. Each row's **Edit** button opens the role's editor, titled **Role: `<name>`**; its **Delete** button deletes the section and, on **Save & Apply**, the entry.
+
+The box next to **Add** (placeholder `New role name, e.g. viewers`) takes the role name, which becomes the section name. While you type, it refuses, with the reason under the box and **Add** disabled: characters other than letters, digits and underscores; more than 32 characters (the length an `rpcd` entry allows); `default`, which belongs to the OIDC section; and the name of an existing section.
+
+The table's **Emails**, **Groups** and **Subjects** columns list the role's values. **Read access** and **Write access** list the entry's lists, without `unauthenticated`:
 
 | Cell | Meaning |
 | :--- | :--- |
-| `(none)` | The list is empty. |
-| `(none): this role grants no access` | Both lists are empty apart from `unauthenticated`. The role's users can log in but see nothing. Shown in both cells. |
-| `Not set: edit and save this role, or its users cannot log in` | The role has no entry. Shown in both cells. |
+| `—` | The list is empty. |
+| **Everything** | **Read access** is exactly `*`. |
+| **Full admin** | **Write access** is exactly `*`. |
+| `None: this role grants no access` | Both lists are empty apart from `unauthenticated`. The role's users can log in but see nothing. Shown under **Read access**. |
+| `Not set: edit this role and Save & Apply, or its users cannot log in` | The role has no entry. Shown under **Read access**. |
 | `(unavailable)` | `list_roles` failed. The access fields are read-only, and nothing is written to `rpcd`. |
 
 | Field (role editor) | Stored in | Form behaviour |
 | :--- | :--- | :--- |
-| **Email Addresses** | `email` | List; one address per entry. |
+| **Emails** | `email` | List; one address per entry. |
 | **Groups** | `group` | List; one group per entry. |
-| **Subjects (sub)** | `sub` | List; one `sub` value per entry, compared exactly. |
-| **Read Access** | `read` of `luci_sso_<name>` | List of access groups. `unauthenticated` is not shown, and is always stored. |
-| **Write Access** | `write` of `luci_sso_<name>` | List of access groups. |
+| **Subjects** | `sub` | List; one `sub` value per entry, compared exactly. |
+| **Read access** | `read` of `luci_sso_<name>` | List of access groups. Suggests `*` and every group [`list_acl_groups`](#the-luci-sso-ubus-object) returns, except `unauthenticated`; any other name or pattern can be typed. `unauthenticated` is not shown, and is always stored. |
+| **Write access** | `write` of `luci_sso_<name>` | List of access groups, with the same suggestions. |
 
-The editor says "Permission changes take effect when you click Save at the bottom of the page." Its own **Save** keeps the edit on the page only. The page's **Save** (and **Save & Apply**) stages the UCI changes, then sends each edited role to `set_role` and each deleted one to `delete_role`, and waits for `rpcd` to reload. A new role always gets an entry, even with both lists empty. An error from the object is shown and stops **Save & Apply**. Emails, groups, subjects and the order take effect with **Save & Apply**.
+The editor says "Changes here are kept on the page until you Save & Apply it." Its own **Save** keeps the edit on the page only. A new role always gets an entry, even with both lists empty.
 
 Matching rules are in [Role Mapping](#role-mapping-config-role); permission rules in [Role Permissions](#role-permissions-rpcd-login-entry).
 

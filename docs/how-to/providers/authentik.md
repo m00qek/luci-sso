@@ -85,16 +85,18 @@ A certificate error here means the router does not trust Authentik's certificate
 
     Navigate to **Services > Single Sign-On**.
 
-    Fill in the **Settings** section:
+    Fill in the **Identity provider** section:
 
     | Field | Value |
     | :--- | :--- |
-    | **Enable SSO** | On |
     | **Issuer URL** | `https://authentik.example.com/application/o/luci-router/` |
     | **Client ID** | Your Client ID from Step 1 |
     | **Client Secret** | Your Client Secret from Step 1 |
     | **Redirect URI** | `https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback` |
     | **Scopes** | `openid profile email` |
+    | **Enable SSO** | On |
+
+    Before you save, click **Test connection**, above **Enable SSO**, and check that every line reads **Pass**; a line that fails says what to fix. See [Test the connection](../sysadmin/configure-in-luci.md#3-test-the-connection).
 
     Click **Save & Apply**.
 
@@ -114,15 +116,15 @@ A certificate error here means the router does not trust Authentik's certificate
 
 ## 5. Configure role mapping
 
-A role says which users it matches, by email or by group. What the role may do on the router is its `rpcd` login entry. On a fresh install, the shipped `admin` role grants full access. To give some users less, add a role with its own **Read Access** and **Write Access**, as described in [How to Configure Role-Based Access Control](../sysadmin/rbac.md). A user gets the first role that matches, from the top.
+A role says which users it matches, by email or by group. What the role may do on the router is its `rpcd` login entry. On a fresh install, the shipped `admin` role grants full access. To give some users less, add a role with its own **Read access** and **Write access**, as described in [How to Configure Role-Based Access Control](../sysadmin/rbac.md). A user gets the first role that matches, from the top.
 
 ### Map by email
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
-    Click **Edit** in the `admin` row. In **Email Addresses**, replace the placeholder `admin@example.com` with the user's email address, then click **Save** in the editor.
+    Click **Edit** in the `admin` row. In **Emails**, replace the placeholder `admin@example.com` with the user's email address, then click **Save** in the editor.
 
     Click **Save & Apply**.
 
@@ -163,7 +165,7 @@ Authentik delivers group memberships through the `profile` scope, so no separate
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section.
 
     Click **Edit** in the `admin` row. In **Groups**, enter the group name, then click **Save** in the editor.
 

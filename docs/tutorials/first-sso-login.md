@@ -61,21 +61,22 @@ Google will display the Client ID and Client Secret in an **OAuth client created
 
 Navigate to **Services > Single Sign-On**.
 
-Fill in the **Settings** section with the values from Step 1:
+Fill in the **Identity provider** section with the values from Step 1:
 
 | Field | Value |
 | :--- | :--- |
-| **Enable SSO** | On |
 | **Issuer URL** | `https://accounts.google.com` |
 | **Client ID** | Our Client ID from Step 1 |
 | **Client Secret** | Our Client Secret from Step 1 |
 | **Redirect URI** | `https://router.example.com/cgi-bin/luci-sso/callback` |
 | **Scopes** | `openid profile email` |
-| **Clock Tolerance** | `60` |
+| **Enable SSO** | On |
 
 The Redirect URI must exactly match what we entered in Google Cloud Console. The field suggests a callback URL built from the address in our browser; we check that it is exactly `https://router.example.com/cgi-bin/luci-sso/callback`, and correct it if not.
 
-Scroll to the **Users** section and click **Edit** on the `admin` role. In **Email Addresses**, remove the placeholder `admin@example.com`, add our Gmail address, and click **Save**.
+Before we save, we click **Test connection**, above **Enable SSO**. Every line should read **Pass**; a line that fails says what to fix. See [Test the connection](../how-to/sysadmin/configure-in-luci.md#3-test-the-connection).
+
+Scroll to the **Roles** section and click **Edit** on the `admin` role. In **Emails**, remove the placeholder `admin@example.com`, add our Gmail address, and click **Save**.
 
 Click **Save & Apply**.
 

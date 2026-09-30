@@ -242,7 +242,7 @@ If a role has the same name as an `rpcd` login, such as `root`, its open session
     ubus call luci-sso list_roles
     ```
 
-3.  Open **Services > Single Sign-On**. A role whose **Read Access** shows "(none): this role grants no access" lets its users log in to an empty LuCI. A role that shows "Not set: edit and save this role, or its users cannot log in" has no entry. Edit each one, set its access, and click **Save**.
+3.  Open **Services > Single Sign-On**. A role whose **Read access** shows "None: this role grants no access" lets its users log in to an empty LuCI. A role that shows "Not set: edit this role and Save & Apply, or its users cannot log in" has no entry. Edit each one, set its access, click **Save** in the editor, and then **Save & Apply**.
 
 4.  Check the order of the roles. If a user matches several, only the first counts. Drag the most privileged or most specific role to the top, then click **Save & Apply**. A user who used to combine two roles needs one role that grants both; see [How to Configure Role-Based Access Control](rbac.md).
 

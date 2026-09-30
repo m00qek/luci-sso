@@ -118,13 +118,13 @@ uci delete luci-sso.default.internal_issuer_url
 uci commit luci-sso
 ```
 
-In the browser, the same field is **Internal Issuer URL** on **Services > Single Sign-On**.
+In the browser, the same field is **Internal Issuer URL** on the **Advanced** tab of **Services > Single Sign-On**.
 
 **Step 3.** Update any role mappings if email addresses or group names differ between the old and new IdP:
 
 === "Browser (LuCI)"
 
-    Navigate to **Services > Single Sign-On** and scroll to the **Users** section. Edit each role and update **Email Addresses** and **Groups** as needed, then click **Save & Apply**.
+    Navigate to **Services > Single Sign-On** and scroll to the **Roles** section. Edit each role and update **Emails** and **Groups** as needed, then click **Save & Apply**.
 
 === "Terminal (SSH)"
 
