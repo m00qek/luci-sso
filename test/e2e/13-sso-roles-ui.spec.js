@@ -1,8 +1,8 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles, RELOAD_WAIT_MS } = require('./helpers');
+const { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles, modal, fillList, saveAndApply, RELOAD_WAIT_MS } = require('./helpers');
 
-// The Users section of the SSO settings page against the real rpcd: matching
+// The Roles section of the SSO settings page against the real rpcd: matching
 // rules and order in /etc/config/luci-sso (UCI), permissions in each role's
 // rpcd login entry (the luci-sso ubus object). Every role created here is
 // named e2e_*; the devenv's `admin` role is left as it is.
@@ -17,19 +17,6 @@ function row(page, sid) {
     return page.locator(`.cbi-section-table-row[data-sid="${sid}"]`);
 }
 
-function modal(page) {
-    return page.locator('#modal_overlay .modal');
-}
-
-// Types the values into a DynamicList of the open modal, one entry each.
-async function fillList(page, name, values) {
-    const field = modal(page).locator(`[data-name="${name}"]`);
-    for (const v of values) {
-        await field.locator('input[type="text"]').last().fill(v);
-        await field.locator('.cbi-button-add').click();
-    }
-}
-
 async function addRole(page, name, { emails = [], read = [], write = [] }) {
     await page.locator('.cbi-section-create-name').pressSequentially(name);
     await page.locator('.cbi-section-create .cbi-button-add').click();
@@ -37,27 +24,11 @@ async function addRole(page, name, { emails = [], read = [], write = [] }) {
     // The dialog's own Save does not write the permissions: the page says so.
     await expect(modal(page).locator('.luci-sso-access-note'))
         .toHaveText('Permission changes take effect when you click Save at the bottom of the page.');
-    await fillList(page, 'email', emails);
-    await fillList(page, 'read', read);
-    await fillList(page, 'write', write);
+    await fillList(modal(page), 'email', emails);
+    await fillList(modal(page), 'read', read);
+    await fillList(modal(page), 'write', write);
     await modal(page).locator('button.cbi-button-positive').click();
     await expect(modal(page)).toBeHidden();
-}
-
-// Save & Apply: the page writes the permissions and waits for rpcd to reload
-// (when `access` changed), then LuCI applies the UCI changes, confirms them
-// and reloads the page. The apply must be confirmed before the test moves on,
-// or LuCI rolls it back.
-async function saveAndApply(page, { access = true } = {}) {
-    await page.locator('.cbi-page-actions .cbi-button-apply').first().click();
-    if (access)
-        await expect(page.locator('.alert-message', { hasText: 'Role permissions saved and in force.' })).toBeVisible({ timeout: RELOAD_WAIT_MS });
-    const applied = page.getByText('Configuration changes applied.');
-    const none = page.getByText('There are no changes to apply');
-    await expect(applied.or(none)).toBeVisible({ timeout: 60000 });
-    if (await applied.isVisible())
-        await page.waitForEvent('load', { timeout: 30000 });
-    await expect(page.getByText('Session expired')).toHaveCount(0);
 }
 
 // The committed role order in /etc/config/luci-sso.
@@ -97,8 +68,8 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         await page.locator('.cbi-section-create-name').pressSequentially('e2e_viewer');
         await page.locator('.cbi-section-create .cbi-button-add').click();
         await expect(modal(page).locator('[data-name="read"]')).toContainText('unauthenticated is always included');
-        await fillList(page, 'email', ['viewer@example.com']);
-        await fillList(page, 'read', ['luci-mod-status-*']);
+        await fillList(modal(page), 'email', ['viewer@example.com']);
+        await fillList(modal(page), 'read', ['luci-mod-status-*']);
         await modal(page).locator('button.cbi-button-positive').click();
         await expect(modal(page)).toBeHidden();
 
@@ -119,8 +90,8 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         await expect(modal(page)).toBeVisible();
         // The stored list is luci-mod-status-* and unauthenticated; the editor shows the first only.
         await expect(modal(page).locator('[data-name="read"] .item')).toHaveText(['luci-mod-status-*']);
-        await fillList(page, 'read', ['luci-base']);
-        await fillList(page, 'write', ['luci-mod-system-config']);
+        await fillList(modal(page), 'read', ['luci-base']);
+        await fillList(modal(page), 'write', ['luci-mod-system-config']);
         await modal(page).locator('button.cbi-button-positive').click();
         await expect(modal(page)).toBeHidden();
         await expect(row(page, 'e2e_viewer').locator('td[data-name="_read"]')).toHaveText('luci-mod-status-*, luci-base');
@@ -136,12 +107,12 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         await gotoSSOSettings(page);
 
         await addRole(page, 'e2e_none', { emails: ['nobody@example.com'] });
-        await expect(row(page, 'e2e_none').locator('td[data-name="_read"]')).toHaveText('(none): this role grants no access');
+        await expect(row(page, 'e2e_none').locator('td[data-name="_read"]')).toHaveText('None: this role grants no access');
         await saveAndApply(page);
 
         expect((await listRoles(page)).e2e_none).toEqual({ read: ['unauthenticated'], write: [] });
         await gotoSSOSettings(page);
-        await expect(row(page, 'e2e_none').locator('td[data-name="_read"]')).toHaveText('(none): this role grants no access');
+        await expect(row(page, 'e2e_none').locator('td[data-name="_read"]')).toHaveText('None: this role grants no access');
     });
 
     test('the first matching role wins, and dragging a role above another changes which one', async ({ page, browser }) => {

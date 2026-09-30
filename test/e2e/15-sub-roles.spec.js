@@ -1,6 +1,6 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { loginAsRoot, gotoSSOSettings, ubus, listRoles, RELOAD_WAIT_MS } = require('./helpers');
+const { loginAsRoot, gotoSSOSettings, ubus, listRoles, modal, fillList, saveAndApply, RELOAD_WAIT_MS } = require('./helpers');
 
 // Matching a role by the OIDC `sub` claim, against the real CGI and rpcd.
 //
@@ -10,10 +10,6 @@ const { loginAsRoot, gotoSSOSettings, ubus, listRoles, RELOAD_WAIT_MS } = requir
 // UCI as root, and put the role back afterwards.
 
 const MOCK_SUB = '1234567890';
-
-function modal(page) {
-    return page.locator('#modal_overlay .modal');
-}
 
 // Sets the devenv admin role's matching rules through UCI, as root, and
 // applies them. The CGI reads UCI on every request, so they are in force at
@@ -64,7 +60,7 @@ test.describe('Roles matched by sub', () => {
     test.beforeAll(async ({ browser }) => { test.setTimeout(RELOAD_WAIT_MS + 30000); await cleanup(browser); });
     test.afterAll(async ({ browser }) => { test.setTimeout(RELOAD_WAIT_MS + 30000); await cleanup(browser); });
 
-    test('the role editor has a Subjects (sub) list, saved to UCI and shown in the table', async ({ page }) => {
+    test('the role editor has a Subjects list, saved to UCI and shown in the table', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
@@ -72,20 +68,15 @@ test.describe('Roles matched by sub', () => {
         await page.locator('.cbi-section-create .cbi-button-add').click();
         await expect(modal(page)).toBeVisible();
 
-        const field = modal(page).locator('[data-name="sub"]');
-        await expect(field).toContainText('Compared exactly, including letter case');
-        for (const v of ['AbC-123', 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6']) {
-            await field.locator('input[type="text"]').last().fill(v);
-            await field.locator('.cbi-button-add').click();
-        }
+        await expect(modal(page).locator('[data-name="sub"]')).toContainText('Compared exactly, including letter case');
+        await fillList(modal(page), 'sub', ['AbC-123', 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6']);
         await modal(page).locator('button.cbi-button-positive').click();
         await expect(modal(page)).toBeHidden();
 
         const row = page.locator('.cbi-section-table-row[data-sid="e2e_sub"]');
         await expect(row.locator('td[data-name="_subs"]')).toHaveText('AbC-123, f81d4fae-7dec-11d0-a765-00a0c91e6bf6');
 
-        await page.locator('.cbi-page-actions .cbi-button-apply').first().click();
-        await expect(page.getByText('Configuration changes applied.')).toBeVisible({ timeout: RELOAD_WAIT_MS + 30000 });
+        await saveAndApply(page);
 
         await expect.poll(async () => {
             const r = await ubus(page, 'uci', 'get', { config: 'luci-sso', section: 'e2e_sub', option: 'sub' });

@@ -68,7 +68,7 @@ test.describe('Security: Management UI ACLs', () => {
     test('ACL: Access is allowed for authorized sessions', async ({ page }) => {
         await loginAsRoot(page);
         await page.goto('/cgi-bin/luci/admin/services/sso');
-        await expect(page.locator('.cbi-map-descr:has-text("Configure OpenID Connect")')).toBeVisible();
+        await expect(page.locator('.cbi-map-descr:has-text("Log in to LuCI with your identity provider")')).toBeVisible();
     });
 
 });

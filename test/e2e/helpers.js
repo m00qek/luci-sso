@@ -1,4 +1,5 @@
 'use strict';
+const { expect } = require('@playwright/test');
 
 // How long to wait for an rpcd reload (a luci-sso write) to finish. The
 // reload itself takes about two seconds: one second until the plugin signals
@@ -73,4 +74,50 @@ async function listRoles(page) {
     }
 }
 
-module.exports = { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles, RELOAD_WAIT_MS };
+// The settings page's tabs: 'provider' (the default) or 'advanced'.
+async function openTab(page, tab) {
+    await page.locator(`.cbi-tabmenu li[data-tab="${tab}"] a`).click();
+}
+
+function modal(page) {
+    return page.locator('#modal_overlay .modal');
+}
+
+// Adds values to a DynamicList of `scope` (the role editor, usually). Read
+// and write access offer the router's access groups in a combobox, whose
+// "custom" box takes any name or pattern; the other lists are text boxes.
+async function fillList(scope, name, values) {
+    const field = scope.locator(`[data-name="${name}"]`);
+    for (const v of values) {
+        const dropdown = field.locator('.cbi-dropdown');
+        if (await dropdown.count()) {
+            await dropdown.click();
+            const custom = field.locator('input.create-item-input:visible');
+            await custom.fill(v);
+            await custom.press('Enter');
+            await expect(field.locator('.item', { hasText: v }).last()).toBeAttached();
+        } else {
+            await field.locator('input[type="text"]').last().fill(v);
+            await field.locator('.cbi-button-add').click();
+        }
+    }
+}
+
+// Save & Apply: the page writes the permissions and waits for rpcd to reload
+// (when `access` changed), then LuCI applies the UCI changes, confirms them
+// and reloads the page. The apply must be confirmed before the test moves on,
+// or LuCI rolls it back.
+async function saveAndApply(page, { access = true } = {}) {
+    await page.locator('.cbi-page-actions .cbi-button-apply').first().click();
+    if (access)
+        await expect(page.locator('.alert-message', { hasText: 'Role permissions saved and in force.' })).toBeVisible({ timeout: RELOAD_WAIT_MS });
+    const applied = page.getByText('Configuration changes applied.');
+    const none = page.getByText('There are no changes to apply');
+    await expect(applied.or(none)).toBeVisible({ timeout: 60000 });
+    if (await applied.isVisible())
+        await page.waitForEvent('load', { timeout: 30000 });
+    await page.waitForSelector('.cbi-map');
+    await expect(page.getByText('Session expired')).toHaveCount(0);
+}
+
+module.exports = { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles, openTab, modal, fillList, saveAndApply, RELOAD_WAIT_MS };
