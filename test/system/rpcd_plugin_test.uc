@@ -1,5 +1,6 @@
 import { describe, it, assert, contains, regex } from 'utest';
 import * as r from 'lib.rpcd';
+import * as fs from 'fs';
 
 // System bucket: the luci-sso ubus object (files/usr/share/rpcd/ucode/luci-sso.uc)
 // running inside the container's REAL rpcd. The plugin is the only way the
@@ -273,8 +274,30 @@ describe('system: luci-sso ubus object — delete_role', () => {
 });
 
 describe('system: luci-sso ubus object — methods', () => {
-	it('offers list_roles, set_role, delete_role and the connection test, and no way to reorder entries', () => {
+	it('offers list_roles, set_role, delete_role, list_acl_groups and the connection test, and no way to reorder entries', () => {
 		let conn = r.connect();
-		assert.match([ "delete_role", "list_roles", "set_role", "test_connection", "test_connection_result" ], sort(keys(conn.list("luci-sso")[0])));
+		assert.match([ "delete_role", "list_acl_groups", "list_roles", "set_role", "test_connection", "test_connection_result" ], sort(keys(conn.list("luci-sso")[0])));
+	});
+});
+
+describe('system: luci-sso ubus object — list_acl_groups', () => {
+	it('lists every access group the acl.d files define, sorted, each once', () => {
+		let expected = {};
+		for (let f in fs.lsdir("/usr/share/rpcd/acl.d"))
+			if (match(f, /\.json$/))
+				for (let k in keys(json(fs.readfile(`/usr/share/rpcd/acl.d/${f}`)) || {}))
+					expected[k] = true;
+		let res = call(r.connect(), "list_acl_groups");
+		assert.match({ groups: sort(keys(expected)) }, res);
+		for (let g in [ "luci-base", "luci-app-sso", "unauthenticated" ])
+			assert.match(true, index(res.groups, g) >= 0, g);
+	});
+
+	it('changes nothing', () => {
+		with_rpcd((conn) => {
+			let before = r.rpcd_sections();
+			call(conn, "list_acl_groups");
+			assert.match(before, r.rpcd_sections());
+		});
 	});
 });

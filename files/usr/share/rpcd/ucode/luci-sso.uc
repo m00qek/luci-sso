@@ -36,6 +36,11 @@
 //   set_role { name, read, write }           -> { role: { name, read, write } },
 //                                               the lists as stored
 //   delete_role { name }                     -> { result: true }
+//   list_acl_groups {}                       -> { groups: [ "<access group>" ] },
+//                                               the top-level keys of every
+//                                               /usr/share/rpcd/acl.d/*.json,
+//                                               sorted, each once; the settings
+//                                               page offers them as suggestions
 //   test_connection { issuer_url, internal_issuer_url, client_id,
 //                     client_secret, redirect_uri }
 //                                            -> { job: "<id>" }
@@ -81,7 +86,7 @@
 "use strict";
 
 import { cursor } from 'uci';
-import { mkdir, readlink, readfile } from 'fs';
+import { mkdir, readlink, readfile, lsdir } from 'fs';
 import * as uloop from 'uloop';
 import * as rpcd_login from 'luci_sso.rpcd_login';
 import * as connection from 'luci_sso.connection';
@@ -96,6 +101,9 @@ const RUN_DIR = "/var/run/luci-sso";
 const DELTA_DIR = "/var/run/luci-sso/rpcd-uci";
 
 const RELOAD_DELAY_MS = 1000;
+
+// Where LuCI packages define their access groups.
+const ACL_DIR = "/usr/share/rpcd/acl.d";
 
 // Well inside LuCI's 20 s call timeout for each poll, and above the three
 // requests' 5 s timeouts.
@@ -242,6 +250,25 @@ const methods = {
 			let err = commit(uci);
 			if (err) return err;
 			return { result: true };
+		}
+	},
+
+	list_acl_groups: {
+		call: function() {
+			let seen = {};
+			for (let f in (lsdir(ACL_DIR) || [])) {
+				if (!match(f, /\.json$/))
+					continue;
+				let data = null;
+				try { data = json(readfile(`${ACL_DIR}/${f}`) || "null"); } catch (e) { continue; }
+				if (type(data) != "object")
+					continue;
+				// Only names a role's list could store (rpcd_login.check_list).
+				for (let k in keys(data))
+					if (rpcd_login.check_list("group", [ k ]).ok && substr(k, 0, 1) != "!")
+						seen[k] = true;
+			}
+			return { groups: sort(keys(seen)) };
 		}
 	},
 
