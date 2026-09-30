@@ -222,7 +222,11 @@ export function check(deps, params) {
 		} else {
 			let code = "luci-sso-connection-test-" + encoding.b64url_encode(rnd.data).data;
 			let cfg = { client_id, client_secret, redirect_uri: length(redirect_uri) ? redirect_uri : null };
-			let res = oidc.exchange_code(tdeps, cfg, backchannel, code, pkce.data.verifier, null);
+			// The probe expects the token request to fail, and the page
+			// reports the outcome: log what exchange_code says at info, so the
+			// expected refusal does not read as an error in the system log.
+			let probe_deps = { ...tdeps, log: (level, msg) => log("info", msg) };
+			let res = oidc.exchange_code(probe_deps, cfg, backchannel, code, pkce.data.verifier, null);
 			let d = (type(res.details) == "object") ? res.details : {};
 			let answer = d.oauth_error ? d.oauth_error : `HTTP ${d.upstream_status}`;
 			if (res.ok) {

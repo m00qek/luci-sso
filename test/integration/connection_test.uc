@@ -117,6 +117,13 @@ describe('connection: check — a working provider', () => {
 		assert.match(0, length(filter(r.logs, (l) => index(l[1], "Connection test: ") != 0)), sprintf("%J", r.logs));
 		assert.match(1, length(filter(r.logs, (l) => l[1] == "Connection test: finished: 7 passed, 0 failed, 0 undetermined, 0 skipped")));
 	});
+
+	it('logs the credential probe\'s expected refusal at info, not as an error', () => {
+		let r = run();
+		let refusal = filter(r.logs, (l) => index(l[1], "invalid_grant") >= 0);
+		assert.match(1, length(refusal), sprintf("%J", r.logs));
+		assert.match("info", refusal[0][0]);
+	});
 });
 
 describe('connection: check — issuer URL', () => {

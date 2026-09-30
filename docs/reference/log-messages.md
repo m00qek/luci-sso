@@ -592,7 +592,7 @@ The settings page's **Test connection** runs in a child process of `rpcd`, which
 | Line | Level | Meaning |
 | :--- | :--- | :--- |
 | `Connection test: started from the settings page` | info | An administrator started the test. |
-| `Connection test: <line>` | as the line | Any line of [Discovery and JWK Set](#discovery-and-jwk-set) or [Token exchange](#token-exchange), written while the test ran the same code a login runs. `Connection test: Token exchange failed (invalid_grant, HTTP 400)` is the expected result of the credentials check: the provider accepted the client and refused the made-up code. |
+| `Connection test: <line>` | as the line; info for the credentials check | Any line of [Discovery and JWK Set](#discovery-and-jwk-set) or [Token exchange](#token-exchange), written while the test ran the same code a login runs. The credentials check expects its token request to fail, so its lines are logged at info: `Connection test: Token exchange failed (invalid_grant, HTTP 400)` is the expected result, meaning the provider accepted the client and refused the made-up code. |
 | `Connection test: finished: <n> passed, <n> failed, <n> undetermined, <n> skipped` | info | The test is over; the settings page shows each check. |
 
 The test never logs the client secret, and does not end with a `[<status>] <CODE>` line.
