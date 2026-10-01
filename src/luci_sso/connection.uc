@@ -23,7 +23,9 @@ import { DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCO
  *   endpoints           authorization_endpoint, token_endpoint and jwks_uri
  *                       are present and use HTTPS
  *   jwks                the JWK Set loads and has a key luci-sso can verify
- *                       ID tokens with
+ *                       ID tokens with, by the rules a login applies (an
+ *                       RSA key of crypto.RSA_MIN_BITS or more, exponent
+ *                       65537; an EC key on P-256)
  *   redirect_uri        redirect_uri is set, uses HTTPS and ends in
  *                       CALLBACK_PATH
  *   client_credentials  the token endpoint accepts client_id and client_secret
@@ -64,19 +66,43 @@ function _network_reason(cause, url) {
 }
 
 /**
- * Whether luci-sso can verify ID tokens with a JWK: a signing key (no "use",
- * or "sig"), whose "alg", if any, is one luci-sso accepts and fits its type,
- * and which converts to a public key (RSA, or EC on P-256).
+ * Whether luci-sso can verify ID tokens with a JWK, judged as a login judges
+ * it: a signing key (no "use", or "sig"), whose "alg", if any, is one
+ * luci-sso accepts and fits its type, and which converts to a public key
+ * (RSA, or EC on P-256), and an RSA key also by the native backends' rules
+ * for verifying (crypto.RSA_MIN_BITS and the 65537 exponent). Returns
+ * { verdict }: "usable", "short" (an RSA key under crypto.RSA_MIN_BITS, with
+ * its size in `bits`), "exponent" (an RSA public exponent other than 65537)
+ * or "unusable".
  * @private
  */
-function _usable_key(native, jwk) {
-	if (type(jwk) != "object") return false;
-	if (jwk.use != null && jwk.use !== "sig") return false;
+function _judge_key(native, jwk) {
+	if (type(jwk) != "object") return { verdict: "unusable" };
+	if (jwk.use != null && jwk.use !== "sig") return { verdict: "unusable" };
 	if (jwk.alg != null) {
-		if (index(oidc.ALLOWED_ALGS, jwk.alg) < 0) return false;
-		if ((jwk.alg === "RS256" && jwk.kty !== "RSA") || (jwk.alg === "ES256" && jwk.kty !== "EC")) return false;
+		if (index(oidc.ALLOWED_ALGS, jwk.alg) < 0) return { verdict: "unusable" };
+		if ((jwk.alg === "RS256" && jwk.kty !== "RSA") || (jwk.alg === "ES256" && jwk.kty !== "EC")) return { verdict: "unusable" };
 	}
-	return crypto.jwk_to_pem(native, jwk).ok;
+	if (jwk.kty === "RSA" && type(jwk.n) == "string" && type(jwk.e) == "string") {
+		if (!crypto.jwk_rsa_exponent_supported(jwk)) return { verdict: "exponent" };
+		let bits = crypto.jwk_rsa_bits(jwk);
+		if (bits != null && bits < crypto.RSA_MIN_BITS) return { verdict: "short", bits };
+	}
+	return { verdict: crypto.jwk_to_pem(native, jwk).ok ? "usable" : "unusable" };
+}
+
+/**
+ * The sentence for the RSA keys that are too short: "The provider's RSA key
+ * is 1024 bits; ...", with each distinct size.
+ * @private
+ */
+function _short_keys(sizes) {
+	let uniq = [];
+	for (let b in sizes) {
+		if (index(uniq, b) < 0) push(uniq, b);
+	}
+	let what = (length(sizes) == 1) ? "RSA key is" : "RSA keys are";
+	return `The provider's ${what} ${join(", ", uniq)} bits; luci-sso requires at least ${crypto.RSA_MIN_BITS}.`;
 }
 
 /**
@@ -179,11 +205,19 @@ export function check(deps, params) {
 		let res = discovery.fetch_jwks(tdeps, uri, { no_cache: true });
 		let d = res.details;
 		if (res.ok) {
-			let usable = length(filter(res.data, (k) => _usable_key(deps.native, k)));
+			let judged = map(res.data, (k) => _judge_key(deps.native, k));
+			let usable = length(filter(judged, (j) => j.verdict == "usable"));
+			let short = map(filter(judged, (j) => j.verdict == "short"), (j) => j.bits);
+			let total = length(res.data);
 			if (usable > 0)
-				set("jwks", "pass", `The JWK Set has ${length(res.data)} key(s); ${usable} can verify ID tokens (RS256, or ES256 on P-256).`);
+				set("jwks", "pass", `The JWK Set has ${total} key(s); ${usable} can verify ID tokens (RS256, or ES256 on P-256)` +
+					(length(short) ? `; ${length(short)} cannot, being RSA keys under ${crypto.RSA_MIN_BITS} bits.` : "."));
+			else if (length(short))
+				set("jwks", "fail", _short_keys(short));
+			else if (length(filter(judged, (j) => j.verdict == "exponent")))
+				set("jwks", "fail", `The provider's RSA key has a public exponent other than 65537 (AQAB), the only one luci-sso accepts.`);
 			else
-				set("jwks", "fail", `The JWK Set has ${length(res.data)} key(s), but none luci-sso can verify ID tokens with: it needs an RS256 (RSA) or ES256 (EC P-256) signing key.`);
+				set("jwks", "fail", `The JWK Set has ${total} key(s), but none luci-sso can verify ID tokens with: it needs an RS256 (RSA) or ES256 (EC P-256) signing key.`);
 		} else if (res.error == JWKS_NETWORK_ERROR) {
 			set("jwks", "fail", _network_reason(d, uri));
 		} else if (res.error == JWKS_FETCH_FAILED) {

@@ -517,6 +517,9 @@ Facade over `luci_sso.crypto.*`. Every function except `constant_time_eq` takes 
 | `hash_sha256_hex` | `crypto.hash.sha256_hex` |
 | `pkce_pair` | `crypto.pkce.pair` |
 | `jwk_to_pem` | `crypto.jwk.to_pem` |
+| `jwk_rsa_bits` | `crypto.jwk.rsa_bits` |
+| `jwk_rsa_exponent_supported` | `crypto.jwk.rsa_exponent_supported` |
+| `RSA_MIN_BITS` | `crypto.jwk.RSA_MIN_BITS` |
 
 ### `constant_time_eq(a, b)` → `bool`
 
@@ -560,6 +563,16 @@ Generates a PKCE verifier from `len` random bytes (default `43`, range 32–96; 
 ### `jwk_to_pem(native, jwk)` → `Result<string>`
 
 Converts an `RSA` or `EC` (`P-256`) JWK to a PEM public key. Fails with `MISSING_KTY`, `UNSUPPORTED_KTY`, `MISSING_RSA_PARAMS`, `INVALID_RSA_PARAMS_ENCODING`, `UNSUPPORTED_CURVE`, `MISSING_EC_PARAMS`, `INVALID_EC_PARAMS_ENCODING` or `PEM_CONVERSION_FAILED`.
+
+### `jwk_rsa_bits(jwk)` → `int` or `null`
+
+The bit length of an RSA JWK's modulus `n`, leading zero bytes ignored. `null` when `n` is missing, empty, all zeros or not Base64URL. Pure.
+
+### `jwk_rsa_exponent_supported(jwk)` → `bool`
+
+`true` when the JWK's `e` is exactly `RSA_EXPONENT` (`"AQAB"`, 65537 as three bytes), the only exponent `native.jwk_rsa_to_pem()` accepts. Pure.
+
+`RSA_MIN_BITS` (`2048`) mirrors `NATIVE_RSA_MIN_BITS` in `mod/native.h`, below which `native.verify_rs256()` refuses a key; `make lint` (`devenv/scripts/check-native-mirrors.sh`) fails when the two differ. `luci_sso.connection` uses these to judge the provider's keys as a login does.
 
 `luci_sso.crypto.pkce` also exports `generate_verifier(native, len)` and `calculate_challenge(native, verifier)`.
 

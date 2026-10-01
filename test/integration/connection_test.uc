@@ -1,7 +1,11 @@
 import { describe, it, assert, contains, spy } from 'utest';
 import * as connection from 'luci_sso.connection';
+import * as crypto from 'luci_sso.crypto';
+import * as encoding from 'luci_sso.encoding';
+import * as native from 'luci_sso.native';
 import { with_context } from 'context';
 import * as f from 'fixtures.oidc';
+import * as h from 'lib.helpers';
 
 // Integration bucket — enter at connection.check, the settings page's
 // connection test. It runs the login's real discovery, JWK Set and token
@@ -13,6 +17,42 @@ const ISSUER = f.MOCK_CONFIG.issuer_url;
 const DISC = ISSUER + "/.well-known/openid-configuration";
 const SECRET = "s3cr3t-Value-!";
 const REDIRECT = "https://router.example.com/cgi-bin/luci-sso/callback";
+
+// Keys the native backends refuse for an ID token, made for these tests.
+// A 1024-bit RSA key, exponent 65537, with its private key to sign with.
+const WEAK_1024_JWK = {
+	kty: "RSA", kid: "weak-1024", e: "AQAB",
+	n: "sDEddzQN7sIus8ghCGwJpYOEkBtHbohg0A3uXavdjuOpcTE2IIgpg42PDtxiaNxdHjt_sbh3jl-hZhs1uhq-y37rldPOumsyyg2hZJu1j5I1-iJJlyaCIjeDGhc5QyoJ1Sl8iZfKNRgOYBPiqHyto7YwdAkPzufh1o_JmranYQ0"
+};
+const WEAK_1024_PRIVKEY = "-----BEGIN PRIVATE KEY-----\n" +
+	"MIICdwIBADANBgkqhkiG9w0BAQEFAASCAmEwggJdAgEAAoGBALAxHXc0De7CLrPI\n" +
+	"IQhsCaWDhJAbR26IYNAN7l2r3Y7jqXExNiCIKYONjw7cYmjcXR47f7G4d45foWYb\n" +
+	"Nboavst+65XTzrprMsoNoWSbtY+SNfoiSZcmgiI3gxoXOUMqCdUpfImXyjUYDmAT\n" +
+	"4qh8raO2MHQJD87n4daPyZq2p2ENAgMBAAECgYBSX6QXBw88gSy0gOxws5IO/94K\n" +
+	"Qbazxq78lobK5H9BPs8JTKixrPc7ugMYP5EC1YPzjn206Tl8JtmekzobOEXat1Zv\n" +
+	"FO9RgbyPgCTlfFchTYENhgQWKlycDPoZrSiZ8IFfX3Vz96xIgVAMxvxVyoGG+yte\n" +
+	"NEJzCj9rnY0k6uuUAQJBANv05j5KTEurRZQyyCFYRi1u6fqSNiBLqpjh43IVDdlw\n" +
+	"KFYcUI3LH3vIem3UAls3cZ5FFynBvpZlcmgboEc+SxECQQDNEEyQlZ8KsPLKAViw\n" +
+	"70la3ZAptUWh7bDjjtfwHiIfT53YrsyDgsJY03tQKFe8eJbqtyYQ5TJNDcmk/+eE\n" +
+	"y549AkEAqZwnD1Frk832UVj3Sf8v3kjw0+97HVw7qLhHEul5THpYIE6lLzG6jVEC\n" +
+	"Vz5ssroGOu07908XEBIaLn1fEpDOgQJAAgsQiDxFamja8nJS/OhVdcdRYWkB+ZwR\n" +
+	"sCLDOgxC0McNTpRnS0QpRZNN3j2YqjMVZd9PTMnL14K0qKU4HFWfDQJBALAwUdWr\n" +
+	"X669yeaN1XNa0uZMC/+Mym+jIPk0nUeKJdGtgUFsUDokPcYCU2UlqUU2aZ/BT9i1\n" +
+	"RI5W6F9nva1bcUY=\n" +
+	"-----END PRIVATE KEY-----";
+// A 2047-bit modulus: 256 bytes, the top bit clear.
+const N_2047 = "SzH5mg-p0YHIxFKIe2giwiGJY2iaHLwG680IlcfTFrl14LJ7FyY_fqf3ktGsVzJM3UxQV5vjm1pJoa_1jWH4WA1cRwbyk9Pl_H1MoOmtDWgxDxh6UQHMmv06LaQnUvDwrVDB3569gZPCx8MCNG92v-CgQrjCL0CDPz8YCSOVveoHdL1zWgdeArpTLMGXMq1oB8fXhuRC7ceHJKyRBUjfHmoqMqmohcTRw6ofd0MGBrigNwQo_4i3-1PHH8dQDLbVBPjESOKRc9mdAeqV9izoj2PyXEqrnSs0lD8W631gmj5aMkYtS8gLRQFIVpVDYUWNC4HmJcC3mkai0vs75OI8lw";
+// A 2048-bit RSA key with the public exponent 3.
+const E3_JWK = {
+	kty: "RSA", kid: "e3", e: "Aw",
+	n: "2A_DHi6B9nN91XxHC1amrfUX93N7-hzn4gUr-4BFZ4lwu93n1gxMK83WvH7ZNN7_K67WWF3GYQuBRYwrVC1F_aVEKwYI6mjy-ktrgZQ_HNiwH_VRXGuU8uohN70D9mwWQb6S2Xjhywuo3sjiYg2DXNQKJG66zE2bSNvntJrOW1kfDBRi8OyLIc8WwTJpKZpEq_YoTn7gHxu0jG76gnS-aJC47k_fo2PPukiYQH83DHodV8UBryDklI5UmRuFdblJTEY415Xty9rDBDjDbGFsHv4ufOo83lAXWEJlAn_YFWZD8jmHYfjS8BTrpdO0FEJ1_gj_VmqLUEpiGx4bNAUQeQ"
+};
+// An EC key on P-384.
+const P384_JWK = {
+	kty: "EC", kid: "p384", crv: "P-384",
+	x: "bOMXaPjvCM3S-gUO8Lxc7K9jA_t6EvSLEm89oS_PmSV6ULVEKsC7vn_98-8EvbQf",
+	y: "jBXp0wabqeIA49QuRaTY-l0sNoV2Hzm-QSIYOgxNyQlsFC_lDDz2drgK1y30L3ir"
+};
 
 const PARAMS = {
 	issuer_url: ISSUER,
@@ -262,6 +302,61 @@ describe('connection: check — signing keys', () => {
 	it('passes when at least one key is usable, and counts them', () => {
 		let r = run(null, idp({ [JWKS]: { status: 200, body: { keys: [ { kty: "oct", k: "c2VjcmV0" }, { ...f.MOCK_JWK, alg: "RS256", use: "sig" } ] } } }));
 		assert.match({ status: "pass", message: "The JWK Set has 2 key(s); 1 can verify ID tokens (RS256, or ES256 on P-256)." }, r.checks.jwks);
+	});
+});
+
+// The keys a login can verify with are the ones the native backends accept:
+// an RSA modulus of at least 2048 bits, the exponent 65537 only, and EC on
+// P-256. The connection test must judge them the same way, or it passes a
+// provider whose every login then fails with INVALID_SIGNATURE.
+describe('connection: check — signing keys, judged as a login judges them', () => {
+	const JWKS = f.MOCK_DISCOVERY.jwks_uri;
+	const jwks = (keys) => run(null, idp({ [JWKS]: { status: 200, body: { keys } } })).checks.jwks;
+
+	it('fails an RSA key under 2048 bits, and says how long it is', () => {
+		assert.match({ status: "fail", message: "The provider's RSA key is 1024 bits; luci-sso requires at least 2048." }, jwks([ WEAK_1024_JWK ]));
+		assert.match({ status: "fail", message: "The provider's RSA key is 2047 bits; luci-sso requires at least 2048." }, jwks([ { kty: "RSA", n: N_2047, e: "AQAB" } ]));
+		assert.match({ status: "fail", message: "The provider's RSA keys are 1024, 2047 bits; luci-sso requires at least 2048." },
+			jwks([ WEAK_1024_JWK, { kty: "RSA", n: N_2047, e: "AQAB" }, { ...WEAK_1024_JWK, kid: "again" } ]));
+	});
+
+	it('passes a 2048-bit RSA key, and says when it sits next to a shorter one', () => {
+		assert.match({ status: "pass", message: "The JWK Set has 1 key(s); 1 can verify ID tokens (RS256, or ES256 on P-256)." }, jwks([ f.MOCK_JWK ]));
+		assert.match({ status: "pass", message: "The JWK Set has 2 key(s); 1 can verify ID tokens (RS256, or ES256 on P-256); 1 cannot, being RSA keys under 2048 bits." },
+			jwks([ WEAK_1024_JWK, f.MOCK_JWK ]));
+	});
+
+	it('fails an RSA key whose public exponent is not 65537, even 65537 with a leading zero byte', () => {
+		for (let k in [ E3_JWK, { ...f.MOCK_JWK, e: "AAEAAQ" }, { ...f.MOCK_JWK, e: "Aw" } ])
+			assert.match({ status: "fail", message: "The provider's RSA key has a public exponent other than 65537 (AQAB), the only one luci-sso accepts." }, jwks([ k ]), k.e);
+	});
+
+	it('fails an EC key on another curve, labelled as it is or as P-256', () => {
+		let general = "The JWK Set has 1 key(s), but none luci-sso can verify ID tokens with: it needs an RS256 (RSA) or ES256 (EC P-256) signing key.";
+		assert.match({ status: "fail", message: general }, jwks([ P384_JWK ]));
+		assert.match({ status: "fail", message: general }, jwks([ { ...P384_JWK, crv: "P-256" } ]));
+	});
+
+	it('agrees with the real native module, key by key: the test passes exactly the keys a login verifies with', () => {
+		// A login turns the JWK into a PEM and verifies an RS256 signature
+		// with it (oidc.verify_id_token, crypto.jwt_verify).
+		let login_verifies = (jwk, privkey) => {
+			let pem = crypto.jwk_to_pem(native, jwk);
+			if (!pem.ok || !privkey) return false;
+			let parts = split(h.generate_id_token({ sub: "x" }, privkey, "RS256"), ".");
+			return native.verify_rs256(`${parts[0]}.${parts[1]}`, encoding.b64url_decode(parts[2]).data, pem.data) === true;
+		};
+		for (let c in [
+			[ "2048 bits, AQAB", f.MOCK_JWK, f.MOCK_PRIVKEY ],
+			[ "1024 bits, AQAB", WEAK_1024_JWK, WEAK_1024_PRIVKEY ],
+			[ "2048 bits, e=3", E3_JWK, null ],
+			[ "2048 bits, AAEAAQ", { ...f.MOCK_JWK, e: "AAEAAQ" }, f.MOCK_PRIVKEY ],
+		]) {
+			let expected = login_verifies(c[1], c[2]);
+			assert.match(expected ? "pass" : "fail", jwks([ c[1] ]).status, c[0]);
+		}
+		assert.match(true, login_verifies(f.MOCK_JWK, f.MOCK_PRIVKEY), "the control: a 2048-bit key verifies");
+		assert.match(false, login_verifies(WEAK_1024_JWK, WEAK_1024_PRIVKEY), "native refuses the 1024-bit key at login");
 	});
 });
 

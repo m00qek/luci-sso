@@ -135,6 +135,7 @@ lint:
 	@bash $(DEVENV_DIR)/scripts/check-error-codes.sh
 	@bash $(DEVENV_DIR)/scripts/check-request-limits.sh
 	@bash $(DEVENV_DIR)/scripts/check-cookie-names.sh
+	@bash $(DEVENV_DIR)/scripts/check-native-mirrors.sh
 	@bash $(DEVENV_DIR)/scripts/check-code-style.sh
 	@bash $(DEVENV_DIR)/scripts/check-docs-links.sh
 	@bash $(DEVENV_DIR)/scripts/check-feed-makefile.sh

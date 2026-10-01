@@ -49,6 +49,58 @@ function ec_to_pem(native, jwk) {
  */
 
 /**
+ * The native backends' rules for an RSA key that verifies ID tokens,
+ * mirrored here so the settings page's connection test judges a key as a
+ * login does. The native module enforces them; these copies only explain a
+ * refusal:
+ *
+ *   RSA_MIN_BITS  native_verify_rs256() refuses a modulus shorter than
+ *                 NATIVE_RSA_MIN_BITS (mod/native.h). `make lint`
+ *                 (devenv/scripts/check-native-mirrors.sh) fails when the
+ *                 two differ.
+ *   RSA_EXPONENT  native_api_jwk_rsa_to_pem() (mod/native_api.c) accepts
+ *                 only the public exponent 65537, as exactly the three bytes
+ *                 01 00 01: base64url "AQAB".
+ */
+export const RSA_MIN_BITS = 2048;
+export const RSA_EXPONENT = "AQAB";
+
+/**
+ * The bit length of an RSA JWK's modulus `n`, leading zero bytes ignored,
+ * as the backends count it.
+ *
+ * @param {object} jwk - An RSA JWK
+ * @returns {?number} The bit length, or null when `n` is missing, empty or
+ *   not base64url
+ */
+export function rsa_bits(jwk) {
+	if (type(jwk) != "object" || type(jwk.n) != "string") return null;
+	let res = b64url_decode(jwk.n);
+	if (!res.ok) return null;
+	let n = res.data;
+	let i = 0;
+	while (i < length(n) && ord(n, i) == 0) i++;
+	if (i == length(n)) return null;
+	let bits = (length(n) - i) * 8;
+	for (let top = ord(n, i); top < 128; top *= 2) bits--;
+	return bits;
+};
+
+/**
+ * Whether an RSA JWK's public exponent `e` is the one the backends accept
+ * (RSA_EXPONENT): 65537, as exactly three bytes. A leading zero byte, as in
+ * "AAEAAQ", is refused too.
+ *
+ * @param {object} jwk - An RSA JWK
+ * @returns {boolean}
+ */
+export function rsa_exponent_supported(jwk) {
+	if (type(jwk) != "object" || type(jwk.e) != "string") return false;
+	let res = b64url_decode(jwk.e);
+	return res.ok && res.data === b64url_decode(RSA_EXPONENT).data;
+};
+
+/**
  * Converts a JWK object to a PEM string.
  * Supports RSA and EC (P-256) keys. Symmetric (`oct`) keys are refused with
  * UNSUPPORTED_KTY: ID tokens are verified with RS256 or ES256 only.

@@ -150,3 +150,56 @@ describe('crypto.jwk: to_pem — oct', () => {
 		assert.match(contains({ ok: false, error: 'UNSUPPORTED_KTY' }), jwk.to_pem(native, OCT_JWK));
 	}));
 });
+
+// ─── RSA key rules (the native backends' rules, mirrored) ───────────────────
+// Pure: no native. Whether native enforces the same rules is checked against
+// the real module in test/integration/connection_test.uc, and the minimum by
+// `make lint` (check-native-mirrors.sh).
+
+// A modulus of `bytes` bytes whose first byte is `top`, base64url.
+function modulus(bytes, top) {
+	let n = chr(top);
+	for (let i = 1; i < bytes; i++) n += chr(0xa5);
+	return encoding.b64url_encode(n).data;
+}
+
+describe('crypto.jwk: RSA_MIN_BITS and RSA_EXPONENT', () => {
+	it('are 2048 bits and 65537, as the native backends enforce them', () => {
+		assert.match(2048, jwk.RSA_MIN_BITS);
+		assert.match('AQAB', jwk.RSA_EXPONENT);
+		assert.match('\x01\x00\x01', encoding.b64url_decode(jwk.RSA_EXPONENT).data);
+	});
+});
+
+describe('crypto.jwk: rsa_bits', () => {
+	it('counts the bits of n from its highest set bit', () => {
+		assert.match(2048, jwk.rsa_bits({ kty: 'RSA', n: modulus(256, 0xc1) }));
+		assert.match(2047, jwk.rsa_bits({ kty: 'RSA', n: modulus(256, 0x41) }));
+		assert.match(2041, jwk.rsa_bits({ kty: 'RSA', n: modulus(256, 0x01) }));
+		assert.match(1024, jwk.rsa_bits({ kty: 'RSA', n: modulus(128, 0x80) }));
+		assert.match(4096, jwk.rsa_bits({ kty: 'RSA', n: modulus(512, 0xff) }));
+	});
+
+	it('ignores leading zero bytes, as a DER integer may carry', () => {
+		let n = '\x00\x00' + encoding.b64url_decode(modulus(128, 0x80)).data;
+		assert.match(1024, jwk.rsa_bits({ kty: 'RSA', n: encoding.b64url_encode(n).data }));
+	});
+
+	it('returns null for a missing, empty, all-zero or non-base64url n', () => {
+		for (let k in [ { kty: 'RSA' }, { kty: 'RSA', n: '' }, { kty: 'RSA', n: 'AAAA' }, { kty: 'RSA', n: '!!!' }, { kty: 'RSA', n: 42 } ])
+			assert.match(null, jwk.rsa_bits(k), sprintf('%J', k));
+		assert.match(null, jwk.rsa_bits(null));
+	});
+});
+
+describe('crypto.jwk: rsa_exponent_supported', () => {
+	it('accepts exactly 65537 as three bytes (AQAB)', () => {
+		assert.match(true, jwk.rsa_exponent_supported({ kty: 'RSA', e: 'AQAB' }));
+	});
+
+	it('refuses any other exponent, 65537 with a leading zero byte, and a missing or bad e', () => {
+		for (let e in [ 'Aw', 'AAEAAQ', 'AQAA', 'AQABAA', 'EQ', 'AP__', '', '!!!', null, 65537 ])
+			assert.match(false, jwk.rsa_exponent_supported({ kty: 'RSA', e }), sprintf('%J', e));
+		assert.match(false, jwk.rsa_exponent_supported(null));
+	});
+});

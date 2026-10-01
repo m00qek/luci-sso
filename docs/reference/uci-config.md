@@ -163,7 +163,7 @@ Access through LuCI needs the `luci-app-sso` access group: its `read` section gr
 | `discovery` | The discovery document is fetched with status 200 and is a JSON object. With `internal_issuer_url`, from its origin plus the issuer's path, as at login. `internal_issuer_url` must be an HTTPS origin with no path. |
 | `issuer_match` | The document's `issuer` is exactly `issuer_url`. A failure's message says when the two differ only in a trailing slash, letter case or default port. |
 | `endpoints` | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. |
-| `jwks` | The JWK Set has at least one key with no `use` or `use` `sig`, no `alg` or an `alg` of `RS256` (RSA) or `ES256` (EC), and a public key the router can build: RSA, or EC on P-256. |
+| `jwks` | The JWK Set has at least one key with no `use` or `use` `sig`, no `alg` or an `alg` of `RS256` (RSA) or `ES256` (EC), and a public key a login can verify with: RSA with a modulus of at least 2048 bits and the public exponent 65537 (`AQAB`), or EC on P-256. These are the native module's rules (`NATIVE_RSA_MIN_BITS` in `mod/native.h`). With no such key, the message names RSA keys that are too short (`The provider's RSA key is <n> bits; luci-sso requires at least 2048.`) or have another exponent before any other reason. |
 | `redirect_uri` | `redirect_uri` is set, starts with `https://`, and ends in `/cgi-bin/luci-sso/callback`. |
 | `client_credentials` | A token request with a made-up authorization code, `client_id` and `client_secret` in the form body (`client_secret_post`, as at login) and a new PKCE verifier gets `invalid_grant`. `invalid_client`, or HTTP 401, fails; any other answer is `warn`, and the message quotes the OAuth `error` or the HTTP status. |
 

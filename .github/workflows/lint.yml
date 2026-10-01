@@ -41,6 +41,16 @@ jobs:
       - name: Check cookie names are documented
         run: bash devenv/scripts/check-cookie-names.sh
 
+  native-mirrors:
+    name: Native Key Rules
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Check the ucode copies of the native key rules match the C ones
+        run: bash devenv/scripts/check-native-mirrors.sh
+
   code-style:
     name: Code Style
     runs-on: ubuntu-latest
