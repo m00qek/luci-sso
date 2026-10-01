@@ -71,6 +71,50 @@ test.describe('SSO settings: Test connection', () => {
         await expect(check(page, 'client_credentials')).toContainText('invalid_client');
     });
 
+    // The provider's values reach the page inside the router's messages. They
+    // are text: no markup in them may become HTML in the admin's session.
+    test('shows a hostile provider\'s issuer as text, and runs none of its markup', async ({ page }) => {
+        await loginAsRoot(page);
+        await gotoSSOSettings(page);
+        const saved = await uciGet(page, 'issuer_url');
+
+        // The mock IdP declares `${saved}/<img src=x onerror="window.__xss=1">` there.
+        await page.locator('[id="widget.cbid.luci-sso.default.issuer_url"]').fill(saved + '/hostile');
+        await testConnection(page);
+
+        await expect(check(page, 'issuer_match')).toHaveAttribute('data-status', 'fail');
+        // The router quotes it with "<" and ">" as "?" (a second line of defence).
+        await expect(check(page, 'issuer_match')).toContainText(`The provider declares "${saved}/?img src=x onerror="window.__xss=1"?"`);
+        await expect(page.locator('.luci-sso-test-output img')).toHaveCount(0);
+        expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+    });
+
+    test('shows the router\'s messages as text even when they hold markup', async ({ page }) => {
+        // The page's own line of defence: a result whose message and check
+        // name carry raw markup, as the router never sends them.
+        const markup = '<img src=x onerror="window.__xss=1"><b>bold</b>';
+        await page.route('**/ubus/**', async (route) => {
+            let body;
+            try { body = route.request().postDataJSON(); } catch (e) { return route.continue(); }
+            const calls = Array.isArray(body) ? body : [body];
+            if (!calls.every(c => c && Array.isArray(c.params) && c.params[2] === 'test_connection_result'))
+                return route.continue();
+            const reply = calls.map(c => ({ jsonrpc: '2.0', id: c.id, result: [0, { done: true, checks: [
+                { id: 'issuer_https', status: 'pass', message: markup },
+                { id: markup, status: 'fail', message: markup },
+            ] }] }));
+            await route.fulfill({ contentType: 'application/json', body: JSON.stringify(Array.isArray(body) ? reply : reply[0]) });
+        });
+        await loginAsRoot(page);
+        await gotoSSOSettings(page);
+        await testConnection(page);
+
+        await expect(page.locator('.luci-sso-check-message').first()).toHaveText(markup);
+        await expect(page.locator('.luci-sso-check-title').nth(1)).toHaveText(markup);
+        await expect(page.locator('.luci-sso-test-output img, .luci-sso-test-output b')).toHaveCount(0);
+        expect(await page.evaluate(() => window.__xss)).toBeUndefined();
+    });
+
     test('works while SSO is disabled', async ({ page }) => {
         await loginAsRoot(page);
         try {

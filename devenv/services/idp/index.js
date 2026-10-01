@@ -61,6 +61,21 @@ app.get('/.well-known/openid-configuration', (req, res) => {
     });
 });
 
+// A hostile provider for the settings page's connection test: an issuer
+// under ${ISSUER}/hostile whose discovery document declares an issuer with
+// HTML markup in it. The page must show it as text and run nothing.
+app.get('/hostile/.well-known/openid-configuration', (req, res) => {
+    res.json({
+        issuer: `${ISSUER}/<img src=x onerror="window.__xss=1">`,
+        authorization_endpoint: `${ISSUER}/auth`,
+        token_endpoint: `${ISSUER}/token`,
+        jwks_uri: `${ISSUER}/jwks`,
+        response_types_supported: ['code'],
+        subject_types_supported: ['public'],
+        id_token_signing_alg_values_supported: ['RS256']
+    });
+});
+
 // RP-Initiated Logout 1.0: end the (mock) IdP session and, if the RP sent a
 // post_logout_redirect_uri, send the browser back there.
 app.get('/logout', (req, res) => {

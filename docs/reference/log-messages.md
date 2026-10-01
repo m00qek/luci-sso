@@ -359,7 +359,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 Notes:
 
-- `USER_NOT_AUTHORIZED`: the error page shows the refused user their own `sub`, so they can give it to the administrator for a `sub` rule; the log has only its hash. An email without `email_verified: true` does not count while `require_email_verified` is on; an `Ignoring the unverified email` line says so. A role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
+- `USER_NOT_AUTHORIZED`: the error page shows the refused user their own `sub`, so they can give it to the administrator for a `sub` rule; the log has only its hash. A `sub` rule counts only while `sub_issuer` equals `issuer_url`; an `Ignoring sub rules` line says when it does not. An email without `email_verified: true` does not count while `require_email_verified` is on; an `Ignoring the unverified email` line says so. A role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
 
 ---
 
@@ -391,6 +391,8 @@ Logged by the CGI script under `luci-sso[<pid>]`.
 | Line | Level | When |
 | :--- | :--- | :--- |
 | `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | `require_email_verified` is on and the email arrived without `email_verified: true`, so only the user's groups were matched. Followed by `matched no roles` when no group matched. See [Provider Compatibility](provider-compatibility.md#verified-email). |
+| `Ignoring sub rules: sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>' [session_id: …]` | warn | Some role has a `sub` rule, but `sub_issuer`, the issuer the rules were made for, is not exactly `issuer_url`, usually because `issuer_url` changed. Every `sub` rule is ignored at this login; `email` and `group` rules still match. Followed by `matched no roles` when nothing else matched. Both values are shown with bytes outside printable ASCII as `?`. See [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#after-you-change-the-identity-provider). |
+| `Ignoring sub rules: sub_issuer is not set [session_id: …]` | warn | Some role has a `sub` rule, and `sub_issuer` is not set. Every `sub` rule is ignored, as above. Saving the settings page sets it, or set it with `uci`. |
 | `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | The user got `<role>`. When other roles matched too, the line reads `mapped to role '<role>', the first match; also matched: <role>, <role>`. |
 | `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. `[oidc_id: …]` is a hash of the user's verified email, or `(no email)` for a user without one: the IdP sent no email, or did not mark it as verified. The user's other lines name them by `[sub_id: …]`. |
 | `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | A plain name in the entry's `read` or `write` list matches no access group. It grants nothing. Globs and negations are not checked. |
@@ -554,6 +556,8 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | Line | Level | Meaning |
 | :--- | :--- | :--- |
 | `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Ignoring sub rules: sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>' [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Ignoring sub rules: sub_issuer is not set [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
 | `User [sub_id: …] matched no roles [session_id: …]` | warn | Before `[403] USER_NOT_AUTHORIZED`. See [Authorization Errors](#authorization-errors). |
 | `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | See [Role Lines](#at-login-and-on-configuration-load). |
 | `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'` | err | Before `[500] UBUS_LOGIN_FAILED`. See [Session Errors](#session-errors). |

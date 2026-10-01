@@ -21,6 +21,7 @@ The connection to the IdP. A missing or invalid required option makes every requ
 | `scope` | string | Optional. Space-separated list of OIDC scopes to request. Default: `openid profile email`. Add `groups` if the IdP supports group claims and role mapping by group is required. |
 | `require_email_verified` | boolean | Optional. Default: `1`, also when the option is absent. While on, an `email` rule matches only if the IdP's `email_verified` claim is the JSON boolean `true`. `0`, `no`, `off` or `false` turns it off. See [notes](#oidc-section-notes). |
 | `trusted_proxy` | list (string) | Optional. Default: empty. The addresses of reverse proxies in front of `uhttpd`, as IPv4 or IPv6 addresses or CIDR ranges (`127.0.0.1`, `::1`, `2001:db8::/48`). A request from one of them skips the per-client rate limits; the proxy must limit its clients itself. See [notes](#oidc-section-notes). |
+| `sub_issuer` | string (URL) | Optional. The issuer the roles' `sub` rules were made for. `sub` rules count only while it is set and equal to `issuer_url`, character for character; otherwise every `sub` rule is ignored. The settings page sets it. See [notes](#oidc-section-notes). |
 | `clock_tolerance` | integer | Required. Allowed clock skew in seconds, applied to the ID Token's `exp`, `iat` and `nbf` checks and to the login handshake's expiry. Valid range: `0`–`3600`. See [notes](#oidc-section-notes). |
 
 ### OIDC section notes
@@ -45,6 +46,12 @@ The connection to the IdP. A missing or invalid required option makes every requ
     - An IPv4-mapped IPv6 address (`::ffff:192.0.2.1`) is the IPv4 address it carries, in the list and in `REMOTE_ADDR`. An IPv6 range never contains an IPv4 address. A `REMOTE_ADDR` with a zone, such as a link-local `fe80::1%br-lan`, is never exempt.
     - The first exempted request logs `Request from trusted proxy [id: …] skips the per-client rate limits (trusted_proxy); not logged again for 3600s`, and then at most one an hour.
     - See [How to Run LuCI Behind a Reverse Proxy](../how-to/sysadmin/reverse-proxy.md#4-exempt-the-proxy-from-luci-ssos-per-client-limits).
+- **`sub_issuer`** binds the `sub` rules to one issuer, because a `sub` identifies an account only at the IdP that issued it (OIDC Core §5.7).
+    - It is compared with `issuer_url` as the `iss` claim is: exactly. A trailing slash, letter case and an explicit `:443` all count.
+    - While it is unset or differs from `issuer_url`, `sub` rules match no one. `email` and `group` rules still match. Each login then logs `Ignoring sub rules: sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>'`, or `Ignoring sub rules: sub_issuer is not set`, if some role has a `sub` rule.
+    - It is not checked at configuration load: a missing or stale value never turns SSO off.
+    - The settings page sets it on each save of the form: to `issuer_url` when the `sub` rules have no issuer yet or already have this one; never to a new `issuer_url` without the **Use these subject rules with the new provider** button. With no `sub` rule left, it removes it. See [Identity provider section](#identity-provider-section).
+    - From the command line: `uci set luci-sso.default.sub_issuer="$(uci get luci-sso.default.issuer_url)"`. See [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#after-you-change-the-identity-provider).
 - **`clock_tolerance`** has no built-in code default: if it is absent, the service reports `CONFIG_ERROR`. The shipped UCI configuration sets it to `60`.
 
 ---
@@ -59,13 +66,13 @@ A role matches a user if ANY of its `email`, `group` or `sub` values matches. Ro
 | :--- | :--- | :--- |
 | `email` | list (string) | Match by OIDC `email` claim, ignoring letter case in the whole address. Only a verified email matches while `require_email_verified` is on (the default). See [notes](#role-mapping-notes). |
 | `group` | list (string) | Match by a value of the OIDC `groups` claim, which must be a JSON array. Case-sensitive. |
-| `sub` | list (string) | Match by the OIDC `sub` claim of the ID Token: exact, case-sensitive string equality. The issuer is implied: it is always `issuer_url`. See [notes](#role-mapping-notes). |
+| `sub` | list (string) | Match by the OIDC `sub` claim of the ID Token: exact, case-sensitive string equality. Counts only while `sub_issuer` equals `issuer_url`. See [notes](#role-mapping-notes). |
 
 ### Role mapping notes
 
 - **Section name.** The role's name. `default` is taken by the OIDC section. The role's `rpcd` entry needs a name of 1–32 letters, digits and underscores; a role with a longer name can exist in UCI, but it cannot get permissions, and its users cannot log in.
 - **Email case.** `Alice@Example.com` and `alice@example.com` match the same rule. Ignoring case in the local part too is `luci-sso`'s policy, not a standard's rule; see [About Roles and Permissions](../explanation/roles-and-permissions.md#verified-email-addresses).
-- **Subject.** A `sub` value matches only the identical string: no letter-case folding, trimming, prefix or pattern. A `sub` claim that is missing, empty or not a string matches no rule. `require_email_verified` does not affect it. Why: [Matching by subject](../explanation/roles-and-permissions.md#matching-by-subject).
+- **Subject.** A `sub` value matches only the identical string: no letter-case folding, trimming, prefix or pattern. A `sub` claim that is missing, empty or not a string matches no rule. `require_email_verified` does not affect it. Every `sub` rule is ignored while [`sub_issuer`](#oidc-section-notes) is not exactly `issuer_url`. Why: [Matching by subject](../explanation/roles-and-permissions.md#matching-by-subject).
 - **No match.** A user who matches no role is refused with `USER_NOT_AUTHORIZED`. The error page shows that user their own `sub`, HTML-escaped, and asks them to give it to the administrator. The log records only its hash (`sub_id`).
 - **Several matches.** Rights are never merged. The login's log line names the role chosen and the other matches.
 - **Invalid roles.** A role that has no `email`, `group` or `sub` entry is ignored, and the log says `Ignoring role '<name>': missing email, group or sub list`. If no valid role is left, the service reports `CONFIG_ERROR` (`No valid roles found in /etc/config/luci-sso`).
@@ -156,7 +163,7 @@ Access through LuCI needs the `luci-app-sso` access group: its `read` section gr
 | `discovery` | The discovery document is fetched with status 200 and is a JSON object. With `internal_issuer_url`, from its origin plus the issuer's path, as at login. `internal_issuer_url` must be an HTTPS origin with no path. |
 | `issuer_match` | The document's `issuer` is exactly `issuer_url`. A failure's message says when the two differ only in a trailing slash, letter case or default port. |
 | `endpoints` | `authorization_endpoint`, `token_endpoint` and `jwks_uri` are present and HTTPS. |
-| `jwks` | The JWK Set has at least one key with no `use` or `use` `sig`, no `alg` or an `alg` of `RS256` (RSA) or `ES256` (EC), and a public key the router can build: RSA, or EC on P-256. |
+| `jwks` | The JWK Set has at least one key with no `use` or `use` `sig`, no `alg` or an `alg` of `RS256` (RSA) or `ES256` (EC), and a public key a login can verify with: RSA with a modulus of at least 2048 bits and the public exponent 65537 (`AQAB`), or EC on P-256. These are the native module's rules (`NATIVE_RSA_MIN_BITS` in `mod/native.h`). With no such key, the message names RSA keys that are too short (`The provider's RSA key is <n> bits; luci-sso requires at least 2048.`) or have another exponent before any other reason. |
 | `redirect_uri` | `redirect_uri` is set, starts with `https://`, and ends in `/cgi-bin/luci-sso/callback`. |
 | `client_credentials` | A token request with a made-up authorization code, `client_id` and `client_secret` in the form body (`client_secret_post`, as at login) and a new PKCE verifier gets `invalid_grant`. `invalid_client`, or HTTP 401, fails; any other answer is `warn`, and the message quotes the OAuth `error` or the HTTP status. |
 
@@ -173,7 +180,7 @@ Changes take effect with **Save & Apply**:
 | Button | UCI changes (`/etc/config/luci-sso`) | Role permissions (`rpcd` login entries) |
 | :--- | :--- | :--- |
 | **Save** | Staged in the session, as on any LuCI page. | Kept on the page; nothing is sent. Lost if the page is reloaded or left. |
-| **Save & Apply** | Staged, then applied with LuCI's checked apply (or unchecked, from the button's menu). | With UCI changes pending: sent after LuCI's `uci-applied` event, when the apply is confirmed; not sent if it is rolled back. With none pending: sent at once. Each edited role goes to `set_role`, each deleted one to `delete_role`, and the page waits up to 45 s for `rpcd` to reload, then reloads itself. A refusal is shown, with the edits kept on the page. |
+| **Save & Apply** | Staged, then applied with LuCI's checked apply (or unchecked, from the button's menu). | With UCI changes pending: sent after LuCI's `uci-applied` event, when the apply is confirmed; not sent if it is rolled back. With none pending: sent at once. Each edited role goes to `set_role`, each deleted one to `delete_role`, and the page waits up to 45 s for `rpcd` to reload, then reloads itself. A refusal, or a reload that does not finish in time, is shown, with the edits kept on the page and no reload: LuCI's own reload after an apply is held off for as long as the page is open. **Dismiss** reloads the permissions from `rpcd`, keeps the edits, and leaves them for the next **Save & Apply**. |
 | **Reset** | The form goes back to the saved values. | Edits on the page are discarded. |
 
 ### Identity provider section
@@ -182,7 +189,7 @@ Edits `config oidc 'default'`. Two tabs; the **Provider** tab is in the order of
 
 | Tab | Field | UCI option | Form behaviour |
 | :--- | :--- | :--- | :--- |
-| Provider | **Issuer URL** | `issuer_url` | Required. Rejects a value that does not start with `https://` (`Must use HTTPS`). Placeholder: `https://accounts.google.com`. |
+| Provider | **Issuer URL** | `issuer_url` | Required. Rejects a value that does not start with `https://` (`Must use HTTPS`). Placeholder: `https://accounts.google.com`. Warns, without blocking, when a role has a `sub` rule that belongs to another issuer (see below). |
 | Provider | **Client ID** | `client_id` | Required. |
 | Provider | **Client Secret** | `client_secret` | Required. Masked password field. |
 | Provider | **Redirect URI** | `redirect_uri` | Required; must start with `https://`. When the option is unset, the field shows `https://<browser host>/cgi-bin/luci-sso/callback`, built from the host name in the browser's address bar without its port, and a **Save** writes it; when it is set, the saved value. Wide enough for the whole address. **Copy** copies the field's value, with the Clipboard API or, where it is missing, a selected text area; "Copied" confirms it. |
@@ -194,7 +201,18 @@ Edits `config oidc 'default'`. Two tabs; the **Provider** tab is in the order of
 | Advanced | **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
 | Advanced | **Trusted Proxy** | `trusted_proxy` | Optional list; one address or CIDR range per entry. Rejects anything else, such as a host name, a netmask or a port. Placeholder: `127.0.0.1`. |
 
-The warnings are computed from the roles as the page holds them, and follow edits to **Scopes**, **Require Verified Email** and the roles.
+The warnings are computed from the roles as the page holds them, and follow edits to **Issuer URL**, **Scopes**, **Require Verified Email** and the roles.
+
+`sub_issuer` has no field. The page sets it on each save of the form (**Save**, **Save & Apply**, and the saves LuCI makes when a role is added, deleted or moved), from the issuer the `sub` rules belong to:
+
+| The `sub` rules belong to | When |
+| :--- | :--- |
+| The issuer the button chose | **Use these subject rules with the new provider** was clicked. |
+| `sub_issuer` | It is set. |
+| The **Issuer URL** the page was loaded with | `sub_issuer` is unset and roles had `sub` rules when the page was loaded. |
+| None yet | Otherwise. |
+
+On a save, `sub_issuer` becomes that issuer, or the **Issuer URL** when there is none yet, and is removed when no role has a `sub` rule. While a role has a `sub` rule that belongs to an issuer other than the **Issuer URL** in the form, the **Provider** tab, under **Issuer URL**, and the **Roles** section, above the table, say "Subject rules belong to `<issuer>` and are ignored for `<Issuer URL>`. A subject identifies one account only at its own provider.", with a **Use these subject rules with the new provider** button. The button changes nothing until the next save; until then both places say "Subject rules will be used with `<Issuer URL>` after Save & Apply." **Reset** cancels it.
 
 ### Roles section
 

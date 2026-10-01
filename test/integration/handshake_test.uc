@@ -669,9 +669,10 @@ describe('handshake: authenticate — at_hash', () => {
 
 describe('handshake: role selection', () => {
 	// Runs a full callback for a user with the given claims against `roles`
-	// and the rpcd sections in `rpcd`. Returns the result, the session values
-	// set, whether a session was created, and the log lines.
-	function login(roles, rpcd, claims) {
+	// and the rpcd sections in `rpcd`, with the sub rules made for the
+	// configured issuer unless `over` says otherwise. Returns the result, the
+	// session values set, whether a session was created, and the log lines.
+	function login(roles, rpcd, claims, over) {
 		let out = { result: null, values: null, created: false, logs: [] };
 		with_context({
 			fs:   { data: {} },
@@ -703,7 +704,7 @@ describe('handshake: role selection', () => {
 			let raw = encoding.safe_json(deps.fs.readfile(path)).data;
 			raw.nonce = "test-nonce";
 			deps.fs.writefile(path, sprintf("%J", raw));
-			out.result = handshake.authenticate(deps, base_config({ roles }),
+			out.result = handshake.authenticate(deps, base_config({ sub_issuer: f.MOCK_CONFIG.issuer_url, roles, ...(over || {}) }),
 				{ query: { code: "c", state: raw.state }, cookies: { "__Host-luci_sso_state": hs.token } });
 		});
 		return out;
@@ -759,6 +760,60 @@ describe('handshake: role selection', () => {
 		assert.match({ http_status: 403, subject: f.MOCK_CLAIMS.sub }, r.result.details);
 		assert.match(false, r.created, "no session");
 		assert.match(0, length(filter(r.logs, (m) => index(m, f.MOCK_CLAIMS.sub) >= 0)), "the log never carries the raw sub");
+	});
+
+	it('logs no sub_issuer warning while the sub rules count', () => {
+		let r = login([ { name: "me", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ] } ], entries, { email: "stranger@example.com" });
+		assert.match("sso:me", r.values.username);
+		assert.match(0, length(filter(r.logs, (m) => index(m, "Ignoring sub rules") == 0)));
+	});
+
+	// OIDC Core §5.7: a sub is unique only within its issuer. After issuer_url
+	// changes, sub_issuer still names the old issuer, and a rule made for an
+	// account there must not let in whoever the new issuer calls by that sub.
+	const OLD = "https://old-idp.example.com";
+	const WARNING = `Ignoring sub rules: sub_issuer '${OLD}' does not match issuer_url '${f.MOCK_CONFIG.issuer_url}' [session_id: `;
+	let warned = (r) => length(filter(r.logs, (m) => index(m, WARNING) == 0));
+
+	it('after issuer_url changes: a login the sub rule let in falls through to the group or email rule', () => {
+		let roles = [
+			{ name: "me", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ] },
+			{ name: "staff", emails: [], groups: [ "staff" ], subs: [] },
+		];
+		let claims = { email: "stranger@example.com", groups: [ "staff" ] };
+		let before = login(roles, entries, claims);
+		assert.match("sso:me", before.values.username, "the sub rule, while it is bound to issuer_url");
+
+		let after = login(roles, entries, claims, { sub_issuer: OLD });
+		assert.match(contains({ ok: true }), after.result, `${after.result.error}`);
+		assert.match("sso:staff", after.values.username, "the group rule");
+		assert.match(1, warned(after), "the warning names both issuers");
+
+		let by_email = login([ roles[0], { name: "staff", emails: [ "alice@example.com" ], groups: [], subs: [] } ], entries,
+			{ email: "alice@example.com", email_verified: true }, { sub_issuer: OLD });
+		assert.match("sso:staff", by_email.values.username, "the email rule");
+	});
+
+	it('after issuer_url changes: a login only the sub rule let in is refused with USER_NOT_AUTHORIZED (403), and the warning says why', () => {
+		let r = login([ { name: "me", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ] } ], entries,
+			{ email: "stranger@example.com", groups: [ "nobody" ] }, { sub_issuer: OLD });
+		assert.match(contains({ ok: false, error: "USER_NOT_AUTHORIZED" }), r.result);
+		assert.match({ http_status: 403, subject: f.MOCK_CLAIMS.sub }, r.result.details);
+		assert.match(false, r.created, "no session");
+		assert.match(1, warned(r));
+	});
+
+	it('after issuer_url changes: a sub_issuer that differs only in a trailing slash is another issuer', () => {
+		let r = login([ { name: "me", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ] } ], entries,
+			{ email: "stranger@example.com" }, { sub_issuer: f.MOCK_CONFIG.issuer_url + "/" });
+		assert.match(contains({ ok: false, error: "USER_NOT_AUTHORIZED" }), r.result);
+	});
+
+	it('an unset sub_issuer ignores the sub rules too, and the warning says it is not set', () => {
+		let r = login([ { name: "me", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ] } ], entries,
+			{ email: "stranger@example.com" }, { sub_issuer: null });
+		assert.match(contains({ ok: false, error: "USER_NOT_AUTHORIZED" }), r.result);
+		assert.match(1, length(filter(r.logs, (m) => index(m, "Ignoring sub rules: sub_issuer is not set [session_id: ") == 0)));
 	});
 
 	it("fails with UBUS_LOGIN_FAILED (500) and no session when the chosen role has no rpcd login entry", () => {

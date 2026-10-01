@@ -256,6 +256,11 @@ describe('native: verify_rs256', () => {
 		assert.match(false, native.verify_rs256(f0.RSA_2048.msg, hex_to_bin(f0.RSA_2048.sig_hex), f0.EC_256.pub));
 	});
 
+	// RSA_2048 (accepted above) is exactly the minimum; this is one bit under.
+	it('SECURITY: rejects a validly-signed 2047-bit key, one bit under the 2048-bit minimum', () => {
+		assert.match(false, native.verify_rs256(f0.RSA_2047.msg, hex_to_bin(f0.RSA_2047.sig_hex), f0.RSA_2047.pub));
+	});
+
 	it('SECURITY: rejects a validly-signed but weak 512-bit RSA key', () => {
 		assert.match(false, native.verify_rs256('test message', WEAK_RSA_SIG, WEAK_RSA_PUB));
 	});

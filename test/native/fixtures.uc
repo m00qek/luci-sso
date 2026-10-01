@@ -72,6 +72,22 @@ export const RSA_2048 = {
 	sig_hex: "26e3f6bdd5cb131a2333d52fbd2cec3b3011017763700acae4a4ede6e2bde8fff6fb09065a18f80c09bbd1aa546fe37b268eb9d4b9e351354966c30f7e3013d701b58c90930d32519c3c880f3f97af602a65d857cf4ff42c998ed5cd9a5739064c2ccb2c010e42d455d887a1765ebfbede57aa2373adaf48596ecf9c149330fff579ad76bfc6b1b63d465b52209cc5ffd4ca909db0ccc9b6219fb5b13a131c6bacefc576d224c71f1e06461002f411a0f1f855ae429436bd86ef55807e4d9429d83528e3e3fa06c6f2cb32c9d17c9be87d535a8a70dc0095d99d368cca4efbc3d7f1c817c61dc05ffd77aae3ca41e7088648dfde43e37b9eb5cf5cd8e41346b7"
 };
 
+// One bit short of NATIVE_RSA_MIN_BITS: a 2047-bit modulus in 256 bytes, the
+// top bit clear. Every backend must refuse it, counting bits, not bytes.
+export const RSA_2047 = {
+	msg: "rsa2047-test",
+	pub: "-----BEGIN PUBLIC KEY-----\n" +
+		"MIIBITANBgkqhkiG9w0BAQEFAAOCAQ4AMIIBCQKCAQB4+ZdLYA/nHzkBcjGLQhgF\n" +
+		"56SigY0y+UBAXXpUzqdhez0qReuKwNLCmUzn9FUjabw8u/1yAgl2ImLqmyw3YUPd\n" +
+		"aCyMEFMW4fz7bzIIBb3xNx0p7ydCrPj3ptvsOj8dhGdJSbU8Y+UzJtHbcpfsEcM3\n" +
+		"9PuxZCyqgxA/NRAolUvRAjic9xm5ASpCn6oia6ohoE5r5C4o0ltgotPijLbCdtP1\n" +
+		"wsIyiGYFosI1TBszHxsLZs0W9FM/RC6J51GNGCGSJEWkhAxy+Gg1AgnzoWJ5u8Up\n" +
+		"78d0f6d5SqFdhJKXw88D1CSH6iOcNoBYfPAcZGTlPK/KdmYtUs7cMXO8s6Ke+ZlP\n" +
+		"AgMBAAE=\n" +
+		"-----END PUBLIC KEY-----",
+	sig_hex: "66378ae72e31cc41c8599a2d2e5504c9f1b9a6b9a08b92531c9f0265d15993302cbef33eb2dab2af52e8b17de583a36a3c17b03f39d74e95742a8fce1ec5b2ce0a526daa4bc142ee698eee26add13016fc21c461e74e799e3496ed3a8432883f25b9ec922e6f74122063622f894917aaeb79be099a55f8970ccfd8e7ac1eb19ae24d9753b7fa07bde4ad57e1995dc9bf12c34ad4f49cd4b5418bb816a0d75e672a2aa144a64beacc1bd8840838ca13ae884af721e7c3957482e33b932511968f4d8cefc7c2e7389e4c175d13aad31a363ea395803a5f0109f329bc12df48d39e74df739188c155db1534b8f2044bf04e9f571fac0e3efe22718c550a5783af80"
+};
+
 export const RSA_NULL_MSG = {
     msg: "null\0msg",
     pub: RSA_2048.pub,

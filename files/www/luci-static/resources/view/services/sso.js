@@ -23,6 +23,14 @@
  *    With UCI changes pending, that happens only once LuCI has applied and
  *    confirmed them (its `uci-applied` event): an apply that is rolled back
  *    writes no permissions. With none pending, it happens at once.
+ *
+ * Subject (sub) rules belong to one issuer: a sub identifies an account only
+ * at the provider that issued it (OIDC Core §5.7), so the backend counts them
+ * only while the option sub_issuer equals issuer_url. Each save of the form
+ * binds them (see bindSubIssuer): to the Issuer URL when they have no issuer
+ * yet or already have this one, never silently to a new one. After the
+ * Issuer URL changes, the page warns, and only the "Use these subject rules
+ * with the new provider" button moves them over.
  */
 
 var callListRoles = rpc.declare({
@@ -85,15 +93,24 @@ var RELOAD_POLL_MS = 500;
 /* A role name becomes part of the rpcd section name luci_sso_<role>. */
 var NAME_MAX = 32;
 
+/* LuCI reloads the page this many seconds after it has applied UCI changes;
+ * for that one reload, the page sets L.env.apply_display to this, so the
+ * reload never comes while the page is open: one day, well under the 2^31-1
+ * ms setTimeout takes. See handleSaveApply. */
+var HOLD_RELOAD_S = 86400;
+
 /* The documentation of this release. */
 var DOCS = 'https://m00qek.github.io/luci-sso/0.10/';
 
 /* Shown for an empty list. */
 var NONE = '\u2014';
 
+/* A list as a table cell's content. The values come from UCI and rpcd, so
+ * they are text: LuCI puts a string returned by textvalue into the cell as
+ * HTML, but appends the strings of an array as text nodes. */
 function renderList(items) {
 	if (!items || !items.length) return NONE;
-	return items.join(', ');
+	return E('span', {}, [ items.join(', ') ]);
 }
 
 function docLink(path, text) {
@@ -136,6 +153,11 @@ function roleRules() {
 	});
 }
 
+/* Whether a role has a subject rule, as the page holds the roles. */
+function hasSubRules() {
+	return roleRules().some(function(r) { return r.sub.length > 0; });
+}
+
 /* A warning for Scopes: roles match by group, but the scopes do not ask
  * for groups. */
 function scopeWarning(scope) {
@@ -143,7 +165,7 @@ function scopeWarning(scope) {
 	if (scopes.indexOf('groups') >= 0) return null;
 	var names = roleRules().filter(function(r) { return r.group.length; }).map(function(r) { return r.name; });
 	if (!names.length) return null;
-	return _('Roles %s match by group, but Scopes does not ask for <code>groups</code>. Most providers then send no groups, and those rules match nobody.')
+	return _('Roles %h match by group, but Scopes does not ask for <code>groups</code>. Most providers then send no groups, and those rules match nobody.')
 		.format(names.join(', '));
 }
 
@@ -153,7 +175,7 @@ function verifiedWarning(on) {
 	var names = roleRules().filter(function(r) { return r.email.length && !r.group.length && !r.sub.length; })
 		.map(function(r) { return r.name; });
 	if (!names.length) return null;
-	return _('Roles %s match by email only. They let a user in only if your identity provider sends <code>email_verified: true</code> for the address; otherwise match those users by group or subject.')
+	return _('Roles %h match by email only. They let a user in only if your identity provider sends <code>email_verified: true</code> for the address; otherwise match those users by group or subject.')
 		.format(names.join(', '));
 }
 
@@ -255,7 +277,7 @@ function awaitTest(job) {
 function renderTestResult(reply) {
 	if (!reply || reply.error || !Array.isArray(reply.checks))
 		return E('div', { 'class': 'alert-message warning luci-sso-test-summary' },
-			_('The connection test could not run: %s').format((reply && (reply.message || reply.error)) || _('no reply')));
+			[ _('The connection test could not run: %s').format((reply && (reply.message || reply.error)) || _('no reply')) ]);
 
 	var counts = { pass: 0, fail: 0, warn: 0, skip: 0 };
 	reply.checks.forEach(function(c) { counts[c.status] = (counts[c.status] || 0) + 1; });
@@ -273,8 +295,10 @@ function renderTestResult(reply) {
 		E('ul', { 'class': 'luci-sso-test-results' }, reply.checks.map(function(c) {
 			return E('li', { 'class': 'luci-sso-check', 'data-check': c.id, 'data-status': c.status }, [
 				E('strong', { 'class': 'luci-sso-check-status' }, '[' + statusLabel(c.status) + ']'), ' ',
-				E('span', { 'class': 'luci-sso-check-title' }, checkTitle(c.id)), ': ',
-				E('span', { 'class': 'luci-sso-check-message' }, c.message)
+				E('span', { 'class': 'luci-sso-check-title' }, [ checkTitle(c.id) ]), ': ',
+				/* The router's message quotes the provider's own values:
+				 * text, never markup. */
+				E('span', { 'class': 'luci-sso-check-message' }, [ c.message ])
 			]);
 		}))
 	]);
@@ -291,7 +315,8 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			callListRoles().catch(function(e) { return { failed: e }; }),
-			callListAclGroups().catch(function() { return null; })
+			callListAclGroups().catch(function() { return null; }),
+			uci.load('luci-sso')
 		]);
 	},
 
@@ -399,7 +424,7 @@ return view.extend({
 		}, this)).catch(L.bind(function(e) {
 			ui.changes.displayStatus('warning', [
 				E('h4', _('Role permissions not saved')),
-				E('p', e.message),
+				E('p', [ e.message ]),
 				E('div', { 'class': 'right' }, E('button', {
 					'class': 'btn cbi-button',
 					'click': L.bind(function() {
@@ -410,7 +435,10 @@ return view.extend({
 							this.edited = edited;
 							this.deleted = deleted;
 							return this._map.load().then(L.bind(this._map.reset, this._map));
-						}, this));
+						}, this)).catch(function(err) {
+							/* The edits are still on the page; Save & Apply tries again. */
+							ui.addNotification(null, E('p', [ _('Could not reload the role permissions from rpcd: %s').format(err.message) ]), 'warning');
+						});
 					}, this)
 				}, _('Dismiss')))
 			]);
@@ -437,10 +465,18 @@ return view.extend({
 					page.applyArmed = true;
 					document.addEventListener('uci-applied', function() {
 						page.applyArmed = false;
-						/* LuCI reloads the page L.env.apply_display seconds
-						 * after this event; hold it until the permissions are
-						 * written, then reload here. */
-						L.env.apply_display = RELOAD_TIMEOUT_MS / 1000 + 60;
+						/* Right after this event, LuCI arms a timer that
+						 * reloads the page in L.env.apply_display seconds.
+						 * Only applyAccess may reload it: once the permissions
+						 * are in force, and never when they fail, or the
+						 * reload would throw away the edits it keeps. So the
+						 * value is HOLD_RELOAD_S while LuCI arms that timer,
+						 * and back to LuCI's own as soon as it has, for its
+						 * other timers (closing a notice, the reload after a
+						 * revert). */
+						var display = L.env.apply_display;
+						L.env.apply_display = HOLD_RELOAD_S;
+						window.setTimeout(function() { L.env.apply_display = display; }, 0);
 						Promise.resolve().then(L.bind(page.applyAccess, page));
 					}, { once: true });
 				}
@@ -474,7 +510,80 @@ return view.extend({
 	handleReset: function() {
 		this.edited = {};
 		this.deleted = {};
+		this.rebindTo = null;
 		return this._map.reset();
+	},
+
+	/* The issuer the roles' subject rules belong to, or null when they have
+	 * none yet: the one the button chose, else sub_issuer, else, for rules
+	 * the page found without one, the Issuer URL it was loaded with. */
+	subOwner: function() {
+		if (this.rebindTo)
+			return this.rebindTo;
+		var bound = uci.get('luci-sso', 'default', 'sub_issuer');
+		if (bound)
+			return bound;
+		return this.loadedSubs ? (this.loadedIssuer || null) : null;
+	},
+
+	/* Fills a subject-rule slot for the Issuer URL `issuer`: a warning, with
+	 * the button, when the rules belong to another issuer; a notice when the
+	 * button has moved them to this one, until saved; nothing otherwise. */
+	renderSubIssuer: function(slot, issuer) {
+		if (!slot)
+			return;
+		var owner = this.subOwner();
+		var bound = uci.get('luci-sso', 'default', 'sub_issuer') || null;
+		var subs = hasSubRules();
+		slot.innerHTML = '';
+		if (subs && owner && issuer && owner !== issuer) {
+			slot.className = 'alert-message warning luci-sso-warning';
+			slot.appendChild(E('p', {}, _('Subject rules belong to <code>%h</code> and are ignored for <code>%h</code>. A subject identifies one account only at its own provider.').format(owner, issuer)));
+			slot.appendChild(E('button', {
+				'class': 'cbi-button cbi-button-action luci-sso-rebind',
+				'type': 'button',
+				'click': L.bind(function(ev) {
+					ev.preventDefault();
+					this.rebindTo = issuer;
+					this.updateSubIssuer(issuer);
+				}, this)
+			}, [ _('Use these subject rules with the new provider') ]));
+			slot.removeAttribute('hidden');
+		}
+		else if (subs && this.rebindTo && this.rebindTo === issuer && bound !== issuer) {
+			slot.className = 'alert-message notice luci-sso-warning';
+			slot.appendChild(E('p', {}, _('Subject rules will be used with <code>%h</code> after Save &amp; Apply.').format(issuer)));
+			slot.removeAttribute('hidden');
+		}
+		else {
+			slot.className = 'luci-sso-warning';
+			slot.setAttribute('hidden', '');
+		}
+	},
+
+	/* Refreshes every subject-rule slot, for the Issuer URL in the form. */
+	updateSubIssuer: function(issuer) {
+		document.querySelectorAll('[data-warning="sub-issuer"]').forEach(L.bind(function(slot) {
+			this.renderSubIssuer(slot, issuer);
+		}, this));
+	},
+
+	/* Run on each save of the form, once its values are parsed into UCI:
+	 * sets sub_issuer to the issuer the subject rules belong to (subOwner),
+	 * or to the Issuer URL when they have none yet, and removes it when no
+	 * role has a subject rule. So a first save binds the rules to the Issuer
+	 * URL, and one after an Issuer URL change keeps them bound to the old
+	 * issuer until the button moves them. */
+	bindSubIssuer: function() {
+		var bound = uci.get('luci-sso', 'default', 'sub_issuer') || '';
+		var next = hasSubRules() ? (this.subOwner() || uci.get('luci-sso', 'default', 'issuer_url') || '') : '';
+		this.rebindTo = null;
+		if (next === bound)
+			return;
+		if (next)
+			uci.set('luci-sso', 'default', 'sub_issuer', next);
+		else
+			uci.unset('luci-sso', 'default', 'sub_issuer');
 	},
 
 	render: function(data) {
@@ -483,12 +592,22 @@ return view.extend({
 
 		this.loadAccess(data[0]);
 		this.aclGroups = Array.isArray(data[1]) ? data[1] : null;
+		/* What the subject rules were found with (see subOwner). */
+		this.rebindTo = null;
+		this.loadedIssuer = uci.get('luci-sso', 'default', 'issuer_url') || '';
+		this.loadedSubs = hasSubRules();
 		if (!this.accessAvailable)
 			ui.addNotification(null, E('p', _('The role permissions could not be loaded from rpcd (luci-sso object): they are shown as unavailable and cannot be changed. Is the luci-sso package fully installed?')), 'warning');
 
 		m = this._map = new form.Map('luci-sso',
 			_('Single Sign-On'),
 			_('Log in to LuCI with your identity provider, using OpenID Connect (OIDC).'));
+		/* Each save binds the subject rules to their issuer, once the form's
+		 * values are in UCI and before LuCI stages them. */
+		var parse = m.parse;
+		m.parse = function() {
+			return parse.apply(this, arguments).then(function() { page.bindSubIssuer(); });
+		};
 
 		/* ------------------------------------------------------------------ */
 		/* Identity provider                                                    */
@@ -508,6 +627,15 @@ return view.extend({
 			return true;
 		};
 		o.placeholder = 'https://accounts.google.com';
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			var node = form.Value.prototype.renderWidget.apply(this, [ section_id, option_index, cfgvalue ]);
+			var slot = E('div', { 'class': 'luci-sso-warning', 'data-warning': 'sub-issuer', 'hidden': '' });
+			page.renderSubIssuer(slot, (cfgvalue != null) ? String(cfgvalue) : (uci.get('luci-sso', section_id, 'issuer_url') || ''));
+			return E('div', {}, [ node, slot ]);
+		};
+		o.onchange = function(ev, section_id, value) {
+			page.updateSubIssuer(String(value || ''));
+		};
 
 		o = s.taboption('provider', form.Value, 'client_id', _('Client ID'),
 		        _('From the client (application) you created for this router at your identity provider.'));
@@ -664,7 +792,7 @@ return view.extend({
 		s.modaledit = true;
 		s.nodescriptions = true;
 		s.modaltitle = function(section_id) {
-			return _('Role: %s').format(section_id);
+			return _('Role: %h').format(section_id);
 		};
 		s.handleAdd = function(ev, name) {
 			var ok = checkRoleName(name ? name.trim() : '');
@@ -696,6 +824,18 @@ return view.extend({
 			input.addEventListener('blur', check);
 			input.addEventListener('input', check);
 			el.appendChild(msg);
+			return el;
+		};
+		/* The subject-rule warning, above the table as well. */
+		s.renderContents = function(cfgsections, nodes) {
+			var el = form.GridSection.prototype.renderContents.apply(this, [ cfgsections, nodes ]);
+			var slot = E('div', { 'class': 'luci-sso-warning', 'data-warning': 'sub-issuer', 'hidden': '' });
+			page.renderSubIssuer(slot, uci.get('luci-sso', 'default', 'issuer_url') || '');
+			var descr = el.querySelector('.cbi-section-descr');
+			if (descr)
+				descr.parentNode.insertBefore(slot, descr.nextSibling);
+			else
+				el.insertBefore(slot, el.firstChild);
 			return el;
 		};
 		s.handleRemove = function(section_id, ev) {

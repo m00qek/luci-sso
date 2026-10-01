@@ -163,7 +163,7 @@ Processes the callback. `deps`: all fields. In order, it:
 6. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
 7. fetches UserInfo when the ID Token has no `email`, and then takes `email` and `email_verified` both from UserInfo;
 8. registers the access token against replay;
-9. logs a warning when `config.matchable_email` sets an unverified email aside, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches. No match fails with `USER_NOT_AUTHORIZED` and `details` `{ http_status: 403, subject: <the ID Token's sub> }`, for the error page;
+9. logs a warning when `config.matchable_email` sets an unverified email aside, and one when `config.ignored_sub_rules` says the `sub` rules are ignored, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches. No match fails with `USER_NOT_AUTHORIZED` and `details` `{ http_status: 403, subject: <the ID Token's sub> }`, for the error page;
 10. creates the `rpcd` session from the role's `rpcd` login entry, labelled with the email `config.session_email` returns. Any failure there, including `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN`, ends as `UBUS_LOGIN_FAILED` (500).
 
 | Field | Type | Description |
@@ -275,12 +275,26 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
-| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (empty when unset). Each entry must pass `netaddr.parse_cidr()`, or the load fails with `CONFIG_ERROR`. |
-| `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
+| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (`uci_list()`). Each entry must pass `netaddr.parse_cidr()`, or the load fails with `CONFIG_ERROR`. |
+| `trusted_ranges` | array | `trusted_proxy`, each entry parsed by `netaddr.parse_cidr()`, in order: what `ratelimit.is_trusted_proxy()` takes. |
+| `sub_issuer` | string or null | `luci-sso.default.sub_issuer`; `null` when unset or empty. Not checked: see `sub_rules_apply()`. |
+| `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`, each list from `uci_list()`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
+
+### `uci_list(v)` → `array`
+
+A UCI option as a list: an array as it is, a non-empty string as a list of one, anything else (a missing or empty option) as `[]`. Also used by `luci_sso.rpcd_login` and the `luci-sso` rpcd plugin.
+
+### `sub_rules_apply(config)` → `bool`
+
+`true` when `config.sub_issuer` is a non-empty string identical to `config.issuer_url`. Only then do the roles' `sub` rules count (OIDC Core §5.7: a `sub` is unique only within its issuer).
+
+### `ignored_sub_rules(config)` → `string` or `null`
+
+The log line, without its `[session_id: …]`, for a login whose `sub` rules are ignored: `Ignoring sub rules: sub_issuer is not set`, or `Ignoring sub rules: sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>'`, both values through `encoding.log_safe()`. `null` when `sub_rules_apply(config)` or no role has a `sub` rule.
 
 ### `find_role_for_user(config, claims)` → `Result<{role_name, also_matched}>`
 
-Matches the sub `matchable_sub` returns (exact, case-sensitive), the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+Matches the sub `matchable_sub` returns (exact, case-sensitive; only when `sub_rules_apply(config)`), the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
 
 ### `matchable_sub(claims)` → `string` or `null`
 
@@ -456,11 +470,11 @@ Per-client request budgets, stored in `STATE_FILE`. `deps: { fs, clock, native, 
 
 ### `client_key(addr)` → `string`
 
-Maps `REMOTE_ADDR` to a key: `"v4:<address>"` for IPv4 and IPv4-mapped IPv6, `"v6:<first four groups>"` (the `/64`) for IPv6, `UNKNOWN_CLIENT` otherwise. A zone is ignored.
+Maps `REMOTE_ADDR` to a key: `"v4:<address>"` for IPv4 and IPv4-mapped IPv6, `"v6:<first four groups>"` (the `/64`) for IPv6, `UNKNOWN_CLIENT` otherwise, including an address longer than `netaddr.MAX_ADDR_LEN` with its zone. A zone is ignored.
 
-### `is_trusted_proxy(addr, trusted)` → `bool`
+### `is_trusted_proxy(addr, ranges)` → `bool`
 
-Whether `REMOTE_ADDR` falls in an entry of `trusted`, the `trusted_proxy` list (`netaddr.contains()`). `false` for an empty or missing list and for an address `netaddr.parse()` refuses; entries `netaddr.parse_cidr()` refuses are skipped. An address with a zone (`fe80::1%eth0`) is never trusted; an IPv4-mapped address is its IPv4 address. No header is read.
+Whether `REMOTE_ADDR` falls in an entry of `ranges`, the `trusted_proxy` list as `config.load()` parsed it (`trusted_ranges`; `netaddr.contains()`). `false` for an empty or missing list and for an address `netaddr.parse()` refuses, such as one longer than `netaddr.MAX_ADDR_LEN`; entries that are not ranges (`null`) are skipped. An address with a zone (`fe80::1%eth0`) is never trusted; an IPv4-mapped address is its IPv4 address. No header is read.
 
 ### `check(deps, key, is_login)` → `{allowed, retry_after, budget}`
 
@@ -474,7 +488,7 @@ For a trusted proxy's request: always `{ allowed: true, budget: null, retry_afte
 
 ## `luci_sso.netaddr`
 
-IP address and CIDR range parsing. Pure. An address is `{ family: 4, parts: [4 bytes] }` or `{ family: 6, parts: [8 groups] }`; an IPv4-mapped IPv6 address is always returned as its IPv4 address.
+IP address and CIDR range parsing. Pure. An address is `{ family: 4, parts: [4 bytes] }` or `{ family: 6, parts: [8 groups] }`; an IPv4-mapped IPv6 address is always returned as its IPv4 address. `MAX_ADDR_LEN` (`64`) is the longest text `parse()` and `parse_cidr()` accept as an address.
 
 ### `parse(s)` → `address` or `null`
 
@@ -508,6 +522,9 @@ Facade over `luci_sso.crypto.*`. Every function except `constant_time_eq` takes 
 | `hash_sha256_hex` | `crypto.hash.sha256_hex` |
 | `pkce_pair` | `crypto.pkce.pair` |
 | `jwk_to_pem` | `crypto.jwk.to_pem` |
+| `jwk_rsa_bits` | `crypto.jwk.rsa_bits` |
+| `jwk_rsa_exponent_supported` | `crypto.jwk.rsa_exponent_supported` |
+| `RSA_MIN_BITS` | `crypto.jwk.RSA_MIN_BITS` |
 
 ### `constant_time_eq(a, b)` → `bool`
 
@@ -551,6 +568,16 @@ Generates a PKCE verifier from `len` random bytes (default `43`, range 32–96; 
 ### `jwk_to_pem(native, jwk)` → `Result<string>`
 
 Converts an `RSA` or `EC` (`P-256`) JWK to a PEM public key. Fails with `MISSING_KTY`, `UNSUPPORTED_KTY`, `MISSING_RSA_PARAMS`, `INVALID_RSA_PARAMS_ENCODING`, `UNSUPPORTED_CURVE`, `MISSING_EC_PARAMS`, `INVALID_EC_PARAMS_ENCODING` or `PEM_CONVERSION_FAILED`.
+
+### `jwk_rsa_bits(jwk)` → `int` or `null`
+
+The bit length of an RSA JWK's modulus `n`, leading zero bytes ignored. `null` when `n` is missing, empty, all zeros or not Base64URL. Pure.
+
+### `jwk_rsa_exponent_supported(jwk)` → `bool`
+
+`true` when the JWK's `e` is exactly `RSA_EXPONENT` (`"AQAB"`, 65537 as three bytes), the only exponent `native.jwk_rsa_to_pem()` accepts. Pure.
+
+`RSA_MIN_BITS` (`2048`) mirrors `NATIVE_RSA_MIN_BITS` in `mod/native.h`, below which `native.verify_rs256()` refuses a key; `make lint` (`devenv/scripts/check-native-mirrors.sh`) fails when the two differ. `luci_sso.connection` uses these to judge the provider's keys as a login does.
 
 `luci_sso.crypto.pkce` also exports `generate_verifier(native, len)` and `calculate_challenge(native, verifier)`.
 

@@ -228,11 +228,33 @@ A `sub` rule matches one account at the IdP, whatever its email address or group
         uci set luci-sso.owner=role
         uci add_list luci-sso.owner.sub='f81d4fae-7dec-11d0-a765-00a0c91e6bf6'
         uci reorder luci-sso.owner=1
+        uci set luci-sso.default.sub_issuer="$(uci get luci-sso.default.issuer_url)"
         uci commit luci-sso
         ubus call luci-sso set_role '{"name": "owner", "read": ["*"], "write": ["*"]}'
         ```
 
+        `sub_issuer` names the IdP the subjects belong to; `sub` rules count only while it equals `issuer_url`. The settings page sets it for you.
+
 3. Ask the user to log in again. The system log line names the role: `User [sub_id: …] mapped to role 'owner'`. The log records a hash of the `sub`, never the value itself.
+
+### After you change the identity provider
+
+A subject belongs to the IdP that issued it, so `sub` rules stop counting when `issuer_url` changes: the log says `Ignoring sub rules: sub_issuer '<old issuer>' does not match issuer_url '<new issuer>'`, and those users are matched by email or group, or refused. Why: [About Roles and Permissions](../../explanation/roles-and-permissions.md#matching-by-subject).
+
+- If the new `issuer_url` is the same IdP under a new address, keep the rules:
+
+    === "Browser (LuCI)"
+
+        The **Provider** tab and the **Roles** section say "Subject rules belong to `<old issuer>` and are ignored for `<new issuer>`". Click **Use these subject rules with the new provider**, then **Save & Apply**.
+
+    === "Terminal (SSH)"
+
+        ```bash
+        uci set luci-sso.default.sub_issuer="$(uci get luci-sso.default.issuer_url)"
+        uci commit luci-sso
+        ```
+
+- If it is another IdP, its accounts have other subjects: replace each `sub` value with the user's `sub` at the new IdP (step 1 above), then move the rules to it as shown.
 
 ---
 

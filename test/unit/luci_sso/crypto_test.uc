@@ -48,6 +48,12 @@ describe('crypto: facade delegation', () => {
 		assert.match(contains({ ok: true, data: regex(/^-----BEGIN/) }), crypto.jwk_to_pem(native, MOCK_JWK));
 	});
 
+	it('exports jwk.rsa_bits, jwk.rsa_exponent_supported and RSA_MIN_BITS', () => {
+		assert.match(2048, crypto.jwk_rsa_bits(MOCK_JWK));
+		assert.match(true, crypto.jwk_rsa_exponent_supported(MOCK_JWK));
+		assert.match(2048, crypto.RSA_MIN_BITS);
+	});
+
 	it('safe_id returns [INVALID] for short tokens', () => {
 		assert.match('[INVALID]', crypto.safe_id(native, 'short'));
 	});

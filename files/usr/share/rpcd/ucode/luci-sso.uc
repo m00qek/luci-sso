@@ -89,6 +89,7 @@ import { cursor } from 'uci';
 import { mkdir, readlink, readfile, lsdir } from 'fs';
 import * as uloop from 'uloop';
 import * as rpcd_login from 'luci_sso.rpcd_login';
+import { uci_list } from 'luci_sso.config';
 import * as connection from 'luci_sso.connection';
 import { create_probe } from 'luci_sso.deps';
 
@@ -119,11 +120,6 @@ function fail(code, message) {
 	return { error: code, message };
 }
 
-function to_list(v) {
-	if (type(v) == "array") return v;
-	return (v != null) ? [ v ] : [];
-}
-
 function open_cursor() {
 	mkdir(RUN_DIR, 0700);
 	mkdir(DELTA_DIR, 0700);
@@ -146,7 +142,7 @@ function sso_entries(uci) {
 			return;
 		if (!rpcd_login.check_name(name).ok)
 			return;
-		push(out, { name, read: to_list(s.read), write: to_list(s.write) });
+		push(out, { name, read: uci_list(s.read), write: uci_list(s.write) });
 	});
 	return out;
 }

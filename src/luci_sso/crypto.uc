@@ -19,3 +19,6 @@ export const hash_sha256       = c_hash.sha256;
 export const hash_sha256_hex   = c_hash.sha256_hex;
 export const pkce_pair         = c_pkce.pair;
 export const jwk_to_pem        = c_jwk.to_pem;
+export const jwk_rsa_bits      = c_jwk.rsa_bits;
+export const jwk_rsa_exponent_supported = c_jwk.rsa_exponent_supported;
+export const RSA_MIN_BITS      = c_jwk.RSA_MIN_BITS;
