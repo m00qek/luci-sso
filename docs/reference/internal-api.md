@@ -275,9 +275,14 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
-| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (empty when unset). Each entry must pass `netaddr.parse_cidr()`, or the load fails with `CONFIG_ERROR`. |
+| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (`uci_list()`). Each entry must pass `netaddr.parse_cidr()`, or the load fails with `CONFIG_ERROR`. |
+| `trusted_ranges` | array | `trusted_proxy`, each entry parsed by `netaddr.parse_cidr()`, in order: what `ratelimit.is_trusted_proxy()` takes. |
 | `sub_issuer` | string or null | `luci-sso.default.sub_issuer`; `null` when unset or empty. Not checked: see `sub_rules_apply()`. |
-| `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
+| `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`, each list from `uci_list()`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
+
+### `uci_list(v)` → `array`
+
+A UCI option as a list: an array as it is, a non-empty string as a list of one, anything else (a missing or empty option) as `[]`. Also used by `luci_sso.rpcd_login`.
 
 ### `sub_rules_apply(config)` → `bool`
 
@@ -465,11 +470,11 @@ Per-client request budgets, stored in `STATE_FILE`. `deps: { fs, clock, native, 
 
 ### `client_key(addr)` → `string`
 
-Maps `REMOTE_ADDR` to a key: `"v4:<address>"` for IPv4 and IPv4-mapped IPv6, `"v6:<first four groups>"` (the `/64`) for IPv6, `UNKNOWN_CLIENT` otherwise. A zone is ignored.
+Maps `REMOTE_ADDR` to a key: `"v4:<address>"` for IPv4 and IPv4-mapped IPv6, `"v6:<first four groups>"` (the `/64`) for IPv6, `UNKNOWN_CLIENT` otherwise, including an address longer than `netaddr.MAX_ADDR_LEN` with its zone. A zone is ignored.
 
-### `is_trusted_proxy(addr, trusted)` → `bool`
+### `is_trusted_proxy(addr, ranges)` → `bool`
 
-Whether `REMOTE_ADDR` falls in an entry of `trusted`, the `trusted_proxy` list (`netaddr.contains()`). `false` for an empty or missing list and for an address `netaddr.parse()` refuses; entries `netaddr.parse_cidr()` refuses are skipped. An address with a zone (`fe80::1%eth0`) is never trusted; an IPv4-mapped address is its IPv4 address. No header is read.
+Whether `REMOTE_ADDR` falls in an entry of `ranges`, the `trusted_proxy` list as `config.load()` parsed it (`trusted_ranges`; `netaddr.contains()`). `false` for an empty or missing list and for an address `netaddr.parse()` refuses, such as one longer than `netaddr.MAX_ADDR_LEN`; entries that are not ranges (`null`) are skipped. An address with a zone (`fe80::1%eth0`) is never trusted; an IPv4-mapped address is its IPv4 address. No header is read.
 
 ### `check(deps, key, is_login)` → `{allowed, retry_after, budget}`
 
@@ -483,7 +488,7 @@ For a trusted proxy's request: always `{ allowed: true, budget: null, retry_afte
 
 ## `luci_sso.netaddr`
 
-IP address and CIDR range parsing. Pure. An address is `{ family: 4, parts: [4 bytes] }` or `{ family: 6, parts: [8 groups] }`; an IPv4-mapped IPv6 address is always returned as its IPv4 address.
+IP address and CIDR range parsing. Pure. An address is `{ family: 4, parts: [4 bytes] }` or `{ family: 6, parts: [8 groups] }`; an IPv4-mapped IPv6 address is always returned as its IPv4 address. `MAX_ADDR_LEN` (`64`) is the longest text `parse()` and `parse_cidr()` accept as an address.
 
 ### `parse(s)` → `address` or `null`
 

@@ -5,6 +5,7 @@ import * as native from 'luci_sso.native';
 import * as session from 'luci_sso.session';
 import * as common from 'luci_sso.session.common';
 import * as ratelimit from 'luci_sso.ratelimit';
+import * as netaddr from 'luci_sso.netaddr';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_loader from 'luci_sso.config';
@@ -522,7 +523,9 @@ describe('router: per-client rate limiting', () => {
 describe('router: per-client rate limiting — a trusted reverse proxy', () => {
 	const NOW = 1516239022;
 	const DISC = { [tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY } };
-	const PROXIED = { ...tf.MOCK_CONFIG, enabled: "1", trusted_proxy: [ "127.0.0.1", "2001:db8:100::/48" ] };
+	// As config.load gives it: the list, and the list parsed once.
+	const TRUSTED = [ "127.0.0.1", "2001:db8:100::/48" ];
+	const PROXIED = { ...tf.MOCK_CONFIG, enabled: "1", trusted_proxy: TRUSTED, trusted_ranges: map(TRUSTED, netaddr.parse_cidr) };
 	const login = (addr) => ({ path: "/", query: {}, cookies: {}, client: addr });
 	const callback = (addr) => ({ path: "/callback", query: { code: "c", state: "s" }, cookies: {}, client: addr });
 	const ctx = (fn, fs) => with_context({ fs: fs || { data: {} }, http_client: { data: DISC }, clock: { data: { now: NOW } } }, fn);

@@ -27,6 +27,7 @@
  */
 
 import * as Result from 'luci_sso.result';
+import { uci_list } from 'luci_sso.config';
 
 export const CONFIG = "rpcd";
 export const SECTION_PREFIX = "luci_sso_";
@@ -233,13 +234,6 @@ export function stage(uci, e) {
 	}
 };
 
-// A role's read/write option as a list. Before role permissions moved to rpcd,
-// luci-sso read a single option as a one-entry list, so the upgrade does too.
-function old_list(v) {
-	if (type(v) == "array") return v;
-	return (v != null) ? [ v ] : [];
-}
-
 /** The role the package ships in /etc/config/luci-sso. */
 export const DEFAULT_ROLE = "admin";
 
@@ -257,9 +251,9 @@ export const PLACEHOLDER_EMAIL = "admin@example.com";
  * @returns {boolean}
  */
 export function is_placeholder(s) {
-	let emails = old_list(s.email);
+	let emails = uci_list(s.email);
 	return s[".name"] == DEFAULT_ROLE && length(emails) == 1 && emails[0] == PLACEHOLDER_EMAIL &&
-		!length(old_list(s.group)) && !length(old_list(s.sub));
+		!length(uci_list(s.group)) && !length(uci_list(s.sub));
 };
 
 /**
@@ -306,7 +300,7 @@ export function migrate(uci, warn) {
 		let name = s[".name"];
 
 		if (s.read != null || s.write != null) {
-			let res = entry(name, old_list(s.read), old_list(s.write));
+			let res = entry(name, uci_list(s.read), uci_list(s.write));
 			if (!res.ok) {
 				warn(`role '${name}' keeps its read/write lists and has no rpcd login entry: ${res.details}; save its permissions on the settings page`);
 				continue;
@@ -378,7 +372,7 @@ export function demigrate(uci, warn) {
 		let name = substr(s[".name"], length(SECTION_PREFIX));
 		if (s[".type"] == "login" && length(name) && uci.get("luci-sso", name) == "role") {
 			for (let opt in [ "read", "write" ]) {
-				let list = old_list(s[opt]);
+				let list = uci_list(s[opt]);
 				uci.delete("luci-sso", name, opt);
 				if (length(list))
 					uci.set("luci-sso", name, opt, list);

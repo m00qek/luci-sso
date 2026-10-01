@@ -2,6 +2,7 @@ import { describe, it, assert, contains, mock, spy } from 'utest';
 import * as rl from 'luci_sso.ratelimit';
 import * as native from 'luci_sso.native';
 import * as crypto from 'luci_sso.crypto';
+import * as netaddr from 'luci_sso.netaddr';
 
 const NOW = 1700000000;
 
@@ -59,39 +60,44 @@ describe('ratelimit: client_key', () => {
 
 // ─── is_trusted_proxy ─────────────────────────────────────────────────────────
 
+// is_trusted_proxy takes the list parsed, as config.load's trusted_ranges.
+function trusted(addr, list) {
+	return rl.is_trusted_proxy(addr, map(list, netaddr.parse_cidr));
+}
+
 describe('ratelimit: is_trusted_proxy', () => {
 	it('matches an IPv4 address listed exactly, and no other', () => {
-		assert.match(true, rl.is_trusted_proxy('127.0.0.1', [ '127.0.0.1' ]));
-		assert.match(false, rl.is_trusted_proxy('127.0.0.2', [ '127.0.0.1' ]));
-		assert.match(true, rl.is_trusted_proxy('::ffff:127.0.0.1', [ '127.0.0.1' ]), 'IPv4-mapped is the IPv4 address');
+		assert.match(true, trusted('127.0.0.1', [ '127.0.0.1' ]));
+		assert.match(false, trusted('127.0.0.2', [ '127.0.0.1' ]));
+		assert.match(true, trusted('::ffff:127.0.0.1', [ '127.0.0.1' ]), 'IPv4-mapped is the IPv4 address');
 	});
 
 	it('matches an IPv6 address listed exactly, in any spelling, and no other', () => {
-		assert.match(true, rl.is_trusted_proxy('::1', [ '::1' ]));
-		assert.match(true, rl.is_trusted_proxy('0:0:0:0:0:0:0:1', [ '::1' ]));
-		assert.match(true, rl.is_trusted_proxy('2001:DB8::7', [ '2001:db8::7' ]));
-		assert.match(false, rl.is_trusted_proxy('2001:db8::8', [ '2001:db8::7' ]), 'not the whole /64, unlike client_key');
-		assert.match(false, rl.is_trusted_proxy('fe80::1%br-lan', [ 'fe80::1', 'fe80::/10' ]),
+		assert.match(true, trusted('::1', [ '::1' ]));
+		assert.match(true, trusted('0:0:0:0:0:0:0:1', [ '::1' ]));
+		assert.match(true, trusted('2001:DB8::7', [ '2001:db8::7' ]));
+		assert.match(false, trusted('2001:db8::8', [ '2001:db8::7' ]), 'not the whole /64, unlike client_key');
+		assert.match(false, trusted('fe80::1%br-lan', [ 'fe80::1', 'fe80::/10' ]),
 			'never with a zone: the same link-local address can be another host on another interface');
 	});
 
 	it('matches by CIDR range, for IPv4 and IPv6', () => {
-		assert.match(true, rl.is_trusted_proxy('10.20.30.40', [ '10.0.0.0/8' ]));
-		assert.match(false, rl.is_trusted_proxy('11.0.0.1', [ '10.0.0.0/8' ]));
-		assert.match(true, rl.is_trusted_proxy('172.31.255.254', [ '172.16.0.0/12' ]));
-		assert.match(false, rl.is_trusted_proxy('172.32.0.1', [ '172.16.0.0/12' ]));
-		assert.match(true, rl.is_trusted_proxy('2001:db8:ffff::1', [ '2001:db8::/32' ]));
-		assert.match(false, rl.is_trusted_proxy('2001:db9::1', [ '2001:db8::/32' ]));
+		assert.match(true, trusted('10.20.30.40', [ '10.0.0.0/8' ]));
+		assert.match(false, trusted('11.0.0.1', [ '10.0.0.0/8' ]));
+		assert.match(true, trusted('172.31.255.254', [ '172.16.0.0/12' ]));
+		assert.match(false, trusted('172.32.0.1', [ '172.16.0.0/12' ]));
+		assert.match(true, trusted('2001:db8:ffff::1', [ '2001:db8::/32' ]));
+		assert.match(false, trusted('2001:db9::1', [ '2001:db8::/32' ]));
 	});
 
 	it('matches any entry of the list, and never across families', () => {
 		let t = [ '192.0.2.1', '::1', '10.0.0.0/8' ];
 		for (let a in [ '192.0.2.1', '::1', '10.1.1.1' ])
-			assert.match(true, rl.is_trusted_proxy(a, t), a);
+			assert.match(true, trusted(a, t), a);
 		for (let a in [ '192.0.2.2', '::2', '198.51.100.1', '2001:db8::1' ])
-			assert.match(false, rl.is_trusted_proxy(a, t), a);
-		assert.match(false, rl.is_trusted_proxy('192.0.2.1', [ '::/0' ]), 'an IPv6 range holds no IPv4 client');
-		assert.match(false, rl.is_trusted_proxy('::1', [ '0.0.0.0/0' ]));
+			assert.match(false, trusted(a, t), a);
+		assert.match(false, trusted('192.0.2.1', [ '::/0' ]), 'an IPv6 range holds no IPv4 client');
+		assert.match(false, trusted('::1', [ '0.0.0.0/0' ]));
 	});
 
 	it('trusts no one when the list is empty, missing or not a list', () => {
@@ -101,9 +107,17 @@ describe('ratelimit: is_trusted_proxy', () => {
 
 	it('trusts no missing or unparsable REMOTE_ADDR, and skips entries that are not addresses', () => {
 		for (let a in [ null, '', 'localhost', '127.0.0.1 ', 42 ])
-			assert.match(false, rl.is_trusted_proxy(a, [ '0.0.0.0/0', '::/0' ]), `${a}`);
-		assert.match(false, rl.is_trusted_proxy('127.0.0.1', [ 'localhost', '127.0.0.1:80' ]));
-		assert.match(true, rl.is_trusted_proxy('127.0.0.1', [ 'localhost', '127.0.0.1' ]));
+			assert.match(false, trusted(a, [ '0.0.0.0/0', '::/0' ]), `${a}`);
+		assert.match(false, trusted('127.0.0.1', [ 'localhost', '127.0.0.1:80' ]));
+		assert.match(true, trusted('127.0.0.1', [ 'localhost', '127.0.0.1' ]));
+	});
+
+	it('neither trusts nor keys a REMOTE_ADDR longer than netaddr.MAX_ADDR_LEN, zone included', () => {
+		// Short enough once its zone is stripped, too long with it.
+		let long = 'fe80::1%';
+		while (length(long) <= netaddr.MAX_ADDR_LEN) long += 'x';
+		assert.match(false, trusted(long, [ '::/0' ]));
+		assert.match(rl.UNKNOWN_CLIENT, rl.client_key(long));
 	});
 });
 

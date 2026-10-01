@@ -15,9 +15,8 @@
 /**
  * Longest text accepted as one address: the longest IPv6 form, with an IPv4
  * tail, is 45 characters.
- * @private
  */
-const MAX_ADDR_LEN = 64;
+export const MAX_ADDR_LEN = 64;
 
 function _ipv4(s) {
 	let m = match(s, /^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/);

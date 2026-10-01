@@ -10,6 +10,19 @@ import * as netaddr from 'luci_sso.netaddr';
 import { SSO_DISABLED, CONFIG_ERROR, UCI_ERROR } from 'luci_sso.errors';
 
 /**
+ * A UCI option as a list: a list option as it is, a single option as a list
+ * of one, and a missing or empty option as an empty list. UCI gives a list
+ * option (`list x`) as an array and a single one (`option x`) as a string.
+ *
+ * @param {*} v - The option's value, as a UCI cursor returns it
+ * @returns {array}
+ */
+export function uci_list(v) {
+	if (type(v) == "array") return v;
+	return v ? [ v ] : [];
+};
+
+/**
  * Checks if the SSO service is enabled in UCI.
  * @param {object} io - I/O provider
  * @returns {object} - Result Object {ok, data/error}
@@ -77,9 +90,9 @@ export function load(deps) {
 	// 2. Load and Validate Roles
 	let roles = [];
 	cursor.foreach("luci-sso", "role", (s) => {
-		let emails = (type(s.email) == "array") ? s.email : (s.email ? [ s.email ] : []);
-		let groups = (type(s.group) == "array") ? s.group : (s.group ? [ s.group ] : []);
-		let subs = (type(s.sub) == "array") ? s.sub : (s.sub ? [ s.sub ] : []);
+		let emails = uci_list(s.email);
+		let groups = uci_list(s.group);
+		let subs = uci_list(s.sub);
 
 		if (length(emails) == 0 && length(groups) == 0 && length(subs) == 0) {
 			deps.log("warn", `Ignoring role '${s[".name"]}': missing email, group or sub list`);
@@ -116,11 +129,14 @@ export function load(deps) {
 	// (ratelimit.is_trusted_proxy). An entry that is not an address or a CIDR
 	// range is refused rather than skipped: a typo would otherwise quietly
 	// leave the proxy, and so every user behind it, on one shared budget.
-	let trusted_proxy = (type(oidc_cfg.trusted_proxy) == "array") ? oidc_cfg.trusted_proxy
-		: (oidc_cfg.trusted_proxy ? [ oidc_cfg.trusted_proxy ] : []);
+	// Parsed here, once per request, into trusted_ranges.
+	let trusted_proxy = uci_list(oidc_cfg.trusted_proxy);
+	let trusted_ranges = [];
 	for (let t in trusted_proxy) {
-		if (!netaddr.parse_cidr(t))
+		let range = netaddr.parse_cidr(t);
+		if (!range)
 			return Result.err(CONFIG_ERROR, "trusted_proxy entries must be IP addresses or CIDR ranges");
+		push(trusted_ranges, range);
 	}
 
 	return Result.ok({
@@ -135,6 +151,7 @@ export function load(deps) {
 		// option existed gets the safe behaviour.
 		require_email_verified: !(oidc_cfg.require_email_verified in [ "0", "no", "off", "false" ]),
 		trusted_proxy: trusted_proxy,
+		trusted_ranges: trusted_ranges,
 		// The issuer the roles' sub rules were made for (sub_rules_apply).
 		sub_issuer: (type(oidc_cfg.sub_issuer) == "string" && length(oidc_cfg.sub_issuer)) ? oidc_cfg.sub_issuer : null,
 		roles: roles

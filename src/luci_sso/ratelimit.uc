@@ -84,7 +84,8 @@ function _strip_zone(addr) {
  * @returns {string}
  */
 export function client_key(addr) {
-	if (type(addr) != "string" || length(addr) > 64) return UNKNOWN_CLIENT;
+	// netaddr's length cap, applied to the address with its zone.
+	if (type(addr) != "string" || length(addr) > netaddr.MAX_ADDR_LEN) return UNKNOWN_CLIENT;
 	let a = netaddr.parse(_strip_zone(addr));
 	if (!a) return UNKNOWN_CLIENT;
 	if (a.family == 4) return "v4:" + netaddr.format(a);
@@ -97,20 +98,19 @@ export function client_key(addr) {
  * header is read. An IPv4-mapped IPv6 address is its IPv4 address. An
  * address with a zone (fe80::1%eth0) is never trusted: the same link-local
  * address can be a different host on each interface, and an entry cannot
- * name the interface. Entries of `trusted` that are not an address or a CIDR
- * range are skipped (config.load refuses them anyway).
+ * name the interface. Entries of `ranges` that are not ranges are skipped.
  *
  * @param {*} addr REMOTE_ADDR from the CGI environment.
- * @param {?array} trusted The trusted_proxy list: addresses and CIDR ranges.
+ * @param {?array} ranges The trusted_proxy list, parsed: config.load's
+ *   trusted_ranges, each from netaddr.parse_cidr().
  * @returns {boolean}
  */
-export function is_trusted_proxy(addr, trusted) {
-	if (type(trusted) != "array" || !length(trusted)) return false;
-	if (type(addr) != "string" || length(addr) > 64) return false;
+export function is_trusted_proxy(addr, ranges) {
+	if (type(ranges) != "array" || !length(ranges)) return false;
 	let a = netaddr.parse(addr);
 	if (!a) return false;
-	for (let t in trusted) {
-		if (netaddr.contains(netaddr.parse_cidr(t), a)) return true;
+	for (let r in ranges) {
+		if (netaddr.contains(r, a)) return true;
 	}
 	return false;
 };

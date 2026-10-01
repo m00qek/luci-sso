@@ -507,6 +507,17 @@ describe('config: load — success', () => {
 		assert.match('https://idp.com/', load_sections({ default: { ...OIDC, sub_issuer: 'https://idp.com/' }, r1: { ...ROLE } }).data.sub_issuer);
 	});
 
+	it('parses trusted_proxy once, into trusted_ranges, in order', () => {
+		assert.match([], load_sections({ default: { ...OIDC }, r1: { ...ROLE } }).data.trusted_ranges, 'unset');
+		let many = [ '127.0.0.1', '10.0.0.0/8', '::1', '::ffff:192.0.2.0/120' ];
+		assert.match([
+			{ family: 4, parts: [ 127, 0, 0, 1 ], prefix: 32 },
+			{ family: 4, parts: [ 10, 0, 0, 0 ], prefix: 8 },
+			{ family: 6, parts: [ 0, 0, 0, 0, 0, 0, 0, 1 ], prefix: 128 },
+			{ family: 4, parts: [ 192, 0, 2, 0 ], prefix: 24 },
+		], load_sections({ default: { ...OIDC, trusted_proxy: many }, r1: { ...ROLE } }).data.trusted_ranges);
+	});
+
 	it('loads a custom scope and leaves it undefined when absent', () => {
 		let with_scope = load_sections({ default: { ...OIDC, scope: 'openid email custom_scope' }, r1: { ...ROLE } });
 		assert.match('openid email custom_scope', with_scope.data.scope);
@@ -582,6 +593,22 @@ describe('config: load — validation', () => {
 
 		for (let bad in ['3601', 'abc'])
 			assert.match(contains({ ok: false, error: 'CONFIG_ERROR' }), load_sections({ default: { ...OIDC, clock_tolerance: bad }, r1: { ...ROLE } }), `tolerance ${bad}`);
+	});
+});
+
+// ─── uci_list ──────────────────────────────────────────────────────────────────
+
+describe('config: uci_list', () => {
+	it('keeps a list option as it is', () => {
+		let l = [ 'a', 'b' ];
+		assert.match(true, config.uci_list(l) === l);
+		assert.match([], config.uci_list([]));
+	});
+
+	it('makes a single option a list of one, and a missing or empty one an empty list', () => {
+		assert.match([ 'a' ], config.uci_list('a'));
+		assert.match([], config.uci_list(null));
+		assert.match([], config.uci_list(''));
 	});
 });
 

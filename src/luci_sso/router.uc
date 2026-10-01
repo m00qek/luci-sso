@@ -209,7 +209,7 @@ export function handle(deps, config, request) {
 	// trusted reverse proxy skips both budgets: the proxy limits its clients,
 	// which luci-sso cannot tell apart. The global limits below still apply.
 	let key = ratelimit.client_key(request.client);
-	let rl = ratelimit.is_trusted_proxy(request.client, config ? config.trusted_proxy : null)
+	let rl = ratelimit.is_trusted_proxy(request.client, config ? config.trusted_ranges : null)
 		? ratelimit.exempt(deps, key)
 		: ratelimit.check(deps, key, path == "/");
 	if (!rl.allowed) {
