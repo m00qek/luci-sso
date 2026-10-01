@@ -2014,7 +2014,7 @@
 
 <h1 id="how-to-install-luci-sso">How to Install luci-sso<a class="headerlink" href="#how-to-install-luci-sso" title="Permanent link">&para;</a></h1>
 <p>This guide describes how to install <code>luci-sso</code> and its crypto backend on your OpenWrt router.</p>
-<p><code>luci-sso</code> is two packages: <code>luci-sso</code> itself, plus <strong>exactly one</strong> crypto backend package. <code>luci-sso</code> depends on a virtual <code>luci-sso-crypto</code> package that each backend provides, so the package manager will not install it alone, and will not pick a backend for you. All three backends install the same file, <code>/usr/lib/ucode/luci_sso/native.so</code>, so installing more than one fails.</p>
+<p><code>luci-sso</code> is two packages: <code>luci-sso</code> itself, plus <strong>exactly one</strong> crypto backend package. <code>luci-sso</code> depends on a virtual <code>luci-sso-crypto</code> package that each backend provides. Name the backend you want in the same command as <code>luci-sso</code>. If you name none, the package manager picks one itself: <code>opkg</code> (OpenWrt 24.10) picks the wolfSSL backend, and <code>apk</code> (OpenWrt 25.12) the mbedTLS one. All three backends install the same file, <code>/usr/lib/ucode/luci_sso/native.so</code>, so only one can be installed at a time.</p>
 <hr />
 <h2 id="1-choose-a-crypto-backend">1. Choose a crypto backend<a class="headerlink" href="#1-choose-a-crypto-backend" title="Permanent link">&para;</a></h2>
 <table>
@@ -2040,6 +2040,10 @@
 </tbody>
 </table>
 <p>Use <strong>mbedTLS</strong> unless you have a reason not to: it is lightweight and already present on most OpenWrt systems. Use <strong>wolfSSL</strong> as an alternative lightweight option, or <strong>OpenSSL</strong> if the router already uses it for other services such as VPNs. The package manager installs the library from the OpenWrt feeds if it is missing. For the trade-offs, see <a href="../../../explanation/crypto-backends/">About Crypto Backends</a>.</p>
+<div class="admonition note">
+<p class="admonition-title">The wolfSSL backend needs the exact <code>libwolfssl</code> it was built with</p>
+<p>OpenWrt names the wolfSSL library package after the wolfSSL version and build options, for example <code>libwolfssl5.9.1.e624513f</code>, and renames it whenever it updates wolfSSL on a release branch. The feeds of every point release of the branch then serve only the new name. A <code>luci-sso-crypto-wolfssl</code> package built before the update cannot be installed until it is rebuilt: <code>opkg</code> reports <code>cannot find dependency libwolfssl…</code>, and <code>apk</code> reports <code>libwolfssl… (no such package)</code>. Choose mbedTLS or OpenSSL then, or <a href="../build-from-source/">build the backend yourself</a>. Their libraries, <code>libmbedtls21</code> and <code>libopenssl3</code>, keep their names across updates.</p>
+</div>
 <hr />
 <h2 id="2-check-your-routers-architecture">2. Check your router's architecture<a class="headerlink" href="#2-check-your-routers-architecture" title="Permanent link">&para;</a></h2>
 <p>On the router, run:</p>
@@ -2085,6 +2089,7 @@ cp<span class="w"> </span>/tmp/feed.pub<span class="w"> </span><span class="s2">
 <div class="highlight"><pre><span></span><code>opkg<span class="w"> </span>update
 opkg<span class="w"> </span>install<span class="w"> </span>luci-sso<span class="w"> </span>luci-sso-crypto-mbedtls
 </code></pre></div>
+<p>Always name the backend: <code>opkg install luci-sso</code> alone picks the wolfSSL backend.</p>
 <p><code>opkg update</code> should report <code>Signature check passed.</code> for the feed. It also prints <code>has no valid architecture, ignoring</code> for the feed's packages built for other routers; that is harmless.</p>
 <p>On OpenWrt 25.12:</p>
 <div class="highlight"><pre><span></span><code>apk<span class="w"> </span>update
