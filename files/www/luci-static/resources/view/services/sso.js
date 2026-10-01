@@ -105,9 +105,12 @@ var DOCS = 'https://m00qek.github.io/luci-sso/0.10/';
 /* Shown for an empty list. */
 var NONE = '\u2014';
 
+/* A list as a table cell's content. The values come from UCI and rpcd, so
+ * they are text: LuCI puts a string returned by textvalue into the cell as
+ * HTML, but appends the strings of an array as text nodes. */
 function renderList(items) {
 	if (!items || !items.length) return NONE;
-	return items.join(', ');
+	return E('span', {}, [ items.join(', ') ]);
 }
 
 function docLink(path, text) {
@@ -162,7 +165,7 @@ function scopeWarning(scope) {
 	if (scopes.indexOf('groups') >= 0) return null;
 	var names = roleRules().filter(function(r) { return r.group.length; }).map(function(r) { return r.name; });
 	if (!names.length) return null;
-	return _('Roles %s match by group, but Scopes does not ask for <code>groups</code>. Most providers then send no groups, and those rules match nobody.')
+	return _('Roles %h match by group, but Scopes does not ask for <code>groups</code>. Most providers then send no groups, and those rules match nobody.')
 		.format(names.join(', '));
 }
 
@@ -172,7 +175,7 @@ function verifiedWarning(on) {
 	var names = roleRules().filter(function(r) { return r.email.length && !r.group.length && !r.sub.length; })
 		.map(function(r) { return r.name; });
 	if (!names.length) return null;
-	return _('Roles %s match by email only. They let a user in only if your identity provider sends <code>email_verified: true</code> for the address; otherwise match those users by group or subject.')
+	return _('Roles %h match by email only. They let a user in only if your identity provider sends <code>email_verified: true</code> for the address; otherwise match those users by group or subject.')
 		.format(names.join(', '));
 }
 
@@ -274,7 +277,7 @@ function awaitTest(job) {
 function renderTestResult(reply) {
 	if (!reply || reply.error || !Array.isArray(reply.checks))
 		return E('div', { 'class': 'alert-message warning luci-sso-test-summary' },
-			_('The connection test could not run: %s').format((reply && (reply.message || reply.error)) || _('no reply')));
+			[ _('The connection test could not run: %s').format((reply && (reply.message || reply.error)) || _('no reply')) ]);
 
 	var counts = { pass: 0, fail: 0, warn: 0, skip: 0 };
 	reply.checks.forEach(function(c) { counts[c.status] = (counts[c.status] || 0) + 1; });
@@ -292,8 +295,10 @@ function renderTestResult(reply) {
 		E('ul', { 'class': 'luci-sso-test-results' }, reply.checks.map(function(c) {
 			return E('li', { 'class': 'luci-sso-check', 'data-check': c.id, 'data-status': c.status }, [
 				E('strong', { 'class': 'luci-sso-check-status' }, '[' + statusLabel(c.status) + ']'), ' ',
-				E('span', { 'class': 'luci-sso-check-title' }, checkTitle(c.id)), ': ',
-				E('span', { 'class': 'luci-sso-check-message' }, c.message)
+				E('span', { 'class': 'luci-sso-check-title' }, [ checkTitle(c.id) ]), ': ',
+				/* The router's message quotes the provider's own values:
+				 * text, never markup. */
+				E('span', { 'class': 'luci-sso-check-message' }, [ c.message ])
 			]);
 		}))
 	]);
@@ -419,7 +424,7 @@ return view.extend({
 		}, this)).catch(L.bind(function(e) {
 			ui.changes.displayStatus('warning', [
 				E('h4', _('Role permissions not saved')),
-				E('p', e.message),
+				E('p', [ e.message ]),
 				E('div', { 'class': 'right' }, E('button', {
 					'class': 'btn cbi-button',
 					'click': L.bind(function() {
@@ -787,7 +792,7 @@ return view.extend({
 		s.modaledit = true;
 		s.nodescriptions = true;
 		s.modaltitle = function(section_id) {
-			return _('Role: %s').format(section_id);
+			return _('Role: %h').format(section_id);
 		};
 		s.handleAdd = function(ev, name) {
 			var ok = checkRoleName(name ? name.trim() : '');

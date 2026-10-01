@@ -191,6 +191,21 @@ describe('connection: check — issuer URL', () => {
 			assert.match("skip", r.checks[id].status, id);
 	});
 
+	it('quotes the provider\'s values with "<" and ">" as "?", so no message carries markup', () => {
+		let hostile = 'https://x/<img src=x onerror="window.__xss=1">';
+		let r = run(null, idp({ [DISC]: { status: 200, body: { ...f.MOCK_DISCOVERY, issuer: hostile } } }));
+		assert.match(true, index(r.checks.issuer_match.message, 'The provider declares "https://x/?img src=x onerror="window.__xss=1"?"') == 0,
+			r.checks.issuer_match.message);
+
+		let bad_jwks = f.MOCK_DISCOVERY.jwks_uri + "?<b>";
+		let j = run(null, idp({ [DISC]: { status: 200, body: { ...f.MOCK_DISCOVERY, jwks_uri: bad_jwks } }, [bad_jwks]: { status: 500, body: "" } }));
+		assert.match({ status: "fail", message: `${f.MOCK_DISCOVERY.jwks_uri}??b? answered HTTP 500.` }, j.checks.jwks);
+
+		// oidc.exchange_code keeps only an error code made of [A-Za-z0-9_.:-].
+		let t = run(null, idp({ [f.MOCK_DISCOVERY.token_endpoint]: { status: 400, body: { error: "<script>x</script>" } } }));
+		assert.match({ status: "warn", message: "Couldn't determine whether the Client ID and Client Secret are right: the provider answered HTTP 400." }, t.checks.client_credentials);
+	});
+
 	it('reports a different issuer without the near-miss hint', () => {
 		let r = run(null, idp({ [DISC]: { status: 200, body: { ...f.MOCK_DISCOVERY, issuer: "https://other.idp" } } }));
 		assert.match(contains({ status: "fail" }), r.checks.issuer_match);

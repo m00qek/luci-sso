@@ -48,12 +48,25 @@ const CHECKS = [ "issuer_https", "discovery", "issuer_match", "endpoints", "jwks
 const SHOWN_MAX = 200;
 
 /**
+ * A value from the provider, or the form, as a message quotes it: made safe
+ * for the log (encoding.log_safe), and with "<" and ">" as "?", which no
+ * URL or OAuth error code may hold unencoded. The settings page shows the
+ * messages as text; this is a second line of defence, should a page ever
+ * put one into HTML.
+ * @private
+ */
+function _shown(v) {
+	return replace(encoding.log_safe(v, SHOWN_MAX), /[<>]/g, "?");
+}
+
+/**
  * A readable reason for a failed request, from its transport cause, such as
  * "HTTP_REQUEST_FAILED (TIMED_OUT)".
  * @private
  */
 function _network_reason(cause, url) {
 	let c = (type(cause) == "string") ? cause : "";
+	url = _shown(url);
 	if (index(c, "TIMED_OUT") >= 0)
 		return `No answer from ${url} within ${HTTP_TIMEOUT_MS / 1000} seconds.`;
 	if (index(c, "CERT_UNTRUSTED") >= 0)
@@ -62,7 +75,7 @@ function _network_reason(cause, url) {
 		return `The certificate of ${url} does not cover that host name.`;
 	if (index(c, "CONNECTION_FAILED") >= 0 || index(c, "CONNECT_NOT_STARTED") >= 0)
 		return `Could not connect to ${url}. Check the address, DNS and the firewall.`;
-	return `Could not fetch ${url} (${encoding.log_safe(c, SHOWN_MAX) || "unknown error"}).`;
+	return `Could not fetch ${url} (${_shown(c) || "unknown error"}).`;
 }
 
 /**
@@ -156,7 +169,7 @@ export function check(deps, params) {
 		set("discovery", "fail", "Internal Issuer URL must be an HTTPS origin, such as https://10.0.0.5:8443, with no path.");
 		skip_rest([ "issuer_match", "endpoints", "jwks" ], "Skipped: the discovery document could not be fetched.");
 	} else {
-		let url = discovery.discovery_url(issuer, length(internal) ? internal : null).data;
+		let url = _shown(discovery.discovery_url(issuer, length(internal) ? internal : null).data);
 		let res = discovery.discover(tdeps, issuer, { internal_issuer_url: length(internal) ? internal : null, no_cache: true });
 		let d = res.details;
 		if (res.ok) {
@@ -176,11 +189,11 @@ export function check(deps, params) {
 			set("issuer_match", "fail", "The discovery document declares no issuer.");
 		} else if (res.error == DISCOVERY_ISSUER_MISMATCH) {
 			set("discovery", "pass", `Fetched the discovery document from ${url}.`);
-			let declared = (type(d) == "object" && type(d.declared) == "string") ? `"${encoding.log_safe(d.declared, SHOWN_MAX)}"` : "no usable issuer";
+			let declared = (type(d) == "object" && type(d.declared) == "string") ? `"${_shown(d.declared)}"` : "no usable issuer";
 			let hint = (type(d) == "object" && d.near_miss)
 				? " They differ only in a trailing slash, letter case or default port: set Issuer URL to exactly the declared value."
 				: " If this is the right provider, set Issuer URL to exactly the declared value.";
-			set("issuer_match", "fail", `The provider declares ${declared}, but Issuer URL is "${encoding.log_safe(issuer, SHOWN_MAX)}".${hint}`);
+			set("issuer_match", "fail", `The provider declares ${declared}, but Issuer URL is "${_shown(issuer)}".${hint}`);
 		} else if (res.error == DISCOVERY_MISSING_ENDPOINT) {
 			set("discovery", "pass", `Fetched the discovery document from ${url}.`);
 			set("issuer_match", "pass", "The provider declares exactly this issuer.");
@@ -221,9 +234,9 @@ export function check(deps, params) {
 		} else if (res.error == JWKS_NETWORK_ERROR) {
 			set("jwks", "fail", _network_reason(d, uri));
 		} else if (res.error == JWKS_FETCH_FAILED) {
-			set("jwks", "fail", `${uri} answered HTTP ${(type(d) == "object") ? d.upstream_status : null}.`);
+			set("jwks", "fail", `${_shown(uri)} answered HTTP ${(type(d) == "object") ? d.upstream_status : null}.`);
 		} else if (res.error == INVALID_JWKS_FORMAT) {
-			set("jwks", "fail", `${uri} did not return a JWK Set (a JSON object with a "keys" array).`);
+			set("jwks", "fail", `${_shown(uri)} did not return a JWK Set (a JSON object with a "keys" array).`);
 		} else {
 			set("jwks", "fail", `The JWK Set could not be fetched (${res.error}).`);
 		}
@@ -262,7 +275,7 @@ export function check(deps, params) {
 			let probe_deps = { ...tdeps, log: (level, msg) => log("info", msg) };
 			let res = oidc.exchange_code(probe_deps, cfg, backchannel, code, pkce.data.verifier, null);
 			let d = (type(res.details) == "object") ? res.details : {};
-			let answer = d.oauth_error ? d.oauth_error : `HTTP ${d.upstream_status}`;
+			let answer = d.oauth_error ? _shown(d.oauth_error) : `HTTP ${d.upstream_status}`;
 			if (res.ok) {
 				set("client_credentials", "warn", "Couldn't determine: the token endpoint accepted a made-up authorization code, which it never should. Check the provider.");
 			} else if (res.error == OIDC_INVALID_GRANT) {
