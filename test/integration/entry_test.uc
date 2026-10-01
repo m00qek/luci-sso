@@ -121,6 +121,37 @@ describe('entry: run', () => {
 		});
 	});
 
+	it('exempts the address in trusted_proxy from the per-client limits, and only that one', () => {
+		// Login starts through entry.run with trusted_proxy read from UCI. The
+		// IdP is down, so each start fails with 502 after the rate limit.
+		let uci = { ...ENABLED_UCI, default: { ...ENABLED_UCI.default, trusted_proxy: [ "127.0.0.1" ] } };
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": uci } },
+		               http_client: { data: { "https://idp.com/.well-known/openid-configuration": { status: 503, body: "" } } },
+		               clock: { data: { now: NOW } } }, (deps) => {
+			let from = (addr) => {
+				let wd = web_deps({ PATH_INFO: "/", REMOTE_ADDR: addr });
+				entry.run(deps, wd);
+				return wd.out();
+			};
+			for (let i = 0; i < 15; i++)
+				assert.match(-1, index(from("127.0.0.1"), "Status: 429"), `trusted request ${i}`);
+			for (let i = 0; i < 10; i++) from("192.0.2.50");
+			assert.match(truthy(), index(from("192.0.2.50"), "Status: 429") >= 0, "another address is limited");
+		});
+	});
+
+	it('refuses a trusted_proxy entry that is not an address, with a 500 and the option named', () => {
+		let uci = { ...ENABLED_UCI, default: { ...ENABLED_UCI.default, trusted_proxy: [ "localhost" ] } };
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": uci } }, clock: { data: { now: NOW } } }, (deps) => {
+			let logs = [];
+			deps.log = (l, m) => push(logs, [ l, m ]);
+			let wd = web_deps({ PATH_INFO: "/", REMOTE_ADDR: "127.0.0.1" });
+			entry.run(deps, wd);
+			assert.match(truthy(), index(wd.out(), "Status: 500") >= 0);
+			assert.match(1, length(filter(logs, (l) => l[1] == "Configuration rejected: trusted_proxy entries must be IP addresses or CIDR ranges")));
+		});
+	});
+
 	it('loads config and routes when SSO is enabled', () => {
 		// config.load succeeds → router.handle runs against the live config; the
 		// action=enabled short-circuit reflects the loaded (enabled) state.

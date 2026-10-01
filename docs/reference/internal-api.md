@@ -18,6 +18,7 @@ For the rationale behind the module boundaries, see [About the Architecture](../
 | [`luci_sso.ubus`](#luci_ssoubus) | The `rpcd` session and the access-token replay registry. |
 | [`luci_sso.rpcd_login`](#luci_ssorpcd_login) | The roles' `rpcd` login entries and `rpcd`'s rules for them. |
 | [`luci_sso.ratelimit`](#luci_ssoratelimit) | Per-client request budgets. |
+| [`luci_sso.netaddr`](#luci_ssonetaddr) | IP address and CIDR range parsing. |
 | [`luci_sso.crypto`](#luci_ssocrypto) | Facade over the crypto wrappers. |
 | [`luci_sso.encoding`](#luci_ssoencoding) | Pure encoding and URL helpers. |
 | [`luci_sso.result`](#luci_ssoresult) | The Result constructors. |
@@ -131,7 +132,7 @@ Dispatches one request. `config` is the result of `config.load()`, or `null` whe
 | `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. |
 | anything else | `NOT_FOUND` (`404`). |
 
-Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`). With a `null` config, every path except the probe fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way.
+Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`), through `ratelimit.check()`. When `ratelimit.is_trusted_proxy(request.client, config.trusted_proxy)` is true, it calls `ratelimit.exempt()` instead, which spends nothing; the rest of the request is handled as for any client. With a `null` config, every path except the probe fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way.
 
 ---
 
@@ -274,6 +275,7 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
+| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (empty when unset). Each entry must pass `netaddr.parse_cidr()`, or the load fails with `CONFIG_ERROR`. |
 | `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
 
 ### `find_role_for_user(config, claims)` → `Result<{role_name, also_matched}>`
@@ -449,16 +451,46 @@ Per-client request budgets, stored in `STATE_FILE`. `deps: { fs, clock, native, 
 | Export | Value |
 | :--- | :--- |
 | `STATE_FILE` | `"/var/run/luci-sso/ratelimit.json"` |
-| `LIMITS` | `{ login: { requests: 10, window: 300 }, client: { requests: 30, window: 60 }, tracked: 256 }` |
+| `LIMITS` | `{ login: { requests: 10, window: 300 }, client: { requests: 30, window: 60 }, tracked: 256, notice: 3600 }` |
 | `UNKNOWN_CLIENT` | `"unknown"`, the shared key for unparseable addresses |
 
 ### `client_key(addr)` → `string`
 
-Maps `REMOTE_ADDR` to a key: `"v4:<address>"` for IPv4 and IPv4-mapped IPv6, `"v6:<first four groups>"` (the `/64`) for IPv6, `UNKNOWN_CLIENT` otherwise.
+Maps `REMOTE_ADDR` to a key: `"v4:<address>"` for IPv4 and IPv4-mapped IPv6, `"v6:<first four groups>"` (the `/64`) for IPv6, `UNKNOWN_CLIENT` otherwise. A zone is ignored.
+
+### `is_trusted_proxy(addr, trusted)` → `bool`
+
+Whether `REMOTE_ADDR` falls in an entry of `trusted`, the `trusted_proxy` list (`netaddr.contains()`). `false` for an empty or missing list and for an address `netaddr.parse()` refuses; entries `netaddr.parse_cidr()` refuses are skipped. An address with a zone (`fe80::1%eth0`) is never trusted; an IPv4-mapped address is its IPv4 address. No header is read.
 
 ### `check(deps, key, is_login)` → `{allowed, retry_after, budget}`
 
-Counts one request for `key` (and one login when `is_login`), saves the state, and returns whether it is allowed. When not, `budget` is `"login"` or `"client"` and `retry_after` is the seconds until that window ends.
+Counts one request for `key` (and one login when `is_login`), saves the state, and returns whether it is allowed. When not, `budget` is `"login"` or `"client"` and `retry_after` is the seconds until that window ends. Keeps the `notice` key (below) while it is less than `LIMITS.notice` seconds old; it is not counted as a client.
+
+### `exempt(deps, key)` → `{allowed, retry_after, budget}`
+
+For a trusted proxy's request: always `{ allowed: true, budget: null, retry_after: 0 }`, and counts nothing. Logs `Request from trusted proxy [id: …] skips the per-client rate limits (trusted_proxy); not logged again for 3600s` at `info` when the state file's `notice` time is missing or at least `LIMITS.notice` seconds old (or in the future), then writes the current time there. The state file is written only then.
+
+---
+
+## `luci_sso.netaddr`
+
+IP address and CIDR range parsing. Pure. An address is `{ family: 4, parts: [4 bytes] }` or `{ family: 6, parts: [8 groups] }`; an IPv4-mapped IPv6 address is always returned as its IPv4 address.
+
+### `parse(s)` → `address` or `null`
+
+A bare IPv4 or IPv6 address. No whitespace, brackets, port, zone or prefix.
+
+### `parse_cidr(s)` → `{family, parts, prefix}` or `null`
+
+An address (`prefix` 32 or 128) or `address/prefix`, with `prefix` 0–32 or 0–128. No netmask. An IPv4-mapped IPv6 range of `/96` or longer becomes the IPv4 range.
+
+### `contains(range, addr)` → `bool`
+
+Whether `addr` is in `range`. Different families, or a `null` either, never match.
+
+### `format(addr)` → `string`
+
+Dotted IPv4, or the eight IPv6 groups in lowercase hex, uncompressed.
 
 ---
 

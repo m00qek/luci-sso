@@ -6,6 +6,7 @@
 
 import * as Result from 'luci_sso.result';
 import * as encoding from 'luci_sso.encoding';
+import * as netaddr from 'luci_sso.netaddr';
 import { SSO_DISABLED, CONFIG_ERROR, UCI_ERROR } from 'luci_sso.errors';
 
 /**
@@ -111,6 +112,17 @@ export function load(deps) {
 			return Result.err(CONFIG_ERROR, "internal_issuer_url must be an origin (scheme://host[:port]) with no path, query or fragment");
 	}
 
+	// Reverse proxies whose requests skip the per-client rate limits
+	// (ratelimit.is_trusted_proxy). An entry that is not an address or a CIDR
+	// range is refused rather than skipped: a typo would otherwise quietly
+	// leave the proxy, and so every user behind it, on one shared budget.
+	let trusted_proxy = (type(oidc_cfg.trusted_proxy) == "array") ? oidc_cfg.trusted_proxy
+		: (oidc_cfg.trusted_proxy ? [ oidc_cfg.trusted_proxy ] : []);
+	for (let t in trusted_proxy) {
+		if (!netaddr.parse_cidr(t))
+			return Result.err(CONFIG_ERROR, "trusted_proxy entries must be IP addresses or CIDR ranges");
+	}
+
 	return Result.ok({
 		issuer_url: oidc_cfg.issuer_url,
 		internal_issuer_url: oidc_cfg.internal_issuer_url || oidc_cfg.issuer_url,
@@ -122,6 +134,7 @@ export function load(deps) {
 		// On unless explicitly turned off, so a config written before the
 		// option existed gets the safe behaviour.
 		require_email_verified: !(oidc_cfg.require_email_verified in [ "0", "no", "off", "false" ]),
+		trusted_proxy: trusted_proxy,
 		roles: roles
 	});
 };

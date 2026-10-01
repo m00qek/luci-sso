@@ -91,9 +91,9 @@ define Package/$(PKG_NAME)/prerm
 #!/bin/sh
 # Shell variables are written $$name: this block is expanded by make first.
 
-# Clean up cron job
-sed -i '/luci-sso-cleanup/d' /etc/crontabs/root 2>/dev/null
-[ -x "/etc/init.d/cron" ] && /etc/init.d/cron restart
+# Remove the cleanup cron job: only its active line, never a comment that
+# mentions it. The same script added it (uci-defaults 10-luci-sso-setup).
+[ -x /usr/sbin/luci-sso-cleanup ] && /usr/sbin/luci-sso-cleanup --remove-cron
 
 # Remove the login button from every LuCI login template. An upgrade puts it
 # back: the new package's uci-defaults script runs luci-sso-repatch again.

@@ -642,6 +642,16 @@ return view.extend({
 		};
 		o.placeholder = 'https://' + window.location.hostname + ':8443';
 
+		o = s.taboption('advanced', form.DynamicList, 'trusted_proxy', _('Trusted Proxy'),
+		        _('Only if LuCI sits behind a reverse proxy on this address. Requests from it skip luci-sso\'s per-client limits, so the proxy must limit clients itself. See %s.')
+		            .format(docLink('how-to/sysadmin/reverse-proxy/', _('running LuCI behind a reverse proxy'))));
+		/* What the backend accepts: an IPv4 or IPv6 address, or a range with
+		 * a prefix length. No netmask, port or zone. */
+		o.datatype = 'or(ipaddr("nomask"),cidr)';
+		o.optional = true;
+		o.rmempty = true;
+		o.placeholder = '127.0.0.1';
+
 		/* ------------------------------------------------------------------ */
 		/* Roles                                                                */
 		/* ------------------------------------------------------------------ */

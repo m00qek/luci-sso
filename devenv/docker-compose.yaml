@@ -128,6 +128,7 @@ services:
       - ../files/usr/share/rpcd/ucode/luci-sso.uc:/usr/share/rpcd/ucode/luci-sso.uc:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
       - ../files/usr/sbin/luci-sso-repatch:/usr/sbin/luci-sso-repatch:ro
+      - ../files/usr/sbin/luci-sso-cleanup:/usr/sbin/luci-sso-cleanup:ro
       - ../bin/lib/${SDK_ARCH}/${SDK_VERSION}:/luci_sso/backends:ro
       - ../test:/usr/share/luci-sso/test:ro
 

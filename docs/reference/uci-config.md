@@ -20,6 +20,7 @@ The connection to the IdP. A missing or invalid required option makes every requ
 | `redirect_uri` | string (URL) | The callback URL registered with the IdP: `https://<router-host>/cgi-bin/luci-sso/callback`. Must use `https://` and exactly match what the IdP client is configured to accept. Unset in the shipped configuration; the LuCI settings page then suggests one from the browser's host name, without port. Enabling SSO without it fails with `CONFIG_ERROR` (`redirect_uri is mandatory and must use HTTPS`). |
 | `scope` | string | Optional. Space-separated list of OIDC scopes to request. Default: `openid profile email`. Add `groups` if the IdP supports group claims and role mapping by group is required. |
 | `require_email_verified` | boolean | Optional. Default: `1`, also when the option is absent. While on, an `email` rule matches only if the IdP's `email_verified` claim is the JSON boolean `true`. `0`, `no`, `off` or `false` turns it off. See [notes](#oidc-section-notes). |
+| `trusted_proxy` | list (string) | Optional. Default: empty. The addresses of reverse proxies in front of `uhttpd`, as IPv4 or IPv6 addresses or CIDR ranges (`127.0.0.1`, `::1`, `2001:db8::/48`). A request from one of them skips the per-client rate limits; the proxy must limit its clients itself. See [notes](#oidc-section-notes). |
 | `clock_tolerance` | integer | Required. Allowed clock skew in seconds, applied to the ID Token's `exp`, `iat` and `nbf` checks and to the login handshake's expiry. Valid range: `0`–`3600`. See [notes](#oidc-section-notes). |
 
 ### OIDC section notes
@@ -36,6 +37,14 @@ The connection to the IdP. A missing or invalid required option makes every requ
     - An unverified email is ignored for matching, and the log says `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified)`. `group` rules still match. A user who matches no role is refused with `USER_NOT_AUTHORIZED`.
     - The session's `oidc_user` label holds only a verified email, whether the option is on or off. An unverified email is not stored.
     - What each IdP sends: [Provider Compatibility](provider-compatibility.md#verified-email). Why: [About Roles and Permissions](../explanation/roles-and-permissions.md#verified-email-addresses).
+- **`trusted_proxy`** only exempts requests from the [per-client rate limits](http-api.md#trusted-proxies).
+    - A request is exempt when its `REMOTE_ADDR`, the address of the host that connected to `uhttpd`, is in the list. No request header is read: `uhttpd` does not pass `X-Forwarded-For` to CGI scripts.
+    - An exempt request spends neither the login-start budget (10 per 5 minutes) nor the request budget (30 a minute). The limits that count every client together, such as the 500 logins in progress, still apply.
+    - List only addresses that no client but the proxy can send from: `127.0.0.1` or `::1` for a proxy on the router. A LAN range would exempt every device on it. See [Trusted proxies](../explanation/threat-model.md#trusted-proxies).
+    - An entry is an address or a range with a prefix length: no netmask (`/255.0.0.0`), port or zone (`%eth0`). An entry that is neither is rejected with `CONFIG_ERROR` (`trusted_proxy entries must be IP addresses or CIDR ranges`).
+    - An IPv4-mapped IPv6 address (`::ffff:192.0.2.1`) is the IPv4 address it carries, in the list and in `REMOTE_ADDR`. An IPv6 range never contains an IPv4 address. A `REMOTE_ADDR` with a zone, such as a link-local `fe80::1%br-lan`, is never exempt.
+    - The first exempted request logs `Request from trusted proxy [id: …] skips the per-client rate limits (trusted_proxy); not logged again for 3600s`, and then at most one an hour.
+    - See [How to Run LuCI Behind a Reverse Proxy](../how-to/sysadmin/reverse-proxy.md#4-exempt-the-proxy-from-luci-ssos-per-client-limits).
 - **`clock_tolerance`** has no built-in code default: if it is absent, the service reports `CONFIG_ERROR`. The shipped UCI configuration sets it to `60`.
 
 ---
@@ -183,6 +192,7 @@ Edits `config oidc 'default'`. Two tabs; the **Provider** tab is in the order of
 | Advanced | **Require Verified Email** | `require_email_verified` | Checkbox; saved as `1` or `0`. Ticked when the option is unset, and then saved as `1`. While ticked, warns, without blocking, about the roles that have an `email` rule and neither a `group` nor a `sub` rule. |
 | Advanced | **Clock Tolerance** | `clock_tolerance` | Required integer, `0`–`3600`. Form default: `60`. |
 | Advanced | **Internal Issuer URL** | `internal_issuer_url` | Optional; must start with `https://`. Placeholder: `https://<browser host>:8443`. The form does not check that the value is an origin with no path; a path is rejected at login with `CONFIG_ERROR`. |
+| Advanced | **Trusted Proxy** | `trusted_proxy` | Optional list; one address or CIDR range per entry. Rejects anything else, such as a host name, a netmask or a port. Placeholder: `127.0.0.1`. |
 
 The warnings are computed from the roles as the page holds them, and follow edits to **Scopes**, **Require Verified Email** and the roles.
 
@@ -229,6 +239,8 @@ config oidc 'default'
     option scope 'openid profile email'
     option clock_tolerance '60'
     option require_email_verified '1'
+    # Only behind a reverse proxy on the router:
+    # list trusted_proxy '127.0.0.1'
 
 config role 'admin'
     list email 'admin@example.com'

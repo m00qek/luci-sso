@@ -101,7 +101,7 @@ Values that come from the IdP or the browser, such as the declared issuer or the
 
 In discovery lines, `[id: …]` is the first 16 hex characters of the SHA-256 of `issuer_url`, exactly as configured. In JWKS lines, it is the same hash of the normalized `jwks_uri`: scheme and host in lower case, no `:443`, no trailing slash. In rate-limit lines, `[id: …]` is the same kind of hash of the client key, so no address is logged.
 
-Every hashed identifier (`[id: …]`, `[sub_id: …]`, `[oidc_id: …]`, `[session_id: …]`) reads `[INVALID]` when its value is missing, is not a string, or is shorter than 8 characters, and `[ERROR]` if hashing fails.
+Every hashed identifier (`[id: …]`, `[sub_id: …]`, `[oidc_id: …]`, `[session_id: …]`) reads `[INVALID]` when its value is missing, is not a string, or is shorter than 8 characters, and `[ERROR]` if hashing fails. One exception: `[oidc_id: …]` reads `(no email)` for a user without a verified email, which is not an error; a verified email shorter than 8 characters still reads `[INVALID]`.
 
 To check which URL an id belongs to, hash the candidate on the router:
 
@@ -127,7 +127,7 @@ These occur on the first request that needs the configuration.
 
 Notes:
 
-- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, or when no role has an email or group. The `<reason>` names the option but never its value.
+- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, when a `trusted_proxy` entry is not an IP address or CIDR range, or when no role has an email or group. The `<reason>` names the option but never its value.
 
 ---
 
@@ -392,7 +392,7 @@ Logged by the CGI script under `luci-sso[<pid>]`.
 | :--- | :--- | :--- |
 | `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | `require_email_verified` is on and the email arrived without `email_verified: true`, so only the user's groups were matched. Followed by `matched no roles` when no group matched. See [Provider Compatibility](provider-compatibility.md#verified-email). |
 | `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | The user got `<role>`. When other roles matched too, the line reads `mapped to role '<role>', the first match; also matched: <role>, <role>`. |
-| `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. `[oidc_id: …]` is a hash of the user's verified email, or `[INVALID]` for a user without one: the IdP sent no email, or did not mark it as verified. |
+| `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. `[oidc_id: …]` is a hash of the user's verified email, or `(no email)` for a user without one: the IdP sent no email, or did not mark it as verified. The user's other lines name them by `[sub_id: …]`. |
 | `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | A plain name in the entry's `read` or `write` list matches no access group. It grants nothing. Globs and negations are not checked. |
 | `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | The role in `/etc/config/luci-sso` still has `read` or `write` options, which grant nothing. |
 | `Ignoring role '<role>': missing email, group or sub list` | warn | The role has no `email`, `group` or `sub` value. |
@@ -450,6 +450,7 @@ Every line `luci-sso` writes to the system log, in the order a login meets them.
 | `Router crash: <message>`, followed by a stack trace | err | An unexpected exception, answered with a 500 page. File a bug with the trace. |
 | `Login rate limit exceeded for client [id: …]: <count> in 300s [limit: 10]` | warn | Before `[429] TOO_MANY_REQUESTS`. See [System Errors](#system-errors). |
 | `Request rate limit exceeded for client [id: …]: <count> in 60s [limit: 30]` | warn | Before `[429] TOO_MANY_REQUESTS`. See [System Errors](#system-errors). |
+| `Request from trusted proxy [id: …] skips the per-client rate limits (trusted_proxy); not logged again for 3600s` | info | A request came from an address in `trusted_proxy`, so neither per-client budget was spent; the limits that count every client together still apply. Logged on the first such request, then at most once an hour, whichever proxy it is for. `[id: …]` is the hash of the proxy's client key. Expected behind a reverse proxy; if there is none, remove the option. See [Trusted proxies](http-api.md#trusted-proxies). |
 | `Rate limit state file is corrupt; starting from empty` | warn | `/var/run/luci-sso/ratelimit.json` could not be read as JSON, so every client's count starts again from zero. The request goes on. |
 | `Rate limit state not saved: CSPRNG failure` | err | This request's counts were not saved, so while this lasts the per-client budgets are not enforced across requests. The random number generator failed; see `CRYPTO_INIT_FAILED` in [System Errors](#system-errors). |
 | `Failed to write rate limit state file` | err | As above, because the new counts could not be written. Check free space in `/var/run/luci-sso/`. |

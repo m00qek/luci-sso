@@ -205,8 +205,13 @@ export function handle(deps, config, request) {
 
 	// Per-client rate limit before anything that writes handshake state or
 	// calls the IdP. GET / (the action=enabled probe returned above) starts a
-	// login and also spends the client's login budget.
-	let rl = ratelimit.check(deps, ratelimit.client_key(request.client), path == "/");
+	// login and also spends the client's login budget. A request from a
+	// trusted reverse proxy skips both budgets: the proxy limits its clients,
+	// which luci-sso cannot tell apart. The global limits below still apply.
+	let key = ratelimit.client_key(request.client);
+	let rl = ratelimit.is_trusted_proxy(request.client, config ? config.trusted_proxy : null)
+		? ratelimit.exempt(deps, key)
+		: ratelimit.check(deps, key, path == "/");
 	if (!rl.allowed) {
 		return Result.err(TOO_MANY_REQUESTS, { http_status: 429, retry_after: rl.retry_after });
 	}

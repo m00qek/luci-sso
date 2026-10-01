@@ -1,25 +1,83 @@
 #!/bin/sh
-# luci-sso: Token Registry Reaper
-# This script removes atomic lock directories for OIDC tokens that have 
-# likely expired (older than 24 hours) to prevent tmpfs exhaustion.
+# luci-sso-cleanup: remove expired luci-sso state, or add or remove the cron
+# job that runs this script.
+#
+#   luci-sso-cleanup                 remove expired token locks and handshakes
+#   luci-sso-cleanup --install-cron  add the daily job to root's crontab, unless
+#                                    an active line already runs this script
+#   luci-sso-cleanup --remove-cron   remove every active line that runs this
+#                                    script; comments are kept
+#
+# The package's setup script (uci-defaults) installs the job and its
+# pre-removal script removes it, both through this script, so the two agree
+# on which lines are the job.
+#
+# Exit status: 0 on success; 2 on a usage error.
 
-REGISTRY="/var/run/luci-sso/tokens"
-STATES="/var/run/luci-sso"
+CRONTAB="/etc/crontabs/root"
+CRON_JOB="0 4 * * * /usr/sbin/luci-sso-cleanup"
 
-if [ -d "$REGISTRY" ]; then
-    # 1. Reap Expired Tokens (24 hours)
-    # Find directories (-type d) older than 1440 minutes and remove them
-    find "$REGISTRY" -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec rmdir {} + 2>/dev/null
-fi
+# An active crontab line that runs this script: its first non-blank character
+# is not `#`, and `luci-sso-cleanup` appears as a command name, after a blank
+# or a `/`. A comment that mentions the script is not the job.
+CRON_LINE='^[[:space:]]*[^#[:space:]].*[[:space:]/]luci-sso-cleanup([^[:alnum:]_.-]|$)'
 
-if [ -d "$STATES" ]; then
-    # 2. Reap Stale Handshakes (60 minutes)
-    # Handshakes are only valid for ~5-10 minutes. 60 minutes is safe for cleanup.
-    # We only target handshake_*.json files to avoid touching discovery/jwks caches.
-    find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json" -mmin +60 -delete 2>/dev/null
-    
-    # 3. Reap Orphaned Atomic Writes (60 minutes)
-    # Cleans up failed renames (.tmp) or failed consumptions (.consumed)
-    find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json.consumed" -mmin +60 -delete 2>/dev/null
-    find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json.tmp" -mmin +60 -delete 2>/dev/null
-fi
+usage() {
+	echo "Usage: luci-sso-cleanup [--install-cron | --remove-cron]"
+	echo "Remove expired luci-sso state, or add or remove its daily cron job."
+}
+
+restart_cron() {
+	[ -x /etc/init.d/cron ] && /etc/init.d/cron restart >/dev/null 2>&1
+	return 0
+}
+
+install_cron() {
+	mkdir -p "${CRONTAB%/*}"
+	touch "$CRONTAB"
+	grep -qE "$CRON_LINE" "$CRONTAB" && return 0
+	# If the last line has no newline, the job would be appended to it,
+	# perhaps to a comment.
+	[ -s "$CRONTAB" ] && [ -n "$(tail -c 1 "$CRONTAB")" ] && echo >>"$CRONTAB"
+	echo "$CRON_JOB" >>"$CRONTAB"
+	restart_cron
+}
+
+remove_cron() {
+	[ -f "$CRONTAB" ] || return 0
+	grep -qE "$CRON_LINE" "$CRONTAB" || return 0
+	sed -i -E "\\,${CRON_LINE},d" "$CRONTAB"
+	restart_cron
+}
+
+reap() {
+	REGISTRY="/var/run/luci-sso/tokens"
+	STATES="/var/run/luci-sso"
+
+	if [ -d "$REGISTRY" ]; then
+		# 1. Reap Expired Tokens (24 hours)
+		# Find directories (-type d) older than 1440 minutes and remove them
+		find "$REGISTRY" -mindepth 1 -maxdepth 1 -type d -mmin +1440 -exec rmdir {} + 2>/dev/null
+	fi
+
+	if [ -d "$STATES" ]; then
+		# 2. Reap Stale Handshakes (60 minutes)
+		# Handshakes are only valid for ~5-10 minutes. 60 minutes is safe for cleanup.
+		# We only target handshake_*.json files to avoid touching discovery/jwks caches.
+		find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json" -mmin +60 -delete 2>/dev/null
+
+		# 3. Reap Orphaned Atomic Writes (60 minutes)
+		# Cleans up failed renames (.tmp) or failed consumptions (.consumed)
+		find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json.consumed" -mmin +60 -delete 2>/dev/null
+		find "$STATES" -mindepth 1 -maxdepth 1 -type f -name "handshake_*.json.tmp" -mmin +60 -delete 2>/dev/null
+	fi
+	return 0
+}
+
+case "$1" in
+	"") reap ;;
+	--install-cron) install_cron ;;
+	--remove-cron) remove_cron ;;
+	-h|--help) usage ;;
+	*) usage >&2; exit 2 ;;
+esac

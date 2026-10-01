@@ -44,7 +44,7 @@ test.describe('SSO settings: layout', () => {
         expect(await fieldOrder(page, 'provider')).toEqual(
             ['issuer_url', 'client_id', 'client_secret', 'redirect_uri', 'scope', '_test_connection', 'enabled']);
         expect(await fieldOrder(page, 'advanced')).toEqual(
-            ['require_email_verified', 'clock_tolerance', 'internal_issuer_url']);
+            ['require_email_verified', 'clock_tolerance', 'internal_issuer_url', 'trusted_proxy']);
 
         await expect(page.locator('div[data-tab="provider"]')).toHaveAttribute('data-tab-active', 'true');
         await expect(page.locator('div[data-tab="advanced"]')).toHaveAttribute('data-tab-active', 'false');
