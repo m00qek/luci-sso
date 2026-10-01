@@ -95,7 +95,7 @@ make fuzzer-test CRYPTO_LIB=boringssl
 To allow users to install your backend with the package manager (`opkg` on OpenWrt 24.10, `apk` on 25.12), you must add a new package definition to `openwrt/luci-sso/Makefile`.
 
 ### Define the Package
-Add a new `Package/luci-sso-crypto-xxx` section. It must `PROVIDES:=luci-sso-crypto` so the main package can depend on it.
+Add a new `Package/luci-sso-crypto-xxx` section. It must provide `luci-sso-crypto $(LUCI_SSO_CRYPTO_ALIAS)`, like the OpenSSL and wolfSSL backends, so `luci-sso` can depend on it. Leave `DEFAULT_VARIANT:=1` to the mbedTLS backend: it is the one installed when the user names none.
 
 ```makefile
 define Package/$(PKG_NAME)-crypto-boringssl
@@ -103,9 +103,11 @@ define Package/$(PKG_NAME)-crypto-boringssl
   CATEGORY:=Utilities
   TITLE:=BoringSSL backend for $(PKG_NAME)
   DEPENDS:=+libucode +libboringssl
-  PROVIDES:=luci-sso-crypto
+  PROVIDES:=luci-sso-crypto $(LUCI_SSO_CRYPTO_ALIAS)
 endef
 ```
+
+`apk` (OpenWrt 25.12) installs the default by provider priority, so any name works there. `opkg` (OpenWrt 24.10) has no provider priority: on 24.10, `luci-sso` depends on `luci-sso-crypto-mbedtls`, which `$(LUCI_SSO_CRYPTO_ALIAS)` makes every backend provide. A backend named in `opkg install luci-sso luci-sso-crypto-xxx` ties with the mbedTLS backend, and `opkg` takes the name that sorts last. So the name must sort after `luci-sso-crypto-mbedtls`. A name that sorts before it, such as `luci-sso-crypto-boringssl`, installs on 24.10 only when the backend is named first, `opkg install luci-sso-crypto-boringssl luci-sso`, or installed before `luci-sso`.
 
 ### Implement the Install Macro
 The install macro must copy your compiled library to `/usr/lib/ucode/luci_sso/native.so` on the target system. Note the rename to `native.so` — this is how the ucode layer remains backend-agnostic.

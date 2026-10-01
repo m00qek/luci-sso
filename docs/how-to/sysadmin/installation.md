@@ -2,7 +2,7 @@
 
 This guide describes how to install `luci-sso` and its crypto backend on your OpenWrt router.
 
-`luci-sso` is two packages: `luci-sso` itself, plus **exactly one** crypto backend package. `luci-sso` depends on a virtual `luci-sso-crypto` package that each backend provides. Name the backend you want in the same command as `luci-sso`. If you name none, the package manager picks one itself: `opkg` (OpenWrt 24.10) picks the wolfSSL backend, and `apk` (OpenWrt 25.12) the mbedTLS one. All three backends install the same file, `/usr/lib/ucode/luci_sso/native.so`, so only one can be installed at a time.
+`luci-sso` is two packages: `luci-sso` itself, plus **exactly one** crypto backend package. Installing `luci-sso` alone installs the mbedTLS backend, `luci-sso-crypto-mbedtls`, with it. To use another backend, name it in the same command, and the package manager installs it instead of mbedTLS. All three backends install the same file, `/usr/lib/ucode/luci_sso/native.so`, so only one can be installed at a time.
 
 ---
 
@@ -14,7 +14,7 @@ This guide describes how to install `luci-sso` and its crypto backend on your Op
 | `luci-sso-crypto-wolfssl` | wolfSSL |
 | `luci-sso-crypto-openssl` | OpenSSL |
 
-Use **mbedTLS** unless you have a reason not to: it is lightweight and already present on most OpenWrt systems. Use **wolfSSL** as an alternative lightweight option, or **OpenSSL** if the router already uses it for other services such as VPNs. The package manager installs the library from the OpenWrt feeds if it is missing. For the trade-offs, see [About Crypto Backends](../../explanation/crypto-backends.md).
+Use **mbedTLS**, the default, unless you have a reason not to: it is lightweight and already present on most OpenWrt systems. Use **wolfSSL** as an alternative lightweight option, or **OpenSSL** if the router already uses it for other services such as VPNs. The package manager installs the library from the OpenWrt feeds if it is missing. For the trade-offs, see [About Crypto Backends](../../explanation/crypto-backends.md).
 
 !!! note "The wolfSSL backend needs the exact `libwolfssl` it was built with"
     OpenWrt names the wolfSSL library package after the wolfSSL version and build options, for example `libwolfssl5.9.1.e624513f`, and renames it whenever it updates wolfSSL on a release branch. The feeds of every point release of the branch then serve only the new name. A `luci-sso-crypto-wolfssl` package built before the update cannot be installed until it is rebuilt: `opkg` reports `cannot find dependency libwolfssl…`, and `apk` reports `libwolfssl… (no such package)`. Choose mbedTLS or OpenSSL then, or [build the backend yourself](build-from-source.md). Their libraries, `libmbedtls21` and `libopenssl3`, keep their names across updates.
@@ -64,7 +64,7 @@ Adding the feed's signing key needs a shell: LuCI's **Software** page can edit t
         echo 'https://m00qek.github.io/packages.ucode.dev/25.12' >> /etc/apk/repositories.d/customfeeds.list
         ```
 
-2.  **Install `luci-sso` and one backend.**
+2.  **Install `luci-sso`.** It installs the mbedTLS backend with it, unless you name another backend.
 
     === "Terminal (SSH)"
 
@@ -72,10 +72,10 @@ Adding the feed's signing key needs a shell: LuCI's **Software** page can edit t
 
         ```bash
         opkg update
-        opkg install luci-sso luci-sso-crypto-mbedtls
+        opkg install luci-sso
         ```
 
-        Always name the backend: `opkg install luci-sso` alone picks the wolfSSL backend.
+        To use another backend, name it in the same command, for example `opkg install luci-sso luci-sso-crypto-openssl`.
 
         `opkg update` should report `Signature check passed.` for the feed. It also prints `has no valid architecture, ignoring` for the feed's packages built for other routers; that is harmless.
 
@@ -83,14 +83,16 @@ Adding the feed's signing key needs a shell: LuCI's **Software** page can edit t
 
         ```bash
         apk update
-        apk add luci-sso luci-sso-crypto-mbedtls
+        apk add luci-sso
         ```
+
+        To use another backend, name it in the same command, for example `apk add luci-sso luci-sso-crypto-openssl`.
 
     === "Browser (LuCI)"
 
         1.  Navigate to **System** -> **Software** and click **Update lists…**.
-        2.  In the **Filter** box, type `luci-sso-crypto`, and click **Install…** next to the backend you chose (for example `luci-sso-crypto-mbedtls`).
-        3.  Filter for `luci-sso` and click **Install…** next to `luci-sso`.
+        2.  To use a backend other than mbedTLS, install it first: in the **Filter** box, type `luci-sso-crypto`, and click **Install…** next to the backend you chose (for example `luci-sso-crypto-openssl`).
+        3.  Filter for `luci-sso` and click **Install…** next to `luci-sso`. Without another backend installed, it installs `luci-sso-crypto-mbedtls` with it.
 
         ![LuCI System > Software page on OpenWrt 24.10 with luci-sso typed in the Filter box and the Available tab selected. The table lists luci-sso, luci-sso-crypto-mbedtls, luci-sso-crypto-openssl and luci-sso-crypto-wolfssl, version 0.10.0-r1, each with an Install… button. Above the tabs, the Actions row has the Update lists…, Upload Package… and Configure opkg buttons.](../../assets/screenshots/luci-software-install.png "System > Software, Available tab, filtered for luci-sso")
 

@@ -17,6 +17,7 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 - The documentation has one version per minor release, at `https://m00qek.github.io/luci-sso/<X.Y>/`, starting with 0.9 and 0.10. [`/latest/`](https://m00qek.github.io/luci-sso/latest/) shows the newest release, and a selector on every page switches between versions. Links to the old unversioned pages lead to the same page, and anchor, under `/latest/`.
 - The settings page links to the documentation of the installed release, `/0.10/`, instead of the unversioned site.
 - The main `luci-sso` package is architecture-independent; only the crypto backends are built per architecture.
+- Installing `luci-sso` alone now installs the mbedtls backend on both OpenWrt 24.10 and 25.12; choose another backend by naming it, for example `opkg install luci-sso luci-sso-crypto-openssl` or `apk add luci-sso luci-sso-crypto-openssl`. Before, `opkg` picked the wolfSSL backend and `apk` the mbedTLS one. An upgrade keeps the backend already installed. See [How to Install luci-sso](https://m00qek.github.io/luci-sso/latest/how-to/sysadmin/installation/).
 
 ### Fixed
 
