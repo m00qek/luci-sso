@@ -415,6 +415,13 @@ describe('config: load — success', () => {
 			assert.match(false, load_sections({ default: { ...OIDC, require_email_verified: v }, r1: { ...ROLE } }).data.require_email_verified, `'${v}'`);
 	});
 
+	it('loads trusted_proxy as a list, empty when unset, from a single option or a list', () => {
+		assert.match([], load_sections({ default: { ...OIDC }, r1: { ...ROLE } }).data.trusted_proxy, 'unset');
+		assert.match([ '127.0.0.1' ], load_sections({ default: { ...OIDC, trusted_proxy: '127.0.0.1' }, r1: { ...ROLE } }).data.trusted_proxy);
+		let many = [ '127.0.0.1', '::1', '10.0.0.0/8', '2001:db8::/32', '::ffff:192.0.2.1' ];
+		assert.match(many, load_sections({ default: { ...OIDC, trusted_proxy: many }, r1: { ...ROLE } }).data.trusted_proxy);
+	});
+
 	it('loads a custom scope and leaves it undefined when absent', () => {
 		let with_scope = load_sections({ default: { ...OIDC, scope: 'openid email custom_scope' }, r1: { ...ROLE } });
 		assert.match('openid email custom_scope', with_scope.data.scope);
@@ -443,6 +450,14 @@ describe('config: load — validation', () => {
 	it('rejects insecure issuer_url and redirect_uri (http)', () => {
 		assert.match(false, load_sections({ default: { ...OIDC, issuer_url: 'http://idp.com' }, r1: { ...ROLE } }).ok);
 		assert.match(contains({ ok: false, error: 'CONFIG_ERROR' }), load_sections({ default: { ...OIDC, redirect_uri: 'http://insecure.com/callback' }, r1: { ...ROLE } }));
+	});
+
+	it('rejects a trusted_proxy entry that is not an address or CIDR range, without echoing it', () => {
+		for (let bad in [ 'localhost', '10.0.0.0/33', '::/129', '1.2.3.4:80', '[::1]', '10.0.0.0/255.0.0.0', 'fe80::1%eth0', '' ]) {
+			let res = load_sections({ default: { ...OIDC, trusted_proxy: [ '127.0.0.1', bad ] }, r1: { ...ROLE } });
+			assert.match(contains({ ok: false, error: 'CONFIG_ERROR' }), res, bad);
+			assert.match('trusted_proxy entries must be IP addresses or CIDR ranges', res.details, bad);
+		}
 	});
 
 	it('rejects an insecure internal_issuer_url (W3)', () => {

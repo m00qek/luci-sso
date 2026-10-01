@@ -3,6 +3,8 @@ import * as router from 'luci_sso.router';
 import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
 import * as session from 'luci_sso.session';
+import * as common from 'luci_sso.session.common';
+import * as ratelimit from 'luci_sso.ratelimit';
 import * as encoding from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import * as config_loader from 'luci_sso.config';
@@ -513,6 +515,84 @@ describe('router: per-client rate limiting', () => {
 		with_context({ fs: { data: {} }, http_client: { data: DISC }, clock: { data: { now: 1516239022 } } }, (deps) => {
 			for (let i = 0; i < 10; i++) router.handle(deps, test_config, { path: "/", query: {}, cookies: {} });
 			assert.match("TOO_MANY_REQUESTS", router.handle(deps, test_config, login("not-an-address")).error);
+		});
+	});
+});
+
+describe('router: per-client rate limiting — a trusted reverse proxy', () => {
+	const NOW = 1516239022;
+	const DISC = { [tf.MOCK_CONFIG.issuer_url + "/.well-known/openid-configuration"]: { status: 200, body: tf.MOCK_DISCOVERY } };
+	const PROXIED = { ...tf.MOCK_CONFIG, enabled: "1", trusted_proxy: [ "127.0.0.1", "2001:db8:100::/48" ] };
+	const login = (addr) => ({ path: "/", query: {}, cookies: {}, client: addr });
+	const callback = (addr) => ({ path: "/callback", query: { code: "c", state: "s" }, cookies: {}, client: addr });
+	const ctx = (fn, fs) => with_context({ fs: fs || { data: {} }, http_client: { data: DISC }, clock: { data: { now: NOW } } }, fn);
+	const refused = (res) => !res.ok && res.error == "TOO_MANY_REQUESTS";
+
+	it('never refuses the trusted address with 429, on either budget', () => {
+		ctx((deps) => {
+			for (let i = 1; i <= 3 * ratelimit.LIMITS.login.requests; i++) {
+				let res = router.handle(deps, PROXIED, login("127.0.0.1"));
+				assert.match(truthy(), res.ok, `login start ${i}`);
+				assert.match(302, res.data.status);
+			}
+			for (let i = 1; i <= 2 * ratelimit.LIMITS.client.requests; i++)
+				assert.match(falsy(), refused(router.handle(deps, PROXIED, callback("127.0.0.1"))), `callback ${i}`);
+		});
+	});
+
+	it('exempts an address inside a trusted CIDR range', () => {
+		ctx((deps) => {
+			for (let i = 0; i < 2 * ratelimit.LIMITS.login.requests; i++)
+				assert.match(truthy(), router.handle(deps, PROXIED, login(sprintf("2001:db8:100:%x::1", i))).ok, `login start ${i}`);
+		});
+	});
+
+	it('still limits every other address, as before', () => {
+		ctx((deps) => {
+			for (let i = 0; i < 3 * ratelimit.LIMITS.login.requests; i++) router.handle(deps, PROXIED, login("127.0.0.1"));
+			for (let i = 1; i <= ratelimit.LIMITS.login.requests; i++)
+				assert.match(truthy(), router.handle(deps, PROXIED, login("198.51.100.9")).ok, `initiation ${i}`);
+			let res = router.handle(deps, PROXIED, login("198.51.100.9"));
+			assert.match("TOO_MANY_REQUESTS", res.error, "the 11th from a direct client");
+			assert.match(429, res.details.http_status);
+			for (let i = 0; i < ratelimit.LIMITS.login.requests; i++) router.handle(deps, PROXIED, login("127.0.0.2"));
+			assert.match("TOO_MANY_REQUESTS", router.handle(deps, PROXIED, login("127.0.0.2")).error,
+				"a neighbour of the trusted address");
+			for (let i = 0; i < ratelimit.LIMITS.login.requests; i++) router.handle(deps, PROXIED, login("2001:db8:101::1"));
+			assert.match("TOO_MANY_REQUESTS", router.handle(deps, PROXIED, login("2001:db8:101::1")).error,
+				"an address just outside the trusted range");
+		});
+	});
+
+	it('limits the proxy\'s address like any client when trusted_proxy is empty', () => {
+		ctx((deps) => {
+			for (let i = 0; i < ratelimit.LIMITS.login.requests; i++)
+				assert.match(truthy(), router.handle(deps, tf.MOCK_CONFIG, login("127.0.0.1")).ok);
+			assert.match("TOO_MANY_REQUESTS", router.handle(deps, tf.MOCK_CONFIG, login("127.0.0.1")).error);
+		});
+	});
+
+	it('keeps the global cap on pending handshakes for the trusted address', () => {
+		// Every slot holds a live handshake (created just now, as stat reports),
+		// so reaping frees nothing. The exempted request still gets 503.
+		ctx((deps) => {
+			for (let i = 0; i < common.LIMIT_PENDING_HANDSHAKES; i++)
+				assert.match(truthy(), session.create_state(deps, PROXIED.clock_tolerance).ok, `handshake ${i}`);
+			let res = router.handle(deps, PROXIED, login("127.0.0.1"));
+			assert.match("HANDSHAKE_CAPACITY_EXCEEDED", res.error);
+			assert.match(503, res.details.http_status);
+		}, { data: {}, behavior: { stat: (p) => ({ mtime: NOW }) } });
+	});
+
+	it('logs that the address is exempt once, not per request', () => {
+		ctx((deps) => {
+			let logs = [];
+			deps.log = (l, m) => push(logs, [ l, m ]);
+			for (let i = 0; i < 20; i++) router.handle(deps, PROXIED, login("127.0.0.1"));
+			let notes = filter(logs, (l) => index(l[1], "Request from trusted proxy") == 0);
+			assert.match(1, length(notes));
+			assert.match("info", notes[0][0]);
+			assert.match(0, length(filter(logs, (l) => index(l[1], "rate limit exceeded") >= 0)));
 		});
 	});
 });

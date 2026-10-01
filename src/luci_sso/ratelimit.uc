@@ -19,6 +19,13 @@
  * file keyed by a truncated SHA-256 of the client key, so no address is
  * stored. At most LIMIT_TRACKED_CLIENTS entries are kept.
  *
+ * Trusted proxies: a request whose REMOTE_ADDR is in the trusted_proxy option
+ * (is_trusted_proxy) skips both budgets (exempt). Behind a reverse proxy every
+ * request has the proxy's address, and uhttpd does not pass X-Forwarded-For
+ * to CGI scripts, so luci-sso cannot tell the clients apart: the proxy must
+ * limit them. The exemption covers these per-client budgets only. Every
+ * global limit, such as the cap on pending handshakes, still applies.
+ *
  * Concurrency: each writer renames its own uniquely named temporary file into
  * place. Two CGIs racing may lose an increment, but can never corrupt the
  * file. A corrupt file is treated as empty.
@@ -28,6 +35,7 @@
 
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
+import * as netaddr from 'luci_sso.netaddr';
 
 export const STATE_FILE = "/var/run/luci-sso/ratelimit.json";
 
@@ -37,72 +45,31 @@ const LIMIT_CLIENT_REQUESTS = 30;  // rate-limited requests per client ...
 const LIMIT_CLIENT_WINDOW   = 60;  // ... per minute
 const LIMIT_TRACKED_CLIENTS = 256; // most clients the state file remembers
 
+// Seconds between two notices that a trusted proxy's request was exempted.
+const EXEMPT_NOTICE_INTERVAL = 3600;
+
 export const LIMITS = {
 	login:   { requests: LIMIT_LOGIN_REQUESTS,  window: LIMIT_LOGIN_WINDOW },
 	client:  { requests: LIMIT_CLIENT_REQUESTS, window: LIMIT_CLIENT_WINDOW },
-	tracked: LIMIT_TRACKED_CLIENTS
+	tracked: LIMIT_TRACKED_CLIENTS,
+	notice:  EXEMPT_NOTICE_INTERVAL
 };
 
 /** Key shared by every client whose address cannot be parsed. */
 export const UNKNOWN_CLIENT = "unknown";
 
-function _ipv4(s) {
-	let m = match(s, /^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/);
-	if (!m) return null;
-	let out = [];
-	for (let i = 1; i <= 4; i++) {
-		let n = int(m[i]);
-		if (n > 255) return null;
-		push(out, n);
-	}
-	return out;
-}
+/**
+ * State-file key of the time the last exemption notice was logged (see
+ * exempt). Every other key is a 16-hex client id, so it cannot collide.
+ * @private
+ */
+const NOTICE_KEY = "notice";
 
-// Expands an IPv6 address to 8 integers, or null. Accepts :: compression and
-// an embedded IPv4 tail (::ffff:192.0.2.1).
-function _ipv6(s) {
-	let tail4 = null;
-	let m = match(s, /^(.*:)([0-9]{1,3}(\.[0-9]{1,3}){3})$/);
-	if (m) {
-		tail4 = _ipv4(m[2]);
-		if (!tail4) return null;
-		s = m[1] + "0:0";                  // placeholder for the two IPv4 groups
-	}
-
-	let halves = split(s, "::");
-	if (length(halves) > 2) return null;
-
-	let parse = (part) => {
-		if (part == "") return [];
-		let groups = [];
-		for (let g in split(part, ":")) {
-			if (!match(g, /^[0-9A-Fa-f]{1,4}$/)) return null;
-			push(groups, hex(g));
-		}
-		return groups;
-	};
-
-	let head = parse(halves[0]);
-	let rest = (length(halves) == 2) ? parse(halves[1]) : [];
-	if (head == null || rest == null) return null;
-
-	let groups;
-	if (length(halves) == 2) {
-		let fill = 8 - length(head) - length(rest);
-		if (fill < 1) return null;
-		groups = [ ...head ];
-		for (let i = 0; i < fill; i++) push(groups, 0);
-		for (let g in rest) push(groups, g);
-	} else {
-		groups = head;
-	}
-	if (length(groups) != 8) return null;
-
-	if (tail4) {
-		groups[6] = tail4[0] * 256 + tail4[1];
-		groups[7] = tail4[2] * 256 + tail4[3];
-	}
-	return groups;
+// fe80::1%eth0: REMOTE_ADDR may carry a zone, which names an interface, not
+// a host. Drop it.
+function _strip_zone(addr) {
+	let zone = index(addr, "%");
+	return (zone >= 0) ? substr(addr, 0, zone) : addr;
 }
 
 /**
@@ -117,25 +84,35 @@ function _ipv6(s) {
  * @returns {string}
  */
 export function client_key(addr) {
-	if (type(addr) != "string" || length(addr) == 0 || length(addr) > 64)
-		return UNKNOWN_CLIENT;
+	if (type(addr) != "string" || length(addr) > 64) return UNKNOWN_CLIENT;
+	let a = netaddr.parse(_strip_zone(addr));
+	if (!a) return UNKNOWN_CLIENT;
+	if (a.family == 4) return "v4:" + netaddr.format(a);
+	return sprintf("v6:%x:%x:%x:%x", a.parts[0], a.parts[1], a.parts[2], a.parts[3]);
+};
 
-	let v4 = _ipv4(addr);
-	if (v4) return "v4:" + join(".", v4);
-
-	let s = addr;
-	let zone = index(s, "%");              // fe80::1%eth0: drop the zone
-	if (zone >= 0) s = substr(s, 0, zone);
-	if (index(s, ":") < 0) return UNKNOWN_CLIENT;
-
-	let g = _ipv6(s);
-	if (!g) return UNKNOWN_CLIENT;
-
-	// ::ffff:a.b.c.d is an IPv4 client reaching a dual-stack socket.
-	if (g[0] == 0 && g[1] == 0 && g[2] == 0 && g[3] == 0 && g[4] == 0 && g[5] == 0xffff)
-		return sprintf("v4:%d.%d.%d.%d", g[6] >> 8, g[6] & 255, g[7] >> 8, g[7] & 255);
-
-	return sprintf("v6:%x:%x:%x:%x", g[0], g[1], g[2], g[3]);
+/**
+ * Whether a request's REMOTE_ADDR is a trusted reverse proxy, which skips
+ * the per-client budgets (see exempt). Only REMOTE_ADDR counts: no request
+ * header is read. An IPv4-mapped IPv6 address is its IPv4 address. An
+ * address with a zone (fe80::1%eth0) is never trusted: the same link-local
+ * address can be a different host on each interface, and an entry cannot
+ * name the interface. Entries of `trusted` that are not an address or a CIDR
+ * range are skipped (config.load refuses them anyway).
+ *
+ * @param {*} addr REMOTE_ADDR from the CGI environment.
+ * @param {?array} trusted The trusted_proxy list: addresses and CIDR ranges.
+ * @returns {boolean}
+ */
+export function is_trusted_proxy(addr, trusted) {
+	if (type(trusted) != "array" || !length(trusted)) return false;
+	if (type(addr) != "string" || length(addr) > 64) return false;
+	let a = netaddr.parse(addr);
+	if (!a) return false;
+	for (let t in trusted) {
+		if (netaddr.contains(netaddr.parse_cidr(t), a)) return true;
+	}
+	return false;
 };
 
 // Advances a [window_start, count] pair: a new window once the old one ends.
@@ -183,6 +160,16 @@ function _save(deps, state) {
 	}
 }
 
+// Takes the last notice time out of `state` and returns it, or null when
+// there is none, it is not a time, or EXEMPT_NOTICE_INTERVAL has passed since
+// (or the clock went back).
+function _notice_time(state, now) {
+	let t = state[NOTICE_KEY];
+	delete state[NOTICE_KEY];
+	if (type(t) != "int" || now < t || now - t >= EXEMPT_NOTICE_INTERVAL) return null;
+	return t;
+}
+
 /**
  * Counts one request from `key` and decides whether to serve it.
  *
@@ -197,6 +184,9 @@ export function check(deps, key, is_login) {
 	let id = id_res.ok ? substr(id_res.data, 0, 16) : "unhashable";
 
 	let state = _load(deps);
+
+	// The notice time is not a client: keep it out of the pruning and the cap.
+	let notice_at = _notice_time(state, now);
 
 	// Prune: drop windows that have ended, and entries with nothing left.
 	for (let k in keys(state)) {
@@ -221,6 +211,7 @@ export function check(deps, key, is_login) {
 			delete state[ids[i]];
 	}
 
+	if (notice_at != null) state[NOTICE_KEY] = notice_at;
 	_save(deps, state);
 
 	if (is_login && e.l[1] > LIMIT_LOGIN_REQUESTS) {
@@ -230,6 +221,33 @@ export function check(deps, key, is_login) {
 	if (e.g[1] > LIMIT_CLIENT_REQUESTS) {
 		deps.log("warn", `Request rate limit exceeded for client [id: ${id}]: ${e.g[1]} in ${LIMIT_CLIENT_WINDOW}s [limit: ${LIMIT_CLIENT_REQUESTS}]`);
 		return { allowed: false, budget: "client", retry_after: e.g[0] + LIMIT_CLIENT_WINDOW - now };
+	}
+	return { allowed: true, budget: null, retry_after: 0 };
+};
+
+/**
+ * Serves a request from a trusted proxy (is_trusted_proxy) without counting
+ * it: it spends neither budget and takes no slot in the state file.
+ *
+ * So that the exemption is visible in the log, without a line per request,
+ * the first exempted request logs a notice at `info`, and then at most one
+ * every EXEMPT_NOTICE_INTERVAL seconds, whichever proxy it is for. The time
+ * of the last notice is kept in the state file, which is written only when a
+ * notice is logged.
+ *
+ * @param {*} deps `fs`, `clock`, `native`, `log`.
+ * @param {string} key The proxy's client key, from client_key(), for the log.
+ * @returns {{allowed: boolean, retry_after: int, budget: string}}
+ */
+export function exempt(deps, key) {
+	let now = deps.clock.time();
+	let state = _load(deps);
+	if (_notice_time(state, now) == null) {
+		let id_res = crypto.hash_sha256_hex(deps.native, key);
+		let id = id_res.ok ? substr(id_res.data, 0, 16) : "unhashable";
+		deps.log("info", `Request from trusted proxy [id: ${id}] skips the per-client rate limits (trusted_proxy); not logged again for ${EXEMPT_NOTICE_INTERVAL}s`);
+		state[NOTICE_KEY] = now;
+		_save(deps, state);
 	}
 	return { allowed: true, budget: null, retry_after: 0 };
 };

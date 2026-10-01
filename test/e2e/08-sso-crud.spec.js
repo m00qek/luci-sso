@@ -76,7 +76,7 @@ test.describe('SSO Settings: Pristine CRUD Lifecycle', () => {
 
         // 1. Add a new role
         await page.locator('.cbi-section-create-name').pressSequentially('newrole');
-        await page.locator('.cbi-button-add').click();
+        await page.locator('.cbi-section-create .cbi-button-add').click();
         const modal = page.locator('.modal, [role="dialog"]');
         await expect(modal).toBeVisible();
 
