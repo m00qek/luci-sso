@@ -93,6 +93,12 @@ var RELOAD_POLL_MS = 500;
 /* A role name becomes part of the rpcd section name luci_sso_<role>. */
 var NAME_MAX = 32;
 
+/* LuCI reloads the page this many seconds after it has applied UCI changes;
+ * for that one reload, the page sets L.env.apply_display to this, so the
+ * reload never comes while the page is open: one day, well under the 2^31-1
+ * ms setTimeout takes. See handleSaveApply. */
+var HOLD_RELOAD_S = 86400;
+
 /* The documentation of this release. */
 var DOCS = 'https://m00qek.github.io/luci-sso/0.10/';
 
@@ -424,7 +430,10 @@ return view.extend({
 							this.edited = edited;
 							this.deleted = deleted;
 							return this._map.load().then(L.bind(this._map.reset, this._map));
-						}, this));
+						}, this)).catch(function(err) {
+							/* The edits are still on the page; Save & Apply tries again. */
+							ui.addNotification(null, E('p', [ _('Could not reload the role permissions from rpcd: %s').format(err.message) ]), 'warning');
+						});
 					}, this)
 				}, _('Dismiss')))
 			]);
@@ -451,10 +460,18 @@ return view.extend({
 					page.applyArmed = true;
 					document.addEventListener('uci-applied', function() {
 						page.applyArmed = false;
-						/* LuCI reloads the page L.env.apply_display seconds
-						 * after this event; hold it until the permissions are
-						 * written, then reload here. */
-						L.env.apply_display = RELOAD_TIMEOUT_MS / 1000 + 60;
+						/* Right after this event, LuCI arms a timer that
+						 * reloads the page in L.env.apply_display seconds.
+						 * Only applyAccess may reload it: once the permissions
+						 * are in force, and never when they fail, or the
+						 * reload would throw away the edits it keeps. So the
+						 * value is HOLD_RELOAD_S while LuCI arms that timer,
+						 * and back to LuCI's own as soon as it has, for its
+						 * other timers (closing a notice, the reload after a
+						 * revert). */
+						var display = L.env.apply_display;
+						L.env.apply_display = HOLD_RELOAD_S;
+						window.setTimeout(function() { L.env.apply_display = display; }, 0);
 						Promise.resolve().then(L.bind(page.applyAccess, page));
 					}, { once: true });
 				}

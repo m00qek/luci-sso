@@ -180,7 +180,7 @@ Changes take effect with **Save & Apply**:
 | Button | UCI changes (`/etc/config/luci-sso`) | Role permissions (`rpcd` login entries) |
 | :--- | :--- | :--- |
 | **Save** | Staged in the session, as on any LuCI page. | Kept on the page; nothing is sent. Lost if the page is reloaded or left. |
-| **Save & Apply** | Staged, then applied with LuCI's checked apply (or unchecked, from the button's menu). | With UCI changes pending: sent after LuCI's `uci-applied` event, when the apply is confirmed; not sent if it is rolled back. With none pending: sent at once. Each edited role goes to `set_role`, each deleted one to `delete_role`, and the page waits up to 45 s for `rpcd` to reload, then reloads itself. A refusal is shown, with the edits kept on the page. |
+| **Save & Apply** | Staged, then applied with LuCI's checked apply (or unchecked, from the button's menu). | With UCI changes pending: sent after LuCI's `uci-applied` event, when the apply is confirmed; not sent if it is rolled back. With none pending: sent at once. Each edited role goes to `set_role`, each deleted one to `delete_role`, and the page waits up to 45 s for `rpcd` to reload, then reloads itself. A refusal, or a reload that does not finish in time, is shown, with the edits kept on the page and no reload: LuCI's own reload after an apply is held off for as long as the page is open. **Dismiss** reloads the permissions from `rpcd`, keeps the edits, and leaves them for the next **Save & Apply**. |
 | **Reset** | The form goes back to the saved values. | Edits on the page are discarded. |
 
 ### Identity provider section
