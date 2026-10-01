@@ -22,7 +22,11 @@ The three paths the CGI script answers. Each entry lists whether the endpoint is
 
 ### `GET /` — Probe or initiate login
 
-**Without parameters:** Starts the OIDC authorization code flow. Removes stale handshake files, loads the IdP's discovery document (cached for 24 hours), generates a PKCE pair, nonce, and state token, saves them to a handshake file, and redirects the browser to the IdP's authorization endpoint.
+**Without `action`:** Starts the OIDC authorization code flow. Removes stale handshake files, loads the IdP's discovery document (cached for 24 hours), generates a PKCE pair, nonce, and state token, saves them to a handshake file, and redirects the browser to the IdP's authorization endpoint.
+
+| Query parameter | Description |
+| :--- | :--- |
+| `return_to` | Optional. The LuCI page to open after the login, as a path and an optional query string, percent-encoded as a query parameter value. The **Login with SSO** button sends the page it is on: `location.pathname` + `location.search`. See [`return_to` rules](#return_to-rules). |
 
 | | |
 | :--- | :--- |
@@ -30,6 +34,26 @@ The three paths the CGI script answers. Each entry lists whether the endpoint is
 | Requires configuration | Yes |
 | **Success response** | `302` with `Location: <IdP authorize URL>` |
 | **Sets cookie** | `__Host-luci_sso_state` (see [Cookies](#cookies)) |
+
+#### `return_to` rules
+
+<!-- LIMIT_RETURN_PATH_LEN=512 -->
+
+An accepted `return_to` is stored in the handshake file on the router, next to `state`. It is not sent to the IdP and not put in a cookie. The callback checks it again before it redirects to it.
+
+| Rule | Accepted | Refused, for example |
+| :--- | :--- | :--- |
+| Length | 1 to 512 bytes, after the query string is decoded | an empty value, 513 bytes |
+| Characters | Letters, digits and `/ _ . ~ % ? & = + , -` | `:` (any scheme), `\`, `@`, `#`, `;`, a space, a control character, any non-ASCII byte |
+| Path, before the first `?` | `/cgi-bin/luci`, or starts with `/cgi-bin/luci/` | `/`, `/cgi-bin/luci-sso/…`, `/ubus/`, a relative path |
+| Separators | — | `//` anywhere, query string included |
+| Dot segments | — | a `.` or `..` path segment; they are refused, not resolved |
+| LuCI's logout page | — | `/cgi-bin/luci/admin/logout`, which would end the new session |
+| Percent escapes | Every `%` starts a `%XX` escape. The value is decoded until no escape is left, up to three times, and each decoded form must pass every rule above | `%2F%2F`, `%5C`, `%0D%0A`, `%2E%2E`, `%40`, `%252F%252F` (double encoding), `%zz`, four or more levels of encoding |
+
+A value that breaks a rule is dropped, never refused: the login goes on, the log has `Ignoring return_to …` (see [Log Messages](log-messages.md#login-start)), and the callback redirects to `/cgi-bin/luci/`. A request without `return_to` behaves the same way, without the log line.
+
+The URL fragment (`#…`) never reaches the router, so it is not kept. LuCI routes by path, so the page opens all the same.
 
 **With `?action=enabled`:** Returns whether SSO is configured and enabled. Does not touch the OIDC flow. Safe to poll from scripts.
 
@@ -57,7 +81,7 @@ Called automatically by the browser after the user authenticates at the IdP. The
 | :--- | :--- |
 | Rate-limited | Yes |
 | Requires configuration | Yes |
-| **Success response** | `302` with `Location: /cgi-bin/luci/` |
+| **Success response** | `302` with `Location:` the `return_to` page stored at login start, or `/cgi-bin/luci/` when there is none or it no longer passes the [`return_to` rules](#return_to-rules) |
 | **Sets cookies** | `sysauth_https`, `sysauth` (see [Cookies](#cookies)) |
 | **Clears cookies** | `__Host-luci_sso_state`, and any `sysauth_https` and `sysauth` at `Path=/cgi-bin/luci` (Max-Age=0) |
 
@@ -94,7 +118,7 @@ The cookies `luci-sso` sets. The handshake cookie lives only during a login; the
 
 ### `__Host-luci_sso_state`
 
-Carries an opaque handle to the handshake during the OIDC flow. The handshake itself (`state`, `nonce`, PKCE verifier and timestamps) is stored on the router in `/var/run/luci-sso/`. The `__Host-` prefix makes the browser send the cookie only over HTTPS, only to the exact host that set it, and only with `Path=/`.
+Carries an opaque handle to the handshake during the OIDC flow. The handshake itself (`state`, `nonce`, PKCE verifier, timestamps and the accepted `return_to` page) is stored on the router in `/var/run/luci-sso/`. The `__Host-` prefix makes the browser send the cookie only over HTTPS, only to the exact host that set it, and only with `Path=/`.
 
 | Attribute | Value |
 | :--- | :--- |
@@ -215,6 +239,7 @@ The size limits apply to every request, including `?action=enabled`. The per-cli
 | Maximum cookie header length | 16 384 bytes |
 | Maximum `PATH_INFO` or `REMOTE_ADDR` length | 16 384 bytes |
 | Maximum number of query parameters | 100 |
+| Maximum `return_to` length | 512 bytes; a longer one is dropped, not refused |
 | Maximum number of cookies | 100 |
 | Login initiations (`GET /`) per client | 10 per 5 minutes; not for a trusted proxy |
 | Rate-limited requests per client | 30 per minute; not for a trusted proxy |

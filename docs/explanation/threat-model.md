@@ -43,6 +43,24 @@ CSRF is separately prevented by the `state` parameter. The router generates a ra
 
 ---
 
+## Open redirect after login
+
+After a login, the router sends the browser to the LuCI page the login started from, so that a link to a LuCI page works with SSO as it does with a password (issue #27). That page arrives as `return_to`, a query parameter anyone can write into a link. Taken as it is, it would make the router an open redirect: a link to the real router, which the user trusts, could send them after a genuine login to a look-alike site that asks for their password again, or to the router's own logout endpoint.
+
+The defence is to accept only what a LuCI page looks like, and to refuse everything else rather than try to repair it:
+
+- **Only LuCI's own pages.** The path must be `/cgi-bin/luci` or start with `/cgi-bin/luci/`. That rules out other sites, other endpoints on the router, `luci-sso`'s own endpoints (no loop back into the login or a logout), and LuCI's logout page, which would end the session just created.
+- **An allow-list of characters.** Letters, digits and `/ _ . ~ % ? & = + , -` only. Without `:` no value can carry a scheme (`https:`, `javascript:`); without `\` no browser can read a backslash as a slash; without `@`, `#`, spaces or control characters nothing can reshape the URL or split the `Location` header. An allow-list does not depend on knowing every trick in advance, as a deny-list would.
+- **No `//`, no dot segments.** `//evil.example` is a protocol-relative URL, and `/cgi-bin/luci/../../` climbs out of LuCI. Both are refused, never normalised.
+- **Every decoded form is checked too.** Browsers and servers decode `%2F`, `%5C` and `%2E` in paths, sometimes more than once. The value is decoded until no escape is left, and each form passes the same rules, so `%2F%2F`, `%5C`, `%0D%0A` and their double encodings are refused. A value encoded more than three times, or with a malformed escape, is refused outright.
+- **Bounded.** At most 512 bytes.
+
+The accepted page is stored in the handshake file on the router, bound to the same `state`, and is never put in a cookie or sent to the IdP. An attacker cannot swap it between the two legs of the flow, and the IdP learns nothing about the router's pages. The callback checks the stored value again before redirecting, so a handshake file edited on disk cannot turn the router into an open redirect either.
+
+A failed check never fails the login. The value is dropped, logged, and the browser lands on `/cgi-bin/luci/`, as it did before. The remaining risk is small: a crafted link can choose which LuCI page opens after a login. That is what LuCI's password login already allows, since its login page sits at the address that was asked for, and opening a page still needs the session's rights.
+
+---
+
 ## Token replay
 
 An attacker who captures a valid ID Token — from a logged network segment, a browser extension, or a compromised IdP response — might attempt to present it in a different session, perhaps after the legitimate user has logged out.

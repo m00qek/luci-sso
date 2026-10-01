@@ -11,9 +11,9 @@ The examples use nginx. Any reverse proxy works if it does the same things: HTTP
 `luci-sso` does not need to see TLS itself:
 
 - It never checks the scheme of the incoming request. From the CGI environment it reads only `PATH_INFO`, `QUERY_STRING`, `HTTP_COOKIE` and `REMOTE_ADDR`.
-- It does not read the `Host` header. Both OIDC legs use the fixed `redirect_uri` from the configuration, and so does the `post_logout_redirect_uri` it sends to the IdP. Every other redirect it issues is a relative path (`/cgi-bin/luci/` or `/`), which the browser resolves against the address it is using.
+- It does not read the `Host` header. Both OIDC legs use the fixed `redirect_uri` from the configuration, and so does the `post_logout_redirect_uri` it sends to the IdP. Every other redirect it issues is a relative path (`/cgi-bin/luci/`, the LuCI page the login started from, or `/`), which the browser resolves against the address it is using.
 - Every cookie it sets carries `Secure`, whatever the scheme `uhttpd` sees.
-- The **Login with SSO** button runs in the browser. It probes `/cgi-bin/luci-sso?action=enabled` with a relative URL, then sends the browser to `https://` plus the host and port in the address bar, followed by `/cgi-bin/luci-sso`.
+- The **Login with SSO** button runs in the browser. It probes `/cgi-bin/luci-sso?action=enabled` with a relative URL, then sends the browser to `https://` plus the host and port in the address bar, followed by `/cgi-bin/luci-sso` and the page it is on as `return_to`.
 
 So once the browser talks HTTPS to the proxy, the login and logout flows are the same as with `uhttpd` serving HTTPS directly.
 

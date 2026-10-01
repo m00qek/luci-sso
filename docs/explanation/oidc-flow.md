@@ -14,12 +14,12 @@ sequenceDiagram
     participant I as Identity Provider
 
     User->>B: Click "Login with SSO"
-    B->>R: GET /cgi-bin/luci-sso/
+    B->>R: GET /cgi-bin/luci-sso/?return_to=<page>
 
     Note over R: Phase 1 — Initiation
     R->>I: GET /.well-known/openid-configuration (cached 24 h) — back-channel
     R->>R: Generate state (CSRF), nonce (replay), PKCE pair
-    R->>R: Save handshake to /var/run/luci-sso/handshake_{handle}.json
+    R->>R: Save handshake (and return_to, if valid) to /var/run/luci-sso/handshake_{handle}.json
     R-->>B: 302 → IdP /authorize?state=…&nonce=…&code_challenge=…
 
     Note over B,I: Phase 2 — User authenticates at the IdP
@@ -45,19 +45,20 @@ sequenceDiagram
     R->>R: Register access_token (replay prevention)
     R->>R: Match claims to the first UCI role
     R->>R: Inject UBUS session with the role's rpcd ACLs
-    R-->>B: 302 → /cgi-bin/luci/ (with session cookie)
-    B->>User: LuCI dashboard
+    R->>R: Check the stored return_to again
+    R-->>B: 302 → return_to, or /cgi-bin/luci/ (with session cookie)
+    B->>User: The page the login started from
 ```
 
 The textual summary below explains what happens in each phase.
 
-**Phase 1 — Initiation:** The router loads the IdP's discovery document, generates the security parameters for this specific login attempt and redirects the browser to the IdP.
+**Phase 1 — Initiation:** The router loads the IdP's discovery document, generates the security parameters for this specific login attempt, keeps the page the login started from if it is a LuCI page, and redirects the browser to the IdP.
 
 **Phase 2 — IdP authentication:** The browser handles everything. The router is not involved. The user enters their credentials and the IdP redirects back with a short-lived authorization code.
 
 **Phase 3 — Code exchange:** The router's back-channel takes over. The code is exchanged for tokens, and every security property of the tokens is verified before anything is trusted.
 
-**Phase 4 — Session injection:** The access token is registered so it cannot be used for a second login, the user's identity is mapped to the first matching role, and a session is created with the rights of that role's `rpcd` login entry. The browser receives a session cookie and lands on the dashboard.
+**Phase 4 — Session injection:** The access token is registered so it cannot be used for a second login, the user's identity is mapped to the first matching role, and a session is created with the rights of that role's `rpcd` login entry. The browser receives a session cookie and lands on the page the login started from, or on LuCI's start page.
 
 ---
 
@@ -100,6 +101,14 @@ The ID Token can carry an `at_hash` claim: the base64url-encoded first 16 bytes 
 If an attacker substitutes a different access token in the token response, while somehow preserving a valid ID token, the `at_hash` check fails. The identity from the ID token cannot be decoupled from the access token actually received.
 
 In the authorization code flow, OIDC Core makes `at_hash` optional, and some IdPs never send it. The router then accepts the ID Token without the check. [About the Threat Model](threat-model.md#access-token-substitution) explains why that leaves no practical gap.
+
+### The page to return to stays on the router
+
+LuCI shows its login page at whatever address was asked for, and its password login then opens that page. The **Login with SSO** button does the same: it sends the page's path and query string as `return_to`, and the callback redirects there.
+
+A redirect target taken from a request is a classic open redirect: a link to the router could send a freshly logged-in user to a look-alike site. So `return_to` is held to a strict allow-list. It must be a path under `/cgi-bin/luci/` with no `//`, no dot segments and only a small set of characters, checked again after each level of percent-decoding; anything else is dropped and the login lands on `/cgi-bin/luci/`. The [HTTP API Reference](../reference/http-api.md#return_to-rules) lists the rules, and [About the Threat Model](threat-model.md#open-redirect-after-login) the reasoning.
+
+The page is kept in the handshake file, on the router, beside `state`, not in a cookie or in the authorization request: the IdP never sees it, and the browser cannot change it between the two legs. The callback checks it again before redirecting, because the file sits on disk between the two requests.
 
 ### Token registry prevents access token replay
 

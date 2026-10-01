@@ -21,6 +21,7 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 
 ### Fixed
 
+- After an SSO login, LuCI opens the page that was requested, as with the password login (#27). The **Login with SSO** button sends the page it is on as `return_to`; the router keeps it in the handshake, never in a cookie or the request to the IdP, checks it again at the callback, and redirects there instead of always to `/cgi-bin/luci/`. Only a path under `/cgi-bin/luci/` is accepted: no other site, no `//`, no dot segments, only letters, digits and `/ _ . ~ % ? & = + , -`, at most 512 bytes, with every percent-decoded form checked too. Anything else is dropped, logged, and the login lands on `/cgi-bin/luci/` as before. See [`return_to` rules](https://m00qek.github.io/luci-sso/latest/reference/http-api/#return_to-rules).
 - The setup script adds the daily cleanup cron job even when a comment in `/etc/crontabs/root` mentions `/usr/sbin/luci-sso-cleanup`. Before, any line naming the script, a comment too, counted as the job, so the job was never added and expired token locks and handshakes were never removed. Removing the package now deletes only the job line, and keeps such comments. Both go through the new `luci-sso-cleanup --install-cron` and `--remove-cron`.
 - The login line `Successful Passwordless SSO login for [oidc_id: …]` says `(no email)` for a user without a verified email, instead of `[INVALID]`, which read like an error.
 
