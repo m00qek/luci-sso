@@ -135,6 +135,8 @@ export function load(deps) {
 		// option existed gets the safe behaviour.
 		require_email_verified: !(oidc_cfg.require_email_verified in [ "0", "no", "off", "false" ]),
 		trusted_proxy: trusted_proxy,
+		// The issuer the roles' sub rules were made for (sub_rules_apply).
+		sub_issuer: (type(oidc_cfg.sub_issuer) == "string" && length(oidc_cfg.sub_issuer)) ? oidc_cfg.sub_issuer : null,
 		roles: roles
 	});
 };
@@ -187,12 +189,46 @@ export function matchable_sub(claims) {
 };
 
 /**
+ * Whether the roles' sub rules count: only when sub_issuer, the issuer they
+ * were made for, is set and is exactly issuer_url (the same string equality
+ * as the iss check). A sub is unique only within its issuer (OIDC Core
+ * §5.7), so a rule made for one issuer must not match whoever another
+ * issuer gives the same sub, as after issuer_url changes. Otherwise every
+ * sub rule is ignored; email and group rules still count.
+ *
+ * @param {object} config - The loaded config
+ * @returns {boolean}
+ */
+export function sub_rules_apply(config) {
+	let bound = config.sub_issuer;
+	return type(bound) == "string" && length(bound) > 0 && bound === config.issuer_url;
+};
+
+/**
+ * Why the roles' sub rules are ignored at this login, for the log, or null
+ * when they count or no role has one (see sub_rules_apply). Both URLs are
+ * made log-safe.
+ *
+ * @param {object} config - The loaded config
+ * @returns {?string}
+ */
+export function ignored_sub_rules(config) {
+	if (sub_rules_apply(config)) return null;
+	if (!length(filter(config.roles, (r) => length(r.subs) > 0))) return null;
+	let bound = config.sub_issuer;
+	if (type(bound) != "string" || !length(bound))
+		return "Ignoring sub rules: sub_issuer is not set";
+	return `Ignoring sub rules: sub_issuer '${encoding.log_safe(bound)}' does not match issuer_url '${encoding.log_safe(config.issuer_url)}'`;
+};
+
+/**
  * Returns true when the claims match a role, by sub (exact), by email
- * (case-insensitive) or by group (exact).
+ * (case-insensitive) or by group (exact). A null sub matches no sub rule.
  *
  * The sub is compared as an exact, case-sensitive string: OIDC Core §5.7
  * makes the sub, together with the issuer, the only stable identifier of a
- * user, and luci-sso talks to one issuer, so the issuer is implied.
+ * user. find_role_for_user passes a sub only when sub_rules_apply says the
+ * rules were made for this issuer.
  *
  * Ignoring case in the whole email address is luci-sso's own matching
  * policy, not a standard's rule: RFC 5321 §2.4 lets the local part be
@@ -223,7 +259,7 @@ function _role_matches(role, sub, email, groups) {
 /**
  * Finds the role a user gets: the FIRST role, in config order, whose subs,
  * emails or groups match the claims (matchable_sub and matchable_email say
- * when the sub and the email count).
+ * when the sub and the email count; sub_rules_apply when the subs do).
  * A session carries one role's rights, because rpcd rebuilds it from a
  * single login entry; roles are not merged.
  *
@@ -233,7 +269,7 @@ function _role_matches(role, sub, email, groups) {
  *   where also_matched lists the other matching roles, in order
  */
 export function find_role_for_user(config, claims) {
-	let sub = matchable_sub(claims);
+	let sub = sub_rules_apply(config) ? matchable_sub(claims) : null;
 	let email = matchable_email(config, claims);
 	let groups = (type(claims.groups) == "array") ? claims.groups : [];
 	let matched = [];

@@ -163,7 +163,7 @@ Processes the callback. `deps`: all fields. In order, it:
 6. verifies the ID Token, forcing one JWK Set refresh on `KEY_NOT_FOUND`, or on `INVALID_SIGNATURE` when the token has a `kid`;
 7. fetches UserInfo when the ID Token has no `email`, and then takes `email` and `email_verified` both from UserInfo;
 8. registers the access token against replay;
-9. logs a warning when `config.matchable_email` sets an unverified email aside, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches. No match fails with `USER_NOT_AUTHORIZED` and `details` `{ http_status: 403, subject: <the ID Token's sub> }`, for the error page;
+9. logs a warning when `config.matchable_email` sets an unverified email aside, and one when `config.ignored_sub_rules` says the `sub` rules are ignored, then maps the claims to the first matching role (`config.find_role_for_user`) and logs it, with any other matches. No match fails with `USER_NOT_AUTHORIZED` and `details` `{ http_status: 403, subject: <the ID Token's sub> }`, for the error page;
 10. creates the `rpcd` session from the role's `rpcd` login entry, labelled with the email `config.session_email` returns. Any failure there, including `MISSING_RPCD_LOGIN` and `INSECURE_RPCD_LOGIN`, ends as `UBUS_LOGIN_FAILED` (500).
 
 | Field | Type | Description |
@@ -276,11 +276,20 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
 | `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (empty when unset). Each entry must pass `netaddr.parse_cidr()`, or the load fails with `CONFIG_ERROR`. |
+| `sub_issuer` | string or null | `luci-sso.default.sub_issuer`; `null` when unset or empty. Not checked: see `sub_rules_apply()`. |
 | `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
+
+### `sub_rules_apply(config)` → `bool`
+
+`true` when `config.sub_issuer` is a non-empty string identical to `config.issuer_url`. Only then do the roles' `sub` rules count (OIDC Core §5.7: a `sub` is unique only within its issuer).
+
+### `ignored_sub_rules(config)` → `string` or `null`
+
+The log line, without its `[session_id: …]`, for a login whose `sub` rules are ignored: `Ignoring sub rules: sub_issuer is not set`, or `Ignoring sub rules: sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>'`, both values through `encoding.log_safe()`. `null` when `sub_rules_apply(config)` or no role has a `sub` rule.
 
 ### `find_role_for_user(config, claims)` → `Result<{role_name, also_matched}>`
 
-Matches the sub `matchable_sub` returns (exact, case-sensitive), the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+Matches the sub `matchable_sub` returns (exact, case-sensitive; only when `sub_rules_apply(config)`), the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
 
 ### `matchable_sub(claims)` → `string` or `null`
 

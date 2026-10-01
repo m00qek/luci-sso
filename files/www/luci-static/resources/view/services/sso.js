@@ -23,6 +23,14 @@
  *    With UCI changes pending, that happens only once LuCI has applied and
  *    confirmed them (its `uci-applied` event): an apply that is rolled back
  *    writes no permissions. With none pending, it happens at once.
+ *
+ * Subject (sub) rules belong to one issuer: a sub identifies an account only
+ * at the provider that issued it (OIDC Core §5.7), so the backend counts them
+ * only while the option sub_issuer equals issuer_url. Each save of the form
+ * binds them (see bindSubIssuer): to the Issuer URL when they have no issuer
+ * yet or already have this one, never silently to a new one. After the
+ * Issuer URL changes, the page warns, and only the "Use these subject rules
+ * with the new provider" button moves them over.
  */
 
 var callListRoles = rpc.declare({
@@ -134,6 +142,11 @@ function roleRules() {
 	return uci.sections('luci-sso', 'role').map(function(s) {
 		return { name: s['.name'], email: L.toArray(s.email), group: L.toArray(s.group), sub: L.toArray(s.sub) };
 	});
+}
+
+/* Whether a role has a subject rule, as the page holds the roles. */
+function hasSubRules() {
+	return roleRules().some(function(r) { return r.sub.length > 0; });
 }
 
 /* A warning for Scopes: roles match by group, but the scopes do not ask
@@ -291,7 +304,8 @@ return view.extend({
 	load: function() {
 		return Promise.all([
 			callListRoles().catch(function(e) { return { failed: e }; }),
-			callListAclGroups().catch(function() { return null; })
+			callListAclGroups().catch(function() { return null; }),
+			uci.load('luci-sso')
 		]);
 	},
 
@@ -474,7 +488,80 @@ return view.extend({
 	handleReset: function() {
 		this.edited = {};
 		this.deleted = {};
+		this.rebindTo = null;
 		return this._map.reset();
+	},
+
+	/* The issuer the roles' subject rules belong to, or null when they have
+	 * none yet: the one the button chose, else sub_issuer, else, for rules
+	 * the page found without one, the Issuer URL it was loaded with. */
+	subOwner: function() {
+		if (this.rebindTo)
+			return this.rebindTo;
+		var bound = uci.get('luci-sso', 'default', 'sub_issuer');
+		if (bound)
+			return bound;
+		return this.loadedSubs ? (this.loadedIssuer || null) : null;
+	},
+
+	/* Fills a subject-rule slot for the Issuer URL `issuer`: a warning, with
+	 * the button, when the rules belong to another issuer; a notice when the
+	 * button has moved them to this one, until saved; nothing otherwise. */
+	renderSubIssuer: function(slot, issuer) {
+		if (!slot)
+			return;
+		var owner = this.subOwner();
+		var bound = uci.get('luci-sso', 'default', 'sub_issuer') || null;
+		var subs = hasSubRules();
+		slot.innerHTML = '';
+		if (subs && owner && issuer && owner !== issuer) {
+			slot.className = 'alert-message warning luci-sso-warning';
+			slot.appendChild(E('p', {}, _('Subject rules belong to <code>%h</code> and are ignored for <code>%h</code>. A subject identifies one account only at its own provider.').format(owner, issuer)));
+			slot.appendChild(E('button', {
+				'class': 'cbi-button cbi-button-action luci-sso-rebind',
+				'type': 'button',
+				'click': L.bind(function(ev) {
+					ev.preventDefault();
+					this.rebindTo = issuer;
+					this.updateSubIssuer(issuer);
+				}, this)
+			}, [ _('Use these subject rules with the new provider') ]));
+			slot.removeAttribute('hidden');
+		}
+		else if (subs && this.rebindTo && this.rebindTo === issuer && bound !== issuer) {
+			slot.className = 'alert-message notice luci-sso-warning';
+			slot.appendChild(E('p', {}, _('Subject rules will be used with <code>%h</code> after Save &amp; Apply.').format(issuer)));
+			slot.removeAttribute('hidden');
+		}
+		else {
+			slot.className = 'luci-sso-warning';
+			slot.setAttribute('hidden', '');
+		}
+	},
+
+	/* Refreshes every subject-rule slot, for the Issuer URL in the form. */
+	updateSubIssuer: function(issuer) {
+		document.querySelectorAll('[data-warning="sub-issuer"]').forEach(L.bind(function(slot) {
+			this.renderSubIssuer(slot, issuer);
+		}, this));
+	},
+
+	/* Run on each save of the form, once its values are parsed into UCI:
+	 * sets sub_issuer to the issuer the subject rules belong to (subOwner),
+	 * or to the Issuer URL when they have none yet, and removes it when no
+	 * role has a subject rule. So a first save binds the rules to the Issuer
+	 * URL, and one after an Issuer URL change keeps them bound to the old
+	 * issuer until the button moves them. */
+	bindSubIssuer: function() {
+		var bound = uci.get('luci-sso', 'default', 'sub_issuer') || '';
+		var next = hasSubRules() ? (this.subOwner() || uci.get('luci-sso', 'default', 'issuer_url') || '') : '';
+		this.rebindTo = null;
+		if (next === bound)
+			return;
+		if (next)
+			uci.set('luci-sso', 'default', 'sub_issuer', next);
+		else
+			uci.unset('luci-sso', 'default', 'sub_issuer');
 	},
 
 	render: function(data) {
@@ -483,12 +570,22 @@ return view.extend({
 
 		this.loadAccess(data[0]);
 		this.aclGroups = Array.isArray(data[1]) ? data[1] : null;
+		/* What the subject rules were found with (see subOwner). */
+		this.rebindTo = null;
+		this.loadedIssuer = uci.get('luci-sso', 'default', 'issuer_url') || '';
+		this.loadedSubs = hasSubRules();
 		if (!this.accessAvailable)
 			ui.addNotification(null, E('p', _('The role permissions could not be loaded from rpcd (luci-sso object): they are shown as unavailable and cannot be changed. Is the luci-sso package fully installed?')), 'warning');
 
 		m = this._map = new form.Map('luci-sso',
 			_('Single Sign-On'),
 			_('Log in to LuCI with your identity provider, using OpenID Connect (OIDC).'));
+		/* Each save binds the subject rules to their issuer, once the form's
+		 * values are in UCI and before LuCI stages them. */
+		var parse = m.parse;
+		m.parse = function() {
+			return parse.apply(this, arguments).then(function() { page.bindSubIssuer(); });
+		};
 
 		/* ------------------------------------------------------------------ */
 		/* Identity provider                                                    */
@@ -508,6 +605,15 @@ return view.extend({
 			return true;
 		};
 		o.placeholder = 'https://accounts.google.com';
+		o.renderWidget = function(section_id, option_index, cfgvalue) {
+			var node = form.Value.prototype.renderWidget.apply(this, [ section_id, option_index, cfgvalue ]);
+			var slot = E('div', { 'class': 'luci-sso-warning', 'data-warning': 'sub-issuer', 'hidden': '' });
+			page.renderSubIssuer(slot, (cfgvalue != null) ? String(cfgvalue) : (uci.get('luci-sso', section_id, 'issuer_url') || ''));
+			return E('div', {}, [ node, slot ]);
+		};
+		o.onchange = function(ev, section_id, value) {
+			page.updateSubIssuer(String(value || ''));
+		};
 
 		o = s.taboption('provider', form.Value, 'client_id', _('Client ID'),
 		        _('From the client (application) you created for this router at your identity provider.'));
@@ -696,6 +802,18 @@ return view.extend({
 			input.addEventListener('blur', check);
 			input.addEventListener('input', check);
 			el.appendChild(msg);
+			return el;
+		};
+		/* The subject-rule warning, above the table as well. */
+		s.renderContents = function(cfgsections, nodes) {
+			var el = form.GridSection.prototype.renderContents.apply(this, [ cfgsections, nodes ]);
+			var slot = E('div', { 'class': 'luci-sso-warning', 'data-warning': 'sub-issuer', 'hidden': '' });
+			page.renderSubIssuer(slot, uci.get('luci-sso', 'default', 'issuer_url') || '');
+			var descr = el.querySelector('.cbi-section-descr');
+			if (descr)
+				descr.parentNode.insertBefore(slot, descr.nextSibling);
+			else
+				el.insertBefore(slot, el.firstChild);
 			return el;
 		};
 		s.handleRemove = function(section_id, ev) {
