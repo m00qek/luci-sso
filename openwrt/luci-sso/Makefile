@@ -14,6 +14,26 @@ PKG_DEPENDS:=+ucode +libucode +ucode-mod-fs +ucode-mod-ubus +ucode-mod-uci +ucod
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
+# The crypto backend installed with luci-sso when none is named: mbedtls, on
+# both package managers. Each backend provides luci-sso-crypto, and naming
+# another one at install time installs it instead.
+#
+# apk (OpenWrt 25.12) picks among the providers of luci-sso-crypto by
+# provider priority, and DEFAULT_VARIANT:=1 gives the mbedtls backend the
+# highest one (100). opkg (OpenWrt 24.10) has no provider priority: it prefers
+# a provider named exactly like the dependency, or named on the command line,
+# and breaks a tie with the name that sorts last. So for opkg luci-sso depends
+# on luci-sso-crypto-mbedtls itself, which the other backends also provide:
+# named on the command line, they tie with it and sort after it. A new
+# backend's name must sort after luci-sso-crypto-mbedtls too.
+ifeq ($(CONFIG_USE_APK),)
+  LUCI_SSO_CRYPTO:=luci-sso-crypto-mbedtls
+  LUCI_SSO_CRYPTO_ALIAS:=luci-sso-crypto-mbedtls
+else
+  LUCI_SSO_CRYPTO:=luci-sso-crypto
+  LUCI_SSO_CRYPTO_ALIAS:=
+endif
+
 # luci-sso itself installs only ucode, shell scripts, JavaScript, JSON and its
 # config, so one package serves every architecture (PKGARCH:=all). The native
 # code, native.so, is in the luci-sso-crypto-* packages, built per architecture.
@@ -21,7 +41,7 @@ define Package/$(PKG_NAME)
   SECTION:=utils
   CATEGORY:=Utilities
   TITLE:=OIDC/OAuth2 SSO for LuCI
-  DEPENDS:=$(PKG_DEPENDS) +luci-sso-crypto +luci-base
+  DEPENDS:=$(PKG_DEPENDS) +$(LUCI_SSO_CRYPTO) +luci-base
   PKGARCH:=all
 endef
 
@@ -39,6 +59,7 @@ define Package/$(PKG_NAME)-crypto-mbedtls
   TITLE:=MbedTLS backend for $(PKG_NAME)
   DEPENDS:=+libucode +libmbedtls
   PROVIDES:=luci-sso-crypto
+  DEFAULT_VARIANT:=1
 endef
 
 define Package/$(PKG_NAME)-crypto-wolfssl
@@ -46,7 +67,7 @@ define Package/$(PKG_NAME)-crypto-wolfssl
   CATEGORY:=Utilities
   TITLE:=WolfSSL backend for $(PKG_NAME)
   DEPENDS:=+libucode +libwolfssl
-  PROVIDES:=luci-sso-crypto
+  PROVIDES:=luci-sso-crypto $(LUCI_SSO_CRYPTO_ALIAS)
 endef
 
 define Package/$(PKG_NAME)-crypto-openssl
@@ -54,7 +75,7 @@ define Package/$(PKG_NAME)-crypto-openssl
   CATEGORY:=Utilities
   TITLE:=OpenSSL backend for $(PKG_NAME)
   DEPENDS:=+libucode +libopenssl
-  PROVIDES:=luci-sso-crypto
+  PROVIDES:=luci-sso-crypto $(LUCI_SSO_CRYPTO_ALIAS)
 endef
 
 define Build/Prepare
