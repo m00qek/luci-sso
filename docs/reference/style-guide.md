@@ -644,7 +644,8 @@ luci-sso/
 │   ├── entry.uc           # CGI pipeline: request → config → router → response
 │   ├── deps.uc            # Production dependency graph (fs, http, ubus, uci, clock, native, log)
 │   ├── router.uc          # Endpoint dispatch, logout
-│   ├── ratelimit.uc       # Per-client rate limits
+│   ├── ratelimit.uc       # Per-client rate limits, and the trusted proxy exemption
+│   ├── netaddr.uc         # IP address and CIDR parsing
 │   ├── handshake.uc       # OIDC login orchestration
 │   ├── connection.uc      # The settings page's connection test
 │   ├── oidc.uc            # Authorization URL, token exchange, ID-token checks, UserInfo

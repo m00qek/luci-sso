@@ -127,7 +127,7 @@ These occur on the first request that needs the configuration.
 
 Notes:
 
-- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, or when no role has an email or group. The `<reason>` names the option but never its value.
+- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, when a `trusted_proxy` entry is not an IP address or CIDR range, or when no role has an email or group. The `<reason>` names the option but never its value.
 
 ---
 
@@ -450,6 +450,7 @@ Every line `luci-sso` writes to the system log, in the order a login meets them.
 | `Router crash: <message>`, followed by a stack trace | err | An unexpected exception, answered with a 500 page. File a bug with the trace. |
 | `Login rate limit exceeded for client [id: …]: <count> in 300s [limit: 10]` | warn | Before `[429] TOO_MANY_REQUESTS`. See [System Errors](#system-errors). |
 | `Request rate limit exceeded for client [id: …]: <count> in 60s [limit: 30]` | warn | Before `[429] TOO_MANY_REQUESTS`. See [System Errors](#system-errors). |
+| `Request from trusted proxy [id: …] skips the per-client rate limits (trusted_proxy); not logged again for 3600s` | info | A request came from an address in `trusted_proxy`, so neither per-client budget was spent; the limits that count every client together still apply. Logged on the first such request, then at most once an hour, whichever proxy it is for. `[id: …]` is the hash of the proxy's client key. Expected behind a reverse proxy; if there is none, remove the option. See [Trusted proxies](http-api.md#trusted-proxies). |
 | `Rate limit state file is corrupt; starting from empty` | warn | `/var/run/luci-sso/ratelimit.json` could not be read as JSON, so every client's count starts again from zero. The request goes on. |
 | `Rate limit state not saved: CSPRNG failure` | err | This request's counts were not saved, so while this lasts the per-client budgets are not enforced across requests. The random number generator failed; see `CRYPTO_INIT_FAILED` in [System Errors](#system-errors). |
 | `Failed to write rate limit state file` | err | As above, because the new counts could not be written. Check free space in `/var/run/luci-sso/`. |

@@ -111,7 +111,19 @@ The `?action=enabled` probe is exempt from rate limiting — it reads a single U
 
 **Residual risk.** An attacker who controls many addresses, or many IPv6 `/64`s, gets a separate budget for each. With about 50 of them, each starting 10 logins, they can fill the 500-slot handshake table and keep it full, blocking *new* SSO logins for as long as the flood lasts. Logins already in progress survive, and password login at `/cgi-bin/luci` is unaffected, so administrators are never locked out.
 
-**Reverse proxies.** Behind a reverse proxy, `REMOTE_ADDR` is the proxy's address, so every client shares one budget. That is no worse than the old global counter. `X-Forwarded-For` is deliberately not trusted: any client can set it, so honouring it would let an attacker choose a fresh budget per request.
+### Trusted proxies
+
+Behind a reverse proxy, `REMOTE_ADDR` is the proxy's address, so every client would share one budget, and one client starting 10 logins would lock everyone else out of SSO for five minutes. `luci-sso` cannot tell the clients apart. The proxy knows each one's address and could pass it in `X-Forwarded-For`, but `uhttpd` passes only a fixed list of request headers to CGI scripts, and that header is not on it. Even if it were, it would be plain request data, which a client could fill in itself to pick a fresh budget for every request.
+
+So the per-client limiting moves to the proxy, which sees the real addresses. The `trusted_proxy` option lists the proxy's address, and a request whose `REMOTE_ADDR` is on the list skips both per-client budgets. `REMOTE_ADDR` is the one address a client cannot forge over TCP, and no header is read. Everything that counts all clients together still applies to these requests: the cap of 500 logins in progress, which never evicts a live login, the size limits, and `uhttpd`'s cap on concurrent CGI processes. A proxy that does not limit its clients therefore cannot do more harm than the [residual risk](#denial-of-service) above: it can fill the handshake table and block new SSO logins, but not take over the logins in progress or password login.
+
+**An exempted address must be one only the proxy can send from.** Whoever can reach `uhttpd` from a listed address gets no per-client limit from `luci-sso`, and does not pass through the proxy's limits either. Listing an address that other clients can come from hands them that exemption. That is why, with the proxy on the router, the address is `127.0.0.1` (or `::1`), and not the router's LAN address or a LAN range:
+
+- A LAN range holds the users' own devices. Each of them reaching `uhttpd` directly would be exempt.
+- For the proxy to reach `uhttpd` at the router's LAN address, `uhttpd` must listen on the LAN. Browsers on the LAN can then reach it directly, past the proxy's limits, and with a LAN range listed, past `luci-sso`'s too.
+- `127.0.0.1` is reachable only by programs on the router itself, and with `uhttpd` listening on the loopback interface only, nothing else can reach `uhttpd` at all.
+
+A proxy on another host is the same: list its one address, and let no other host reach `uhttpd`. So that the exemption is never silent, the first exempted request logs a notice, and then at most one an hour.
 
 ---
 

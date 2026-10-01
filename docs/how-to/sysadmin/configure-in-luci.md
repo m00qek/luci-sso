@@ -58,6 +58,7 @@ The defaults suit most setups.
 1.  Leave **Require Verified Email** ticked. Clear it only if your IdP cannot send `email_verified: true` and users cannot set their own address; see [About Roles and Permissions](../../explanation/roles-and-permissions.md#verified-email-addresses). While it is ticked, a warning under it names the roles that match by email only: they let a user in only if the IdP marks the address as verified.
 2.  Leave **Clock Tolerance** at `60` unless logins fail with `TOKEN_EXPIRED` or `TOKEN_ISSUED_IN_FUTURE` while the clocks look right.
 3.  If the router reaches the IdP at a different address than browsers do, set **Internal Issuer URL** to that origin (`https://host[:port]`, no path). Otherwise leave it empty. See [How to Configure Split-Horizon Networking](split-horizon.md).
+4.  Leave **Trusted Proxy** empty unless LuCI sits behind a reverse proxy that limits each client itself. See [How to Run LuCI Behind a Reverse Proxy](reverse-proxy.md#4-exempt-the-proxy-from-luci-ssos-per-client-limits).
 
 ---
 

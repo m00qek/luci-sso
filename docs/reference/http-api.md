@@ -198,7 +198,7 @@ For what each code means and how it is logged, see [Log Messages](log-messages.m
 
 ## Request limits
 
-The size limits apply to every request, including `?action=enabled`. The rate limits apply to every request except `?action=enabled`.
+The size limits apply to every request, including `?action=enabled`. The per-client rate limits apply to every request except `?action=enabled` and requests from a [trusted proxy](#trusted-proxies).
 
 <!-- LIMIT_LOGIN_REQUESTS=10 -->
 <!-- LIMIT_LOGIN_WINDOW=300 -->
@@ -216,19 +216,30 @@ The size limits apply to every request, including `?action=enabled`. The rate li
 | Maximum `PATH_INFO` or `REMOTE_ADDR` length | 16 384 bytes |
 | Maximum number of query parameters | 100 |
 | Maximum number of cookies | 100 |
-| Login initiations (`GET /`) per client | 10 per 5 minutes |
-| Rate-limited requests per client | 30 per minute |
+| Login initiations (`GET /`) per client | 10 per 5 minutes; not for a trusted proxy |
+| Rate-limited requests per client | 30 per minute; not for a trusted proxy |
 | Clients tracked at once | 256; the least recently seen is forgotten first |
-| Logins in progress (handshakes) | 500 at once; expired ones are removed to make room, live ones never are. Beyond that, a new login gets `503` |
+| Logins in progress (handshakes) | 500 at once, for every client together, a trusted proxy included; expired ones are removed to make room, live ones never are. Beyond that, a new login gets `503` |
 
 Rate limits are per client:
 
 - **Client identity.** A client is its source address as uhttpd reports it (`REMOTE_ADDR`): the full address for IPv4, the `/64` prefix for IPv6, and one shared bucket for an address that cannot be parsed.
 - **Budgets spent.** `GET /` spends both budgets; `/callback`, `/logout` and unknown paths spend only the per-minute one. `?action=enabled` is never limited.
-- **No global limit.** There is no router-wide limit: uhttpd's cap on concurrent CGI processes bounds the total load.
-- **Reverse proxies.** Behind a reverse proxy, every client arrives with the proxy's address and shares one budget. `X-Forwarded-For` is not trusted. See [How to Run LuCI Behind a Reverse Proxy](../how-to/sysadmin/reverse-proxy.md).
+- **No global rate limit.** There is no router-wide request budget: uhttpd's cap on concurrent CGI processes bounds the total load. The size limits and the cap on logins in progress apply to every request.
 
 Requests that exceed the size limits return `431`. Requests that exceed a rate limit return `429` with a `Retry-After` header giving the seconds until that budget resets.
+
+### Trusted proxies
+
+Behind a reverse proxy, every request arrives from the proxy's address, so `luci-sso` would count every user as one client. It cannot tell them apart: `uhttpd` passes only a fixed list of request headers to CGI scripts, and `X-Forwarded-For` and `X-Real-IP` are not on it.
+
+The [`trusted_proxy`](uci-config.md#oidc-section-notes) option lists the proxies' addresses. A request whose `REMOTE_ADDR` is in the list:
+
+- spends neither per-client budget, and never gets `429` from `luci-sso`;
+- is not tracked in the rate-limit state file;
+- is still subject to the size limits (`431`) and to the cap of 500 logins in progress (`503`), which count every client together.
+
+No request header is read to decide this. The proxy must limit each client itself; [How to Run LuCI Behind a Reverse Proxy](../how-to/sysadmin/reverse-proxy.md#why-nginx-limits-the-clients) has an nginx configuration with the same numbers. The first exempted request logs a notice, and then at most one an hour; see [Log Messages](log-messages.md#any-request).
 
 ---
 
