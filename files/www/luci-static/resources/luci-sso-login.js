@@ -94,7 +94,13 @@
 
 			// Always start the SSO flow over HTTPS, even from an HTTP page: every
 			// cookie it sets is Secure.
-			window.location.href = 'https://' + window.location.host + '/cgi-bin/luci-sso';
+			// LuCI shows its login page at the address that was asked for, so
+			// pass that page on as return_to: the router opens it after the
+			// login, as the password login does (issue #27). The router checks
+			// it and keeps it on the router. The #fragment is not sent.
+			var page = window.location.pathname + window.location.search;
+			window.location.href = 'https://' + window.location.host + '/cgi-bin/luci-sso' +
+				'?return_to=' + encodeURIComponent(page);
 		};
 
 		return ssoBtn;

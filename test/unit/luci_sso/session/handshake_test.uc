@@ -140,6 +140,31 @@ describe('session.handshake: create', () => {
 		});
 	});
 
+	it('stores return_to with the handshake when given', () => {
+		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
+			let res = handshake.create(make_deps(injected), 0, '/cgi-bin/luci/admin/services/sso');
+			assert.match(contains({ ok: true }), res);
+			let stored = json(injected.fs.readfile(DIR + '/handshake_' + res.data.token + '.json'));
+			assert.match('/cgi-bin/luci/admin/services/sso', stored.return_to);
+			assert.match(null, res.data.return_to, 'never handed back for the cookie or the IdP');
+		});
+	});
+
+	it('stores no return_to when none is given', () => {
+		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
+			let res = handshake.create(make_deps(injected), 0);
+			let stored = json(injected.fs.readfile(DIR + '/handshake_' + res.data.token + '.json'));
+			assert.match(false, exists(stored, 'return_to'));
+		});
+	});
+
+	it('dies for a return_to that is neither a string nor null', () => {
+		mock.inject_all({ fs: fs_mock(), clock: { data: { now: NOW } } }, (injected) => {
+			assert.throws(() => handshake.create(make_deps(injected), 0, 42), /CONTRACT_VIOLATION/);
+			assert.throws(() => handshake.create(make_deps(injected), 0, {}), /CONTRACT_VIOLATION/);
+		});
+	});
+
 	// At the cap: LIMIT_PENDING_HANDSHAKES files, `expired` of them old enough
 	// that verify would reject them (mtime = iat; exp = iat + HANDSHAKE_DURATION).
 	function full_dir(expired) {
@@ -402,6 +427,17 @@ describe('session.handshake: verify', () => {
 		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
 			assert.match(
 				contains({ ok: true, data: contains({ state: 'state_value', nonce: 'nonce_value', code_verifier: VERIFIER }) }),
+				handshake.verify(make_deps(injected), HANDLE, 'state_value', 0)
+			);
+		});
+	});
+
+	it('returns the stored return_to with the handshake', () => {
+		let data = {};
+		data[PATH] = make_state({ return_to: '/cgi-bin/luci/admin/services/sso' });
+		mock.inject_all({ fs: fs_mock(data), clock: { strict: true, data: { now: NOW } } }, (injected) => {
+			assert.match(
+				contains({ ok: true, data: contains({ return_to: '/cgi-bin/luci/admin/services/sso' }) }),
 				handshake.verify(make_deps(injected), HANDLE, 'state_value', 0)
 			);
 		});

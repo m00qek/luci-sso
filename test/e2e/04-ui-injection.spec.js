@@ -169,16 +169,17 @@ test.describe('UI: Login Button Injection', () => {
     const ssoBtn = page.locator('#luci-sso-login-btn');
     
     // Set up interception for the redirect target
-    let redirected = false;
-    await page.route('**/cgi-bin/luci-sso', route => {
-      redirected = true;
+    let redirected = '';
+    await page.route(/\/cgi-bin\/luci-sso(\?return_to=[^&]*)?$/, route => {
+      redirected = route.request().url();
       route.fulfill({ status: 200, body: 'Intercepted' });
     });
 
     await ssoBtn.click();
     
-    // Verify redirection happened via network layer
-    await expect.poll(() => redirected).toBe(true);
+    // Verify redirection happened via network layer, carrying the page the
+    // button was clicked on as return_to (issue #27)
+    await expect.poll(() => redirected).toBe('https://luci.luci-sso.test/cgi-bin/luci-sso?return_to=%2Fmock-login');
   });
 
   test('Integration: Real LuCI Login Page Detection', async ({ page }) => {

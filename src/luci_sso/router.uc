@@ -19,6 +19,12 @@ import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'l
  */
 
 /**
+ * Where a completed login lands when it has no page to return to.
+ * @private
+ */
+const LUCI_START = "/cgi-bin/luci/";
+
+/**
  * Creates a response object.
  * @private
  */
@@ -34,13 +40,16 @@ function response(status, headers, body) {
  * Handles the initial login redirect.
  * @private
  */
-function handle_login(deps, config) {
+function handle_login(deps, config, request) {
 	let reap_res = session.reap_stale_handshakes(deps, config.clock_tolerance);
 	if (reap_res.ok && reap_res.data > 0) {
 		deps.log("info", `Cleaned up ${reap_res.data} stale handshakes`);
 	}
 
-	let res = handshake.initiate(deps, config);
+	// The page the user asked for (issue #27). handshake.initiate validates
+	// it and keeps it in the handshake file, never in a cookie.
+	let query = request.query || {};
+	let res = handshake.initiate(deps, config, query.return_to);
 	if (!res.ok) return res;
 
 	return Result.ok(response(302, {
@@ -67,7 +76,9 @@ function handle_callback(deps, config, request) {
 	// POST, iframe or XHR, so CSRF protection is unaffected -- the same
 	// reasoning already applied to __Host-luci_sso_state above.
 	return Result.ok(response(302, {
-		"Location": "/cgi-bin/luci/",
+		// The page the login started from, already checked against
+		// encoding.return_path by handshake.authenticate; else LuCI's start.
+		"Location": res.data.return_to || LUCI_START,
 		// LuCI's admin node accepts either sysauth_https or sysauth_http,
 		// whatever the scheme; HTTPS only decides which one its own password
 		// login sets. sysauth_http is deliberately NOT set: every cookie here
@@ -225,7 +236,7 @@ export function handle(deps, config, request) {
 		return Result.err(SSO_DISABLED, { http_status: 500 });
 	}
 	if (path == "/") {
-		return handle_login(deps, config);
+		return handle_login(deps, config, request);
 	} else if (path == "/callback") {
 		return handle_callback(deps, config, request);
 	} else if (path == "/logout") {

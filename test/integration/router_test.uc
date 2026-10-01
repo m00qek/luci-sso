@@ -412,6 +412,152 @@ describe('router: routing', () => {
 	});
 });
 
+// ─── return_to (issue #27) ───────────────────────────────────────────────────
+
+// A whole login through router.handle: GET / with the given query, then the
+// callback with the state and cookie it handed out. `tamper`, when given, may
+// change the stored handshake before the callback, as an edit of the file on
+// disk would. Returns the initiation and callback responses, the stored
+// handshake (before tampering) and the log lines.
+function login_round_trip(query, tamper) {
+	let at = "mock-access-token-return-to";
+	let pending_id_token = null;
+	let out = { logs: [] };
+
+	with_context({
+		fs: { data: {} },
+		http_client: {
+			data: {
+				"https://idp.com/.well-known/openid-configuration": { status: 200, body: MOCK_DISC_DOC },
+				"https://idp.com/jwks": { status: 200, body: { keys: [ tf.MOCK_JWK ] } }
+			},
+			behavior: {
+				post: (url, opts) => {
+					if (url == "https://idp.com/token")
+						return { ok: true, data: { status: 200, body: sprintf("%J", { access_token: at, id_token: pending_id_token }) } };
+					return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
+				}
+			}
+		},
+		uci: { data: rpcd_logins({ system_admin: { read: ["*"], write: ["*"] } }) },
+		ubus: {
+			data: {
+				"session:create": (args) => ({ ubus_rpc_session: "session-return-to" }),
+				"session:grant": UBUS_NO_DATA,
+				"session:set": UBUS_NO_DATA
+			}
+		},
+		clock: { data: { now: 1516239022 } }
+	}, (deps) => {
+		deps.log = (level, msg) => push(out.logs, `${level}: ${msg}`);
+
+		let start = router.handle(deps, MOCK_CONFIG, mock_request("/", query));
+		assert.match(truthy(), start.ok, "the login starts");
+		out.start = start.data;
+
+		let state = match(start.data.headers["Location"], /[?&]state=([A-Za-z0-9_-]+)/)[1];
+		let token = match(start.data.headers["Set-Cookie"], /^__Host-luci_sso_state=([A-Za-z0-9_-]+);/)[1];
+		let path = `${common.HANDSHAKE_DIR}/handshake_${token}.json`;
+		let stored = json(deps.fs.readfile(path));
+		out.stored = { ...stored };
+		if (tamper) {
+			tamper(stored);
+			deps.fs.writefile(path, sprintf("%J", stored));
+		}
+
+		let at_hash = encoding.b64url_encode(substr(crypto.hash_sha256(native, at).data, 0, 16)).data;
+		let payload = { ...tf.MOCK_CLAIMS, iss: "https://idp.com", email: "user-123", nonce: stored.nonce, at_hash: at_hash };
+		pending_id_token = h.generate_id_token(payload, tf.MOCK_PRIVKEY, "RS256");
+
+		let res = router.handle(deps, MOCK_CONFIG, mock_request("/callback", { code: "c", state: state }, { "__Host-luci_sso_state": token }));
+		assert.match(truthy(), res.ok, "the callback succeeds");
+		out.callback = res.data;
+	});
+
+	return out;
+}
+
+function logged(out, pattern) {
+	return length(filter(out.logs, (l) => match(l, pattern))) > 0;
+}
+
+describe('router: return_to — the requested page', () => {
+	it('returns to the page the login started from', () => {
+		let page = "/cgi-bin/luci/admin/services/sso";
+		let out = login_round_trip({ return_to: page });
+		assert.match(302, out.callback.status);
+		assert.match(page, out.callback.headers["Location"]);
+		assert.match(page, out.stored.return_to, "kept in the handshake on the router");
+	});
+
+	it('keeps the query string of the page', () => {
+		let page = "/cgi-bin/luci/admin/system/package-manager?query=luci&page=2";
+		let out = login_round_trip({ return_to: page });
+		assert.match(page, out.callback.headers["Location"]);
+	});
+
+	it('never sends return_to to the IdP or puts it in a cookie', () => {
+		let out = login_round_trip({ return_to: "/cgi-bin/luci/admin/services/sso" });
+		assert.match(-1, index(out.start.headers["Location"], "return_to"));
+		assert.match(-1, index(out.start.headers["Location"], "services"));
+		assert.match(-1, index(out.start.headers["Set-Cookie"], "services"));
+		for (let c in out.callback.headers["Set-Cookie"])
+			assert.match(-1, index(c, "services"));
+	});
+
+	it('without return_to, the callback still lands on /cgi-bin/luci/ and logs nothing about it', () => {
+		let out = login_round_trip({});
+		assert.match("/cgi-bin/luci/", out.callback.headers["Location"]);
+		assert.match(false, exists(out.stored, "return_to"));
+		assert.match(false, logged(out, /return_to/));
+	});
+});
+
+describe('router: return_to — hostile values', () => {
+	for (let hostile in [
+		"https://evil.example/",
+		"//evil.example/",
+		"/\\evil.example",
+		"/cgi-bin/luci//evil.example",
+		"/cgi-bin/luci/../../evil",
+		"/cgi-bin/luci/%2e%2e/%2e%2e/",
+		"/cgi-bin/luci/\r\nSet-Cookie:x",
+		"/cgi-bin/luci-sso/logout",
+		"javascript:alert(1)",
+	]) {
+		let value = hostile;
+		it(`drops ${encoding.log_safe(value)} at the start and lands on /cgi-bin/luci/`, () => {
+			let out = login_round_trip({ return_to: value });
+			assert.match(false, exists(out.stored, "return_to"), "nothing is stored");
+			assert.match("/cgi-bin/luci/", out.callback.headers["Location"]);
+			assert.match(truthy(), logged(out, /^info: Ignoring return_to /));
+		});
+	}
+
+	it('falls back to /cgi-bin/luci/ when the stored page was edited to another site', () => {
+		let out = login_round_trip({ return_to: "/cgi-bin/luci/admin/services/sso" }, (hs) => {
+			hs.return_to = "//evil.example/";
+		});
+		assert.match("/cgi-bin/luci/", out.callback.headers["Location"]);
+		assert.match(truthy(), logged(out, /^warn: Stored return_to refused: not a LuCI page; returning to LuCI's start page \[session_id: /));
+	});
+
+	it('falls back to /cgi-bin/luci/ when the stored page is not a string', () => {
+		let out = login_round_trip({ return_to: "/cgi-bin/luci/admin/services/sso" }, (hs) => {
+			hs.return_to = { href: "https://evil.example/" };
+		});
+		assert.match("/cgi-bin/luci/", out.callback.headers["Location"]);
+		assert.match(truthy(), logged(out, /^warn: Stored return_to refused: not a string/));
+	});
+
+	it('falls back to /cgi-bin/luci/ when a page was planted in a handshake that had none', () => {
+		let out = login_round_trip({}, (hs) => {
+			hs.return_to = "https://evil.example/";
+		});
+		assert.match("/cgi-bin/luci/", out.callback.headers["Location"]);
+	});
+});
+
 // ─── folded reproduction cases (← tier2 router_*, cgi_error, dos_ratelimit) ────
 
 describe('router: enabled action (reproduction)', () => {

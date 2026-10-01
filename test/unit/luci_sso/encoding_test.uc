@@ -389,3 +389,155 @@ describe('encoding: log_safe', () => {
 	});
 });
 
+
+// ─── return_path ─────────────────────────────────────────────────────────────
+
+describe('encoding: return_path — accepted', () => {
+	it('accepts LuCI pages, returning the value unchanged', () => {
+		for (let p in [
+			'/cgi-bin/luci',
+			'/cgi-bin/luci/',
+			'/cgi-bin/luci/admin/services/sso',
+			'/cgi-bin/luci/admin/status/overview/',
+			'/cgi-bin/luci/admin/network/wireless/radio0.network1',
+			'/cgi-bin/luci/admin/system/package-manager?query=luci-app_x~1&page=2',
+			'/cgi-bin/luci?tab=general',
+			'/cgi-bin/luci/admin/a%2Bb,c=d',
+		])
+			assert.match(contains({ ok: true, data: p }), encoding.return_path(p), p);
+	});
+
+	it('accepts a value of exactly 512 bytes', () => {
+		let p = '/cgi-bin/luci/';
+		while (length(p) < 512) p += 'a';
+		assert.match(contains({ ok: true, data: p }), encoding.return_path(p));
+	});
+
+	it('accepts a dot inside a segment, which is not a dot segment', () => {
+		assert.match(contains({ ok: true }), encoding.return_path('/cgi-bin/luci/admin/a..b/.c/d.'));
+	});
+});
+
+describe('encoding: return_path — refused', () => {
+	const HOSTILE = [
+		// Another site
+		'https://evil.example/',
+		'HTTPS://evil.example/',
+		'//evil.example/',
+		'///evil.example/',
+		'/\\evil.example',
+		'\\\\evil.example',
+		'javascript:alert(1)',
+		'data:text/html,x',
+		'evil.example/cgi-bin/luci/',
+		'/cgi-bin/luci/@evil.example',
+		'/cgi-bin/luci//evil.example',
+		'/cgi-bin/luci/admin#//evil.example',
+		// Out of LuCI
+		'/',
+		'/cgi-bin/luci-sso',
+		'/cgi-bin/luci-sso/',
+		'/cgi-bin/luci-sso/logout',
+		'/cgi-bin/luci-sso/callback?code=x',
+		'/cgi-bin/lucifer',
+		'/cgi-bin/luci/../../evil',
+		'/cgi-bin/luci/../luci-sso/logout',
+		'/cgi-bin/luci/./admin',
+		'/cgi-bin/luci/admin/..',
+		'/ubus/',
+		'cgi-bin/luci/',
+		// LuCI's own logout page
+		'/cgi-bin/luci/admin/logout',
+		'/cgi-bin/luci/admin/logout/',
+		'/cgi-bin/luci/admin/logout?x=1',
+		// Percent-encoded tricks
+		'%2F%2Fevil.example',
+		'/cgi-bin/luci/%2F%2Fevil.example',
+		'/cgi-bin/luci/%2f/evil',
+		'/cgi-bin/luci/%2e%2e/%2e%2e/',
+		'/cgi-bin/luci/%2E%2E/%2E%2E/evil',
+		'/cgi-bin/luci/%2e/admin',
+		'/cgi-bin/luci/.%2e/luci-sso',
+		'/%5Cevil.example',
+		'/cgi-bin/luci/%5Cevil',
+		'/cgi-bin/luci/%0d%0aSet-Cookie:x',
+		'/cgi-bin/luci/%0D%0ALocation:%20https://evil',
+		'/cgi-bin/luci/%00',
+		'/cgi-bin/luci/%09',
+		'/cgi-bin/luci/%40evil',
+		'/cgi-bin/luci/%3a',
+		'/cgi-bin/luci/%23x',
+		'/cgi-bin/luci/%C3%A9',
+		'/cgi-bin/luci/admin%2F..%2F..%2Fevil',
+		'/cgi-bin/luci/a?next=%2F%2Fevil',
+		// Double and deeper encoding
+		'/cgi-bin/luci/%252e%252e/%252e%252e/evil',
+		'/cgi-bin/luci/%252F%252Fevil',
+		'/cgi-bin/luci/%255C',
+		'/cgi-bin/luci/%250d%250a',
+		'/cgi-bin/luci/%25252e',
+		'/cgi-bin/luci/%2525252e',
+		// Malformed escapes
+		'/cgi-bin/luci/%',
+		'/cgi-bin/luci/%2',
+		'/cgi-bin/luci/%zz',
+		'/cgi-bin/luci/%25zz',
+		// Raw control characters, whitespace and other bytes
+		'/cgi-bin/luci/\r\nSet-Cookie:x',
+		'/cgi-bin/luci/\nx',
+		'/cgi-bin/luci/\tx',
+		'/cgi-bin/luci/\u0000x',
+		'/cgi-bin/luci/ x',
+		'/cgi-bin/luci/"x',
+		'/cgi-bin/luci/<script>',
+		'/cgi-bin/luci/admin/x%20y',
+		'/cgi-bin/luci/;stok=x',
+		// Unicode
+		'/cgi-bin/luci/é',
+		'/cgi-bin/luci/∕∕evil',
+		'/cgi-bin/luci/／／evil',
+		'。/evil',
+	];
+
+	it('refuses every hostile value', () => {
+		for (let v in HOSTILE)
+			assert.match(contains({ ok: false, error: 'INVALID_RETURN_PATH' }), encoding.return_path(v), v);
+	});
+
+	it('refuses an empty value', () => {
+		assert.match(contains({ ok: false, error: 'INVALID_RETURN_PATH', details: 'empty' }), encoding.return_path(''));
+	});
+
+	it('refuses a value over 512 bytes', () => {
+		let p = '/cgi-bin/luci/';
+		while (length(p) < 513) p += 'a';
+		assert.match(contains({ ok: false, details: 'longer than 512 bytes' }), encoding.return_path(p));
+	});
+
+	it('refuses a non-string', () => {
+		for (let v in [ null, 42, true, [ '/cgi-bin/luci/' ], { path: '/cgi-bin/luci/' } ])
+			assert.match(contains({ ok: false, error: 'INVALID_RETURN_PATH', details: 'not a string' }), encoding.return_path(v));
+	});
+
+	it('names the reason', () => {
+		assert.match(contains({ details: 'not a LuCI page' }),                         encoding.return_path('/evil'));
+		assert.match(contains({ details: 'contains //' }),                             encoding.return_path('/cgi-bin/luci//evil'));
+		assert.match(contains({ details: 'contains a dot segment' }),                  encoding.return_path('/cgi-bin/luci/%2e%2e/'));
+		assert.match(contains({ details: 'holds a character outside the allowed set' }), encoding.return_path('/cgi-bin/luci/%5C'));
+		assert.match(contains({ details: 'has a malformed percent escape' }),          encoding.return_path('/cgi-bin/luci/%zz'));
+		assert.match(contains({ details: 'percent-encoded too many times' }),          encoding.return_path('/cgi-bin/luci/%2525252e'));
+		assert.match(contains({ details: "is LuCI's logout page" }),                   encoding.return_path('/cgi-bin/luci/admin/logout'));
+	});
+
+	prop('anything accepted is a LuCI path with only allowed characters and no //', gen.string({ max_len: 80 }), (s, ctx) => {
+		for (let v in [ s, '/cgi-bin/luci/' + s ]) {
+			let res = encoding.return_path(v);
+			ctx.classify('accepted', res.ok);
+			if (!res.ok) continue;
+			assert.match(v, res.data);
+			assert.match(regex(/^\/cgi-bin\/luci(\/|\?|$)/), v);
+			assert.match(regex(/^[A-Za-z0-9\/_.~%?&=+,-]+$/), v);
+			assert.match(-1, index(v, '//'));
+		}
+	});
+});

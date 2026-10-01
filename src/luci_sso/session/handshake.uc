@@ -58,12 +58,18 @@ export function reap(deps, clock_tolerance) {
  * is never removed: when every slot is live, the new login is refused with
  * HANDSHAKE_CAPACITY_EXCEEDED and the users already at the IdP are unaffected.
  *
+ * `return_to`, when given, is stored with the handshake and returned by
+ * verify. The caller validates it (encoding.return_path); it never leaves
+ * the router.
+ *
  * @param {*} deps Service dependencies: `deps.fs`, `deps.clock`, `deps.native`, `deps.log`.
  * @param {int} clock_tolerance Clock skew tolerance in seconds, as passed to verify.
+ * @param {?string} [return_to] The LuCI page to open after the login, or null.
  * @returns {Result}
  */
-export function create(deps, clock_tolerance) {
+export function create(deps, clock_tolerance, return_to) {
 	if (type(clock_tolerance) !== "int") die("CONTRACT_VIOLATION: create expects mandatory integer clock_tolerance");
+	if (return_to != null && type(return_to) !== "string") die("CONTRACT_VIOLATION: create expects a string or null return_to");
 
 	common.ensure_handshake_dir(deps);
 
@@ -115,6 +121,8 @@ export function create(deps, clock_tolerance) {
 		iat: now,
 		exp: now + common.HANDSHAKE_DURATION
 	};
+	if (return_to != null)
+		data.return_to = return_to;
 
 	try {
 		let path = `${common.HANDSHAKE_DIR}/handshake_${handle}.json`;
