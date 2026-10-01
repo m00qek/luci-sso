@@ -96,7 +96,7 @@ Adding the feed's signing key needs a shell: LuCI's **Software** page can edit t
 Use this for an architecture the feed does not serve, or to try a build of your own. Build the packages as described in [How to Build the Packages from Source](build-from-source.md). The build leaves the `luci-sso` packages in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`: `luci-sso` and the three crypto backends. On OpenWrt 24.10 they are `.ipk` files, and you need two of them:
 
 ```text
-luci-sso_<version>_<arch>.ipk
+luci-sso_<version>_all.ipk
 luci-sso-crypto-mbedtls_<version>_<arch>.ipk
 ```
 
@@ -110,14 +110,14 @@ OpenWrt 25.12 uses `apk` packages instead, built with `SDK_VERSION=25.12.3` and 
     2.  Navigate to **System** -> **Software**. The **Update lists…** and **Upload Package…** buttons are in the **Actions** row at the top of the page.
     3.  Click **Update lists…** so the backend's crypto library can be installed from the OpenWrt feeds.
     4.  Click **Upload Package…**, select the backend file (for example `luci-sso-crypto-mbedtls_<version>_<arch>.ipk`) and confirm the installation.
-    5.  Click **Upload Package…** again, select the `luci-sso_<version>_<arch>.ipk` file and confirm. The backend must already be installed: `luci-sso` cannot be installed without one.
+    5.  Click **Upload Package…** again, select the `luci-sso_<version>_all.ipk` file and confirm. The backend must already be installed: `luci-sso` cannot be installed without one.
 
 === "Terminal (SSH)"
 
     1.  **Copy the two packages to the router**, for example with `scp` from the build machine:
 
         ```bash
-        scp -O luci-sso_<version>_<arch>.ipk luci-sso-crypto-mbedtls_<version>_<arch>.ipk root@192.168.1.1:/tmp/
+        scp -O luci-sso_<version>_all.ipk luci-sso-crypto-mbedtls_<version>_<arch>.ipk root@192.168.1.1:/tmp/
         ```
 
     2.  **Install both in one command** on the router.
@@ -126,7 +126,7 @@ OpenWrt 25.12 uses `apk` packages instead, built with `SDK_VERSION=25.12.3` and 
 
         ```bash
         opkg update
-        opkg install /tmp/luci-sso_<version>_<arch>.ipk /tmp/luci-sso-crypto-mbedtls_<version>_<arch>.ipk
+        opkg install /tmp/luci-sso_<version>_all.ipk /tmp/luci-sso-crypto-mbedtls_<version>_<arch>.ipk
         ```
 
         On OpenWrt 25.12 (`apk`):

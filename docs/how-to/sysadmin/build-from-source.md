@@ -74,7 +74,7 @@ The packages are in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`. Only `luci-sso
     ```
 
     ```text
-    luci-sso_0.10.0-r1_aarch64_cortex-a53.ipk
+    luci-sso_0.10.0-r1_all.ipk
     luci-sso-crypto-mbedtls_0.10.0-r1_aarch64_cortex-a53.ipk
     luci-sso-crypto-openssl_0.10.0-r1_aarch64_cortex-a53.ipk
     luci-sso-crypto-wolfssl_0.10.0-r1_aarch64_cortex-a53.ipk
@@ -92,6 +92,8 @@ The packages are in `bin/lib/<SDK_ARCH>/<SDK_VERSION>/packages/`. Only `luci-sso
     luci-sso-crypto-openssl-0.10.0-r1.apk
     luci-sso-crypto-wolfssl-0.10.0-r1.apk
     ```
+
+`luci-sso` itself is the same for every architecture: it holds no compiled code, so its `.ipk` ends in `_all` and `apk` lists it as `noarch`. Only the crypto backends are built for `<SDK_ARCH>`.
 
 The router needs `luci-sso` and exactly one backend. Each build first deletes the `luci-sso` packages an earlier build left in that directory, so only the current version is there.
 

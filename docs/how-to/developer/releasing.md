@@ -81,6 +81,8 @@ git push
 
 A push to `main` that changes `luci-sso/` runs the feed's `luci-sso` workflow. Its first job regenerates the Makefile with the generator from the `v<version>` tag and fails if the committed one differs. Only then does the workflow build the packages for each architecture and OpenWrt release and publish them.
 
+`luci-sso` itself is architecture-independent (`PKGARCH:=all`), so the feed publishes one copy for each OpenWrt release, taken from the `x86_64` build: `24.10/luci-sso_<version>-r1_all.ipk` at the feed root and `25.12/noarch/luci-sso-<version>-r1.apk`. Only the crypto backends are published per architecture, under `24.10/<arch>/` and `25.12/<arch>/`.
+
 ---
 
 ## If the generator refuses the Makefile
