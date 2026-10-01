@@ -64,6 +64,27 @@ static int portable_pubkey_pem_to_der(const char *pem, size_t pem_len, unsigned 
 	return final_len;
 }
 
+/* The length of an RSA key's modulus in bits, leading zero bits ignored, as
+ * mbedtls_pk_get_bitlen() and EVP_PKEY_bits() count it, or -1 on error.
+ * wc_RsaEncryptSize() counts bytes, which would let a modulus of 2041 to
+ * 2047 bits pass a 2048-bit floor. A public key holds no secret, so the
+ * buffers need no wiping. */
+static int rsa_modulus_bits(RsaKey *key) {
+	unsigned char n[NATIVE_RSA_PEM_MAX];
+	unsigned char e[64];
+	word32 n_len = sizeof(n);
+	word32 e_len = sizeof(e);
+	if (wc_RsaFlattenPublicKey(key, e, &e_len, n, &n_len) != 0) return -1;
+
+	word32 i = 0;
+	while (i < n_len && n[i] == 0) i++;
+	if (i == n_len) return 0;
+
+	int bits = (int)(n_len - i) * 8;
+	for (unsigned char top = n[i]; (top & 0x80) == 0; top <<= 1) bits--;
+	return bits;
+}
+
 bool native_verify_rs256(const unsigned char *msg, size_t msg_len,
                          const unsigned char *sig, size_t sig_len,
                          const char *key_pem, size_t key_len) {
@@ -85,7 +106,9 @@ bool native_verify_rs256(const unsigned char *msg, size_t msg_len,
 		return false;
 	}
 
-	if (wc_RsaEncryptSize(&key) < (NATIVE_RSA_MIN_BITS / 8)) {
+	/* SECURITY: Enforce minimum RSA key size (2048 bits) per NIST SP 800-57,
+	 * in bits, exactly as the other backends do. */
+	if (rsa_modulus_bits(&key) < NATIVE_RSA_MIN_BITS) {
 		wc_FreeRsaKey(&key);
 		return false;
 	}

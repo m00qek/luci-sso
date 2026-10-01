@@ -22,7 +22,7 @@ Your implementation **MUST** fulfill these security requirements:
 
 | Function | Security Requirement |
 | :--- | :--- |
-| `native_verify_rs256` | Reject RSA keys smaller than 2048 bits (`NATIVE_RSA_MIN_BITS`). The connection test mirrors the number as `RSA_MIN_BITS` in `src/luci_sso/crypto/jwk.uc`; `make lint` fails when they differ. |
+| `native_verify_rs256` | Reject RSA keys smaller than 2048 bits (`NATIVE_RSA_MIN_BITS`), counting the modulus in bits, not bytes: a 2047-bit key must fail (`RSA_2047` in `test/native/fixtures.uc`). The connection test mirrors the number as `RSA_MIN_BITS` in `src/luci_sso/crypto/jwk.uc`; `make lint` fails when they differ. |
 | `native_verify_es256` | Verify with the library's ECDSA P-256 routine, taking the signature as 64 bytes of `R` followed by `S`. Never compare signature bytes yourself. |
 | `native_random` | Must use a cryptographically secure random number generator (CSPRNG). |
 | `native_memzero` | Must use a compiler-safe zeroization function (e.g., `explicit_bzero`) to prevent optimization removal. |
