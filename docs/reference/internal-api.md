@@ -282,7 +282,7 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 
 ### `uci_list(v)` → `array`
 
-A UCI option as a list: an array as it is, a non-empty string as a list of one, anything else (a missing or empty option) as `[]`. Also used by `luci_sso.rpcd_login`.
+A UCI option as a list: an array as it is, a non-empty string as a list of one, anything else (a missing or empty option) as `[]`. Also used by `luci_sso.rpcd_login` and the `luci-sso` rpcd plugin.
 
 ### `sub_rules_apply(config)` → `bool`
 
