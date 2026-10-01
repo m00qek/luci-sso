@@ -21,9 +21,13 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 
 ### Fixed
 
-- The wolfSSL backend checked the 2048-bit minimum for RSA keys in bytes, so it accepted ID tokens signed with a 2041- to 2047-bit key, which the mbedTLS and OpenSSL backends refuse. It now counts bits, as they do.
 - The setup script adds the daily cleanup cron job even when a comment in `/etc/crontabs/root` mentions `/usr/sbin/luci-sso-cleanup`. Before, any line naming the script, a comment too, counted as the job, so the job was never added and expired token locks and handshakes were never removed. Removing the package now deletes only the job line, and keeps such comments. Both go through the new `luci-sso-cleanup --install-cron` and `--remove-cron`.
 - The login line `Successful Passwordless SSO login for [oidc_id: …]` says `(no email)` for a user without a verified email, instead of `[INVALID]`, which read like an error.
+
+### Security
+
+- The settings page inserted role values into the role table as HTML: the emails, groups and read and write access shown in each row. Someone who can change the luci-sso configuration or a role's permissions, such as a user given only the `luci-app-sso` access group, could store markup that runs in the browser of an administrator who opens the page. Every value the router or the identity provider supplies is now shown as text.
+- The wolfSSL backend checked the 2048-bit minimum for RSA keys in bytes, so it accepted ID tokens signed with a 2041- to 2047-bit key, which the mbedTLS and OpenSSL backends refuse. It now counts bits, as they do.
 
 ## [0.10.0] - 2026-09-29
 
