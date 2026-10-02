@@ -596,7 +596,7 @@ A logout that goes through LuCI's own logout, as it does for a password session,
 
 ### Connection test
 
-The settings page's **Test connection** runs in a child process of `rpcd`, which logs as `luci-sso[<pid>]` too. Every line it writes starts with `Connection test: `.
+The settings page's **Test connection** runs in a program of its own, `/usr/libexec/luci-sso/connection-test`, which `rpcd` starts and which logs as `luci-sso[<pid>]` too. Every line it writes starts with `Connection test: `.
 
 | Line | Level | Meaning |
 | :--- | :--- | :--- |

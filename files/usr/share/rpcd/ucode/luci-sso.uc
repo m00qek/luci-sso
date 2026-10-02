@@ -55,16 +55,29 @@
 // discovery, JWK Set and token-request code without touching any cache. The
 // checks make up to three HTTPS requests to the IdP, which would block rpcd
 // if they ran here, and uclient's event loop cannot run nested inside rpcd's:
-// ending it would end rpcd's own loop too. So they run in a child process
-// (uloop.task, a fork of rpcd), and rpcd stays responsive meanwhile. rpcd on
-// OpenWrt 24.10 cannot defer a ucode plugin's reply, so test_connection
-// answers at once with a job ID, and the page asks test_connection_result
-// until the result is there. One test runs at a time (BUSY otherwise); only
-// the latest is kept, in memory, never on disk. A test that has not finished
-// after TEST_TIMEOUT_MS is killed and reported as TIMEOUT; each HTTP request
-// already gives up after connection.HTTP_TIMEOUT_MS. The client secret is
-// passed to the child in memory only, never logged and never part of a
-// reply.
+// ending it would end rpcd's own loop too. So they run in a separate program,
+// HELPER, started with fork and exec (uloop.process): nothing of rpcd
+// survives in it. A plain fork of rpcd would keep rpcd's ubus socket, its
+// pending events and its signal handlers, so an rpcd reload during a test
+// would leave the new rpcd without its ubus objects, and the deadline's
+// SIGTERM would not stop the test. Before the exec, the shell that starts
+// HELPER closes every descriptor rpcd holds, but the two pipes.
+//
+// The parameters, client secret included, go to HELPER's standard input
+// through a pipe, never its command line or environment, which other users
+// can read; they are written before HELPER starts, and fit the pipe's buffer,
+// so rpcd never waits on HELPER. HELPER writes the reply, at most
+// connection.MAX_REPLY bytes, to its standard output, a second pipe, which
+// rpcd reads once HELPER has exited. rpcd on OpenWrt 24.10 cannot defer a
+// ucode plugin's reply, so test_connection answers at once with a job ID, and
+// the page asks test_connection_result until the result is there. One test
+// runs at a time (BUSY otherwise); only the latest is kept, in memory, never
+// on disk. A test that has not finished after TEST_TIMEOUT_MS is killed with
+// SIGKILL, which nothing can catch, and reported as TIMEOUT; each HTTP
+// request already gives up after connection.HTTP_TIMEOUT_MS. The client
+// secret is never logged and never part of a reply. This plugin imports
+// neither luci_sso.connection nor the native crypto module: the luci-sso
+// object loads even when a crypto backend does not.
 //
 // Order: list_roles returns the entries in the order of /etc/config/rpcd,
 // which means nothing: rpcd matches login entries by exact username, and
@@ -86,12 +99,10 @@
 "use strict";
 
 import { cursor } from 'uci';
-import { mkdir, readlink, readfile, lsdir } from 'fs';
+import { mkdir, readlink, readfile, lsdir, pipe, open } from 'fs';
 import * as uloop from 'uloop';
 import * as rpcd_login from 'luci_sso.rpcd_login';
 import { uci_list } from 'luci_sso.config';
-import * as connection from 'luci_sso.connection';
-import { create_probe } from 'luci_sso.deps';
 
 const CONFIG = rpcd_login.CONFIG;
 const SECTION_PREFIX = rpcd_login.SECTION_PREFIX;
@@ -106,14 +117,21 @@ const RELOAD_DELAY_MS = 1000;
 // Where LuCI packages define their access groups.
 const ACL_DIR = "/usr/share/rpcd/acl.d";
 
+// The connection test's program (see "Connection test" above).
+const HELPER = "/usr/libexec/luci-sso/connection-test";
+
 // Above the three requests' 5 s timeouts. Each poll of the result answers
 // at once, so LuCI's call timeout never applies to the test itself.
 const TEST_TIMEOUT_MS = 25000;
 
+// The longest parameters HELPER is given, as JSON: one page, the smallest
+// buffer a pipe can have, so they are written in full before HELPER starts.
+const MAX_TEST_INPUT = 4096;
+
 let reload_timer = null;
 
-// The latest connection test: { id, task, timer, reply }, reply null while
-// it runs.
+// The latest connection test: { id, proc, out, timer, reply }, reply null
+// while it runs.
 let conn_test = null;
 
 function fail(code, message) {
@@ -169,38 +187,92 @@ function job_id() {
 	return length(id) ? id : sprintf("%x", time());
 }
 
-// Called from the task's or the timer's callback. The task object is kept:
-// dropping the last reference to it inside its own callback lets ucode free
-// it while uloop still uses it, which crashes rpcd. It goes when the next
-// test replaces this one, outside any callback; the closure holding the
-// secret is released as soon as uloop has cleaned the task up.
+// Records a test's reply, once. Called from HELPER's exit callback or the
+// deadline timer. The process object is kept: dropping the last reference to
+// it inside its own callback lets ucode free it while uloop still uses it.
+// It goes when the next test replaces this one, outside any callback.
 function finish_test(t, reply) {
 	if (t.reply != null)
 		return;
 	t.reply = reply;
 	if (t.timer)
 		t.timer.cancel();
+	if (t.out) {
+		t.out.close();
+		t.out = null;
+	}
 }
 
+// HELPER exited: its reply is in the pipe, complete, since it writes no more
+// than connection.MAX_REPLY bytes, and nobody else holds the pipe's write end.
+function test_exited(t) {
+	let text = t.out ? t.out.read("all") : null;
+	let reply = null;
+	try { reply = json(text || "null"); } catch (e) { reply = null; }
+	if (type(reply) != "object" || reply.done !== true)
+		reply = { done: true, error: "TEST_FAILED", message: "the test stopped without a result" };
+	finish_test(t, reply);
+}
+
+// The shell command that runs HELPER with `input` and `output` as its
+// standard input and output. Every other descriptor rpcd holds above 2 is
+// closed first: some, such as the source files of its ucode plugins, are not
+// marked close-on-exec. Standard error stays rpcd's, so HELPER's errors reach
+// rpcd's log.
+function helper_command(input, output) {
+	let closes = "";
+	for (let fd in (lsdir("/proc/self/fd") || [])) {
+		let n = int(fd);
+		if (type(n) == "int" && n > 2 && n != input && n != output)
+			closes += ` ${n}<&-`;
+	}
+	return `exec ${HELPER} 0<&${input} 1>&${output} ${input}<&- ${output}>&-${closes}`;
+}
+
+function close_all(files) {
+	for (let f in files)
+		if (f) f.close();
+}
+
+// Starts HELPER on `params`. Returns the test, or a failure reply.
 function start_test(params) {
-	let t = { id: job_id(), task: null, timer: null, reply: null };
-	// Runs in the child, a fork of rpcd, whose own event loop the HTTP
-	// client may start and end.
-	t.task = uloop.task(function() {
-		let res = connection.check(create_probe(connection.HTTP_TIMEOUT_MS), params);
-		return res.ok ? { done: true, checks: res.data.checks } : { done: true, error: "TEST_FAILED", message: `${res.error}` };
-	}, function(msg) {
-		finish_test(t, (type(msg) == "object") ? msg : { done: true, error: "TEST_FAILED", message: "the test returned no result" });
-	}, function() {
-		// Never called: the task asks for no input. Passing it makes ucode
-		// close the task's pipes when it ends, which it skips for a task
-		// without an input callback, leaking a pipe per test.
-		return null;
-	});
-	if (!t.task)
-		return null;
+	let input = sprintf("%J", params);
+	if (length(input) > MAX_TEST_INPUT)
+		return fail("TEST_FAILED", "the settings are too long to test");
+
+	let to_helper = pipe(), from_helper = pipe();
+	if (!to_helper || !from_helper) {
+		close_all([ ...(to_helper || []), ...(from_helper || []) ]);
+		return fail("TEST_FAILED", "could not start the test");
+	}
+
+	// The parameters first, then end of file: HELPER reads until it.
+	let written = to_helper[1].write(input);
+	to_helper[1].close();
+
+	// rpcd keeps only the read end of HELPER's output, reopened close-on-exec
+	// so that no other program rpcd starts, nor rpcd itself when it reloads,
+	// inherits it.
+	let out = open(`/proc/self/fd/${from_helper[0].fileno()}`, "re");
+	from_helper[0].close();
+
+	let t = { id: job_id(), proc: null, out, timer: null, reply: null };
+	if (written === length(input) && out)
+		t.proc = uloop.process("/bin/sh", [ "-c", helper_command(to_helper[0].fileno(), from_helper[1].fileno()) ], {}, () => test_exited(t));
+
+	// HELPER has its own copies now, or failed to start.
+	close_all([ to_helper[0], from_helper[1] ]);
+	if (!t.proc) {
+		close_all([ out ]);
+		return fail("TEST_FAILED", "could not start the test");
+	}
+
 	t.timer = uloop.timer(TEST_TIMEOUT_MS, () => {
-		if (!t.task.finished()) t.task.kill();
+		// SIGKILL: HELPER cannot catch or delay it. A HELPER that has just
+		// exited is a zombie until uloop reaps it, so its process ID cannot
+		// have been reused yet.
+		if (t.reply == null)
+			system([ "/bin/kill", "-KILL", `${t.proc.pid()}` ]);
 		finish_test(t, { done: true, error: "TIMEOUT", message: `the test did not finish within ${TEST_TIMEOUT_MS / 1000} seconds and was stopped` });
 	});
 	return t;
@@ -289,8 +361,8 @@ const methods = {
 				redirect_uri: a.redirect_uri
 			};
 			let t = start_test(params);
-			if (!t)
-				return fail("TEST_FAILED", "could not start the test");
+			if (t.error)
+				return t;
 			conn_test = t;
 			return { job: t.id };
 		}
@@ -302,9 +374,6 @@ const methods = {
 			let t = conn_test;
 			if (!t || t.id !== req.args.job)
 				return fail("NOT_FOUND", "no such connection test: a newer one replaced it, or rpcd restarted");
-			// A child that died without a result.
-			if (t.reply == null && t.task.finished())
-				finish_test(t, { done: true, error: "TEST_FAILED", message: "the test stopped without a result" });
 			return (t.reply != null) ? t.reply : { done: false };
 		}
 	}

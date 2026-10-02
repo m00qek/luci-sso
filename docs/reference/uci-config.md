@@ -147,7 +147,7 @@ Errors come back as a reply `{ "error": "<CODE>", "message": "<text>" }`. `rpcd`
 | `COMMIT_FAILED` | `/etc/config/rpcd` could not be written. |
 | `BUSY` | `test_connection`: a test is already running. One runs at a time. |
 | `TIMEOUT` | `test_connection_result`: the test did not finish within 25 seconds and was stopped. |
-| `TEST_FAILED` | `test_connection` could not start the test, or it stopped without a result. |
+| `TEST_FAILED` | `test_connection` could not start the test, or the settings are longer than 4096 bytes as JSON; or the test stopped without a result. |
 
 After a successful write, the plugin makes `rpcd` reload one second after the reply, as `/etc/init.d/rpcd reload` does. Writes in that second share the reload. `list_roles` reports `"reload_pending": true` from the write until `rpcd` has restarted. While `rpcd` restarts, a `/ubus/` request that reaches it at the moment it re-executes itself is never answered: `uhttpd` waits for its session check up to half its script timeout (30 s by default) and serves no page meanwhile. Every `rpcd` reload can do this, whatever triggers it. The settings page waits up to 45 seconds for the reload.
 
@@ -167,7 +167,7 @@ Access through LuCI needs the `luci-app-sso` access group: its `read` section gr
 | `redirect_uri` | `redirect_uri` is set, starts with `https://`, and ends in `/cgi-bin/luci-sso/callback`. |
 | `client_credentials` | A token request with a made-up authorization code, `client_id` and `client_secret` in the form body (`client_secret_post`, as at login) and a new PKCE verifier gets `invalid_grant`. `invalid_client`, or HTTP 401, fails; any other answer is `warn`, and the message quotes the OAuth `error` or the HTTP status. |
 
-With `internal_issuer_url`, the JWK Set and token requests go to the internal origin too, as at login. Each HTTP request gives up after 5 seconds, and the test after 25. It runs in a child process of `rpcd`, so `rpcd` keeps answering meanwhile. It reads no cache and writes nothing on the router; its log lines start with `Connection test:`. `client_secret` is never part of a reply or a log line.
+With `internal_issuer_url`, the JWK Set and token requests go to the internal origin too, as at login. Each HTTP request gives up after 5 seconds, and the test after 25. It runs in a separate program, `/usr/libexec/luci-sso/connection-test`, which `rpcd` starts with fork and exec and gives the settings on its standard input, never on its command line or in its environment. So `rpcd` keeps answering meanwhile, and a test that is still running when `rpcd` reloads does it no harm. A test that is not over after 25 seconds is killed with `SIGKILL` and makes no further request. It reads no cache and writes nothing on the router; its log lines start with `Connection test:`. `client_secret` is never part of a reply or a log line.
 
 ---
 

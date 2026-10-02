@@ -95,6 +95,8 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/sbin
 	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-cleanup $(1)/usr/sbin/luci-sso-cleanup
 	$(INSTALL_BIN) ./files/usr/sbin/luci-sso-repatch $(1)/usr/sbin/luci-sso-repatch
+	$(INSTALL_DIR) $(1)/usr/libexec/luci-sso
+	$(INSTALL_BIN) ./files/usr/libexec/luci-sso/connection-test $(1)/usr/libexec/luci-sso/connection-test
 	$(INSTALL_DIR) $(1)/www/cgi-bin
 	$(INSTALL_BIN) ./files/www/cgi-bin/luci-sso $(1)/www/cgi-bin/luci-sso
 	$(INSTALL_DIR) $(1)/www/luci-static/resources

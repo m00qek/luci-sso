@@ -436,3 +436,47 @@ describe('connection: check — client credentials', () => {
 		assert.match("fail", r.data.checks[5].status, "redirect_uri");
 	});
 });
+
+// ─── run: what the test program runs ─────────────────────────────────────────
+
+// A reply's checks as { id: status }.
+function reduce_status(checks) {
+	let out = {};
+	for (let c in checks) out[c.id] = c.status;
+	return out;
+}
+
+// Runs connection.run on `input` against the mock provider; returns its reply, parsed.
+function run_text(input) {
+	let out = null;
+	with_context({
+		fs:          { data: {} },
+		http_client: { data: idp() },
+		clock:       { data: { now: 1516239022 } }
+	}, (deps) => {
+		deps.log = () => null;
+		let text = connection.run(deps, input);
+		assert.match("string", type(text));
+		assert.match(true, length(text) <= connection.MAX_REPLY);
+		out = json(text);
+	});
+	return out;
+}
+
+describe('connection: run', () => {
+	it('runs the checks on the parameters as JSON, and replies with them as JSON', () => {
+		let reply = run_text(sprintf("%J", PARAMS));
+		assert.match(true, reply.done);
+		assert.match(ALL_PASS, reduce_status(reply.checks));
+	});
+
+	it('never puts the client secret in the reply', () => {
+		for (let p in [ PARAMS, { ...PARAMS, client_secret: SECRET + "x" }, { ...PARAMS, issuer_url: "http://" + SECRET } ])
+			assert.match(-1, index(sprintf("%J", run_text(sprintf("%J", p))), SECRET));
+	});
+
+	it('fails the test, without a crash, on input that is not a JSON object', () => {
+		for (let input in [ null, "", "not json", "[1,2]", "42", "\"text\"", "{" ])
+			assert.match({ done: true, error: "TEST_FAILED", message: "the test received no settings" }, run_text(input), `${input}`);
+	});
+});

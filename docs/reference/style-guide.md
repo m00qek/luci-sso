@@ -343,7 +343,7 @@ let body = sprintf('{"enabled": %s}', enabled ? "true" : "false");
 
 | Rule | Files | Check |
 | :--- | :--- | :--- |
-| `indent` | Production ucode: `src/**/*.uc`, `files/**/*.uc`, `files/www/cgi-bin/luci-sso` | No line is indented with spaces. Tabs followed by spaces for alignment are allowed. |
+| `indent` | Production ucode: `src/**/*.uc`, `files/**/*.uc`, `files/www/cgi-bin/luci-sso`, `files/usr/libexec/luci-sso/connection-test` | No line is indented with spaces. Tabs followed by spaces for alignment are allowed. |
 | `func-end` | Production ucode | An exported function ends with `};`, a private top-level function with `}`. |
 | `quotes` | Production ucode | No single-quoted string, except import specifiers and strings that contain `"`. |
 | `indent` | C (`mod/*.c`, `mod/*.h`, `test/fuzz_test.c`) and browser JavaScript (`files/www/**/*.js`) | No line is indented with spaces, except a continuation line (the previous line ends with `,`, `(` or an operator), such as parameters aligned under a top-level `(`. |
@@ -667,7 +667,7 @@ luci-sso/
 │   ├── native_api.c       # Input guards
 │   ├── native.h           # Backend interface
 │   └── native_<lib>.c     # mbedtls, wolfssl, openssl backends
-├── files/                 # Installed as-is: CGI script, LuCI view, menu and controller, rpcd ACL and plugin, uci-defaults, luci-sso-repatch
+├── files/                 # Installed as-is: CGI script, LuCI view, menu and controller, rpcd ACL and plugin, connection test program, uci-defaults, luci-sso-repatch
 ├── openwrt/luci-sso/      # OpenWrt package Makefile
 ├── test/
 │   ├── native/            # The compiled crypto module's contract

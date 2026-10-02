@@ -182,11 +182,15 @@ The HTTP status of each failure is listed in the [HTTP API Reference](http-api.m
 
 ## `luci_sso.connection`
 
-The settings page's connection test, run by the `luci-sso` rpcd plugin's `test_connection` method. It calls `discovery.discover()` and `discovery.fetch_jwks()` with `no_cache`, and `oidc.exchange_code()` with a made-up code, so it runs a login's own code and writes nothing on the router. Its log lines start with `Connection test: `. `HTTP_TIMEOUT_MS` (`5000`) is the timeout of each request; `CALLBACK_PATH` is `/cgi-bin/luci-sso/callback`.
+The settings page's connection test, which the `luci-sso` rpcd plugin's `test_connection` method runs in a program of its own, `/usr/libexec/luci-sso/connection-test`, started with fork and exec. It calls `discovery.discover()` and `discovery.fetch_jwks()` with `no_cache`, and `oidc.exchange_code()` with a made-up code, so it runs a login's own code and writes nothing on the router. Its log lines start with `Connection test: `. `HTTP_TIMEOUT_MS` (`5000`) is the timeout of each request; `CALLBACK_PATH` is `/cgi-bin/luci-sso/callback`.
 
 ### `check(deps, params)` → `Result<{checks}>`
 
 Runs every check on `params` (`issuer_url`, `internal_issuer_url`, `client_id`, `client_secret`, `redirect_uri`; anything but a string counts as empty) and returns `checks`, one `{ id, status, message }` per check, in a fixed order. Always succeeds. The checks and their statuses are listed in [Connection test](uci-config.md#connection-test). `client_secret` is never part of a message or a log line.
+
+### `run(deps, input)` → `string`
+
+What `/usr/libexec/luci-sso/connection-test` runs: parses `input`, the JSON text of `params` that the plugin writes to the program's standard input, calls `check()`, and returns the reply as JSON text, which the program writes to its standard output and the plugin passes on from `test_connection_result`: `{ "done": true, "checks": […] }`, or `{ "done": true, "error": "TEST_FAILED", "message" }` when `input` is not a JSON object. `MAX_REPLY` (`32768`) caps the reply's length, so it fits the pipe the plugin reads it from once the program has exited; a longer one becomes `TEST_FAILED` too.
 
 ---
 
@@ -637,7 +641,7 @@ Builds the production `deps` object. Called once by the CGI script; never in tes
 
 ### `create_probe(http_timeout_ms)` → `{ fs, native, http, clock, log }`
 
-The `deps` of the connection test: no `ubus` and no `uci`, and an HTTP client whose requests time out after `http_timeout_ms`. Called by the `luci-sso` rpcd plugin, in the child process that runs the test.
+The `deps` of the connection test: no `ubus` and no `uci`, and an HTTP client whose requests time out after `http_timeout_ms`. Called by `/usr/libexec/luci-sso/connection-test`, the program that runs the test.
 
 ### `ubus_channel(conn)` → `{ call(obj, method, args) → Result }`
 

@@ -39,6 +39,13 @@ import { DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCO
 /** Each HTTP request of the test gives up after this long (see deps.create_probe). */
 export const HTTP_TIMEOUT_MS = 5000;
 
+/**
+ * The longest reply run() writes, in bytes. The rpcd plugin reads the reply
+ * once the helper process has exited, so it must fit a pipe's buffer (64 KiB
+ * on Linux): a longer write would block the helper until it is killed.
+ */
+export const MAX_REPLY = 32768;
+
 /** The path luci-sso serves the OIDC callback at. */
 export const CALLBACK_PATH = "/cgi-bin/luci-sso/callback";
 
@@ -297,4 +304,34 @@ export function check(deps, params) {
 	log("info", `finished: ${count("pass")} passed, ${count("fail")} failed, ${count("warn")} undetermined, ${count("skip")} skipped`);
 
 	return Result.ok({ checks });
+};
+
+/**
+ * The connection test as its helper process runs it: parses the parameters,
+ * which the rpcd plugin writes to the helper's standard input, runs check(),
+ * and returns the reply for the settings page as JSON text, at most
+ * MAX_REPLY bytes.
+ *
+ * The helper is /usr/libexec/luci-sso/connection-test, which the plugin
+ * starts with fork and exec: none of rpcd's state (its ubus connection, its
+ * event loop, its signal handlers) reaches the checks. The parameters
+ * include the client secret, so they travel only through the pipe, never on
+ * the command line or in the environment, and the reply never carries it.
+ *
+ * @param {object} deps - deps.create_probe(HTTP_TIMEOUT_MS)
+ * @param {*} input - The parameters as JSON text: { issuer_url,
+ *   internal_issuer_url, client_id, client_secret, redirect_uri }
+ * @returns {string} - The JSON of { done: true, checks: [ { id, status,
+ *   message } ] }, or of { done: true, error: "TEST_FAILED", message }
+ */
+export function run(deps, input) {
+	let failed = (message) => sprintf("%J", { done: true, error: "TEST_FAILED", message });
+	let parsed = encoding.safe_json(input);
+	if (!parsed.ok || type(parsed.data) != "object")
+		return failed("the test received no settings");
+	let res = check(deps, parsed.data);
+	if (!res.ok)
+		return failed(`${res.error}`);
+	let out = sprintf("%J", { done: true, checks: res.data.checks });
+	return (length(out) <= MAX_REPLY) ? out : failed("the test's result is too long");
 };
