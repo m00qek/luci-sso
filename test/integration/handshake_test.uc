@@ -733,14 +733,21 @@ describe('handshake: authenticate — at_hash', () => {
 
 describe('handshake: role selection', () => {
 	// Runs a full callback for a user with the given claims against `roles`
-	// and the rpcd sections in `rpcd`, with the sub rules made for the
-	// configured issuer unless `over` says otherwise. Returns the result, the
+	// and the UCI data in `logins` (rpcd_logins(): the roles' rpcd entries),
+	// with each role's sub rules made for the configured
+	// issuer unless the role or `over` says otherwise. Returns the result, the
 	// session values set, whether a session was created, and the log lines.
-	function login(roles, rpcd, claims, over) {
+	function login(roles, logins, claims, over) {
 		let out = { result: null, values: null, created: false, logs: [] };
+		// Each role's sub rules are bound to the configured issuer, unless the
+		// role names its own sub_issuer or `over.sub_issuer` names one for all.
+		let bound = (over && exists(over, "sub_issuer")) ? over.sub_issuer : f.MOCK_CONFIG.issuer_url;
+		let bound_roles = map(roles, (r) => ({ ...r, sub_issuer: exists(r, "sub_issuer") ? r.sub_issuer : bound }));
+		let rest = { ...(over || {}) };
+		delete rest.sub_issuer;
 		with_context({
 			fs:   { data: {} },
-			uci:  { data: { rpcd } },
+			uci:  { data: logins },
 			ubus: { data: {
 				"session:create": () => { out.created = true; return { ubus_rpc_session: "s-role" }; },
 				"session:grant":  UBUS_NO_DATA,
@@ -768,13 +775,13 @@ describe('handshake: role selection', () => {
 			let raw = encoding.safe_json(deps.fs.readfile(path)).data;
 			raw.nonce = "test-nonce";
 			deps.fs.writefile(path, sprintf("%J", raw));
-			out.result = handshake.authenticate(deps, base_config({ sub_issuer: f.MOCK_CONFIG.issuer_url, roles, ...(over || {}) }),
+			out.result = handshake.authenticate(deps, base_config({ roles: bound_roles, ...rest }),
 				{ query: { code: "c", state: raw.state }, cookies: { "__Host-luci_sso_state": hs.token } });
 		});
 		return out;
 	}
 
-	let entries = rpcd_logins({ staff: { read: [ "*" ] }, admins: { read: [ "*" ], write: [ "*" ] }, me: { read: [ "*" ] } }).rpcd;
+	let entries = rpcd_logins({ staff: { read: [ "*" ] }, admins: { read: [ "*" ], write: [ "*" ] }, me: { read: [ "*" ] } });
 	let claims = { email: "alice@example.com", groups: [ "staff", "admins" ] };
 
 	it('the first matching role in config order wins, and the log names it and the other matches', () => {
@@ -833,10 +840,11 @@ describe('handshake: role selection', () => {
 	});
 
 	// OIDC Core §5.7: a sub is unique only within its issuer. After issuer_url
-	// changes, sub_issuer still names the old issuer, and a rule made for an
-	// account there must not let in whoever the new issuer calls by that sub.
+	// changes, a role's sub_issuer still names the old issuer, and a rule made
+	// for an account there must not let in whoever the new issuer calls by
+	// that sub.
 	const OLD = "https://old-idp.example.com";
-	const WARNING = `Ignoring sub rules: sub_issuer '${OLD}' does not match issuer_url '${f.MOCK_CONFIG.issuer_url}' [session_id: `;
+	const WARNING = `Ignoring sub rules of role 'me': its sub_issuer '${OLD}' does not match issuer_url '${f.MOCK_CONFIG.issuer_url}' [session_id: `;
 	let warned = (r) => length(filter(r.logs, (m) => index(m, WARNING) == 0));
 
 	it('after issuer_url changes: a login the sub rule let in falls through to the group or email rule', () => {
@@ -877,21 +885,33 @@ describe('handshake: role selection', () => {
 		let r = login([ { name: "me", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ] } ], entries,
 			{ email: "stranger@example.com" }, { sub_issuer: null });
 		assert.match(contains({ ok: false, error: "USER_NOT_AUTHORIZED" }), r.result);
-		assert.match(1, length(filter(r.logs, (m) => index(m, "Ignoring sub rules: sub_issuer is not set [session_id: ") == 0)));
+		assert.match(1, length(filter(r.logs, (m) => index(m, "Ignoring sub rules of role 'me': its sub_issuer is not set [session_id: ") == 0)));
+	});
+
+	it("sub_issuer is per role: one role's old binding leaves another role's sub rules in force, with a warning for the old one only", () => {
+		let roles = [
+			{ name: "me", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ], sub_issuer: OLD },
+			{ name: "staff", emails: [], groups: [], subs: [ f.MOCK_CLAIMS.sub ] },
+		];
+		let r = login(roles, entries, { email: "stranger@example.com", groups: [ "nobody" ] });
+		assert.match(contains({ ok: true }), r.result, `${r.result.error}`);
+		assert.match("sso:staff", r.values.username, "the role bound to issuer_url");
+		assert.match(1, warned(r), "the role bound to the old issuer is named");
+		assert.match(1, length(filter(r.logs, (m) => index(m, "Ignoring sub rules") == 0)), "and only it");
 	});
 
 	it("fails with UBUS_LOGIN_FAILED (500) and no session when the chosen role has no rpcd login entry", () => {
 		// "root" is the stock rpcd login's user, never a role's entry.
 		let r = login([ { name: "root", emails: [ "alice@example.com" ], groups: [] } ],
-			{ root: { ".type": "login", username: "root", password: "$p$root", read: [ "*" ], write: [ "*" ] } }, claims);
+			{ rpcd: { root: { ".type": "login", username: "root", password: "$p$root", read: [ "*" ], write: [ "*" ] } }, "luci-sso": {} }, claims);
 		assert.match(contains({ ok: false, error: "UBUS_LOGIN_FAILED", details: { http_status: 500 } }), r.result);
 		assert.match(false, r.created);
 		assert.match(1, length(filter(r.logs, (m) => index(m, "MISSING_RPCD_LOGIN: role 'root'") == 0)));
 	});
 
 	it("fails with UBUS_LOGIN_FAILED (500) and no session when the role's entry has a password", () => {
-		let rpcd = { luci_sso_staff: { ...entries.luci_sso_staff, password: "" } };
-		let r = login([ { name: "staff", emails: [], groups: [ "staff" ] } ], rpcd, claims);
+		let logins = { ...entries, rpcd: { luci_sso_staff: { ...entries.rpcd.luci_sso_staff, password: "" } } };
+		let r = login([ { name: "staff", emails: [], groups: [ "staff" ] } ], logins, claims);
 		assert.match(contains({ ok: false, error: "UBUS_LOGIN_FAILED", details: { http_status: 500 } }), r.result);
 		assert.match(false, r.created);
 		assert.match(1, length(filter(r.logs, (m) => index(m, "INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_staff'") == 0)));

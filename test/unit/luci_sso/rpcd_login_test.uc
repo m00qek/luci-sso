@@ -209,3 +209,72 @@ describe('rpcd_login: is_placeholder — the shipped admin role', () => {
 			assert.match(false, rpcd_login.is_placeholder(s), sprintf("%J", s));
 	});
 });
+
+describe('rpcd_login: is_pattern', () => {
+	it('is true for a negation, a wildcard or a character class', () => {
+		for (let p in [ "!luci-base", "*", "luci-*", "luci-?ase", "web[admin]", "!" ])
+			assert.match(true, rpcd_login.is_pattern(p), p);
+	});
+
+	it('is false for a plain group name', () => {
+		for (let p in [ "luci-base", "unauthenticated", "luci-app-sso", "a!b", "x]" ])
+			assert.match(false, rpcd_login.is_pattern(p), p);
+	});
+});
+
+describe('rpcd_login: load_acl', () => {
+	const ACL_DIR = "/usr/share/rpcd/acl.d";
+	let load = (files) => {
+		let res = null;
+		mock.inject('fs', { strict: true, behavior: {
+			lsdir:    (p) => (p === ACL_DIR) ? keys(files) : null,
+			readfile: (p) => files[substr(p, length(ACL_DIR) + 1)],
+		} }, (fsp) => {
+			res = rpcd_login.load_acl({ fs: fsp, log: () => null });
+		});
+		return res;
+	};
+
+	it('returns every group defined with an object, sorted, and one entry per usable section, in file name order', () => {
+		let res = load({
+			'b.json': sprintf('%J', { 'luci-base': { read: { uci: [ 'b' ] } } }),
+			'a.json': sprintf('%J', { 'luci-base': { read: { uci: [ 'a' ] }, write: { uci: [ 'a' ] } }, 'zz': {} }),
+		});
+		assert.match(contains({ ok: true }), res);
+		assert.match([ 'luci-base', 'zz' ], res.data.groups);
+		assert.match([
+			{ group: 'luci-base', perm: 'read', section: { uci: [ 'a' ] } },
+			{ group: 'luci-base', perm: 'write', section: { uci: [ 'a' ] } },
+			{ group: 'luci-base', perm: 'read', section: { uci: [ 'b' ] } },
+		], res.data.entries);
+	});
+
+	it('skips broken files, other files, non-object roots and group values, and other keys', () => {
+		let res = load({
+			'broken.json': '{ not json',
+			'list.json': '[ "x" ]',
+			'readme.txt': sprintf('%J', { 'txt-group': {} }),
+			'odd.json': sprintf('%J', { 'luci-list': [], 'luci-str': 'x', 'luci-ok': { description: 'd', read: 'no', other: { uci: [ 'x' ] } } }),
+		});
+		assert.match({ ok: true, data: { entries: [], groups: [ 'luci-ok' ] } }, res);
+	});
+
+	it('fails with ACL_SCAN_FAILED when the directory cannot be listed', () => {
+		let logs = [], res = null;
+		mock.inject('fs', { strict: true, behavior: { lsdir: () => null } }, (fsp) => {
+			res = rpcd_login.load_acl({ fs: fsp, log: (l, m) => push(logs, [ l, m ]) });
+		});
+		assert.match(contains({ ok: false, error: 'ACL_SCAN_FAILED' }), res);
+		assert.match([ [ 'error', `ACL scan failed: ${ACL_DIR} is missing or unreadable` ] ], logs);
+	});
+});
+
+describe('rpcd_login: offered_groups', () => {
+	it('keeps the names a list can name exactly, in order', () => {
+		assert.match([ 'luci-app-sso', 'luci-base', 'unauthenticated' ], rpcd_login.offered_groups([ 'luci-app-sso', 'luci-base', 'unauthenticated' ]));
+	});
+
+	it('drops patterns, which would not match the group itself, and names a list cannot store', () => {
+		assert.match([ 'ok' ], rpcd_login.offered_groups([ '!x', 'a*', 'a?', 'web[admin]', 'ok', 'tab\tname', sprintf('%0129d', 0), '' ]));
+	});
+});

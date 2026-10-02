@@ -261,11 +261,11 @@ export function authenticate(deps, config, request) {
 		deps.log("warn", `Ignoring the unverified email of user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] for role matching: email_verified is not true (require_email_verified) [session_id: ${session_id}]`);
 	}
 
-	// Sub rules count only for the issuer they were made for (sub_issuer).
-	// Say so when they are ignored, since it can be why no role matched.
-	let ignored_subs = config_mod.ignored_sub_rules(config);
-	if (ignored_subs) {
-		deps.log("warn", `${ignored_subs} [session_id: ${session_id}]`);
+	// A role's sub rules count only for the issuer they were made for (its
+	// sub_issuer). Say so when they are ignored, since it can be why no role
+	// matched.
+	for (let msg in config_mod.ignored_sub_rules(config)) {
+		deps.log("warn", `${msg} [session_id: ${session_id}]`);
 	}
 
 	let res_role = config_mod.find_role_for_user(config, user_data);

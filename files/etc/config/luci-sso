@@ -15,13 +15,13 @@ config oidc 'default'
 	# Only behind a reverse proxy: its address. Requests from it skip the
 	# per-client rate limits, so the proxy must limit clients itself.
 	# list trusted_proxy '127.0.0.1'
-	# The issuer the roles' sub rules were made for: they count only while
-	# it is exactly issuer_url. The settings page sets it.
-	# option sub_issuer ''
 
 # A role's permissions are its rpcd login entry, luci_sso_<role> in
 # /etc/config/rpcd, which the settings page edits. On install, this role gets
 # read '*' and write '*' (full access, like root) if it still matches only
 # admin@example.com; edited first, it gets an entry that grants nothing.
+# A role's sub rules count only while its sub_issuer is exactly issuer_url:
+#	list sub '<the OIDC sub claim>'
+#	option sub_issuer 'https://accounts.google.com'
 config role 'admin'
 	list email 'admin@example.com'

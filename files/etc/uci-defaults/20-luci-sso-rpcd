@@ -11,11 +11,22 @@
 #    changes nothing. Changes go through a private UCI delta directory, so no one
 #    else's staged change to rpcd or luci-sso is committed with them.
 #
+#    An upgrade from 0.10.0 finds every role without lists and with its entry,
+#    so it changes nothing in either file. Only a global
+#    luci-sso.default.sub_issuer, which no release ever wrote, is removed:
+#    sub_issuer is an option of each role.
+#
 # 2. rpcd loads its plugins (/usr/share/rpcd/ucode/luci-sso.uc) only when it
 #    starts or reloads, so after an install or upgrade the settings page could
 #    not reach the new object until the next reboot. A reload (SIGHUP)
 #    re-executes rpcd and keeps every session: each one's rights are rebuilt
 #    from its login entry in /etc/config/rpcd, which step 1 has written.
+#    /usr/libexec/luci-sso/rpcd-reload does it, never during a LuCI apply that
+#    may still be rolled back.
+#
+# 3. The init script, which reloads rpcd when an apply changes a role's
+#    entry, is enabled: a fresh install enables it on its own, but an upgrade
+#    from 0.10.0, which had none, does not.
 #
 # Runs after an install or upgrade (the package's postinst runs uci-defaults)
 # and at first boot, when rpcd is not running yet and the reload does nothing.
@@ -33,6 +44,10 @@ uci.revert("rpcd");
 uci.revert("luci-sso");
 
 let changed = migrate(uci, (msg) => print(msg, "\n"));
+if (uci.get("luci-sso", "default", "sub_issuer") != null) {
+	uci.delete("luci-sso", "default", "sub_issuer");
+	changed.luci_sso = true;
+}
 if (changed.rpcd) uci.commit("rpcd");
 if (changed.luci_sso) uci.commit("luci-sso");
 ' 2>&1 | while read -r line; do
@@ -40,6 +55,12 @@ if (changed.luci_sso) uci.commit("luci-sso");
 	echo "luci-sso: $line" >&2
 done
 
-[ -x /etc/init.d/rpcd ] && /etc/init.d/rpcd reload >/dev/null 2>&1
+if [ -x /usr/libexec/luci-sso/rpcd-reload ]; then
+	/usr/libexec/luci-sso/rpcd-reload request
+else
+	[ -x /etc/init.d/rpcd ] && /etc/init.d/rpcd reload >/dev/null 2>&1
+fi
+
+[ -x /etc/init.d/luci-sso ] && /etc/init.d/luci-sso enable
 
 exit 0

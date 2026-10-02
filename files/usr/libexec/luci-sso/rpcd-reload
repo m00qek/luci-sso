@@ -1,0 +1,248 @@
+#!/usr/bin/ucode
+// SPDX-License-Identifier: MIT
+//
+// Makes rpcd reload when the SSO roles' permissions change, so that open SSO
+// sessions get the new rights. A role's permissions are its rpcd login entry,
+// luci_sso_<role> in /etc/config/rpcd (luci_sso.rpcd_login), and rpcd
+// rebuilds a session's rights from it only when it reloads (SIGHUP: it saves
+// its sessions, re-executes itself and restores them). rpcd itself does not
+// reload when its configuration is applied.
+//
+//   rpcd-reload record    notes /etc/config/rpcd as rpcd has loaded it:
+//                         /etc/init.d/luci-sso start, as rpcd starts.
+//   rpcd-reload check     reloads rpcd unless /etc/config/rpcd is still the
+//                         file it last loaded, untouched: /etc/init.d/luci-sso
+//                         reload, which procd runs on every apply of
+//                         /etc/config/rpcd (LuCI's Save & Apply and its
+//                         rollback, reload_config, or by hand after
+//                         `uci commit rpcd`). Any write counts, not only one
+//                         to the luci_sso_* entries: an entry committed
+//                         without an apply already reached the sessions that
+//                         logged in since, even if a later commit took it
+//                         back. A reload for a change elsewhere in the file is
+//                         harmless: every session gets back the rights its
+//                         login entry gives.
+//   rpcd-reload request   reloads rpcd in any case: the package's install,
+//                         upgrade and removal, so rpcd also loads or drops the
+//                         luci-sso plugin and ACL file.
+//   rpcd-reload serve     internal: serves the reloads the others request.
+//
+// It never writes a configuration. Four rules govern a reload:
+//
+// - Never during a LuCI apply that may still be rolled back. rpcd keeps that
+//   apply's rollback timer in memory only, so a reload would cancel the
+//   rollback, and LuCI would then report the apply as confirmed whatever
+//   happens to the connection. The reload waits until the apply is confirmed
+//   or rolled back, for at most APPLY_WAIT_MS. New logins meanwhile get the
+//   entries as they are on disk.
+// - Never two at once: a SIGHUP that reaches rpcd while it re-executes
+//   itself, before it handles the signal again, would stop it. One process
+//   at a time serves the requests, and waits for each reload to finish.
+// - In the background, so the trigger returns at once: procd runs its
+//   triggers one after another, and a wait here would hold up the other
+//   services of the same apply.
+// - Once per change: right before a reload, the file is noted as loaded.
+//   After a rollback, rpcd has restored /etc/config/rpcd by the time the
+//   reload runs, and the rollback's own trigger then finds nothing new.
+//
+// A reload is requested by creating RELOAD_FLAG; whoever holds RELOAD_LOCK
+// serves it. Messages go to syslog (tag luci-sso) and to standard error.
+
+"use strict";
+
+import * as fs from 'fs';
+import * as ubus from 'ubus';
+import * as log from 'log';
+
+const SELF = "/usr/libexec/luci-sso/rpcd-reload";
+
+const RUN_DIR = "/var/run/luci-sso";
+const STATE = RUN_DIR + "/rpcd.loaded";
+const RPCD_CONFIG = "/etc/config/rpcd";
+const RELOAD_FLAG = RUN_DIR + "/rpcd-reload";
+const RELOAD_LOCK = RUN_DIR + "/rpcd-reload.lock";
+
+// How long a reload waits for a pending LuCI apply to be confirmed or rolled
+// back. LuCI's own rollback timeout is 90 s by default; past this, the
+// reload goes ahead rather than leave old rights in force.
+const APPLY_WAIT_MS = 900000;
+// How long rpcd may take to come back after the signal.
+const RELOAD_WAIT_MS = 30000;
+const POLL_MS = 250;
+
+// A session ID no session can have (rpcd's are 32 hex digits): `uci confirm`
+// with it answers PERMISSION_DENIED while an apply waits for its
+// confirmation, NO_DATA otherwise, and changes nothing either way. A real
+// session that may apply the same files would confirm the apply instead.
+const PROBE_SID = "luci-sso-apply-probe";
+const UBUS_STATUS_NO_DATA = 5;
+const UBUS_STATUS_PERMISSION_DENIED = 6;
+
+log.openlog("luci-sso", log.LOG_PID, log.LOG_USER);
+
+function say(priority, msg) {
+	log.syslog(priority, "%s", msg);
+	warn(`luci-sso: ${msg}\n`);
+}
+
+function warning(msg) {
+	say(log.LOG_WARNING, msg);
+}
+
+function now_ms() {
+	let t = clock(true);
+	return t[0] * 1000 + int(t[1] / 1000000);
+}
+
+// Close-on-exec, so the background process request_reload() starts never
+// holds this process's lock.
+function open_lock(path) {
+	let f = fs.open(path, "we", 0600);
+	if (!f)
+		die(`cannot open ${path}: ${fs.error()}`);
+	return f;
+}
+
+// /etc/config/rpcd as committed: its inode, modification time and content,
+// as one string. Every commit replaces the file (a new inode), and rpcd's
+// rollback rewrites it (a new modification time), so a change that has come
+// and gone since the last reload, such as an entry committed without an apply
+// and then deleted, still counts.
+function rpcd_config() {
+	let st = fs.stat(RPCD_CONFIG);
+	return sprintf("%J", [ st ? st.inode : null, st ? st.mtime : null, fs.readfile(RPCD_CONFIG) ]);
+}
+
+function record() {
+	fs.writefile(STATE, rpcd_config());
+}
+
+// Whether a LuCI apply is waiting for its confirmation, null when rpcd does
+// not answer.
+function apply_pending(conn) {
+	if (conn.call("uci", "confirm", { ubus_rpc_session: PROBE_SID }) != null)
+		return false;
+	let code = conn.error(true);
+	if (code == UBUS_STATUS_PERMISSION_DENIED) return true;
+	if (code == UBUS_STATUS_NO_DATA) return false;
+	return null;
+}
+
+function rpcd_running(conn) {
+	let l = conn.list("session");
+	return type(l) == "array" && length(l) > 0;
+}
+
+// The pid of the rpcd daemon: procd's instance, or, where procd does not run
+// it, the lowest pid named rpcd (a child rpcd forked never has a lower one).
+function rpcd_pid(conn) {
+	let svc = conn.call("service", "list", { name: "rpcd" });
+	for (let name, inst in (svc && svc.rpcd && svc.rpcd.instances) || {})
+		if (inst.running && type(inst.pid) == "int")
+			return inst.pid;
+	let p = fs.popen("pidof rpcd 2>/dev/null");
+	let out = p ? p.read("all") : "";
+	if (p) p.close();
+	let pids = sort(map(filter(split(trim(out || ""), /\s+/), length), int), (a, b) => a - b);
+	return length(pids) ? pids[0] : null;
+}
+
+// One rpcd reload, done once rpcd answers again: a canary session carries a
+// grant no login entry gives, which the restored session no longer has.
+// Returns false when rpcd did not come back in time.
+function reload_rpcd(conn) {
+	let created = conn.call("session", "create", { timeout: 120 });
+	let sid = created ? created.ubus_rpc_session : null;
+	if (sid)
+		conn.call("session", "grant", { ubus_rpc_session: sid, scope: "luci-sso", objects: [ [ "reload-canary", "x" ] ] });
+
+	let pid = rpcd_pid(conn);
+	if (pid == null || system([ "kill", "-HUP", `${pid}` ]) != 0) {
+		if (sid) conn.call("session", "destroy", { ubus_rpc_session: sid });
+		return false;
+	}
+	if (!sid) {
+		sleep(2000);
+		return true;
+	}
+
+	// A call that reaches rpcd while it restarts is never answered, so poll
+	// on a connection that gives up after a second.
+	let poll = ubus.connect(null, 1);
+	let deadline = now_ms() + RELOAD_WAIT_MS;
+	let done = false;
+	while (!done && now_ms() < deadline) {
+		sleep(POLL_MS);
+		let l = poll ? poll.call("session", "list", { ubus_rpc_session: sid }) : null;
+		if (l != null)
+			done = !(l.acls && l.acls["luci-sso"] && l.acls["luci-sso"]["reload-canary"]);
+		else if (!poll || poll.error(true) == null)
+			poll = ubus.connect(null, 1);
+	}
+	conn.call("session", "destroy", { ubus_rpc_session: sid });
+	return done;
+}
+
+// Serves reload requests until none is left. Only one process does at a
+// time; another that finds the lock taken leaves its request to it.
+function serve_reloads() {
+	while (true) {
+		let lock = open_lock(RELOAD_LOCK);
+		if (!lock.lock("xn")) {
+			lock.close();
+			return;
+		}
+		let conn = ubus.connect(null, 5);
+		let deadline = now_ms() + APPLY_WAIT_MS;
+		while (fs.access(RELOAD_FLAG)) {
+			if (!conn || !rpcd_running(conn)) {
+				// rpcd reads the entries when it starts: nothing to reload.
+				fs.unlink(RELOAD_FLAG);
+				break;
+			}
+			// Polled often: LuCI reloads its page 1.5 s after the
+			// confirmation, and rpcd should be back by then.
+			if (apply_pending(conn) !== false && now_ms() < deadline) {
+				sleep(POLL_MS);
+				continue;
+			}
+			if (now_ms() >= deadline)
+				warning("a LuCI apply is still waiting for its confirmation; reloading rpcd anyway, which cancels its rollback");
+			fs.unlink(RELOAD_FLAG);
+			record();
+			if (!reload_rpcd(conn))
+				warning("rpcd did not come back from its reload in time; SSO sessions may keep their old rights until it reloads");
+			deadline = now_ms() + APPLY_WAIT_MS;
+		}
+		if (conn) conn.disconnect();
+		lock.lock("u");
+		lock.close();
+		// A request made while this process was releasing the lock.
+		if (!fs.access(RELOAD_FLAG))
+			return;
+	}
+}
+
+// Asks for a reload and returns at once: the waiting happens in the
+// background (see the comment at the top).
+function request_reload() {
+	fs.writefile(RELOAD_FLAG, "");
+	system(`${SELF} serve </dev/null >/dev/null 2>&1 &`);
+}
+
+let cmd = ARGV[0];
+if (!(cmd in [ "record", "check", "request", "serve" ])) {
+	warn("usage: rpcd-reload record|check|request|serve\n");
+	exit(2);
+}
+
+fs.mkdir(RUN_DIR, 0700);
+
+if (cmd == "serve")
+	serve_reloads();
+else if (cmd == "record")
+	record();
+else if (cmd == "request" || fs.readfile(STATE) !== rpcd_config())
+	request_reload();
+
+exit(0);

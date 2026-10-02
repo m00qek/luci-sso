@@ -26,62 +26,10 @@ cat <<EOF >/etc/board.json
 }
 EOF
 
-# 4. Minimal rpcd mock
-# A container runs no procd, so this stands in for its `system` ubus object.
-# It answers the two calls LuCI makes, board and info, in the shape procd
-# uses, so the header shows the hostname and Status > Overview has its values.
-mkdir -p /usr/libexec/rpcd
-cat <<'EOF' >/usr/libexec/rpcd/system
-#!/bin/sh
-. /usr/share/libubox/jshn.sh
-
-meminfo() { sed -n "s/^$1: *\([0-9]*\) kB/\1/p" /proc/meminfo | awk '{ printf "%.0f", $1 * 1024 }'; }
-
-case "$1" in
-	list) echo '{"info":{},"board":{}}' ;;
-	call)
-		json_init
-		case "$2" in
-			board)
-				. /etc/openwrt_release
-				json_add_string kernel "$(sed -n 's/^Version: \([0-9.]*\).*/\1/p' /usr/lib/opkg/info/kernel.control)"
-				json_add_string hostname "$(uci -q get system.@system[0].hostname || echo OpenWrt)"
-				json_add_string system "$DISTRIB_ARCH"
-				json_add_string model "$(jsonfilter -i /etc/board.json -e '@.model.name')"
-				json_add_string board_name "$(jsonfilter -i /etc/board.json -e '@.model.id')"
-				json_add_object release
-				json_add_string distribution "$DISTRIB_ID"
-				json_add_string version "$DISTRIB_RELEASE"
-				json_add_string revision "$DISTRIB_REVISION"
-				json_add_string target "$DISTRIB_TARGET"
-				json_add_string description "$DISTRIB_DESCRIPTION"
-				json_close_object
-				;;
-			info)
-				json_add_int localtime "$(date +%s)"
-				json_add_int uptime "$(cut -d. -f1 /proc/uptime)"
-				json_add_array load
-				for l in $(cut -d' ' -f1-3 /proc/loadavg); do
-					json_add_int "" "$(awk -v l="$l" 'BEGIN { printf "%d", l * 65536 }')"
-				done
-				json_close_array
-				json_add_object memory
-				for f in total:MemTotal free:MemFree shared:Shmem buffered:Buffers available:MemAvailable cached:Cached; do
-					json_add_int "${f%%:*}" "$(meminfo "${f#*:}")"
-				done
-				json_close_object
-				;;
-		esac
-		json_dump
-		;;
-esac
-EOF
-chmod +x /usr/libexec/rpcd/system
-
-# 5. Initial UCI Setup (skip reload_config on boot)
+# 4. Initial UCI Setup (skip reload_config on boot)
 BOOTING=1 /bin/sh /usr/local/bin/setup-uci.sh
 
-# 6. Hot Reload Watcher (Background)
+# 5. Hot Reload Watcher (Background)
 watch_setup() {
   echo "👀 Starting setup-uci watcher..."
   while inotifywait -e close_write /usr/local/bin/setup-uci.sh 2>/dev/null; do
@@ -91,35 +39,56 @@ watch_setup() {
 }
 watch_setup &
 
-# 7. SSO Permissions
+# 6. SSO Permissions
 chmod +x /www/cgi-bin/luci-sso 2>/dev/null || true
 mkdir -p /usr/sbin
 cp /usr/share/luci-sso/test/../files/usr/sbin/luci-sso-cleanup /usr/sbin/ 2>/dev/null || true
 chmod +x /usr/sbin/luci-sso-cleanup 2>/dev/null || true
 
-# 7a. Link native crypto backend to the path ucode expects
+# 6a. Link native crypto backend to the path ucode expects
 : ${CRYPTO_LIB:?CRYPTO_LIB must be set}
 mkdir -p /usr/lib/ucode/luci_sso
 ln -sf /luci_sso/backends/${CRYPTO_LIB}/luci_sso/native.so /usr/lib/ucode/luci_sso/native.so
 
-# 8. Core Daemons
+# 7. Core Daemons
+# procd is not this container's init, but it runs as a service manager all
+# the same: not PID 1, it only connects to ubus and offers its `service` and
+# `system` objects. That gives the devenv what a router has: rpcd as a procd
+# instance (so /etc/init.d/rpcd reload works), and the config triggers that
+# run /etc/init.d/luci-sso on every apply of /etc/config/luci-sso.
 /sbin/ubusd &
 sleep 1
 /sbin/logd -S 64 &
-/sbin/rpcd &
+/sbin/procd &
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  ubus -t 1 list service >/dev/null 2>&1 && break
+  sleep 1
+done
+/etc/init.d/rpcd start
+for i in 1 2 3 4 5 6 7 8 9 10; do
+  ubus -t 1 list session >/dev/null 2>&1 && break
+  sleep 1
+done
 
-# 9. One-time Setup
+# 8. One-time Setup
 echo "🔄 Running setup..."
 mkdir -p /etc/uci-defaults
 cp -r /usr/share/luci-sso/uci-defaults/* /etc/uci-defaults/ 2>/dev/null || true
 for f in /etc/uci-defaults/*; do
   [ -e "$f" ] && (. "$f") && rm -f "$f" 2>/dev/null || true
 done
+# What the package's postinst does after the uci-defaults: start the init
+# script, which registers its procd trigger.
+/etc/init.d/luci-sso enable
+/etc/init.d/luci-sso start
+# reload_config sends a config.change event only for files whose checksum
+# changed since its last run: record the first checksums now.
+/sbin/reload_config >/dev/null 2>&1 || true
 
-# 10. Root Password
+# 9. Root Password
 printf "admin\nadmin\n" | passwd root >/dev/null 2>&1
 
-# 11. Execution Mode
+# 10. Execution Mode
 if [ "$SHOULD_FOREGROUND" = "true" ]; then
   echo "🚀 Starting LuCI..."
   exec /usr/sbin/uhttpd -f \

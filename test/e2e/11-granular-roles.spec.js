@@ -1,17 +1,16 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { loginAsRoot, RELOAD_WAIT_MS } = require('./helpers');
+const { applyAsRoot, entryFor, awaitAccess, loginViaSSO: ssoLogin, RELOAD_WAIT_MS } = require('./helpers');
 
 // Granular SSO roles against the real rpcd.
 //
 // The mock IdP always signs in admin@example.com, which the devenv maps to the
 // `admin` role. That role's permissions are its rpcd login entry,
-// rpcd.luci_sso_admin (username sso:admin). This spec rewrites the entry's
-// read/write lists as root over /ubus/ before each case, through the
-// luci-sso ubus object, and restores read '*' / write '*' afterwards.
-// (A LuCI session has no UCI write access to rpcd, not even root's.) Each
-// change makes rpcd reload, and the spec waits for the reload to finish so
-// that no step races rpcd's restart.
+// rpcd.luci_sso_admin (username sso:admin). This spec sets its lists as root
+// over /ubus/ and applies them before each case, and restores read '*' /
+// write '*' afterwards. Each change makes rpcd reload, and the spec waits
+// until an open SSO session has the new rights, so that no step races rpcd's
+// restart.
 //
 // luci-sso expands the entry's access groups into the concrete ubus/uci grants
 // rpcd gives a password login with the same lists. Without that expansion an
@@ -47,30 +46,17 @@ async function ubus(page, obj, method, params) {
   return { status: reply.result[0] === 6 ? 'denied' : reply.result[0], data: reply.result[1] };
 }
 
-// Waits until the reload a luci-sso write scheduled is over: list_roles
-// reports reload_pending until rpcd has re-executed itself, and the new rpcd
-// answers only once it has restored the sessions. A poll can freeze uhttpd
-// for up to 30 s (see RELOAD_WAIT_MS), which the wait allows for.
-async function awaitReload(page) {
-  await expect.poll(async () => {
-    const r = await ubus(page, 'luci-sso', 'list_roles', {});
-    return r.status === 0 && r.data.reload_pending === false;
-  }, { timeout: RELOAD_WAIT_MS }).toBe(true);
-}
-
-// Sets the read/write lists of the devenv admin role's rpcd login entry, as
-// root, through the luci-sso ubus object.
-async function setRole(browser, read, write) {
-  const context = await browser.newContext();
-  const page = await context.newPage();
+// Sets the read/write lists of the devenv admin role as root and applies
+// them, then waits until an SSO session opened before has `probe`: the new
+// rights are in force.
+async function setRole(browser, read, write, probe) {
+  const sso = await browser.newPage();
   try {
-    await loginAsRoot(page);
-    const r = await ubus(page, 'luci-sso', 'set_role', { name: 'admin', read, write });
-    expect(r.status).toBe(0);
-    expect(r.data).toEqual({ role: { name: 'admin', read, write } });
-    await awaitReload(page);
+    await ssoLogin(sso);
+    await applyAsRoot(browser, {}, entryFor('admin', read, write));
+    await awaitAccess(sso, probe.group, probe.perm, probe.expected);
   } finally {
-    await context.close();
+    await sso.close();
   }
 }
 
@@ -87,11 +73,11 @@ test.describe('SSO roles: access groups work like a password login', () => {
 
   test.afterAll(async ({ browser }) => {
     test.setTimeout(RELOAD_WAIT_MS + 30000);
-    await setRole(browser, ['*'], ['*']);
+    await setRole(browser, ['*'], ['*'], { group: 'luci-mod-network-config', perm: 'write', expected: true });
   });
 
   test("read '*' only: the overview shows real data, and nothing can be changed", async ({ page, browser }) => {
-    await setRole(browser, ['*'], []);
+    await setRole(browser, ['*'], [], { group: 'luci-base', perm: 'write', expected: false });
     await loginViaSSO(page);
 
     await test.step('Status > Overview loads its data', async () => {
@@ -121,7 +107,7 @@ test.describe('SSO roles: access groups work like a password login', () => {
   // group like luci-mod-system-config grants write on its configs. A writer
   // needs both, exactly as an rpcd password login would.
   test('write luci-mod-system-config: system settings can be saved, network settings cannot', async ({ page, browser }) => {
-    await setRole(browser, ['*'], ['luci-base', 'luci-mod-system-config']);
+    await setRole(browser, ['*'], ['luci-base', 'luci-mod-system-config'], { group: 'luci-mod-system-config', perm: 'write', expected: true });
     await loginViaSSO(page);
 
     await test.step('the System page loads', async () => {

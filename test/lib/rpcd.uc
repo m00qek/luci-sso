@@ -1,15 +1,20 @@
 'use strict';
 
-// Helpers for the system bucket, which drives the container's REAL rpcd.
+// Helpers for the system bucket, which drives the container's REAL rpcd and
+// procd.
 //
 // rpcd reloads (SIGHUP: it saves its sessions, re-executes itself and restores
-// them) whenever the luci-sso ubus object writes an entry. While it restarts,
-// its ubus objects are briefly gone, so a test that writes must wait for the
-// reload to finish before its next call. The system bucket runs its files one
-// at a time (devenv/scripts/test.sh), so no other file sees the restart.
+// them) whenever an apply of /etc/config/rpcd changes a role's rpcd login
+// entry (/etc/init.d/luci-sso, through its procd trigger), and when a test
+// signals it. While it restarts, its ubus objects are briefly gone, so a test
+// that makes it reload must wait for the reload to finish before its next
+// call. The system bucket runs its
+// files one at a time (devenv/scripts/test.sh), so no other file sees the
+// restart.
 
 import * as ubus_lib from 'ubus';
 import * as uci from 'uci';
+import * as rpcd_login from 'luci_sso.rpcd_login';
 
 export const ENTRY_PREFIX = "luci_sso_";
 
@@ -33,6 +38,25 @@ export function put_login(section, values) {
 	cur.commit("rpcd");
 };
 
+/**
+ * A luci-sso role matching one made-up email, and its rpcd login entry with
+ * the given { read, write } lists, as the settings page stages them
+ * (rpcd_login.entry and stage: `unauthenticated` added to the read list),
+ * committed without an apply: no trigger and no rpcd reload. Returns the entry.
+ */
+export function put_role(name, lists) {
+	let cur = rpcd_cursor();
+	cur.set("luci-sso", name, "role");
+	cur.set("luci-sso", name, "email", [ `${name}@systest.invalid` ]);
+	cur.commit("luci-sso");
+	let res = rpcd_login.entry(name, lists.read || [], lists.write || []);
+	if (!res.ok)
+		die(`put_role ${name}: ${res.details}`);
+	rpcd_login.stage(cur, res.data);
+	cur.commit("rpcd");
+	return res.data;
+};
+
 /** Deletes a section of /etc/config/rpcd if it exists (no reload). */
 export function drop_section(section) {
 	let cur = rpcd_cursor();
@@ -40,6 +64,16 @@ export function drop_section(section) {
 		cur.delete("rpcd", section);
 		cur.commit("rpcd");
 	}
+};
+
+/** Deletes a luci-sso role and its rpcd login entry, if they exist (no reload). */
+export function drop_role(name) {
+	let cur = rpcd_cursor();
+	if (cur.get("luci-sso", name)) {
+		cur.delete("luci-sso", name);
+		cur.commit("luci-sso");
+	}
+	drop_section(rpcd_login.section_name(name));
 };
 
 // A session's ACLs flattened to { "scope object function": true }, or null
@@ -122,6 +156,40 @@ export function await_reload(conn, fn, timeout_ms) {
 	}
 	conn.call("session", "destroy", { ubus_rpc_session: canary });
 	return res;
+};
+
+/**
+ * Waits until rpcd has reloaded since `canary` was made by marked_session():
+ * rpcd answers for it, without its marker. Dies after `timeout_ms`.
+ */
+export function await_marker_gone(canary, timeout_ms) {
+	let poll = ubus_lib.connect(null, 1);
+	let limit = timeout_ms || 15000, start = elapsed_ms(0);
+	while (true) {
+		let listed = poll.list("luci-sso");
+		let acls = flat_acls(poll, canary);
+		if (listed && length(listed) && acls != null && !acls[MARKER])
+			return;
+		if (elapsed_ms(start) >= limit)
+			die(`rpcd did not reload within ${limit} ms`);
+		sleep(100);
+	}
+};
+
+/**
+ * Polls fn() every 100 ms until it returns a truthy value, and returns it.
+ * Dies after `timeout_ms` with `what` in the message.
+ */
+export function wait_for(what, fn, timeout_ms) {
+	let limit = timeout_ms || 15000, start = elapsed_ms(0);
+	while (true) {
+		let v = fn();
+		if (v)
+			return v;
+		if (elapsed_ms(start) >= limit)
+			die(`timed out after ${limit} ms waiting for ${what}`);
+		sleep(100);
+	}
 };
 
 export function connect() {

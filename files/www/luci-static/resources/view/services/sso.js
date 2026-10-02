@@ -4,51 +4,32 @@
 'require uci';
 'require ui';
 'require rpc';
-'require request';
 'require dom';
 
 /*
- * One rule: changes take effect with Save & Apply.
+ * A plain LuCI form: Save stages the changes, Save & Apply (here or in
+ * LuCI's "Unsaved Changes" dialog) applies them, with LuCI's rollback.
  *
- * A role has two halves:
- *  - its matching rules (email, group, sub) and its place in the order: a
- *    `role` section of /etc/config/luci-sso, edited through UCI like any
- *    other LuCI form. Save stages them; Save & Apply applies them;
- *  - its permissions (read, write): the rpcd login entry luci_sso_<role>,
- *    which only the `luci-sso` ubus object may write, and which LuCI's
- *    staged changes cannot hold. The page loads them with list_roles and
- *    keeps edits to them on the page, across a plain Save, until Save &
- *    Apply. Then it writes the roles edited since with set_role, removes the
- *    deleted ones with delete_role, and waits for rpcd to reload with them.
- *    With UCI changes pending, that happens only once LuCI has applied and
- *    confirmed them (its `uci-applied` event): an apply that is rolled back
- *    writes no permissions. With none pending, it happens at once.
+ * A role has two halves, both edited as ordinary staged UCI changes, saved
+ * and applied together:
+ *  - its matching rules (email, group, sub), the issuer its sub rules belong
+ *    to (sub_issuer), and its place in the order: a `role` section of
+ *    /etc/config/luci-sso;
+ *  - its permissions (read, write: LuCI access groups or patterns): its rpcd
+ *    login entry, luci_sso_<role> in /etc/config/rpcd, with the username
+ *    sso:<role> and never a password option (luci_sso.rpcd_login). The read
+ *    list always grants `unauthenticated`, which the page adds and hides.
+ *    The page touches no other rpcd section.
+ * LuCI's rollback reverts both files. After an apply, the init script
+ * /etc/init.d/luci-sso makes rpcd reload, so open sessions get the new rights.
  *
  * Subject (sub) rules belong to one issuer: a sub identifies an account only
- * at the provider that issued it (OIDC Core §5.7), so the backend counts them
- * only while the option sub_issuer equals issuer_url. Each save of the form
- * binds them (see bindSubIssuer): to the Issuer URL when they have no issuer
- * yet or already have this one, never silently to a new one. After the
- * Issuer URL changes, the page warns, and only the "Use these subject rules
- * with the new provider" button moves them over.
+ * at the provider that issued it (OIDC Core §5.7), so the backend counts a
+ * role's sub rules only while its sub_issuer equals issuer_url. The role
+ * dialog saves sub_issuer with the subjects. The page warns about every role
+ * whose sub_issuer is not the Issuer URL, and changes it only when the "Use
+ * with this provider" button of that role is pressed.
  */
-
-var callListRoles = rpc.declare({
-	object: 'luci-sso',
-	method: 'list_roles'
-});
-
-var callSetRole = rpc.declare({
-	object: 'luci-sso',
-	method: 'set_role',
-	params: [ 'name', 'read', 'write' ]
-});
-
-var callDeleteRole = rpc.declare({
-	object: 'luci-sso',
-	method: 'delete_role',
-	params: [ 'name' ]
-});
 
 var callListAclGroups = rpc.declare({
 	object: 'luci-sso',
@@ -77,27 +58,16 @@ var TEST_POLL_MS = 500;
 /* The provider settings the connection test checks. */
 var TEST_FIELDS = [ 'issuer_url', 'internal_issuer_url', 'client_id', 'client_secret', 'redirect_uri' ];
 
-/* Every role's read list grants this group (the ubus object adds it), so the
- * page neither shows it nor lets it be removed. */
+/* Every role's rpcd login entry grants this group in its read list (the page
+ * adds it), so the page neither shows it nor lets it be removed. */
 var BASELINE = 'unauthenticated';
-
-/* How long to wait for rpcd to reload after a write. The reload takes about
- * two seconds, but uhttpd checks each /ubus/ call's session with a
- * synchronous call to rpcd, for up to half its script timeout (60 s by
- * default), and serves nothing meanwhile. A check that reaches rpcd just as it
- * re-executes itself is never answered, so uhttpd can stall for 30 s; the wait
- * outlasts that rather than report a reload that did finish as failed. */
-var RELOAD_TIMEOUT_MS = 45000;
-var RELOAD_POLL_MS = 500;
 
 /* A role name becomes part of the rpcd section name luci_sso_<role>. */
 var NAME_MAX = 32;
 
-/* LuCI reloads the page this many seconds after it has applied UCI changes;
- * for that one reload, the page sets L.env.apply_display to this, so the
- * reload never comes while the page is open: one day, well under the 2^31-1
- * ms setTimeout takes. See handleSaveApply. */
-var HOLD_RELOAD_S = 86400;
+/* What a read or write list may hold, as luci_sso.rpcd_login checks it. */
+var LIST_MAX = 128;
+var ENTRY_MAX = 128;
 
 /* The documentation of this release. */
 var DOCS = 'https://m00qek.github.io/luci-sso/0.10/';
@@ -153,11 +123,6 @@ function roleRules() {
 	});
 }
 
-/* Whether a role has a subject rule, as the page holds the roles. */
-function hasSubRules() {
-	return roleRules().some(function(r) { return r.sub.length > 0; });
-}
-
 /* A warning for Scopes: roles match by group, but the scopes do not ask
  * for groups. */
 function scopeWarning(scope) {
@@ -198,37 +163,78 @@ function withoutBaseline(list) {
 	return L.toArray(list).filter(function(g) { return g !== BASELINE; });
 }
 
-/* Whether rpcd still has a reload pending. Asked with a plain request rather
- * than rpc.declare: while rpcd re-executes itself a call can fail, and a
- * failed rpc call can make LuCI report the session as expired. */
-function reloadPending() {
-	return request.post(rpc.getBaseURL(), {
-		jsonrpc: '2.0', id: 1, method: 'call',
-		params: [ rpc.getSessionID(), 'luci-sso', 'list_roles', {} ]
-	}, { timeout: 2000, nobatch: true, credentials: true }).then(function(res) {
-		var msg = res.json();
-		var r = (msg && Array.isArray(msg.result)) ? msg.result : null;
-		return !(r && r[0] === 0 && r[1] && r[1].reload_pending === false);
-	}).catch(function() {
-		return true;
-	});
+/* rpcd's patterns, as luci_sso.rpcd_login reads them: fnmatch(3) without
+ * flags, so `*` and `?` are wildcards and `[...]` a character class ([!...]
+ * negates). */
+function globRegExp(pattern) {
+	var out = '^';
+	for (var i = 0; i < pattern.length; i++) {
+		var ch = pattern.charAt(i);
+		if (ch == '*') out += '.*';
+		else if (ch == '?') out += '.';
+		else if (ch == '[') {
+			var j = pattern.indexOf(']', i + 1);
+			if (j < i + 2) { out += '\\['; continue; }
+			var body = pattern.substring(i + 1, j);
+			if (body.charAt(0) == '!') body = '^' + body.substring(1);
+			out += '[' + body.replace(/\\/g, '\\\\') + ']';
+			i = j;
+		}
+		else out += ('\\.^$|+(){}]'.indexOf(ch) >= 0) ? '\\' + ch : ch;
+	}
+	return new RegExp(out + '$');
 }
 
-function awaitReload() {
-	var deadline = Date.now() + RELOAD_TIMEOUT_MS;
-	var poll = function() {
-		return reloadPending().then(function(pending) {
-			if (!pending) return true;
-			if (Date.now() > deadline) return false;
-			return new Promise(function(resolve) {
-				window.setTimeout(resolve, RELOAD_POLL_MS);
-			}).then(poll);
-		});
-	};
-	/* The reload starts a second after the write. */
-	return new Promise(function(resolve) {
-		window.setTimeout(resolve, RELOAD_POLL_MS);
-	}).then(poll);
+/* The rpcd login entry that holds a role's permissions. */
+function entrySection(role) {
+	return 'luci_sso_' + role;
+}
+
+/* A read list as the entry stores it: as given when it grants BASELINE
+ * already, through the name or a pattern such as `*`, and with the name
+ * appended otherwise (luci_sso.rpcd_login.with_baseline). */
+function withBaselineList(list) {
+	var grants = list.some(function(p) {
+		var re = null;
+		if (p.charAt(0) == '!') return false;
+		try { re = globRegExp(p); } catch (e) {}
+		return re && re.test(BASELINE);
+	});
+	return grants ? list : list.concat([ BASELINE ]);
+}
+
+/* Stages a role's rpcd login entry, as luci_sso.rpcd_login.stage() writes
+ * one: a login named luci_sso_<role>, with the username sso:<role> and no
+ * password option, and a read list that grants BASELINE. */
+function ensureEntry(role) {
+	var sid = entrySection(role);
+	if (uci.get('rpcd', sid) == null) {
+		uci.add('rpcd', 'login', sid);
+		uci.set('rpcd', sid, 'read', [ BASELINE ]);
+	}
+	if (uci.get('rpcd', sid, 'username') !== 'sso:' + role)
+		uci.set('rpcd', sid, 'username', 'sso:' + role);
+	if (uci.get('rpcd', sid, 'password') != null)
+		uci.unset('rpcd', sid, 'password');
+	return sid;
+}
+
+/* Why an entry of a read (`read` true) or write list cannot be stored, or
+ * true: the checks of luci_sso.rpcd_login, which would otherwise leave the
+ * role without an rpcd login entry, so its users could not log in. */
+function checkAccessEntry(value, read) {
+	if (value.length > ENTRY_MAX)
+		return _('Use at most %d characters.').format(ENTRY_MAX);
+	if (/[\x00-\x1f\x7f]/.test(value))
+		return _('Control characters are not allowed.');
+	if (read && value.charAt(0) == '!') {
+		var p = value.substring(1).replace(/^\s+/, '');
+		var re = null;
+		try { re = globRegExp(p); } catch (e) {}
+		if (p.length && re && re.test(BASELINE))
+			return _('LuCI needs "%s" on every page: it cannot be denied.').format(BASELINE);
+	}
+	return true;
 }
 
 function sleep(ms) {
@@ -304,185 +310,41 @@ function renderTestResult(reply) {
 	]);
 }
 
-/* A reply of the luci-sso object: its own errors come back as a result. */
-function checkReply(name, reply) {
-	if (reply && reply.error)
-		throw new Error(_('Role "%s": %s').format(name, reply.message || reply.error));
-	return reply;
+/* The roles whose sub rules are ignored at a login with Issuer URL `issuer`:
+ * those with a subject whose sub_issuer is not exactly it, as the page
+ * holds them, with what they were made for. */
+function subMismatches(issuer) {
+	return uci.sections('luci-sso', 'role').filter(function(s) {
+		return L.toArray(s.sub).length > 0 && (s.sub_issuer || '') !== issuer;
+	}).map(function(s) {
+		return { name: s['.name'], owner: s.sub_issuer || null };
+	});
 }
 
 return view.extend({
 	load: function() {
 		return Promise.all([
-			callListRoles().catch(function(e) { return { failed: e }; }),
 			callListAclGroups().catch(function() { return null; }),
-			uci.load('luci-sso')
+			uci.load([ 'luci-sso', 'rpcd' ])
 		]);
 	},
 
-	/* Permissions as rpcd holds them, by role name, and the edits since. */
-	loadAccess: function(data) {
-		this.accessAvailable = !!(data && Array.isArray(data.roles));
-		this.access = {};
-		this.edited = {};
-		this.deleted = {};
-		if (this.accessAvailable)
-			data.roles.forEach(L.bind(function(r) {
-				this.access[r.name] = { read: L.toArray(r.read), write: L.toArray(r.write) };
-			}, this));
-	},
-
-	/* A role's permissions: edited, stored, or null when it has no entry. */
-	accessOf: function(name) {
-		return this.edited[name] || this.access[name] || null;
-	},
-
-	/* Records an edit of one list; a role without an entry gets one even
-	 * when both lists stay empty. */
-	editAccess: function(name, list, value) {
-		var cur = this.accessOf(name);
-		var shown = function(l) { return (list == 'read' ? withoutBaseline(l) : L.toArray(l)).join('\n'); };
-		delete this.deleted[name];
-		if (cur && shown(cur[list]) == shown(value))
-			return;
-		cur = cur || { read: [], write: [] };
-		var next = { read: cur.read, write: cur.write };
-		next[list] = L.toArray(value);
-		this.edited[name] = next;
-	},
-
-	/* The Read access / Write access cell of a role. */
+	/* The Read access / Write access cell of a role, from its rpcd login
+	 * entry as the page holds it. */
 	accessCell: function(name, list) {
-		if (!this.accessAvailable)
-			return E('em', _('(unavailable)'));
-		var a = this.accessOf(name);
-		if (!a)
+		var sid = entrySection(name);
+		if (uci.get('rpcd', sid) == null)
 			return list == 'read'
 				? E('em', { 'class': 'luci-sso-no-entry' }, _('Not set: edit this role and Save & Apply, or its users cannot log in'))
 				: NONE;
-		var read = withoutBaseline(a.read);
-		if (list == 'read' && !read.length && !a.write.length)
+		var read = withoutBaseline(uci.get('rpcd', sid, 'read'));
+		var write = L.toArray(uci.get('rpcd', sid, 'write'));
+		if (list == 'read' && !read.length && !write.length)
 			return E('em', { 'class': 'luci-sso-no-access' }, _('None: this role grants no access'));
-		var items = (list == 'read') ? read : L.toArray(a.write);
+		var items = (list == 'read') ? read : write;
 		if (items.length == 1 && items[0] === '*')
 			return E('span', { 'title': '*' }, (list == 'read') ? _('Everything') : _('Full admin'));
 		return renderList(items);
-	},
-
-	/* Whether the page holds permission edits that rpcd does not have yet. */
-	hasAccessEdits: function() {
-		if (!this.accessAvailable)
-			return false;
-		var roles = uci.sections('luci-sso', 'role').map(function(s) { return s['.name']; });
-		return Object.keys(this.deleted).some(function(n) { return roles.indexOf(n) < 0; }) ||
-			Object.keys(this.edited).some(function(n) { return roles.indexOf(n) >= 0; });
-	},
-
-	/* Writes the edited and deleted roles' permissions, then waits for rpcd
-	 * to reload with them. Resolves true once they are in force, false when
-	 * the reload did not finish in time; rejects when rpcd refuses one. */
-	writeAccess: function() {
-		var roles = uci.sections('luci-sso', 'role').map(function(s) { return s['.name']; });
-		var tasks = [];
-
-		Object.keys(this.deleted).forEach(function(name) {
-			if (roles.indexOf(name) >= 0) return;
-			tasks.push(callDeleteRole(name).then(function(reply) {
-				if (reply && reply.error == 'NOT_FOUND') return;
-				checkReply(name, reply);
-			}));
-		});
-		Object.keys(this.edited).forEach(L.bind(function(name) {
-			if (roles.indexOf(name) < 0) return;
-			var a = this.edited[name];
-			tasks.push(callSetRole(name, withoutBaseline(a.read), a.write).then(function(reply) {
-				checkReply(name, reply);
-			}));
-		}, this));
-
-		if (!tasks.length)
-			return Promise.resolve(true);
-		return Promise.all(tasks).then(awaitReload);
-	},
-
-	/* The permission half of Save & Apply, shown in LuCI's apply dialog. On
-	 * success the page reloads, as after any apply; on failure the edits stay
-	 * on the page, to fix and apply again. */
-	applyAccess: function() {
-		var reload = function() { window.location = window.location.href.split('#')[0]; };
-
-		ui.changes.displayStatus('notice spinning',
-			E('p', _('Saving role permissions; rpcd is reloading to apply them…')));
-
-		return this.writeAccess().then(L.bind(function(done) {
-			if (!done)
-				throw new Error(_('rpcd did not finish reloading; the new permissions may not be in force yet.'));
-			this.edited = {};
-			this.deleted = {};
-			ui.changes.displayStatus('notice', E('p', _('Role permissions saved and in force.')));
-			return sleep(1500).then(reload);
-		}, this)).catch(L.bind(function(e) {
-			ui.changes.displayStatus('warning', [
-				E('h4', _('Role permissions not saved')),
-				E('p', [ e.message ]),
-				E('div', { 'class': 'right' }, E('button', {
-					'class': 'btn cbi-button',
-					'click': L.bind(function() {
-						ui.changes.displayStatus(false);
-						return callListRoles().then(L.bind(function(data) {
-							var edited = this.edited, deleted = this.deleted;
-							this.loadAccess(data);
-							this.edited = edited;
-							this.deleted = deleted;
-							return this._map.load().then(L.bind(this._map.reset, this._map));
-						}, this)).catch(function(err) {
-							/* The edits are still on the page; Save & Apply tries again. */
-							ui.addNotification(null, E('p', [ _('Could not reload the role permissions from rpcd: %s').format(err.message) ]), 'warning');
-						});
-					}, this)
-				}, _('Dismiss')))
-			]);
-		}, this));
-	},
-
-	/* Save & Apply: stage and apply the UCI changes as LuCI does, and write
-	 * the permissions only once the apply has gone through (see the comment
-	 * at the top). */
-	handleSaveApply: function(ev, mode) {
-		var page = this;
-		var checked = (mode == '0');
-
-		return this.handleSave(ev).then(function() {
-			if (!page.hasAccessEdits())
-				return ui.changes.apply(checked);
-
-			return uci.changes().then(function(changes) {
-				var pending = Object.keys(changes || {}).some(function(c) { return L.toArray(changes[c]).length > 0; });
-				if (!pending)
-					return page.applyAccess();
-
-				if (!page.applyArmed) {
-					page.applyArmed = true;
-					document.addEventListener('uci-applied', function() {
-						page.applyArmed = false;
-						/* Right after this event, LuCI arms a timer that
-						 * reloads the page in L.env.apply_display seconds.
-						 * Only applyAccess may reload it: once the permissions
-						 * are in force, and never when they fail, or the
-						 * reload would throw away the edits it keeps. So the
-						 * value is HOLD_RELOAD_S while LuCI arms that timer,
-						 * and back to LuCI's own as soon as it has, for its
-						 * other timers (closing a notice, the reload after a
-						 * revert). */
-						var display = L.env.apply_display;
-						L.env.apply_display = HOLD_RELOAD_S;
-						window.setTimeout(function() { L.env.apply_display = display; }, 0);
-						Promise.resolve().then(L.bind(page.applyAccess, page));
-					}, { once: true });
-				}
-				ui.changes.apply(checked);
-			});
-		});
 	},
 
 	/* Checks the provider settings as the form holds them, saved or not. */
@@ -507,107 +369,70 @@ return view.extend({
 		});
 	},
 
-	handleReset: function() {
-		this.edited = {};
-		this.deleted = {};
-		this.rebindTo = null;
-		return this._map.reset();
-	},
-
-	/* The issuer the roles' subject rules belong to, or null when they have
-	 * none yet: the one the button chose, else sub_issuer, else, for rules
-	 * the page found without one, the Issuer URL it was loaded with. */
-	subOwner: function() {
-		if (this.rebindTo)
-			return this.rebindTo;
-		var bound = uci.get('luci-sso', 'default', 'sub_issuer');
-		if (bound)
-			return bound;
-		return this.loadedSubs ? (this.loadedIssuer || null) : null;
-	},
-
-	/* Fills a subject-rule slot for the Issuer URL `issuer`: a warning, with
-	 * the button, when the rules belong to another issuer; a notice when the
-	 * button has moved them to this one, until saved; nothing otherwise. */
+	/* Fills a subject-rule slot for the Issuer URL `issuer`: one warning per
+	 * role whose sub rules belong to another issuer, each with a button that
+	 * stages sub_issuer = `issuer` for that role only, at once, as a Save
+	 * would: Save & Apply applies it, the header dialog's Revert discards it. */
 	renderSubIssuer: function(slot, issuer) {
 		if (!slot)
 			return;
-		var owner = this.subOwner();
-		var bound = uci.get('luci-sso', 'default', 'sub_issuer') || null;
-		var subs = hasSubRules();
+		var roles = issuer ? subMismatches(issuer) : [];
 		slot.innerHTML = '';
-		if (subs && owner && issuer && owner !== issuer) {
-			slot.className = 'alert-message warning luci-sso-warning';
-			slot.appendChild(E('p', {}, _('Subject rules belong to <code>%h</code> and are ignored for <code>%h</code>. A subject identifies one account only at its own provider.').format(owner, issuer)));
-			slot.appendChild(E('button', {
-				'class': 'cbi-button cbi-button-action luci-sso-rebind',
-				'type': 'button',
-				'click': L.bind(function(ev) {
-					ev.preventDefault();
-					this.rebindTo = issuer;
-					this.updateSubIssuer(issuer);
-				}, this)
-			}, [ _('Use these subject rules with the new provider') ]));
-			slot.removeAttribute('hidden');
-		}
-		else if (subs && this.rebindTo && this.rebindTo === issuer && bound !== issuer) {
-			slot.className = 'alert-message notice luci-sso-warning';
-			slot.appendChild(E('p', {}, _('Subject rules will be used with <code>%h</code> after Save &amp; Apply.').format(issuer)));
-			slot.removeAttribute('hidden');
-		}
-		else {
+		if (!roles.length) {
 			slot.className = 'luci-sso-warning';
 			slot.setAttribute('hidden', '');
+			return;
 		}
+		slot.className = 'alert-message warning luci-sso-warning';
+		roles.forEach(L.bind(function(r) {
+			slot.appendChild(E('p', { 'class': 'luci-sso-sub-mismatch', 'data-role': r.name }, [
+				E('span', {}, r.owner
+					? _('The subject rules of role <strong>%h</strong> belong to <code>%h</code> and are ignored for <code>%h</code>. A subject identifies one account only at its own provider.').format(r.name, r.owner, issuer)
+					: _('The subject rules of role <strong>%h</strong> name no provider (sub_issuer) and are ignored.').format(r.name)),
+				' ',
+				E('button', {
+					'class': 'cbi-button cbi-button-action luci-sso-rebind',
+					'type': 'button',
+					'data-role': r.name,
+					'click': ui.createHandlerFn(this, function(ev) {
+						uci.set('luci-sso', r.name, 'sub_issuer', issuer);
+						return uci.save().then(L.bind(function() {
+							this.updateSubIssuer(issuer);
+							return ui.changes.init();
+						}, this));
+					})
+				}, [ _('Use with this provider') ])
+			]));
+		}, this));
+		slot.removeAttribute('hidden');
 	},
 
-	/* Refreshes every subject-rule slot, for the Issuer URL in the form. */
+	/* Refreshes every subject-rule slot, and the roles' Subjects cells, for
+	 * the Issuer URL in the form. */
 	updateSubIssuer: function(issuer) {
 		document.querySelectorAll('[data-warning="sub-issuer"]').forEach(L.bind(function(slot) {
 			this.renderSubIssuer(slot, issuer);
 		}, this));
-	},
-
-	/* Run on each save of the form, once its values are parsed into UCI:
-	 * sets sub_issuer to the issuer the subject rules belong to (subOwner),
-	 * or to the Issuer URL when they have none yet, and removes it when no
-	 * role has a subject rule. So a first save binds the rules to the Issuer
-	 * URL, and one after an Issuer URL change keeps them bound to the old
-	 * issuer until the button moves them. */
-	bindSubIssuer: function() {
-		var bound = uci.get('luci-sso', 'default', 'sub_issuer') || '';
-		var next = hasSubRules() ? (this.subOwner() || uci.get('luci-sso', 'default', 'issuer_url') || '') : '';
-		this.rebindTo = null;
-		if (next === bound)
-			return;
-		if (next)
-			uci.set('luci-sso', 'default', 'sub_issuer', next);
-		else
-			uci.unset('luci-sso', 'default', 'sub_issuer');
+		var ignored = {};
+		subMismatches(issuer).forEach(function(r) { ignored[r.name] = true; });
+		document.querySelectorAll('.luci-sso-sub-ignored').forEach(function(el) {
+			if (ignored[el.getAttribute('data-role')]) el.removeAttribute('hidden');
+			else el.setAttribute('hidden', '');
+		});
 	},
 
 	render: function(data) {
 		var m, s, o;
 		var page = this;
 
-		this.loadAccess(data[0]);
-		this.aclGroups = Array.isArray(data[1]) ? data[1] : null;
-		/* What the subject rules were found with (see subOwner). */
-		this.rebindTo = null;
-		this.loadedIssuer = uci.get('luci-sso', 'default', 'issuer_url') || '';
-		this.loadedSubs = hasSubRules();
-		if (!this.accessAvailable)
-			ui.addNotification(null, E('p', _('The role permissions could not be loaded from rpcd (luci-sso object): they are shown as unavailable and cannot be changed. Is the luci-sso package fully installed?')), 'warning');
+		this.aclGroups = Array.isArray(data[0]) ? data[0] : null;
 
 		m = this._map = new form.Map('luci-sso',
 			_('Single Sign-On'),
 			_('Log in to LuCI with your identity provider, using OpenID Connect (OIDC).'));
-		/* Each save binds the subject rules to their issuer, once the form's
-		 * values are in UCI and before LuCI stages them. */
-		var parse = m.parse;
-		m.parse = function() {
-			return parse.apply(this, arguments).then(function() { page.bindSubIssuer(); });
-		};
+		/* The roles' permissions are rpcd login entries: load and save
+		 * /etc/config/rpcd with the map. */
+		m.chain('rpcd');
 
 		/* ------------------------------------------------------------------ */
 		/* Identity provider                                                    */
@@ -802,6 +627,12 @@ return view.extend({
 			}
 			return form.GridSection.prototype.handleAdd.call(this, ev, name.trim());
 		};
+		/* Deleting a role deletes its rpcd login entry with it. */
+		s.handleRemove = function(section_id, ev) {
+			if (uci.get('rpcd', entrySection(section_id)) != null)
+				uci.remove('rpcd', entrySection(section_id));
+			return form.GridSection.prototype.handleRemove.call(this, section_id, ev);
+		};
 		/* The Add box: a placeholder, and the role name rules checked as you
 		 * type, with the reason next to the box. */
 		s.renderSectionAdd = function(extra_class) {
@@ -838,12 +669,6 @@ return view.extend({
 				el.insertBefore(slot, el.firstChild);
 			return el;
 		};
-		s.handleRemove = function(section_id, ev) {
-			delete page.edited[section_id];
-			page.deleted[section_id] = true;
-			return form.GridSection.prototype.handleRemove.call(this, section_id, ev);
-		};
-
 		/* --- Table columns (visible inline) --- */
 		var column = function(name, title, option) {
 			o = s.option(form.DummyValue, name, title);
@@ -854,7 +679,22 @@ return view.extend({
 		};
 		column('_emails', _('Emails'), 'email');
 		column('_groups', _('Groups'), 'group');
-		column('_subs', _('Subjects'), 'sub');
+
+		/* Subjects, marked when they are ignored (see subMismatches). */
+		o = s.option(form.DummyValue, '_subs', _('Subjects'));
+		o.modalonly = false;
+		o.textvalue = function(section_id) {
+			var subs = L.toArray(uci.get('luci-sso', section_id, 'sub'));
+			if (!subs.length)
+				return NONE;
+			var ignored = subMismatches(uci.get('luci-sso', 'default', 'issuer_url') || '')
+				.some(function(r) { return r.name == section_id; });
+			return E('span', {}, [
+				E('span', {}, [ subs.join(', ') ]), ' ',
+				E('em', { 'class': 'luci-sso-sub-ignored', 'data-role': section_id, 'hidden': ignored ? null : '' },
+					_('(ignored: another provider)'))
+			]);
+		};
 
 		o = s.option(form.DummyValue, '_read', _('Read access'));
 		o.modalonly = false;
@@ -888,16 +728,52 @@ return view.extend({
 		o.modalonly = true;
 		o.rmempty = true;
 
-		/* Read and write access live in rpcd, not in /etc/config/luci-sso:
-		 * these options load from and write to the page's copy, which
-		 * Save & Apply sends to the luci-sso object. The router's access
-		 * groups are offered as suggestions; any name or pattern can be
-		 * typed. */
+		/* Saved with the subjects, by the same dialog Save, so they are
+		 * applied together. A role's first subject gets the Issuer URL. */
+		var subsInForm = function(opt, section_id) {
+			return L.toArray(opt.section.formvalue(section_id, 'sub')).filter(function(v) { return v !== ''; });
+		};
+		o = s.option(form.Value, 'sub_issuer', _('Subject issuer'),
+			_('The identity provider the subjects belong to. They count only while this is exactly the Issuer URL: a subject identifies one account only at its own provider. ' +
+			  'Filled in with the Issuer URL when the role gets its first subject.'));
+		o.modalonly = true;
+		o.rmempty = true;
+		o.forcewrite = true;
+		o.load = function(section_id) {
+			var v = uci.get('luci-sso', section_id, 'sub_issuer');
+			if (v)
+				return v;
+			if (L.toArray(uci.get('luci-sso', section_id, 'sub')).length)
+				return null;
+			return uci.get('luci-sso', 'default', 'issuer_url') || null;
+		};
+		o.validate = function(section_id, value) {
+			if (value && !value.match(/^https:\/\//))
+				return _('Must use HTTPS');
+			if (!value && subsInForm(this, section_id).length)
+				return _('Needed for the subjects: the Issuer URL they belong to.');
+			return true;
+		};
+		o.write = function(section_id, value) {
+			if (!subsInForm(this, section_id).length)
+				return this.remove(section_id);
+			if (uci.get('luci-sso', section_id, 'sub_issuer') !== value)
+				uci.set('luci-sso', section_id, 'sub_issuer', value);
+		};
+		o.remove = function(section_id) {
+			if (uci.get('luci-sso', section_id, 'sub_issuer') != null)
+				uci.unset('luci-sso', section_id, 'sub_issuer');
+		};
+
+		/* Read and write access: the lists of the role's rpcd login entry,
+		 * luci_sso_<role>, staged with the role's other options. Saving the
+		 * dialog always leaves the role with an entry. The router's access
+		 * groups are offered as suggestions; any name or pattern can be typed.
+		 * `unauthenticated` is never shown, and always kept in the read list. */
 		var accessOption = function(list, title, description, everything) {
 			o = s.option(form.DynamicList, list, title, description);
 			o.modalonly = true;
 			o.rmempty = true;
-			o.readonly = !page.accessAvailable || null;
 			o.placeholder = _('-- choose or type a group --');
 			if (page.aclGroups) {
 				o.value('*', everything);
@@ -905,26 +781,38 @@ return view.extend({
 					if (g !== BASELINE) o.value(g);
 				});
 			}
+			o.validate = function(section_id, value) {
+				var all = L.toArray(this.formvalue(section_id));
+				if (all.length > LIST_MAX)
+					return _('Use at most %d entries.').format(LIST_MAX);
+				return (value == null || value === '') ? true : checkAccessEntry(String(value), list == 'read');
+			};
 			o.load = function(section_id) {
-				var a = page.accessOf(section_id);
-				return a ? (list == 'read' ? withoutBaseline(a.read) : a.write) : [];
+				var v = L.toArray(uci.get('rpcd', entrySection(section_id), list));
+				return (list == 'read') ? withoutBaseline(v) : v;
 			};
 			o.write = function(section_id, value) {
-				if (page.accessAvailable) page.editAccess(section_id, list, value);
+				var sid = ensureEntry(section_id);
+				var next = L.toArray(value);
+				if (list == 'read')
+					next = withBaselineList(next);
+				if (L.toArray(uci.get('rpcd', sid, list)).join('\n') !== next.join('\n'))
+					uci.set('rpcd', sid, list, next);
 			};
 			o.remove = function(section_id) {
-				if (page.accessAvailable) page.editAccess(section_id, list, []);
+				var sid = ensureEntry(section_id);
+				if (list == 'read') {
+					/* Nothing listed: the read list grants `unauthenticated`
+					 * alone. */
+					var cur = L.toArray(uci.get('rpcd', sid, 'read'));
+					if (cur.length != 1 || cur[0] !== BASELINE)
+						uci.set('rpcd', sid, 'read', [ BASELINE ]);
+				}
+				else if (uci.get('rpcd', sid, 'write') != null) {
+					uci.unset('rpcd', sid, 'write');
+				}
 			};
 			return o;
-		};
-
-		/* The dialog's own Save only keeps the edit on the page. */
-		o = s.option(form.DummyValue, '_access_note');
-		o.modalonly = true;
-		o.rawhtml = true;
-		o.cfgvalue = function() {
-			return '<em class="luci-sso-access-note">' +
-				_('Changes here are kept on the page until you Save &amp; Apply it.') + '</em>';
 		};
 
 		accessOption('read', _('Read access'),
