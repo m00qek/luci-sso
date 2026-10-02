@@ -59,4 +59,26 @@ test.describe('Single Sign-On: return to the requested page', () => {
       expect(landed.pathname.startsWith('/cgi-bin/luci/')).toBe(true);
     });
   }
+
+  // LuCI runs its logout for any path under admin/logout, not only the exact
+  // one, so a crafted link could log the victim straight out again (and out
+  // of the IdP, through RP-initiated logout).
+  for (const logout of ['/cgi-bin/luci/admin/logout/x', '/cgi-bin/luci/admin/logout%2Fx']) {
+    test(`A crafted return_to ${logout} does not log the user out`, async ({ page }) => {
+      const callbacks = recordCallbackRedirects(page);
+
+      await test.step('Given a link that returns to a path under LuCI\'s logout page', async () => {
+        await page.goto('/cgi-bin/luci-sso?return_to=' + encodeURIComponent(logout));
+        await expect(page.locator('a[href*="/logout"]')).toBeVisible();
+      });
+
+      await test.step('Then the login lands on /cgi-bin/luci/, and the session stays', async () => {
+        expect(callbacks).toEqual(['/cgi-bin/luci/']);
+        await page.goto(DEEP_PAGE);
+        expect(new URL(page.url()).pathname).toBe(DEEP_PAGE);
+        await expect(page.locator('.cbi-map')).toBeVisible();
+        await expect(page.locator('#luci-sso-login-btn')).toHaveCount(0);
+      });
+    });
+  }
 });

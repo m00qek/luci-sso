@@ -48,7 +48,7 @@ An accepted `return_to` is stored in the handshake file on the router, next to `
 | Path, before the first `?` | `/cgi-bin/luci`, or starts with `/cgi-bin/luci/` | `/`, `/cgi-bin/luci-sso/…`, `/ubus/`, a relative path |
 | Separators | — | `//` anywhere, query string included |
 | Dot segments | — | a `.` or `..` path segment; they are refused, not resolved |
-| LuCI's logout page | — | `/cgi-bin/luci/admin/logout`, which would end the new session |
+| LuCI's logout page | — | `/cgi-bin/luci/admin/logout` and every path under it, such as `/cgi-bin/luci/admin/logout/x`: LuCI runs its logout for those too, which would end the new session |
 | Percent escapes | Every `%` starts a `%XX` escape. The value is decoded until no escape is left, up to three times, and each decoded form must pass every rule above | `%2F%2F`, `%5C`, `%0D%0A`, `%2E%2E`, `%40`, `%252F%252F` (double encoding), `%zz`, four or more levels of encoding |
 
 A value that breaks a rule is dropped, never refused: the login goes on, the log has `Ignoring return_to …` (see [Log Messages](log-messages.md#login-start)), and the callback redirects to `/cgi-bin/luci/`. A request without `return_to` behaves the same way, without the log line.
