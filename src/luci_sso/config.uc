@@ -126,18 +126,23 @@ export function load(deps) {
 	}
 
 	// Reverse proxies whose requests skip the per-client rate limits
-	// (ratelimit.is_trusted_proxy). An entry that is not an address or a CIDR
-	// range is refused rather than skipped: a typo would otherwise quietly
-	// leave the proxy, and so every user behind it, on one shared budget.
-	// Parsed here, once per request, into trusted_ranges.
+	// (ratelimit.is_trusted_proxy). Parsed here, once per request, into
+	// trusted_ranges. An entry that is not an address or a CIDR range is
+	// skipped, so nothing it was meant to name is trusted, and logged once per
+	// load, by its position, never its value. Refusing the whole configuration
+	// instead would turn SSO off, and with it the logout of SSO sessions.
 	let trusted_proxy = uci_list(oidc_cfg.trusted_proxy);
 	let trusted_ranges = [];
-	for (let t in trusted_proxy) {
+	let skipped = [];
+	for (let i, t in trusted_proxy) {
 		let range = netaddr.parse_cidr(t);
-		if (!range)
-			return Result.err(CONFIG_ERROR, "trusted_proxy entries must be IP addresses or CIDR ranges");
-		push(trusted_ranges, range);
+		if (range)
+			push(trusted_ranges, range);
+		else
+			push(skipped, i + 1);
 	}
+	if (length(skipped))
+		deps.log("warn", `Ignoring trusted_proxy entries that are not an IP address or CIDR range (position ${join(", ", skipped)} of ${length(trusted_proxy)}); they exempt no proxy from the per-client rate limits`);
 
 	return Result.ok({
 		issuer_url: oidc_cfg.issuer_url,

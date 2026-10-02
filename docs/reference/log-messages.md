@@ -121,13 +121,13 @@ These occur on the first request that needs the configuration.
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `SSO_DISABLED` | A login, callback or logout request arrives while `enabled` is not `1` | SSO is turned off. The `?action=enabled` probe returns `{"enabled": false}` instead and logs nothing. | `[500] SSO_DISABLED` |
-| `CONFIG_ERROR` | SSO is enabled, but a required option is missing or invalid (see notes) | The configuration cannot be used. Every request fails, including the `?action=enabled` probe. | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` |
+| `SSO_DISABLED` | A login or callback request arrives while `enabled` is not `1` | SSO is turned off. The `?action=enabled` probe returns `{"enabled": false}` instead and logs nothing. A logout still ends the session, locally. | `[500] SSO_DISABLED` |
+| `CONFIG_ERROR` | SSO is enabled, but a required option is missing or invalid (see notes) | The configuration cannot be used. Every request fails, including the `?action=enabled` probe, except a logout, which still ends the session, locally. | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` |
 | `UCI_ERROR` | The UCI cursor could not be created | The UCI system itself is unavailable, which points to a deeper OpenWrt problem. | `[500] UCI_ERROR` |
 
 Notes:
 
-- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, when a `trusted_proxy` entry is not an IP address or CIDR range, or when no role has an email or group. The `<reason>` names the option but never its value.
+- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, or when no role has an email or group. The `<reason>` names the option but never its value.
 
 ---
 
@@ -581,6 +581,7 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | :--- | :--- | :--- |
 | `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
 | `Ignoring role '<role>': missing email, group or sub list` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Ignoring trusted_proxy entries that are not an IP address or CIDR range (position <n>, … of <total>); they exempt no proxy from the per-client rate limits` | warn | An entry of `trusted_proxy` is neither an address nor a CIDR range, such as a host name, a netmask or a trailing space. It is skipped, so requests from the proxy it was meant to name share one per-client budget; the other entries still count. Logged on every request, until the entry is fixed. See [`trusted_proxy`](uci-config.md#oidc-section-notes). |
 
 ### Logout
 
@@ -589,6 +590,7 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | `Logout attempt with invalid or missing CSRF token` | warn | Before `[403] CSRF_CHECK_FAILED`. See [Authorization Errors](#authorization-errors). |
 | `Logout for [sub_id: …] (role=<role>)` | info | An SSO session was ended on the router. `[sub_id: …]` is read from the session's ID Token, so it matches the user's login lines; it reads `[INVALID]` when the session holds no ID Token, when its `sub` cannot be read, or, as in the login lines, when the `sub` is shorter than 8 characters. The browser then goes to the IdP's `end_session_endpoint`, if it has one. |
 | `Logout for [sub_id: …] (not an SSO session)` | info | A session whose username is not `sso:<role>` was sent to `/cgi-bin/luci-sso/logout` directly and ended. LuCI's **Log out** never sends one there. |
+| `Logout is local only: the configuration could not be loaded, so the IdP session is not ended` | warn | SSO is disabled, or the configuration is rejected (`Configuration rejected: <reason>` comes first). The session was still ended on the router and its cookies expired, but the browser goes to `/`, not to the IdP. Fix the configuration; the user's IdP session stays until it ends there. |
 
 A logout that goes through LuCI's own logout, as it does for a password session, is not logged by `luci-sso`.
 

@@ -122,17 +122,21 @@ Request dispatch by path.
 
 ### `handle(deps, config, request)` → `Result<{status, headers, body}>`
 
-Dispatches one request. `config` is the result of `config.load()`, or `null` when SSO is disabled. `request` is the result of `web.request()`.
+Dispatches one request. `config` is the result of `config.load()`, or `null` when it could not be loaded (SSO disabled, or `CONFIG_ERROR`). `request` is the result of `web.request()`.
 
 | Path | Behaviour |
 | :--- | :--- |
 | `/` with `action=enabled` | Returns `{"enabled": true}` or `{"enabled": false}` from `config.is_enabled()`. Not rate-limited; works with a `null` config. |
 | `/` | Reaps stale handshakes, calls `handshake.initiate()` with the `return_to` query parameter, and redirects to the IdP with the `__Host-luci_sso_state` cookie. |
 | `/callback` | Calls `handshake.authenticate()` and redirects to its `return_to`, or to `/cgi-bin/luci/` when that is `null`, with the session cookies. |
-| `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. |
+| `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. With a `null` config the logout is local: no discovery, and the redirect is to `/`. |
 | anything else | `NOT_FOUND` (`404`). |
 
-Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`), through `ratelimit.check()`. When `ratelimit.is_trusted_proxy(request.client, config.trusted_proxy)` is true, it calls `ratelimit.exempt()` instead, which spends nothing; the rest of the request is handled as for any client. With a `null` config, every path except the probe fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way.
+Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`), through `ratelimit.check()`. When `ratelimit.is_trusted_proxy(request.client, config.trusted_proxy)` is true, it calls `ratelimit.exempt()` instead, which spends nothing; the rest of the request is handled as for any client. With a `null` config, every path except the probe and `/logout` fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way. `entry.run()` passes a `null` config for `/logout` whenever `config.load()` fails, so a broken or disabled configuration never keeps an SSO session alive.
+
+### `is_logout(request)` → `bool`
+
+Whether `request` is for `/logout`, with or without a trailing slash: the one path besides the probe that `handle()` serves with a `null` config.
 
 ---
 
@@ -276,8 +280,8 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
-| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (`uci_list()`). Each entry must pass `netaddr.parse_cidr()`, or the load fails with `CONFIG_ERROR`. |
-| `trusted_ranges` | array | `trusted_proxy`, each entry parsed by `netaddr.parse_cidr()`, in order: what `ratelimit.is_trusted_proxy()` takes. |
+| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (`uci_list()`), as written. |
+| `trusted_ranges` | array | The entries of `trusted_proxy` that `netaddr.parse_cidr()` accepts, parsed, in order: what `ratelimit.is_trusted_proxy()` takes. Every other entry is left out, and one `warn` line per load gives their positions, never their values. |
 | `sub_issuer` | string or null | `luci-sso.default.sub_issuer`; `null` when unset or empty. Not checked: see `sub_rules_apply()`. |
 | `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`, each list from `uci_list()`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
 

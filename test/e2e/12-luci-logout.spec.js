@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { loginAsRoot, ubus } = require('./helpers');
 
 // LuCI's own "Log out" menu entry is overridden by
 // /usr/share/luci/menu.d/luci-sso-logout.json: SSO sessions are sent through
@@ -100,6 +101,53 @@ test.describe("Logout: LuCI's own Log out entry", () => {
     await test.step('And the router session is destroyed', async () => {
       await expectSessionGone(page, context, sid);
     });
+  });
+
+  // A configuration that cannot be loaded once made /cgi-bin/luci-sso/logout
+  // answer 500 before it looked at the session, which then stayed valid.
+  test('an SSO session logs out locally while the configuration is broken', async ({ page, context, browser }) => {
+    const admin = await (await browser.newContext()).newPage();
+    await loginAsRoot(admin);
+    const setTolerance = async (value) => {
+      expect((await ubus(admin, 'uci', 'set', { config: 'luci-sso', section: 'default', values: { clock_tolerance: value } })).status).toBe(0);
+      // LuCI's ACL has no uci commit: apply commits the session's changes.
+      expect((await ubus(admin, 'uci', 'apply', { rollback: false })).status).toBe(0);
+    };
+    const before = (await ubus(admin, 'uci', 'get', { config: 'luci-sso', section: 'default', option: 'clock_tolerance' })).data.value;
+    let sid;
+
+    try {
+      await test.step('Given a user logged in through SSO', async () => {
+        await ssoLogin(page);
+        sid = (await sessionCookie(context)).value;
+        expect(sid).toBeTruthy();
+      });
+
+      await test.step('And a configuration that luci-sso rejects', async () => {
+        await setTolerance('99999');
+      });
+
+      const seen = record(page);
+
+      await test.step('When they click Log out', async () => {
+        await page.locator(LOGOUT_LINK).first().click();
+        await expect(page.locator('input[name="luci_username"]')).toBeVisible();
+      });
+
+      await test.step('Then the logout stayed on the router, and cleared the cookies', async () => {
+        expect(seen.urls.some((u) => /\/cgi-bin\/luci-sso\/logout\?stoken=/.test(u))).toBeTruthy();
+        expect(seen.urls.some((u) => u.includes(process.env.FQDN_IDP))).toBeFalsy();
+        expect(seen.ssoLogoutCookies.join('\n')).toMatch(/sysauth_https=;[^\n]*Max-Age=0/);
+        expect(await sessionCookie(context)).toBeUndefined();
+      });
+
+      await test.step('And the router session is destroyed', async () => {
+        await expectSessionGone(page, context, sid);
+      });
+    } finally {
+      await setTolerance(before);
+      await admin.context().close();
+    }
   });
 
   test('a password session logs out exactly as before', async ({ page, context }) => {

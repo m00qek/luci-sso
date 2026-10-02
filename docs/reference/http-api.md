@@ -100,7 +100,7 @@ Destroys the active LuCI session and redirects the browser. If the IdP advertise
 | | |
 | :--- | :--- |
 | Rate-limited | Yes |
-| Requires configuration | Yes — discovery runs to find `end_session_endpoint` |
+| Requires configuration | No. With a configuration, discovery runs to find `end_session_endpoint`. Without one (SSO disabled, or `CONFIG_ERROR`), the session is still destroyed and its cookies expired, and the browser is sent to `/`; the IdP session is not ended |
 | **Success response** | `302` with `Location: <end_session_endpoint or />` |
 | **Clears cookies** | `sysauth_https`, `sysauth`, at both `Path=/` and `Path=/cgi-bin/luci` (Max-Age=0) |
 | **Error on missing/invalid `stoken`** | `403` — CSRF check failure |
