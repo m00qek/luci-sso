@@ -132,7 +132,7 @@ Dispatches one request. `config` is the result of `config.load()`, or `null` whe
 | `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. With a `null` config the logout is local: no discovery, and the redirect is to `/`. |
 | anything else | `NOT_FOUND` (`404`). |
 
-Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`), through `ratelimit.check()`. When `ratelimit.is_trusted_proxy(request.client, config.trusted_proxy)` is true, it calls `ratelimit.exempt()` instead, which spends nothing; the rest of the request is handled as for any client. With a `null` config, every path except the probe and `/logout` fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way. `entry.run()` passes a `null` config for `/logout` whenever `config.load()` fails, so a broken or disabled configuration never keeps an SSO session alive.
+Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`), through `ratelimit.check()`. When `ratelimit.is_trusted_proxy(request.client, config.trusted_ranges)` is true, it calls `ratelimit.exempt()` instead, which spends nothing; the rest of the request is handled as for any client. With a `null` config, every path except the probe and `/logout` fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way. `entry.run()` passes a `null` config for `/logout` whenever `config.load()` fails, so a broken or disabled configuration never keeps an SSO session alive.
 
 ### `is_logout(request)` → `bool`
 
@@ -649,7 +649,7 @@ Wraps a ubus connection. A `null` reply is a success unless `conn.error()` repor
 
 ### `syslog_channel(log_mod)` → `(level, msg) → void`
 
-Opens syslog with the tag `luci-sso` and returns the `deps.log` function.
+Opens syslog with the tag `luci-sso` and returns the `deps.log` function. Each message is passed to `log.syslog()` as the argument of a constant `%s` format, never as the format: `log.syslog()` runs `sprintf()` on a string format, and messages carry request data.
 
 ---
 

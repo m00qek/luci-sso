@@ -127,7 +127,7 @@ These occur on the first request that needs the configuration.
 
 Notes:
 
-- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, or when no role has an email or group. The `<reason>` names the option but never its value.
+- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, or when no role has an email, group or sub rule (`No valid roles found in /etc/config/luci-sso`). The `<reason>` names the option but never its value.
 
 ---
 
