@@ -1,5 +1,9 @@
 const { test, expect } = require('@playwright/test');
 
+// The button's request that starts a login, with the page it was clicked on
+// as return_to, but not the ?action=enabled probe.
+const LOGIN_START = /\/cgi-bin\/luci-sso(\?return_to=[^&]*)?$/;
+
 test.describe('Authentication', () => {
   test.describe('Single Sign-On', () => {
     
@@ -44,7 +48,7 @@ test.describe('Authentication', () => {
     // redirect's target is not routed, so the redirect itself is rewritten).
     test('User logs in when the ID token has no at_hash', async ({ page }) => {
       let rewritten = false;
-      await page.route(/\/cgi-bin\/luci-sso$/, async (route) => {
+      await page.route(LOGIN_START, async (route) => {
         const response = await route.fetch({ maxRedirects: 0 });
         const headers = response.headers();
         const target = new URL(headers['location']);

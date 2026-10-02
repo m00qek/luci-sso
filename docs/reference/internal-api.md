@@ -127,8 +127,8 @@ Dispatches one request. `config` is the result of `config.load()`, or `null` whe
 | Path | Behaviour |
 | :--- | :--- |
 | `/` with `action=enabled` | Returns `{"enabled": true}` or `{"enabled": false}` from `config.is_enabled()`. Not rate-limited; works with a `null` config. |
-| `/` | Reaps stale handshakes, calls `handshake.initiate()`, and redirects to the IdP with the `__Host-luci_sso_state` cookie. |
-| `/callback` | Calls `handshake.authenticate()` and redirects to `/cgi-bin/luci/` with the session cookies. |
+| `/` | Reaps stale handshakes, calls `handshake.initiate()` with the `return_to` query parameter, and redirects to the IdP with the `__Host-luci_sso_state` cookie. |
+| `/callback` | Calls `handshake.authenticate()` and redirects to its `return_to`, or to `/cgi-bin/luci/` when that is `null`, with the session cookies. |
 | `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. |
 | anything else | `NOT_FOUND` (`404`). |
 
@@ -140,9 +140,9 @@ Every path except the probe first spends the client's rate-limit budget (`TOO_MA
 
 The OIDC orchestrator for both legs of the authorization code flow.
 
-### `initiate(deps, config)` → `Result<{url, token}>`
+### `initiate(deps, config, return_to)` → `Result<{url, token}>`
 
-Runs discovery, creates the handshake state and builds the authorization URL. `deps: { fs, http, native, clock, log }`.
+Runs discovery, creates the handshake state and builds the authorization URL. `deps: { fs, http, native, clock, log }`. `return_to` is the untrusted `return_to` query parameter, or `null`. When `encoding.return_path()` accepts it, it is stored in the handshake; otherwise it is dropped with an info log line, and the login goes on. It is never part of the authorization URL.
 
 | Field | Type | Description |
 | :--- | :--- | :--- |
@@ -151,7 +151,7 @@ Runs discovery, creates the handshake state and builds the authorization URL. `d
 
 Fails with `OIDC_DISCOVERY_FAILED` (`502`), `HANDSHAKE_CAPACITY_EXCEEDED` (`503`), or an error from `session.create_state()` or `oidc.get_auth_url()`.
 
-### `authenticate(deps, config, request)` → `Result<{sid, email}>`
+### `authenticate(deps, config, request)` → `Result<{sid, email, return_to}>`
 
 Processes the callback. `deps`: all fields. In order, it:
 
@@ -170,6 +170,7 @@ Processes the callback. `deps`: all fields. In order, it:
 | :--- | :--- | :--- |
 | `sid` | string | The `rpcd` session ID. Set it as the `sysauth_https` and `sysauth` cookies. |
 | `email` | string or `null` | The user's email address, verified or not; `null` when the IdP sent none. |
+| `return_to` | string or `null` | The page stored at `initiate`, after `encoding.return_path()` accepted it again. `null` when there is none or it fails the check, which logs a warning. |
 
 The HTTP status of each failure is listed in the [HTTP API Reference](http-api.md#error-responses).
 
@@ -325,13 +326,13 @@ Facade over `luci_sso.session.handshake`: the handshake state files in `/var/run
 | `consume_state` | `session.handshake.consume` |
 | `reap_stale_handshakes` | `session.handshake.reap` |
 
-### `create(deps, clock_tolerance)` → `Result<{token, state, nonce, code_challenge}>`
+### `create(deps, clock_tolerance, return_to)` → `Result<{token, state, nonce, code_challenge}>`
 
-Writes a new handshake file (mode `0600`) holding `state`, `nonce`, the PKCE verifier, `iat` and `exp` (`iat` + 300 s), and returns the opaque `token` for the cookie. At 500 pending handshakes it first removes expired ones; if none can be removed, it fails with `HANDSHAKE_CAPACITY_EXCEEDED`. Other failures: `CRYPTO_INIT_FAILED`, `STATE_SAVE_FAILED`. `deps: { fs, clock, native, log }`.
+Writes a new handshake file (mode `0600`) holding `state`, `nonce`, the PKCE verifier, `iat`, `exp` (`iat` + 300 s) and, when it is a string, `return_to` (validated by the caller), and returns the opaque `token` for the cookie. At 500 pending handshakes it first removes expired ones; if none can be removed, it fails with `HANDSHAKE_CAPACITY_EXCEEDED`. Other failures: `CRYPTO_INIT_FAILED`, `STATE_SAVE_FAILED`. `deps: { fs, clock, native, log }`.
 
 ### `verify(deps, handle, expected_state, clock_tolerance)` → `Result<handshake>`
 
-Reads the handshake for `handle`, checks its fields, compares `state` with `expected_state` in constant time, checks `exp` and `iat` against the clock, and only then claims the file by renaming it. Returns `{ id, state, code_verifier, nonce, iat, exp }`. A wrong `state` fails with `STATE_PARAMETER_MISMATCH` and keeps the file; `STATE_CORRUPTED`, `HANDSHAKE_EXPIRED` and `HANDSHAKE_NOT_YET_VALID` remove it. Other failures: `MALFORMED_STATE_COOKIE`, `STATE_NOT_FOUND`.
+Reads the handshake for `handle`, checks its fields, compares `state` with `expected_state` in constant time, checks `exp` and `iat` against the clock, and only then claims the file by renaming it. Returns `{ id, state, code_verifier, nonce, iat, exp }`, and `return_to` when the handshake has one; `return_to` is not checked here. A wrong `state` fails with `STATE_PARAMETER_MISMATCH` and keeps the file; `STATE_CORRUPTED`, `HANDSHAKE_EXPIRED` and `HANDSHAKE_NOT_YET_VALID` remove it. Other failures: `MALFORMED_STATE_COOKIE`, `STATE_NOT_FOUND`.
 
 ### `consume(deps, handle)` → `void`
 
@@ -598,6 +599,7 @@ Pure helpers.
 | `is_origin(url)` | `bool` | `true` for `scheme://host[:port]` with at most a trailing `/`. |
 | `rebase_origin(url, from, to)` | `string` | Moves `url` from `from`'s origin to `to`'s, keeping its path; otherwise returns it unchanged. |
 | `is_https(url)` | `bool` | `true` if `url` starts with `https://`, in any case. |
+| `return_path(value)` | `Result<string>` | `value` unchanged when it is a LuCI page that may be opened after a login, by the [`return_to` rules](http-api.md#return_to-rules). Otherwise fails with the internal code `INVALID_RETURN_PATH`, and `details` names the broken rule. |
 | `log_safe(value, max)` | `string` | Replaces every byte outside printable ASCII with `?` and cuts the result to `max` bytes (default `200`), adding `...`. A non-string gives `""`. For untrusted values in log lines. |
 
 ---

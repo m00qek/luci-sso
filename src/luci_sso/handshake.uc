@@ -183,16 +183,32 @@ function _complete_oauth_flow(deps, config, code, handshake) {
 /**
  * Initiates the OIDC login flow.
  *
+ * `return_to` is the LuCI page the browser asked for (untrusted). When
+ * encoding.return_path accepts it, it is stored in the handshake, on the
+ * router only: it is never sent to the IdP or put in a cookie. Otherwise it
+ * is dropped, and the login goes on to LuCI's start page.
+ *
  * @param {object} deps - { fs, http, ubus, log, clock }
  * @param {object} config - UCI configuration
+ * @param {*} [return_to] - The `return_to` query parameter, or null
  * @returns {object} - Result Object {ok, data: {url, token}}
  */
-export function initiate(deps, config) {
+export function initiate(deps, config, return_to) {
 	deps.log("info", "Initiating OIDC login flow");
 	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
 	if (!disc_res.ok) return Result.err(OIDC_DISCOVERY_FAILED, { http_status: 502 });
 
-	let handshake_res = session.create_state(deps, config.clock_tolerance);
+	let return_path = null;
+	if (return_to != null) {
+		let rp_res = encoding.return_path(return_to);
+		if (rp_res.ok) {
+			return_path = rp_res.data;
+		} else {
+			deps.log("info", `Ignoring return_to "${encoding.log_safe(return_to, 100)}": ${rp_res.details}; the login returns to LuCI's start page`);
+		}
+	}
+
+	let handshake_res = session.create_state(deps, config.clock_tolerance, return_path);
 	if (!handshake_res.ok) {
 		// Capacity is a temporary condition, not a server fault.
 		if (handshake_res.error == HANDSHAKE_CAPACITY_EXCEEDED)
@@ -216,7 +232,8 @@ export function initiate(deps, config) {
  * @param {object} deps - { fs, http, ubus, log, clock }
  * @param {object} config - UCI configuration
  * @param {object} request - Parsed request context
- * @returns {object} - Result Object {ok, data: {sid, email}}
+ * @returns {object} - Result Object {ok, data: {sid, email, return_to}}
+ *   return_to is the page stored at initiate, checked again here, or null.
  */
 export function authenticate(deps, config, request) {
 	deps.log("info", "OIDC callback received");
@@ -283,8 +300,21 @@ export function authenticate(deps, config, request) {
 
 	deps.log("info", `Session successfully created for user [sub_id: ${crypto.safe_id(deps.native, user_data.sub)}] [session_id: ${session_id}] (mapped to role=${role})`);
 
+	// The handshake file is on disk: check the stored page again before the
+	// router redirects to it. Any failure falls back to LuCI's start page.
+	let return_path = null;
+	if (handshake.return_to != null) {
+		let rp_res = encoding.return_path(handshake.return_to);
+		if (rp_res.ok) {
+			return_path = rp_res.data;
+		} else {
+			deps.log("warn", `Stored return_to refused: ${rp_res.details}; returning to LuCI's start page [session_id: ${session_id}]`);
+		}
+	}
+
 	return Result.ok({
 		sid: ubus_res.data,
-		email: user_data.email
+		email: user_data.email,
+		return_to: return_path
 	});
 };

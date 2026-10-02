@@ -470,6 +470,7 @@ Every line `luci-sso` writes to the system log, in the order a login meets them.
 | `CRITICAL: CSPRNG failure during handshake state generation` | err | Before `[500] CRYPTO_INIT_FAILED`. See [System Errors](#system-errors). |
 | `CRITICAL: b64url_encode failure during handshake state generation` | err | Before `[500] CRYPTO_INIT_FAILED`. Internal error; file a bug. |
 | `Failed to save handshake state (write): <error>`, `Failed to save handshake state (rename): <error>` or `Failed to save handshake state: <exception>` | err | Before `[500] STATE_SAVE_FAILED`. See [Login Initiation Errors](#login-initiation-errors). |
+| `Ignoring return_to "<value>": <reason>; the login returns to LuCI's start page` | info | The login start's `return_to` is not a LuCI page that may be opened after the login, so it is not stored and the login lands on `/cgi-bin/luci/`. The login goes on. `<value>` is cut to 100 bytes, with every byte outside printable ASCII shown as `?`. `<reason>` is `not a string`, `empty`, `longer than 512 bytes`, `holds a character outside the allowed set`, `not a LuCI page`, `contains //`, `contains a dot segment`, `is LuCI's logout page`, `has a malformed percent escape` or `percent-encoded too many times`. See [`return_to` rules](http-api.md#return_to-rules). |
 | `Handshake state created [session_id: …]` | info | The handshake was saved, and the browser is sent to the IdP. |
 
 ### Discovery and JWK Set
@@ -572,6 +573,7 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | `UBUS session grant failed [sid: …] [scope: <scope>] [objects: <n>]` | err | Before `[500] UBUS_LOGIN_FAILED`. |
 | `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | See [Role Lines](#at-login-and-on-configuration-load). |
 | `Session successfully created for user [sub_id: …] [session_id: …] (mapped to role=<role>)` | info | The login is complete; the browser is sent to LuCI. |
+| `Stored return_to refused: <reason>; returning to LuCI's start page [session_id: …]` | warn | The page stored in the handshake at login start failed the check made again before the redirect, so the browser is sent to `/cgi-bin/luci/`. The login itself succeeded. Only a handshake file changed on disk can cause it: check who can write to `/var/run/luci-sso/`. `<reason>` is one of those of `Ignoring return_to`. |
 
 ### Configuration load
 

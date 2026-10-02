@@ -44,7 +44,7 @@ test.describe('Security: Protocol Enforcement', () => {
 
     // Set up interception for the redirect target and capture the URL
     let capturedUrl = '';
-    await page.route('**/cgi-bin/luci-sso', route => {
+    await page.route(/\/cgi-bin\/luci-sso(\?return_to=[^&]*)?$/, route => {
       capturedUrl = route.request().url();
       route.fulfill({ status: 200, body: 'Intercepted' });
     });

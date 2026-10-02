@@ -10,6 +10,10 @@ const ORIGIN = 'https://luci.luci-sso.test/mock-feedback-test';
 // page.clock, so they do not wait for it in real time.
 const IDP_TIMEOUT_MS = 15000;
 
+// The button's request that starts a login, with the page it was clicked on
+// as return_to, but not the ?action=enabled probe.
+const LOGIN_START = /\/cgi-bin\/luci-sso(\?return_to=[^&]*)?$/;
+
 const TIMEOUT_TEXT = 'The identity provider is not responding. ' +
   'Check that this device can reach it, then try again.';
 
@@ -65,7 +69,7 @@ test.describe('UI: SSO button feedback', () => {
       // navigation left pending instead would stall every Playwright locator
       // until it finished.)
       let attempts = 0;
-      await page.route(/\/cgi-bin\/luci-sso$/, async (route) => {
+      await page.route(LOGIN_START, async (route) => {
         const response = await route.fetch({ maxRedirects: 0 });
         expect(response.status()).toBe(302);
         expect(new URL(response.headers()['location']).host).toBe(process.env.FQDN_IDP);
@@ -139,7 +143,7 @@ test.describe('UI: SSO button feedback', () => {
         body: JSON.stringify({ enabled: true }),
       }));
       // The redirect never leaves the page (see the real login page test).
-      await page.route(/\/cgi-bin\/luci-sso$/, route => route.fulfill({ status: 204 }));
+      await page.route(LOGIN_START, route => route.fulfill({ status: 204 }));
       await page.clock.install();
       await page.goto(ORIGIN);
     });

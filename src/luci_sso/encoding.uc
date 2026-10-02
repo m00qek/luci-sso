@@ -287,3 +287,133 @@ export function log_safe(value, max) {
 	if (length(clean) > limit) clean = substr(clean, 0, limit) + "...";
 	return clean;
 };
+
+/**
+ * Longest `return_to` path accepted, in bytes.
+ * @private
+ */
+const LIMIT_RETURN_PATH_LEN = 512;
+
+/**
+ * Percent-decoding rounds tried before a value is refused as nested encoding.
+ * @private
+ */
+const RETURN_PATH_DECODE_PASSES = 3;
+
+/**
+ * The punctuation a `return_to` path may hold, as byte values:
+ * / _ . ~ % ? & = + , -
+ * @private
+ */
+const RETURN_PATH_PUNCT = [ 47, 95, 46, 126, 37, 63, 38, 61, 43, 44, 45 ];
+
+/**
+ * LuCI's own logout page. Returning there would end the session just created.
+ * @private
+ */
+const LUCI_LOGOUT_PATH = "/cgi-bin/luci/admin/logout";
+
+/**
+ * True when every byte of `s` is a letter, a digit or RETURN_PATH_PUNCT.
+ * Checked byte by byte, not with a regex, so an embedded NUL cannot end the
+ * check early.
+ * @private
+ */
+function _return_path_bytes_ok(s) {
+	for (let i = 0; i < length(s); i++) {
+		let c = ord(s, i);
+		if ((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122))
+			continue;
+		if (index(RETURN_PATH_PUNCT, c) < 0)
+			return false;
+	}
+	return true;
+}
+
+/**
+ * Checks one form (as sent, or decoded) of a `return_to` path: the path part
+ * must be LuCI's (/cgi-bin/luci, or under /cgi-bin/luci/), with no "//"
+ * anywhere and no "." or ".." segment. Returns the reason it fails, or null.
+ * @private
+ */
+function _return_path_shape(path, whole) {
+	if (path != "/cgi-bin/luci" && substr(path, 0, 14) != "/cgi-bin/luci/")
+		return "not a LuCI page";
+	if (index(whole, "//") >= 0)
+		return "contains //";
+	for (let seg in split(path, "/")) {
+		if (seg == "." || seg == "..")
+			return "contains a dot segment";
+	}
+	if (path == LUCI_LOGOUT_PATH || path == LUCI_LOGOUT_PATH + "/")
+		return "is LuCI's logout page";
+	return null;
+}
+
+/**
+ * Decodes every %XX escape of `s` once. Returns null when a "%" does not
+ * start a two-digit hexadecimal escape.
+ * @private
+ */
+function _percent_decode(s) {
+	if (index(replace(s, /%[0-9A-Fa-f][0-9A-Fa-f]/g, ""), "%") >= 0)
+		return null;
+	return replace(s, /%([0-9A-Fa-f][0-9A-Fa-f])/g, (m, h) => chr(hex(h)));
+}
+
+/**
+ * Checks a page to return to after login (the `return_to` parameter).
+ *
+ * Accepts only a relative path to a LuCI page, so that the redirect can
+ * never leave the router or reach another endpoint. The value must:
+ *
+ * - be a string of 1 to 512 bytes;
+ * - hold only letters, digits and / _ . ~ % ? & = + , - (no scheme, no
+ *   backslash, no "@", no control or non-ASCII bytes, no "#");
+ * - have a path part (before the first "?") that is /cgi-bin/luci or starts
+ *   with /cgi-bin/luci/, has no "." or ".." segment, and is not LuCI's
+ *   logout page; and contain no "//" anywhere.
+ *
+ * Every "%" must start a %XX escape. The value is then decoded, up to three
+ * times, until no escape is left; each decoded form must pass the same
+ * checks, so %2F%2F, %5C, %0D%0A, %2E%2E and double encoding are refused
+ * too. More than three levels of encoding are refused. Dot segments are
+ * refused, not resolved.
+ *
+ * @param {*} value - The untrusted value, as decoded once from the query string
+ * @returns {object} - Result.ok(value unchanged) or Result.err("INVALID_RETURN_PATH", reason)
+ */
+export function return_path(value) {
+	let bad = (reason) => Result.err("INVALID_RETURN_PATH", reason);
+
+	if (type(value) != "string")
+		return bad("not a string");
+	if (!length(value))
+		return bad("empty");
+	if (length(value) > LIMIT_RETURN_PATH_LEN)
+		return bad(`longer than ${LIMIT_RETURN_PATH_LEN} bytes`);
+
+	// The path and the query are told apart by the first literal "?" of the
+	// value as sent: a decoded %3F is part of the path, as the browser sees it.
+	let q = index(value, "?");
+	let path = (q < 0) ? value : substr(value, 0, q);
+	let whole = value;
+
+	for (let pass = 0; ; pass++) {
+		if (!_return_path_bytes_ok(whole))
+			return bad("holds a character outside the allowed set");
+		let reason = _return_path_shape(path, whole);
+		if (reason)
+			return bad(reason);
+		if (index(whole, "%") < 0)
+			break;
+		if (pass == RETURN_PATH_DECODE_PASSES)
+			return bad("percent-encoded too many times");
+		whole = _percent_decode(whole);
+		path = _percent_decode(path);
+		if (whole == null || path == null)
+			return bad("has a malformed percent escape");
+	}
+
+	return Result.ok(value);
+};
