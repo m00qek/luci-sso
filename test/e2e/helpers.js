@@ -1,15 +1,23 @@
 'use strict';
 const { expect } = require('@playwright/test');
 
-// How long to wait for an rpcd reload (a luci-sso write) to finish. The
-// reload itself takes about two seconds: one second until the plugin signals
-// rpcd, then rpcd's restart. The rest covers a stall of uhttpd: it checks
-// every /ubus/ call's session with a synchronous call to rpcd, waiting up to
-// half its script timeout (60 s by default, so 30 s), and serves nothing
-// meanwhile. A check that reaches rpcd just as it re-executes itself is never
-// answered, so one unlucky poll freezes uhttpd for those 30 s. The wait still
-// ends on an exact condition: list_roles, answered, with reload_pending false.
+// How long to wait for permissions to be in force after an apply. The
+// init script regenerates the rpcd login entries a second after the apply
+// (procd's trigger delay), and rpcd's reload takes about two seconds more,
+// once LuCI has confirmed the apply. The rest covers a stall of uhttpd: it
+// checks every /ubus/ call's session with a synchronous call to rpcd, waiting
+// up to half its script timeout (60 s by default, so 30 s), and serves
+// nothing meanwhile. A check that reaches rpcd just as it re-executes itself
+// is never answered, so one unlucky poll freezes uhttpd for those 30 s. The
+// waits still end on an exact condition: an SSO session's rights, as rpcd
+// answers for them.
 const RELOAD_WAIT_MS = 45000;
+
+// After an apply that changes no open session's rights, nothing tells the
+// browser when the init script has regenerated the entries and rpcd has
+// reloaded; this outlasts both, so the next login neither meets an entry its
+// lists no longer generate nor reaches rpcd while it restarts.
+const SETTLE_MS = 6000;
 
 async function loginAsRoot(page) {
     await page.goto('/');
@@ -61,17 +69,90 @@ async function ubus(page, obj, method, params) {
     return { status: reply.result[0] === 6 ? 'denied' : reply.result[0], data: reply.result[1] };
 }
 
-// The luci-sso ubus object's roles (rpcd login entries), by name, once no
-// rpcd reload is pending.
-async function listRoles(page) {
+// rpcd's answer for the page's own session: may it `perm` ('read' or
+// 'write') the access group? null while rpcd does not answer.
+async function hasAccess(page, group, perm) {
+    const r = await ubus(page, 'session', 'access', { scope: 'access-group', object: group, function: perm });
+    return r.status === 0 ? r.data.access : null;
+}
+
+// Waits until the page's session, an SSO session, has (`expected` true) or
+// lacks `perm` on `group`: once an apply's new rights are in force, rpcd has
+// reloaded and rebuilt the session from its role's entry. Polls every two
+// seconds: a poll that reaches rpcd while it re-executes itself freezes
+// uhttpd (see RELOAD_WAIT_MS), so the fewer, the better.
+async function awaitAccess(page, group, perm, expected) {
     const deadline = Date.now() + RELOAD_WAIT_MS;
     for (;;) {
-        const r = await ubus(page, 'luci-sso', 'list_roles', {});
-        if (r.status === 0 && r.data.reload_pending === false)
-            return Object.fromEntries(r.data.roles.map(x => [x.name, { read: x.read, write: x.write }]));
-        if (Date.now() > deadline) throw new Error('rpcd did not finish reloading');
-        await page.waitForTimeout(250);
+        await page.waitForTimeout(2000);
+        if (await hasAccess(page, group, perm) === expected)
+            return;
+        if (Date.now() > deadline)
+            throw new Error(`the session never got ${perm} on ${group} = ${expected}`);
     }
+}
+
+// An option of a luci-sso (or `config`) section, as the page's session sees
+// it: with the changes it has staged. null when it is not set (rpcd then
+// answers with no data at all).
+async function uciOption(page, section, option, config = 'luci-sso') {
+    const r = await ubus(page, 'uci', 'get', { config, section, option });
+    return (r.status === 0 && r.data) ? r.data.value : null;
+}
+
+// Waits for an apply that changes no open session's rights to settle (see
+// SETTLE_MS).
+async function settle(page) {
+    await page.waitForTimeout(SETTLE_MS);
+}
+
+// Sets options of luci-sso sections, and of rpcd sections in `rpcd`, as root,
+// and applies them unchecked, as `uci set` and `reload_config` would: the
+// init script then makes rpcd reload. Each argument maps a section to its
+// options; an option set to null is removed, as is a section set to null. A
+// section of rpcd that does not exist yet is created as a login. The caller
+// waits for the result (awaitAccess or settle).
+async function applyAsRoot(browser, values, rpcd = {}) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    try {
+        await loginAsRoot(page);
+        for (const [config, sections] of [['luci-sso', values], ['rpcd', rpcd]]) {
+            for (const [section, options] of Object.entries(sections)) {
+                if (options === null) {
+                    await ubus(page, 'uci', 'delete', { config, section });
+                    continue;
+                }
+                if (config === 'rpcd' && (await ubus(page, 'uci', 'get', { config, section })).status !== 0)
+                    await ubus(page, 'uci', 'add', { config, type: 'login', name: section });
+                for (const [option, value] of Object.entries(options)) {
+                    if (value === null)
+                        await ubus(page, 'uci', 'delete', { config, section, option });
+                    else
+                        await ubus(page, 'uci', 'set', { config, section, values: { [option]: value } });
+                }
+            }
+        }
+        // 5 (UBUS_STATUS_NO_DATA): nothing changed, so nothing to apply.
+        const r = await ubus(page, 'uci', 'apply', { rollback: false });
+        expect([0, 5]).toContain(r.status);
+    } finally {
+        await context.close();
+    }
+}
+
+// The options of a role's rpcd login entry, luci_sso_<role>, as the settings
+// page stages them: username sso:<role>, the read list with `unauthenticated`
+// unless it grants it already, and no write option for an empty list.
+function entryFor(role, read, write) {
+    const grants = read.some(g => g === '*' || g === 'unauthenticated');
+    return {
+        [`luci_sso_${role}`]: {
+            username: `sso:${role}`,
+            read: grants ? read : [...read, 'unauthenticated'],
+            write: write.length ? write : null,
+        },
+    };
 }
 
 // The settings page's tabs: 'provider' (the default) or 'advanced'.
@@ -103,26 +184,45 @@ async function fillList(scope, name, values) {
     }
 }
 
-// Save & Apply. With permission edits (`access`), LuCI applies the UCI
-// changes, the page then writes the permissions and waits for rpcd to reload,
-// and reloads itself. Without, LuCI applies and reloads, or says there is
-// nothing to apply. The apply must be confirmed before the test moves on, or
-// LuCI rolls it back.
-async function saveAndApply(page, { access = true } = {}) {
-    await page.locator('.cbi-page-actions .cbi-button-apply').first().click();
-    if (access) {
-        await expect(page.locator('.alert-message', { hasText: 'Role permissions saved and in force.' }))
-            .toBeVisible({ timeout: RELOAD_WAIT_MS + 60000 });
+// Removes the item `value` of a DynamicList of `scope`: a click on its x,
+// the right edge of the item.
+async function removeListItem(scope, name, value) {
+    const item = scope.locator(`[data-name="${name}"] .item`, { hasText: value }).first();
+    const box = await item.boundingBox();
+    await item.click({ position: { x: box.width - 4, y: box.height / 2 } });
+    await expect(scope.locator(`[data-name="${name}"] .item`, { hasText: value })).toHaveCount(0);
+}
+
+// Waits for LuCI to report an apply, confirmed, and to reload the page.
+async function awaitApplied(page) {
+    const applied = page.getByText('Configuration changes applied.');
+    const none = page.getByText('There are no changes to apply');
+    await expect(applied.or(none)).toBeVisible({ timeout: 60000 });
+    if (await applied.isVisible())
         await page.waitForEvent('load', { timeout: 30000 });
-    } else {
-        const applied = page.getByText('Configuration changes applied.');
-        const none = page.getByText('There are no changes to apply');
-        await expect(applied.or(none)).toBeVisible({ timeout: 60000 });
-        if (await applied.isVisible())
-            await page.waitForEvent('load', { timeout: 30000 });
-    }
     await page.waitForSelector('.cbi-map');
     await expect(page.getByText('Session expired')).toHaveCount(0);
 }
 
-module.exports = { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles, openTab, modal, fillList, saveAndApply, RELOAD_WAIT_MS };
+// The page footer's Save & Apply: saves the form and applies every staged
+// change, with LuCI's rollback. It must be confirmed before the test moves
+// on, or LuCI rolls it back.
+async function saveAndApply(page) {
+    await page.locator('.cbi-page-actions .cbi-button-apply').first().click();
+    await awaitApplied(page);
+}
+
+// Save & Apply from LuCI's header: the "Unsaved Changes" indicator opens the
+// changes dialog, whose Save & Apply applies everything staged, with LuCI's
+// rollback. Unsaved edits in the form are not part of it.
+async function applyFromHeader(page) {
+    await page.locator('[data-indicator="uci-changes"]').click();
+    await expect(modal(page).getByText('# /etc/config/luci-sso')).toBeVisible();
+    await modal(page).locator('.cbi-button-positive', { hasText: 'Save & Apply' }).first().click();
+    await awaitApplied(page);
+}
+
+module.exports = {
+    loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, hasAccess, awaitAccess, uciOption, settle, applyAsRoot, entryFor, openTab, modal,
+    fillList, removeListItem, saveAndApply, applyFromHeader, RELOAD_WAIT_MS, SETTLE_MS,
+};

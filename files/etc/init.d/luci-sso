@@ -1,0 +1,29 @@
+#!/bin/sh /etc/rc.common
+# SPDX-License-Identifier: MIT
+#
+# LuCI SSO - puts changed role permissions in force.
+#
+# A role's permissions are its rpcd login entry, luci_sso_<role> in
+# /etc/config/rpcd. rpcd rebuilds a session's rights from it only when it
+# reloads, and does not reload when its configuration is applied. This service
+# runs no daemon: on every apply of /etc/config/rpcd (LuCI's Save & Apply and
+# its rollback, `reload_config`, or `/etc/init.d/luci-sso reload` after
+# `uci commit rpcd`), it makes rpcd reload if the file changed, so
+# open SSO sessions get the new rights. It never reloads rpcd while a LuCI
+# apply can still be rolled back. The rules are in
+# /usr/libexec/luci-sso/rpcd-reload.
+
+START=13
+USE_PROCD=1
+
+start_service() {
+	/usr/libexec/luci-sso/rpcd-reload record
+}
+
+reload_service() {
+	/usr/libexec/luci-sso/rpcd-reload check
+}
+
+service_triggers() {
+	procd_add_reload_trigger "rpcd"
+}

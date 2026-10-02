@@ -10,50 +10,6 @@ import { UBUS_SESSION_FAILED, UBUS_ERROR, CRYPTO_INIT_FAILED, INVALID_TOKEN, SYS
  * Logic for interacting with UBUS sessions.
  */
 
-const ACL_DIR = "/usr/share/rpcd/acl.d";
-
-/**
- * Loads every access-group definition from rpcd's ACL directory.
- *
- * Returns `{ entries, groups }`. `entries` has one item per (file, group,
- * permission) with a usable section: `{ group, perm, section }`, where perm is
- * "read" or "write" and section maps scopes to objects. `groups` lists every
- * group name defined with an object value, sections or not. A group may be defined in several
- * files; each definition yields its own entries, as rpcd applies them all.
- * Unparseable files, non-object roots, group values and sections, and keys
- * other than "read" and "write" are skipped. Files are read in name order,
- * like rpcd's glob.
- * @private
- */
-function _load_acl_entries(deps) {
-	let files = deps.fs.lsdir(ACL_DIR);
-	if (!files) {
-		deps.log("error", `ACL scan failed: ${ACL_DIR} is missing or unreadable`);
-		return Result.err("ACL_SCAN_FAILED");
-	}
-
-	let entries = [], groups = {};
-	for (let f in sort(files)) {
-		if (!match(f, /\.json$/)) continue;
-
-		let content = deps.fs.readfile(`${ACL_DIR}/${f}`);
-		if (!content) continue;
-
-		let res = encoding.safe_json(content);
-		if (!res.ok || type(res.data) != "object") continue;
-
-		for (let group, def in res.data) {
-			if (type(def) != "object") continue;
-			groups[group] = true;
-			for (let perm in [ "read", "write" ]) {
-				if (type(def[perm]) == "object")
-					push(entries, { group, perm, section: def[perm] });
-			}
-		}
-	}
-	return Result.ok({ entries, groups: sort(keys(groups)) });
-}
-
 /**
  * Expands a login entry's `read`/`write` lists into the grants rpcd gives a
  * password login with that entry (rpc_login_setup_acl_file).
@@ -215,7 +171,7 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 	if (!login_res.ok) return login_res;
 	let perms = login_res.data;
 
-	let acl_res = _load_acl_entries(deps);
+	let acl_res = rpcd_login.load_acl(deps);
 	if (!acl_res.ok) {
 		deps.log("error", `Failed to load LuCI ACLs for role '${role}'`);
 		return Result.err(UBUS_SESSION_FAILED);
@@ -226,7 +182,7 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 	for (let g in acl_res.data.groups) known[g] = true;
 	for (let list in [ perms.read, perms.write ]) {
 		for (let n in list) {
-			if (type(n) == "string" && !match(n, /^!|[*?\[]/) && !known[n])
+			if (type(n) == "string" && !rpcd_login.is_pattern(n) && !known[n])
 				deps.log("warn", `Role '${role}' grants unknown access group '${n}'; no ACL file defines it`);
 		}
 	}

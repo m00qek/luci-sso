@@ -286,24 +286,23 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
 | `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (`uci_list()`), as written. |
 | `trusted_ranges` | array | The entries of `trusted_proxy` that `netaddr.parse_cidr()` accepts, parsed, in order: what `ratelimit.is_trusted_proxy()` takes. Every other entry is left out, and one `warn` line per load gives their positions, never their values. |
-| `sub_issuer` | string or null | `luci-sso.default.sub_issuer`; `null` when unset or empty. Not checked: see `sub_rules_apply()`. |
-| `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`, each list from `uci_list()`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
+| `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs, sub_issuer }`, each list from `uci_list()`, and `sub_issuer` the role's option, `null` when unset or empty (not checked: see `sub_rules_apply()`). A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. A `sub_issuer` on the `default` section is not read. |
 
 ### `uci_list(v)` → `array`
 
-A UCI option as a list: an array as it is, a non-empty string as a list of one, anything else (a missing or empty option) as `[]`. Also used by `luci_sso.rpcd_login` and the `luci-sso` rpcd plugin.
+A UCI option as a list: an array as it is, a non-empty string as a list of one, anything else (a missing or empty option) as `[]`. Also used by `luci_sso.rpcd_login`.
 
-### `sub_rules_apply(config)` → `bool`
+### `sub_rules_apply(config, role)` → `bool`
 
-`true` when `config.sub_issuer` is a non-empty string identical to `config.issuer_url`. Only then do the roles' `sub` rules count (OIDC Core §5.7: a `sub` is unique only within its issuer).
+`true` when `role.sub_issuer` is a non-empty string identical to `config.issuer_url`. Only then do that role's `sub` rules count (OIDC Core §5.7: a `sub` is unique only within its issuer).
 
-### `ignored_sub_rules(config)` → `string` or `null`
+### `ignored_sub_rules(config)` → `array`
 
-The log line, without its `[session_id: …]`, for a login whose `sub` rules are ignored: `Ignoring sub rules: sub_issuer is not set`, or `Ignoring sub rules: sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>'`, both values through `encoding.log_safe()`. `null` when `sub_rules_apply(config)` or no role has a `sub` rule.
+The log lines, without their `[session_id: …]`, for a login, one for each role, in config order, that has a `sub` rule for which `sub_rules_apply(config, role)` is `false`: `Ignoring sub rules of role '<role>': its sub_issuer is not set`, or `Ignoring sub rules of role '<role>': its sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>'`, both values through `encoding.log_safe()`. Empty when every `sub` rule counts.
 
 ### `find_role_for_user(config, claims)` → `Result<{role_name, also_matched}>`
 
-Matches the sub `matchable_sub` returns (exact, case-sensitive; only when `sub_rules_apply(config)`), the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
+Matches the sub `matchable_sub` returns (exact, case-sensitive; against a role only when `sub_rules_apply(config, role)`), the email `matchable_email` returns (case-insensitive) and `claims.groups` (case-sensitive, only when it is an array) against every role, in config order. `role_name` is the first matching role; `also_matched` lists the other matching roles, in order. Rights are never merged. Fails with `NO_ROLES_MATCHED` when nothing matches.
 
 ### `matchable_sub(claims)` → `string` or `null`
 
@@ -367,7 +366,7 @@ Creates an `rpcd` session for `role` with the rights of its `rpcd` login entry. 
 - a missing entry, one that is not a `login`, or one whose `username` is not `sso:<role>` fails with `MISSING_RPCD_LOGIN`;
 - an entry with a `password` option, whatever its value, fails with `INSECURE_RPCD_LOGIN`.
 
-It then creates the session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`), sets its values (the username `sso:<role>`, the OIDC tokens and the CSRF token), and only then grants exactly what `rpcd` grants a password login with the entry's `read` and `write` lists (`rpcd_login.permits` over the ACL files in `/usr/share/rpcd/acl.d/`). The username comes first because an `rpcd` reload keeps a session's values but rebuilds its rights from the login entry of its username: set first, a reload between any two calls still leaves the full rights. Only list options count; nothing is added. A plain group name that no ACL file defines is logged as a warning. Returns the session ID. Other failures: `UBUS_SESSION_FAILED`, including a failed grant, or `CRYPTO_INIT_FAILED`; a failure after the session is created destroys it. `deps.ubus.call`, `deps.uci` and a non-empty `role` are required (`die()` otherwise).
+It then creates the session with LuCI's idle timeout (`luci.sauth.sessiontime`, default `3600`), sets its values (the username `sso:<role>`, the OIDC tokens and the CSRF token), and only then grants exactly what `rpcd` grants a password login with the entry's `read` and `write` lists (`rpcd_login.permits` over the ACL files `rpcd_login.load_acl()` reads from `/usr/share/rpcd/acl.d/`). The username comes first because an `rpcd` reload keeps a session's values but rebuilds its rights from the login entry of its username: set first, a reload between any two calls still leaves the full rights. Only list options count; nothing is added. A plain group name that no ACL file defines is logged as a warning. Returns the session ID. Other failures: `UBUS_SESSION_FAILED`, including a failed grant, or `CRYPTO_INIT_FAILED`; a failure after the session is created destroys it. `deps.ubus.call`, `deps.uci` and a non-empty `role` are required (`die()` otherwise).
 
 The session holds these values:
 
@@ -396,7 +395,7 @@ Creates `/var/run/luci-sso/tokens/<sha256 hex>` with `mkdir`, which succeeds onl
 
 ## `luci_sso.rpcd_login`
 
-The roles' `rpcd` login entries (`luci_sso_<role>` in `/etc/config/rpcd`, `username 'sso:<role>'`, never a password) and `rpcd`'s rules for them. Shared by `luci_sso.ubus`, the `luci-sso` ubus object (`files/usr/share/rpcd/ucode/luci-sso.uc`), the install script `20-luci-sso-rpcd` and the package's removal script. No `deps`: functions that write take a UCI cursor, and the caller commits.
+The roles' `rpcd` login entries (`luci_sso_<role>` in `/etc/config/rpcd`, `username 'sso:<role>'`, never a password) and `rpcd`'s rules for them. Shared by `luci_sso.ubus`, the `luci-sso` ubus object (`files/usr/share/rpcd/ucode/luci-sso.uc`), the install script `20-luci-sso-rpcd` and the package's removal script. The settings page stages the entries itself, by the same rules. No `deps`, but for `load_acl()`: functions that write take a UCI cursor, and the caller commits.
 
 | Constant | Value |
 | :--- | :--- |
@@ -464,6 +463,18 @@ Touches only `luci_sso_*` sections of `rpcd`, never reorders roles, and changes 
 ### `demigrate(uci, warn)` → `{rpcd, luci_sso}`
 
 The reverse of `migrate()`, for the package's removal. For each `luci_sso_*` section of `rpcd`, in config order: if it is a `login` and `/etc/config/luci-sso` has the role, its `read` and `write` lists replace the role's options, as stored (`BASELINE_GROUP` included; an empty list removes the option). The section is then deleted; a section without a role, or not a login, is deleted with a `warn` call. `migrate()` then recreates the same entries. Returns whether each configuration changed. The caller commits `luci-sso` before `rpcd`.
+
+### `is_pattern(name)` → `bool`
+
+Whether a list entry is a pattern rather than one access group: a negation (leading `!`), or a name with `*`, `?` or `[`.
+
+### `load_acl(deps)` → `Result<{entries, groups}>`
+
+Every access-group definition in `/usr/share/rpcd/acl.d/*.json`, read in file-name order, as the login grants them. `entries` has one `{ group, perm, section }` per group and permission (`"read"` or `"write"`) with an object section; `groups` lists, sorted, every group whose value is an object. Unparseable files, non-object roots and values are skipped. Fails with `ACL_SCAN_FAILED` when the directory cannot be listed, logged through `deps.log`. `deps`: `{ fs: { lsdir, readfile }, log }`. Used by `luci_sso.ubus` at login and by the `luci-sso` object's `list_acl_groups`.
+
+### `offered_groups(groups)` → `array`
+
+The groups from `load_acl()` that a list can name exactly: those `check_list()` accepts and `is_pattern()` does not, in order. What `list_acl_groups` returns.
 
 ---
 

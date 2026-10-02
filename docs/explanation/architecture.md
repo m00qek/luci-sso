@@ -32,7 +32,7 @@ The reason this matters: OpenWrt routers can't run network tests. Because the re
 *   **`discovery.uc`** — Fetches and caches OIDC metadata from the IdP's `/.well-known/openid-configuration` and the JWK Set. Caches to `/var/run/luci-sso/` (tmpfs) for 24 hours. The cache survives the router staying up but is cleared on every reboot — the first login after a reboot always fetches fresh discovery data. A stale cache is used as a fallback only when the IdP becomes temporarily unreachable while the router is already running.
 *   **`session.uc`** — Manages handshake state files (creation, verification and consumption, and reaping of stale entries). A facade over `session/handshake.uc` and `session/common.uc`. The LuCI session itself lives in `rpcd`; `luci-sso` issues no tokens of its own.
 *   **`ubus.uc`** — The `rpcd` side. Reads the matched role's `rpcd` login entry, creates the LuCI session under the entry's user name, grants it the ACLs the entry grants, stores the tokens and, when there is one, the user's verified email in it, and reads or destroys it at logout. Also keeps the access-token replay registry.
-*   **`rpcd_login.uc`** — The roles' `rpcd` login entries (`luci_sso_<role>`, user name `sso:<role>`) and `rpcd`'s rules for them: names, list checks, how a list grants an access group, the `unauthenticated` baseline, and the move of permissions between `/etc/config/luci-sso` and `/etc/config/rpcd` on install and removal. It takes no `deps`; the code that writes passes it a UCI cursor.
+*   **`rpcd_login.uc`** — The roles' `rpcd` login entries (`luci_sso_<role>`, user name `sso:<role>`) and `rpcd`'s rules for them: names, list checks, how a list grants an access group, the `unauthenticated` baseline, the access groups the ACL files define (shared by the login and the settings page's suggestions), and the move of 0.9.x permissions into `/etc/config/rpcd` on install and back on removal. It takes no `deps`, but for the ACL scan; the code that writes passes it a UCI cursor.
 *   **`ratelimit.uc`** — Per-client request budgets, kept in one small JSON file, and the exemption for a trusted reverse proxy's address. Parses addresses with the pure helper `netaddr.uc`.
 *   **`config.uc`** — Reads UCI configuration and maps OIDC claims to the first matching role.
 *   **`crypto.uc`** — High-level cryptographic API, a facade over `crypto/*.uc`. Wraps the native C bridge for JWT signature verification, JWK conversion, hashing, PKCE and random bytes, and provides the best-effort constant-time comparison, which is plain ucode.
@@ -145,6 +145,27 @@ The injection grants:
 
 The session is created via UBUS with LuCI's own idle timeout, `luci.sauth.sessiontime` (3600 seconds by default), the same one a password login gets. The ID Token's `exp` claim is validated at login time — an already-expired token is rejected — but it does not set the session duration in either direction.
 
-The entries are written by an `rpcd` plugin, `/usr/share/rpcd/ucode/luci-sso.uc`, which runs inside `rpcd` and exposes the `luci-sso` ubus object (`list_roles`, `set_role`, `delete_role`). The settings page calls it instead of editing `/etc/config/rpcd` through UCI, because UCI permissions cover a whole configuration file: a page that could write `rpcd`'s file could also rewrite `root`'s login. After a write, the plugin makes `rpcd` reload, so the change reaches open sessions. [About Roles and Permissions](roles-and-permissions.md) explains the design.
+### Applying permissions
+
+The settings page edits the entries as ordinary UCI changes, staged in the session together with the roles' rules in `/etc/config/luci-sso`. LuCI's **Save & Apply**, from the page or from its header's **Unsaved Changes** dialog, commits both files through `rpcd`'s `uci apply`, with LuCI's rollback. `rpcd` itself does not reload when its configuration is applied, so the package adds an init script:
+
+```mermaid
+sequenceDiagram
+    participant LuCI as LuCI (browser)
+    participant rpcd
+    participant procd
+    participant init as /etc/init.d/luci-sso
+    LuCI->>rpcd: uci apply (rollback)
+    rpcd->>procd: config.change rpcd
+    procd->>init: reload (1 s later)
+    init->>init: rpcd-reload check: file changed, apply pending: wait
+    LuCI->>rpcd: uci confirm
+    init->>rpcd: SIGHUP, once the apply is settled
+    rpcd->>rpcd: rebuild every session from its login entry
+```
+
+**Textual summary:** an apply commits `/etc/config/luci-sso` and `/etc/config/rpcd`, and `rpcd` tells `procd` the configurations changed. `procd`'s trigger runs `/etc/init.d/luci-sso reload` a second later, which runs `/usr/libexec/luci-sso/rpcd-reload check`. If `/etc/config/rpcd` has been written since `rpcd` last loaded it, it asks for a reload, served in the background: it waits while LuCI's apply can still be rolled back, since `rpcd` keeps the rollback timer in memory and a reload would cancel it, then sends `rpcd` `SIGHUP` once, and waits for it to answer again. New logins read the committed entry at once; open sessions get it at the reload. A rollback restores both files; the reload that follows loads the restored entries, and the rollback's own trigger finds nothing more to do.
+
+The `rpcd` plugin `/usr/share/rpcd/ucode/luci-sso.uc` writes nothing. It offers the page the router's access groups (`list_acl_groups`, through the same ACL scan as the login) and runs the connection test. The `luci-app-sso` access group has UCI access to both files, which makes it root-equivalent, as it always was. [About Roles and Permissions](roles-and-permissions.md#how-the-settings-page-saves-permissions) explains the design.
 
 LuCI's own **Log out** entry ends SSO sessions through `luci-sso` by way of a menu override, not a patch. LuCI builds its menu from every file in `/usr/share/luci/menu.d/`, in name order, and a later file that names an existing path replaces only the keys it gives. `luci-sso-logout.json` sorts after LuCI's `luci-base.json` and gives `admin/logout` a new `action` (and the same `depends`), so the entry keeps LuCI's title and position. The action is `luci.controller.sso`'s `action_logout`: for a session whose username is `sso:<role>` it redirects to `/cgi-bin/luci-sso/logout` with the session's CSRF token, which destroys the session and continues to the IdP's `end_session_endpoint`; for any other session it calls LuCI's own `action_logout` unchanged. Removing the package removes both files, and LuCI's entry is back.

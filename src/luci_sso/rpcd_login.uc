@@ -5,7 +5,9 @@
  * rpcd's rules for them: one place for every rule that the login path
  * (ubus.uc), the `luci-sso` ubus object (files/usr/share/rpcd/ucode/luci-sso.uc),
  * the upgrade script (files/etc/uci-defaults/20-luci-sso-rpcd) and the
- * package's removal script (prerm in openwrt/luci-sso/Makefile) share.
+ * package's removal script (prerm in openwrt/luci-sso/Makefile) share. The
+ * settings page edits the entries as ordinary staged UCI changes, and checks
+ * the same rules before it stages them.
  *
  * Each role `<role>` has exactly one entry in /etc/config/rpcd:
  *
@@ -27,6 +29,7 @@
  */
 
 import * as Result from 'luci_sso.result';
+import * as encoding from 'luci_sso.encoding';
 import { uci_list } from 'luci_sso.config';
 
 export const CONFIG = "rpcd";
@@ -45,6 +48,9 @@ export const LIST_MAX = 128;
 export const ENTRY_MAX = 128;
 // NUL cannot appear in a POSIX regex, so it is checked on its own.
 const CONTROL_RE = regexp("[\x01-\x1f\x7f]");
+
+// Where rpcd and LuCI packages define their access groups.
+const ACL_DIR = "/usr/share/rpcd/acl.d";
 
 /** The section name of a role's entry. */
 export function section_name(role) {
@@ -264,7 +270,7 @@ export function is_placeholder(s) {
  * Each luci-sso role, in config order:
  *
  * - A role with a read or write option gets its entry created or replaced
- *   from those lists, by the same rules as the luci-sso ubus object (entry()
+ *   from those lists, by the same rules as the settings page (entry()
  *   and stage(): the `unauthenticated` group added, rpcd's meaning of every
  *   pattern, no password), and the options are removed from the role. A role
  *   whose name or lists the rules refuse keeps its options, and a warning
@@ -347,9 +353,9 @@ export function migrate(uci, warn) {
  * removes the option). The lists are copied as stored, `unauthenticated`
  * included: migrate() keeps a read list that grants it as it is, so the entry
  * it creates from them is the one deleted here. Leaving the group out when
- * set_role added it would turn an entry that grants only `unauthenticated` into
- * a role without lists, which migrate() treats as having no permissions to
- * move: an untouched admin role would get full access back. The section is then
+ * the settings page added it would turn an entry that grants only
+ * `unauthenticated` into a role without lists, which migrate() treats as
+ * having no permissions to move: an untouched admin role would get full access back. The section is then
  * deleted, and so is any luci_sso_* section without a role, with a warning.
  *
  * Stages the changes on the cursor; the caller commits luci-sso before rpcd,
@@ -387,4 +393,74 @@ export function demigrate(uci, warn) {
 	}
 
 	return changed;
+};
+
+/**
+ * Whether a name in a role's list is a pattern rather than one access group:
+ * a negation, or a name with an fnmatch(3) wildcard or character class.
+ *
+ * @param {string} name
+ * @returns {boolean}
+ */
+export function is_pattern(name) {
+	return match(name, /^!|[*?\[]/) != null;
+};
+
+/**
+ * Loads every access-group definition from rpcd's ACL directory, the way
+ * the login grants them.
+ *
+ * Returns `{ entries, groups }`. `entries` has one item per (file, group,
+ * permission) with a usable section: `{ group, perm, section }`, where perm is
+ * "read" or "write" and section maps scopes to objects. `groups` lists every
+ * group name defined with an object value, sections or not, sorted. A group
+ * may be defined in several files; each definition yields its own entries,
+ * as rpcd applies them all. Unparseable files, non-object roots, group values
+ * and sections, and keys other than "read" and "write" are skipped. Files are
+ * read in name order, like rpcd's glob.
+ *
+ * @param {object} deps - { fs: { lsdir, readfile }, log }
+ * @returns {object} - Result: ok({ entries, groups }), or err("ACL_SCAN_FAILED")
+ *   when the directory cannot be listed
+ */
+export function load_acl(deps) {
+	let files = deps.fs.lsdir(ACL_DIR);
+	if (!files) {
+		deps.log("error", `ACL scan failed: ${ACL_DIR} is missing or unreadable`);
+		return Result.err("ACL_SCAN_FAILED");
+	}
+
+	let entries = [], groups = {};
+	for (let f in sort(files)) {
+		if (!match(f, /\.json$/)) continue;
+
+		let content = deps.fs.readfile(`${ACL_DIR}/${f}`);
+		if (!content) continue;
+
+		let res = encoding.safe_json(content);
+		if (!res.ok || type(res.data) != "object") continue;
+
+		for (let group, def in res.data) {
+			if (type(def) != "object") continue;
+			groups[group] = true;
+			for (let perm in [ "read", "write" ]) {
+				if (type(def[perm]) == "object")
+					push(entries, { group, perm, section: def[perm] });
+			}
+		}
+	}
+	return Result.ok({ entries, groups: sort(keys(groups)) });
+};
+
+/**
+ * The access groups a role's list can name to grant exactly that group, as
+ * the settings page offers them: the groups load_acl() found, without the
+ * names a list cannot store (check_list()) and those rpcd would read as a
+ * pattern (is_pattern()), which would not match the group itself.
+ *
+ * @param {array} groups - Group names, as load_acl() returns them
+ * @returns {array}
+ */
+export function offered_groups(groups) {
+	return filter(groups, (g) => check_list("group", [ g ]).ok && !is_pattern(g));
 };

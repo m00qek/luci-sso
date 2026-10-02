@@ -12,15 +12,12 @@
 // mode, and is cropped to the page content. State is set up the way the e2e
 // specs do it:
 //   - the SSO settings page is fed example configuration through a mocked
-//     `uci get` (as in 08-sso-crud), so the images show example values rather
-//     than the devenv's, and the client secret field stays masked. The roles'
-//     permissions come from rpcd (list_roles), so the example `viewer` role's
-//     entry is created for real through the luci-sso object's set_role, which
-//     adds the `unauthenticated` group as for any role, and deleted after;
-//   - the read-only session rewrites the devenv `admin` role over /ubus/ as
-//     root through set_role (as in 11-granular-roles), which adds
-//     `unauthenticated` to the read-only list, and restores read '*' /
-//     write '*' after;
+//     `uci get` of luci-sso and rpcd (as in 08-sso-crud), the roles' rpcd
+//     login entries included, so the images show example values rather than
+//     the devenv's, and the client secret field stays masked;
+//   - the read-only session sets the devenv `admin` role's rpcd login entry
+//     over /ubus/ as root and applies it (as in 11-granular-roles), and
+//     restores read '*' / write '*' after;
 //   - the Software page's installed list gains luci-sso and its mbedtls
 //     backend in the browser only, from the feed's own package index, because
 //     the devenv mounts luci-sso instead of installing its package. No package
@@ -32,7 +29,7 @@
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('@playwright/test');
-const { loginAsRoot, gotoSSOSettings, loginViaSSO, RELOAD_WAIT_MS } = require('./helpers');
+const { loginAsRoot, gotoSSOSettings, loginViaSSO, applyAsRoot, entryFor, awaitAccess } = require('./helpers');
 
 const BASE_URL = process.env.BASE_URL;
 const OUT_DIR = process.env.OUT_DIR || '/tmp/luci-sso-screenshots';
@@ -68,6 +65,19 @@ const EXAMPLE_CONFIG = {
 // The read-only role from docs/how-to/sysadmin/rbac.md ("Read-only access").
 const READONLY_READ = ['luci-base', 'luci-mod-status-*', 'luci-mod-network-*'];
 
+// The example roles' rpcd login entries.
+const EXAMPLE_RPCD = {
+  luci_sso_admin: {
+    '.name': 'luci_sso_admin', '.type': 'login', '.anonymous': false,
+    username: 'sso:admin', read: ['*'], write: ['*'],
+  },
+  luci_sso_viewer: {
+    '.name': 'luci_sso_viewer', '.type': 'login', '.anonymous': false,
+    username: 'sso:viewer', read: [...READONLY_READ, 'unauthenticated'],
+  },
+};
+const EXAMPLE = { 'luci-sso': EXAMPLE_CONFIG, rpcd: EXAMPLE_RPCD };
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -90,46 +100,18 @@ async function shoot(target, name, options = {}) {
   console.log(`  ${file}`);
 }
 
-// Calls rpcd over /ubus/ with the page's own LuCI session (as 11-granular-roles).
-async function ubus(page, obj, method, params) {
-  const reply = await page.evaluate(async ([o, m, p]) => {
-    const r = await fetch('/ubus/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'call', params: [L.env.sessionid, o, m, p] }),
-    });
-    return r.json();
-  }, [obj, method, params]);
-  if (reply.error || reply.result[0] !== 0)
-    throw new Error(`ubus ${obj}.${method} failed: ${JSON.stringify(reply)}`);
-  return reply.result[1];
-}
-
-// Waits for the rpcd reload a luci-sso write triggers (as 11-granular-roles).
-async function awaitReload(page) {
-  const deadline = Date.now() + RELOAD_WAIT_MS;
-  for (;;) {
-    const done = await ubus(page, 'luci-sso', 'list_roles', {}).then(r => r.reload_pending === false, () => false);
-    if (done) return;
-    if (Date.now() > deadline) throw new Error('rpcd did not reload');
-    await page.waitForTimeout(250);
-  }
-}
-
-// Writes a role's rpcd login entry (rpcd.luci_sso_<name>), as root, through
-// the luci-sso ubus object, which adds `unauthenticated` to a read list that
-// lacks it, and waits for the reload. With `read` null, deletes the entry.
-async function setRole(browser, read, write, name = 'admin') {
-  const page = await newPage(browser);
+// Sets the devenv admin role's lists as root and applies them, then waits
+// until an SSO session opened before has `probe` (as 11-granular-roles).
+async function setAdminLists(browser, read, write, probe) {
+  // applyAsRoot opens its own context, which needs the base URL.
+  const based = { newContext: (opts) => browser.newContext({ baseURL: BASE_URL, ...opts }) };
+  const sso = await newPage(browser);
   try {
-    await loginAsRoot(page);
-    if (read === null)
-      await ubus(page, 'luci-sso', 'delete_role', { name });
-    else
-      await ubus(page, 'luci-sso', 'set_role', { name, read, write });
-    await awaitReload(page);
+    await loginViaSSO(sso);
+    await applyAsRoot(based, {}, entryFor('admin', read, write));
+    await awaitAccess(sso, probe.group, probe.perm, probe.expected);
   } finally {
-    await page.context().close();
+    await sso.context().close();
   }
 }
 
@@ -142,12 +124,13 @@ function fetchReal(route) {
   return route.fetch({ url: url.toString() });
 }
 
-// Answers LuCI's `uci get luci-sso` with EXAMPLE_CONFIG (as 08-sso-crud).
+// Answers LuCI's `uci get luci-sso` and `uci get rpcd` with EXAMPLE (as
+// 08-sso-crud).
 async function mockSSOConfig(page) {
   await page.route(/\/ubus\/?(\?|$)/, async (route) => {
     const body = route.request().postDataJSON();
     const requests = Array.isArray(body) ? body : [body];
-    const hit = requests.some(r => r?.params?.[1] === 'uci' && r?.params?.[2] === 'get' && r?.params?.[3]?.config === 'luci-sso');
+    const hit = requests.some(r => r?.params?.[1] === 'uci' && r?.params?.[2] === 'get' && EXAMPLE[r?.params?.[3]?.config]);
     if (!hit) return route.continue();
 
     const response = await fetchReal(route);
@@ -155,8 +138,8 @@ async function mockSSOConfig(page) {
     const list = Array.isArray(replies) ? replies : [replies];
     const patched = list.map((reply, i) => {
       const [, obj, method, params] = requests[i].params || [];
-      if (obj === 'uci' && method === 'get' && params?.config === 'luci-sso')
-        return { jsonrpc: '2.0', id: requests[i].id, result: [0, { values: EXAMPLE_CONFIG }] };
+      if (obj === 'uci' && method === 'get' && EXAMPLE[params?.config])
+        return { jsonrpc: '2.0', id: requests[i].id, result: [0, { values: EXAMPLE[params.config] }] };
       return reply;
     });
     await route.fulfill({ response, json: Array.isArray(replies) ? patched : patched[0] });
@@ -239,15 +222,6 @@ async function loginPage(browser) {
 }
 
 async function ssoSettings(browser) {
-  await setRole(browser, READONLY_READ, [], 'viewer');
-  try {
-    await ssoSettingsShots(browser);
-  } finally {
-    await setRole(browser, null, null, 'viewer');
-  }
-}
-
-async function ssoSettingsShots(browser) {
   const page = await newPage(browser);
   await mockSSOConfig(page);
   await loginAsRoot(page);
@@ -283,11 +257,11 @@ async function adminView(browser) {
 }
 
 async function readonlyView(browser) {
-  await setRole(browser, READONLY_READ, []);
+  await setAdminLists(browser, READONLY_READ, [], { group: 'luci-base', perm: 'write', expected: false });
   try {
     await statusOverview(browser, 'luci-readonly-view');
   } finally {
-    await setRole(browser, ['*'], ['*']);
+    await setAdminLists(browser, ['*'], ['*'], { group: 'luci-base', perm: 'write', expected: true });
   }
 }
 

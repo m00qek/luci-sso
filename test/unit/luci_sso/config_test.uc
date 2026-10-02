@@ -25,9 +25,9 @@ function is_enabled_sections(sections) {
 	return res;
 }
 
-// The issuer the sub rules below were made for (sub_issuer).
+// The issuer the sub rules below were made for: each role's sub_issuer.
 const ISS = 'https://idp.example.com';
-const BOUND = { issuer_url: ISS, sub_issuer: ISS };
+const BOUND = { issuer_url: ISS };
 
 const ROLE_READERS = {
 	name: 'readers',
@@ -136,10 +136,10 @@ describe('config: find_role_for_user', () => {
 // ─── find_role_for_user: sub ─────────────────────────────────────────────────
 
 describe('config: find_role_for_user — sub', () => {
-	// The sub rules were made for this issuer (sub_issuer); see the
-	// sub_issuer describe below for the other cases.
+	// The sub rules were made for this issuer (each role's sub_issuer); see
+	// the sub_issuer describe below for the other cases.
 	const SUB = '248289761001';
-	const ROLE_SUB = { name: 'bysub', emails: [], groups: [], subs: [ SUB ] };
+	const ROLE_SUB = { name: 'bysub', emails: [], groups: [], subs: [ SUB ], sub_issuer: ISS };
 
 	it('matches by an exact sub', () => {
 		assert.match({ ok: true, data: { role_name: 'bysub', also_matched: [] } },
@@ -157,7 +157,7 @@ describe('config: find_role_for_user — sub', () => {
 	});
 
 	it('compares the sub case-sensitively: a sub that differs only in case is refused', () => {
-		let role = { name: 'r', emails: [], groups: [], subs: [ 'AbC-12' ] };
+		let role = { name: 'r', emails: [], groups: [], subs: [ 'AbC-12' ], sub_issuer: ISS };
 		for (let sub in [ 'abc-12', 'ABC-12', 'Abc-12' ])
 			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
 				config.find_role_for_user({ ...BOUND, roles: [role] }, { sub }), sub);
@@ -168,16 +168,16 @@ describe('config: find_role_for_user — sub', () => {
 		for (let sub in [ '24828976100', '2482897610011', ` ${SUB}`, `${SUB} `, `${SUB}\n`, '*', '.*' ])
 			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
 				config.find_role_for_user({ ...BOUND, roles: [ROLE_SUB] }, { sub }), sprintf('%J', sub));
-		let glob = { name: 'glob', emails: [], groups: [], subs: [ '*' ] };
+		let glob = { name: 'glob', emails: [], groups: [], subs: [ '*' ], sub_issuer: ISS };
 		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
 			config.find_role_for_user({ ...BOUND, roles: [glob] }, { sub: SUB }), 'a role sub is not a pattern');
 	});
 
 	it('refuses a sub that is not a non-empty string (OIDC Core §2)', () => {
 		let roles = [
-			{ name: 'num', emails: [], groups: [], subs: [ '248289761001' ] },
-			{ name: 'empty', emails: [], groups: [], subs: [ '' ] },
-			{ name: 'bool', emails: [], groups: [], subs: [ 'true' ] },
+			{ name: 'num', emails: [], groups: [], subs: [ '248289761001' ], sub_issuer: ISS },
+			{ name: 'empty', emails: [], groups: [], subs: [ '' ], sub_issuer: ISS },
+			{ name: 'bool', emails: [], groups: [], subs: [ 'true' ], sub_issuer: ISS },
 		];
 		for (let sub in [ 248289761001, '', null, true, [ '248289761001' ], { v: '248289761001' } ])
 			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
@@ -204,7 +204,7 @@ describe('config: find_role_for_user — sub', () => {
 			let role_sub = pair[0], claim_sub = pair[1];
 			let same = (role_sub === claim_sub && length(claim_sub) > 0);
 			ctx.classify('equal', same);
-			let res = config.find_role_for_user({ ...BOUND, roles: [ { name: 'r', emails: [], groups: [], subs: [ role_sub ] } ] }, { sub: claim_sub });
+			let res = config.find_role_for_user({ ...BOUND, roles: [ { name: 'r', emails: [], groups: [], subs: [ role_sub ], sub_issuer: ISS } ] }, { sub: claim_sub });
 			assert.match(same, res.ok);
 		}
 	);
@@ -212,74 +212,97 @@ describe('config: find_role_for_user — sub', () => {
 
 describe('config: find_role_for_user — sub_issuer (OIDC Core §5.7)', () => {
 	const SUB = '248289761001';
-	const ROLE_SUB = { name: 'bysub', emails: [], groups: [], subs: [ SUB ] };
-	const ROLE_BOTH = { name: 'both', emails: [ 'alice@example.com' ], groups: [ 'admins' ], subs: [ SUB ] };
-	const cfg = (sub_issuer, roles) => ({ issuer_url: ISS, sub_issuer, roles: roles || [ ROLE_SUB ] });
+	const role_sub = (sub_issuer) => ({ name: 'bysub', emails: [], groups: [], subs: [ SUB ], sub_issuer });
+	const ROLE_BOTH = (sub_issuer) => ({ name: 'both', emails: [ 'alice@example.com' ], groups: [ 'admins' ], subs: [ SUB ], sub_issuer });
+	const cfg = (roles) => ({ issuer_url: ISS, roles });
 
-	it('counts the sub rules when sub_issuer is exactly issuer_url', () => {
-		assert.match({ ok: true, data: { role_name: 'bysub', also_matched: [] } }, config.find_role_for_user(cfg(ISS), { sub: SUB }));
+	it("counts a role's sub rules when its sub_issuer is exactly issuer_url", () => {
+		assert.match({ ok: true, data: { role_name: 'bysub', also_matched: [] } }, config.find_role_for_user(cfg([ role_sub(ISS) ]), { sub: SUB }));
 	});
 
-	it('ignores every sub rule when sub_issuer is another issuer, or unset', () => {
+	it("ignores a role's sub rules when its sub_issuer is another issuer, or unset", () => {
 		for (let bound in [ 'https://old-idp.example.com', null, '' ])
-			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), config.find_role_for_user(cfg(bound), { sub: SUB }), `${bound}`);
-		let no_option = { issuer_url: ISS, roles: [ ROLE_SUB ] };
-		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), config.find_role_for_user(no_option, { sub: SUB }), 'no sub_issuer key');
+			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), config.find_role_for_user(cfg([ role_sub(bound) ]), { sub: SUB }), `${bound}`);
+		let no_key = { name: 'bysub', emails: [], groups: [], subs: [ SUB ] };
+		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), config.find_role_for_user(cfg([ no_key ]), { sub: SUB }), 'no sub_issuer key');
+	});
+
+	it('ignores a sub_issuer on the config itself: only the role\'s counts', () => {
+		let res = config.find_role_for_user({ issuer_url: ISS, sub_issuer: ISS, roles: [ role_sub(null) ] }, { sub: SUB });
+		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), res);
 	});
 
 	it('compares sub_issuer exactly: a trailing slash, letter case or default port is another issuer', () => {
 		for (let near in [ ISS + '/', 'HTTPS://idp.example.com', 'https://IDP.example.com', 'https://idp.example.com:443', ` ${ISS}` ])
-			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), config.find_role_for_user(cfg(near), { sub: SUB }), near);
-		let slashed = { issuer_url: ISS + '/', sub_issuer: ISS + '/', roles: [ ROLE_SUB ] };
+			assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }), config.find_role_for_user(cfg([ role_sub(near) ]), { sub: SUB }), near);
+		let slashed = { issuer_url: ISS + '/', roles: [ role_sub(ISS + '/') ] };
 		assert.match(true, config.find_role_for_user(slashed, { sub: SUB }).ok, 'equal with the slash on both');
+	});
+
+	it("one role's ignored sub rules leave another role's, made for this issuer, in force", () => {
+		let old = { name: 'old', emails: [], groups: [], subs: [ SUB ], sub_issuer: 'https://old-idp.example.com' };
+		let cur = { name: 'cur', emails: [], groups: [], subs: [ SUB ], sub_issuer: ISS };
+		assert.match({ ok: true, data: { role_name: 'cur', also_matched: [] } }, config.find_role_for_user(cfg([ old, cur ]), { sub: SUB }));
+		assert.match({ ok: true, data: { role_name: 'cur', also_matched: [] } }, config.find_role_for_user(cfg([ cur, old ]), { sub: SUB }));
 	});
 
 	it('still matches email and group rules while the sub rules are ignored', () => {
 		let bound = 'https://old-idp.example.com';
 		assert.match(contains({ ok: true, data: { role_name: 'both' } }),
-			config.find_role_for_user(cfg(bound, [ ROLE_BOTH ]), { sub: SUB, email: 'alice@example.com', email_verified: true }));
+			config.find_role_for_user(cfg([ ROLE_BOTH(bound) ]), { sub: SUB, email: 'alice@example.com', email_verified: true }));
 		assert.match(contains({ ok: true, data: { role_name: 'both' } }),
-			config.find_role_for_user(cfg(bound, [ ROLE_BOTH ]), { sub: SUB, groups: [ 'admins' ] }));
+			config.find_role_for_user(cfg([ ROLE_BOTH(bound) ]), { sub: SUB, groups: [ 'admins' ] }));
 		assert.match(contains({ ok: false, error: 'NO_ROLES_MATCHED' }),
-			config.find_role_for_user(cfg(bound, [ ROLE_BOTH ]), { sub: SUB, email: 'stranger@example.com', email_verified: true }));
+			config.find_role_for_user(cfg([ ROLE_BOTH(bound) ]), { sub: SUB, email: 'stranger@example.com', email_verified: true }));
 	});
 
 	it('an ignored sub rule does not make its role the first match', () => {
-		let roles = [ ROLE_SUB, { name: 'staff', emails: [], groups: [ 'staff' ] } ];
+		let roles = [ role_sub('https://old-idp.example.com'), { name: 'staff', emails: [], groups: [ 'staff' ] } ];
 		assert.match({ ok: true, data: { role_name: 'staff', also_matched: [] } },
-			config.find_role_for_user(cfg('https://old-idp.example.com', roles), { sub: SUB, groups: [ 'staff' ] }));
+			config.find_role_for_user(cfg(roles), { sub: SUB, groups: [ 'staff' ] }));
 	});
 });
 
 describe('config: sub_rules_apply', () => {
-	it('is true only for a sub_issuer that is exactly issuer_url', () => {
-		assert.match(true, config.sub_rules_apply({ issuer_url: ISS, sub_issuer: ISS }));
+	it("is true only for a role whose sub_issuer is exactly issuer_url", () => {
+		assert.match(true, config.sub_rules_apply({ issuer_url: ISS }, { sub_issuer: ISS }));
 		for (let v in [ null, '', ISS + '/', uc(ISS), 'https://other.example.com', 42, [ ISS ] ])
-			assert.match(false, config.sub_rules_apply({ issuer_url: ISS, sub_issuer: v }), sprintf('%J', v));
-		assert.match(false, config.sub_rules_apply({ issuer_url: ISS }));
+			assert.match(false, config.sub_rules_apply({ issuer_url: ISS }, { sub_issuer: v }), sprintf('%J', v));
+		assert.match(false, config.sub_rules_apply({ issuer_url: ISS }, {}));
+		assert.match(false, config.sub_rules_apply({ issuer_url: ISS, sub_issuer: ISS }, {}), 'not the config\'s');
 	});
 });
 
 describe('config: ignored_sub_rules', () => {
-	const ROLE_SUB = { name: 'bysub', emails: [], groups: [], subs: [ 'x' ] };
+	const role_sub = (name, sub_issuer) => ({ name, emails: [], groups: [], subs: [ 'x' ], sub_issuer });
 	const ROLE_EMAIL = { name: 'byemail', emails: [ 'a@b.c' ], groups: [], subs: [] };
 
-	it('is null when the sub rules count, or when no role has one', () => {
-		assert.match(null, config.ignored_sub_rules({ issuer_url: ISS, sub_issuer: ISS, roles: [ ROLE_SUB ] }));
-		assert.match(null, config.ignored_sub_rules({ issuer_url: ISS, roles: [ ROLE_EMAIL ] }));
-		assert.match(null, config.ignored_sub_rules({ issuer_url: ISS, sub_issuer: 'https://old.example.com', roles: [ ROLE_EMAIL, { name: 'r', emails: [ 'x' ] } ] }));
+	it('is empty when every sub rule counts, or when no role has one', () => {
+		assert.match([], config.ignored_sub_rules({ issuer_url: ISS, roles: [ role_sub('bysub', ISS) ] }));
+		assert.match([], config.ignored_sub_rules({ issuer_url: ISS, roles: [ ROLE_EMAIL ] }));
+		assert.match([], config.ignored_sub_rules({ issuer_url: ISS, roles: [ ROLE_EMAIL, { name: 'r', emails: [ 'x' ], sub_issuer: 'https://old.example.com' } ] }));
 	});
 
-	it('says sub_issuer is not set', () => {
-		assert.match('Ignoring sub rules: sub_issuer is not set', config.ignored_sub_rules({ issuer_url: ISS, roles: [ ROLE_EMAIL, ROLE_SUB ] }));
-		assert.match('Ignoring sub rules: sub_issuer is not set', config.ignored_sub_rules({ issuer_url: ISS, sub_issuer: null, roles: [ ROLE_SUB ] }));
+	it("says a role's sub_issuer is not set", () => {
+		assert.match([ "Ignoring sub rules of role 'bysub': its sub_issuer is not set" ],
+			config.ignored_sub_rules({ issuer_url: ISS, roles: [ ROLE_EMAIL, { name: 'bysub', emails: [], groups: [], subs: [ 'x' ] } ] }));
+		assert.match([ "Ignoring sub rules of role 'bysub': its sub_issuer is not set" ],
+			config.ignored_sub_rules({ issuer_url: ISS, roles: [ role_sub('bysub', null) ] }));
 	});
 
 	it('names both issuers when they differ, made safe for the log', () => {
-		assert.match(`Ignoring sub rules: sub_issuer 'https://old.example.com' does not match issuer_url '${ISS}'`,
-			config.ignored_sub_rules({ issuer_url: ISS, sub_issuer: 'https://old.example.com', roles: [ ROLE_SUB ] }));
-		assert.match(`Ignoring sub rules: sub_issuer 'https://old.example.com?forged' does not match issuer_url '${ISS}'`,
-			config.ignored_sub_rules({ issuer_url: ISS, sub_issuer: 'https://old.example.com\nforged', roles: [ ROLE_SUB ] }));
+		assert.match([ `Ignoring sub rules of role 'bysub': its sub_issuer 'https://old.example.com' does not match issuer_url '${ISS}'` ],
+			config.ignored_sub_rules({ issuer_url: ISS, roles: [ role_sub('bysub', 'https://old.example.com') ] }));
+		assert.match([ `Ignoring sub rules of role 'bysub': its sub_issuer 'https://old.example.com?forged' does not match issuer_url '${ISS}'` ],
+			config.ignored_sub_rules({ issuer_url: ISS, roles: [ role_sub('bysub', 'https://old.example.com\nforged') ] }));
+	});
+
+	it('gives one message per role whose rules are ignored, in config order, and none for a role whose rules count', () => {
+		let roles = [ role_sub('a', 'https://old.example.com'), role_sub('b', ISS), role_sub('c', null) ];
+		assert.match([
+			`Ignoring sub rules of role 'a': its sub_issuer 'https://old.example.com' does not match issuer_url '${ISS}'`,
+			"Ignoring sub rules of role 'c': its sub_issuer is not set",
+		], config.ignored_sub_rules({ issuer_url: ISS, roles }));
 	});
 });
 
@@ -432,8 +455,8 @@ describe('config: load — success', () => {
 		});
 		assert.match(contains({ ok: true }), res);
 		assert.match([
-			{ name: 'r1', emails: ['admin@test.com'], groups: [], subs: [] },
-			{ name: 'r2', emails: ['jane@test.com'], groups: ['staff'], subs: [] },
+			{ name: 'r1', emails: ['admin@test.com'], groups: [], subs: [], sub_issuer: null },
+			{ name: 'r2', emails: ['jane@test.com'], groups: ['staff'], subs: [], sub_issuer: null },
 		], res.data.roles);
 	});
 
@@ -445,8 +468,8 @@ describe('config: load — success', () => {
 		});
 		assert.match(contains({ ok: true }), res);
 		assert.match([
-			{ name: 'one', emails: [], groups: [], subs: [ 'Ab-12' ] },
-			{ name: 'many', emails: [ 'x@test.com' ], groups: [], subs: [ '248289761001', 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6' ] },
+			{ name: 'one', emails: [], groups: [], subs: [ 'Ab-12' ], sub_issuer: null },
+			{ name: 'many', emails: [ 'x@test.com' ], groups: [], subs: [ '248289761001', 'f81d4fae-7dec-11d0-a765-00a0c91e6bf6' ], sub_issuer: null },
 		], res.data.roles);
 	});
 
@@ -501,10 +524,21 @@ describe('config: load — success', () => {
 		assert.match(many, load_sections({ default: { ...OIDC, trusted_proxy: many }, r1: { ...ROLE } }).data.trusted_proxy);
 	});
 
-	it('loads sub_issuer as written, and null when unset or empty', () => {
-		assert.match(null, load_sections({ default: { ...OIDC }, r1: { ...ROLE } }).data.sub_issuer, 'unset');
-		assert.match(null, load_sections({ default: { ...OIDC, sub_issuer: '' }, r1: { ...ROLE } }).data.sub_issuer, 'empty');
-		assert.match('https://idp.com/', load_sections({ default: { ...OIDC, sub_issuer: 'https://idp.com/' }, r1: { ...ROLE } }).data.sub_issuer);
+	it("loads each role's sub_issuer as written, and null when unset or empty", () => {
+		let res = load_sections({
+			default: { ...OIDC },
+			unset: { ...ROLE },
+			empty: { ...ROLE, sub_issuer: '' },
+			set: { ...ROLE, sub: 'x', sub_issuer: 'https://idp.com/' },
+		});
+		assert.match([ null, null, 'https://idp.com/' ], map(res.data.roles, (r) => r.sub_issuer));
+	});
+
+	it('ignores a sub_issuer on the default section: only the roles carry one', () => {
+		let res = load_sections({ default: { ...OIDC, sub_issuer: 'https://idp.com' }, r1: { ...ROLE, sub: 'x' } });
+		assert.match(contains({ ok: true }), res);
+		assert.match(false, exists(res.data, 'sub_issuer'));
+		assert.match(null, res.data.roles[0].sub_issuer);
 	});
 
 	it('parses trusted_proxy once, into trusted_ranges, in order', () => {

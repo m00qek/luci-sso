@@ -1,11 +1,13 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, listRoles, modal, fillList, saveAndApply, RELOAD_WAIT_MS } = require('./helpers');
+const { uciOption, loginAsRoot, gotoSSOSettings, loginViaSSO, ubus, settle, applyAsRoot, modal, fillList, saveAndApply, RELOAD_WAIT_MS } = require('./helpers');
 
-// The Roles section of the SSO settings page against the real rpcd: matching
-// rules and order in /etc/config/luci-sso (UCI), permissions in each role's
-// rpcd login entry (the luci-sso ubus object). Every role created here is
-// named e2e_*; the devenv's `admin` role is left as it is.
+// The Roles section of the SSO settings page against the real rpcd: each
+// role's matching rules and place in the order are a `role` section of
+// /etc/config/luci-sso, and its read and write lists its rpcd login entry,
+// luci_sso_<role> in /etc/config/rpcd; the page stages both, and an apply
+// commits both. Every role created here is named e2e_*; the devenv's `admin`
+// role is left as it is.
 //
 // The mock IdP always signs in admin@example.com, which the devenv's `admin`
 // role matches. A role created here that matches the same email decides the
@@ -21,9 +23,6 @@ async function addRole(page, name, { emails = [], read = [], write = [] }) {
     await page.locator('.cbi-section-create-name').pressSequentially(name);
     await page.locator('.cbi-section-create .cbi-button-add').click();
     await expect(modal(page)).toBeVisible();
-    // The dialog's own Save does not write the permissions: the page says so.
-    await expect(modal(page).locator('.luci-sso-access-note'))
-        .toHaveText('Changes here are kept on the page until you Save & Apply it.');
     await fillList(modal(page), 'email', emails);
     await fillList(modal(page), 'read', read);
     await fillList(modal(page), 'write', write);
@@ -37,37 +36,46 @@ async function roleOrder(page) {
     return Object.values(r.data.values).sort((a, b) => a['.index'] - b['.index']).map(s => s['.name']);
 }
 
+// The option of a role's rpcd login entry, as the page's session sees it.
+function entryOption(page, role, option) {
+    return uciOption(page, `luci_sso_${role}`, option, 'rpcd');
+}
+
 async function cleanup(browser) {
     const context = await browser.newContext();
     const page = await context.newPage();
+    let roles = [], entries = [];
     try {
         await loginAsRoot(page);
         const r = await ubus(page, 'uci', 'get', { config: 'luci-sso', type: 'role' });
-        for (const name of Object.keys(r.data?.values ?? {}).filter(n => n.startsWith('e2e_')))
-            await ubus(page, 'uci', 'delete', { config: 'luci-sso', section: name });
-        await ubus(page, 'uci', 'apply', { rollback: false });
-        for (const name of Object.keys(await listRoles(page)).filter(n => n.startsWith('e2e_')))
-            await ubus(page, 'luci-sso', 'delete_role', { name });
-        await listRoles(page);
+        roles = Object.keys(r.data?.values ?? {}).filter(n => n.startsWith('e2e_'));
+        const e = await ubus(page, 'uci', 'get', { config: 'rpcd', type: 'login' });
+        entries = Object.keys(e.data?.values ?? {}).filter(n => n.startsWith('luci_sso_e2e_'));
     } finally {
         await context.close();
     }
+    if (roles.length || entries.length) {
+        await applyAsRoot(browser, Object.fromEntries(roles.map(n => [n, null])), Object.fromEntries(entries.map(n => [n, null])));
+        const page2 = await browser.newPage();
+        await settle(page2);
+        await page2.close();
+    }
 }
 
-// A save waits for an rpcd reload, which may take RELOAD_WAIT_MS.
 test.describe.configure({ mode: 'serial', timeout: RELOAD_WAIT_MS + 30000 });
 
-test.describe('SSO settings: roles and their rpcd permissions', () => {
+test.describe('SSO settings: roles and their permissions', () => {
     test.beforeAll(async ({ browser }) => { test.setTimeout(RELOAD_WAIT_MS + 30000); await cleanup(browser); });
     test.afterAll(async ({ browser }) => { test.setTimeout(RELOAD_WAIT_MS + 30000); await cleanup(browser); });
 
-    test('creating a role writes the luci-sso role and its rpcd entry, with unauthenticated', async ({ page }) => {
+    test('creating a role stores its rules in luci-sso and its lists in its rpcd login entry, with unauthenticated', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
         await page.locator('.cbi-section-create-name').pressSequentially('e2e_viewer');
         await page.locator('.cbi-section-create .cbi-button-add').click();
         await expect(modal(page).locator('[data-name="read"]')).toContainText('unauthenticated is always included');
+        await expect(modal(page).locator('.luci-sso-access-note')).toHaveCount(0);
         await fillList(modal(page), 'email', ['viewer@example.com']);
         await fillList(modal(page), 'read', ['luci-mod-status-*']);
         await modal(page).locator('button.cbi-button-positive').click();
@@ -76,19 +84,22 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         await expect(row(page, 'e2e_viewer').locator('td[data-name="_read"]')).toHaveText('luci-mod-status-*');
         await saveAndApply(page);
 
-        expect((await listRoles(page)).e2e_viewer).toEqual({ read: ['luci-mod-status-*', 'unauthenticated'], write: [] });
         await expect.poll(async () => (await roleOrder(page)).includes('e2e_viewer'), { timeout: 10000 }).toBe(true);
-        const email = await ubus(page, 'uci', 'get', { config: 'luci-sso', section: 'e2e_viewer', option: 'email' });
-        expect(email.data.value).toEqual(['viewer@example.com']);
+        expect(await uciOption(page, 'e2e_viewer', 'email')).toEqual(['viewer@example.com']);
+        expect(await uciOption(page, 'e2e_viewer', 'read')).toBeNull();
+        expect(await entryOption(page, 'e2e_viewer', 'username')).toBe('sso:e2e_viewer');
+        expect(await entryOption(page, 'e2e_viewer', 'read')).toEqual(['luci-mod-status-*', 'unauthenticated']);
+        expect(await entryOption(page, 'e2e_viewer', 'write')).toBeNull();
+        expect(await entryOption(page, 'e2e_viewer', 'password')).toBeNull();
     });
 
-    test('editing a role rewrites its rpcd entry; the table hides unauthenticated', async ({ page }) => {
+    test('the table and the editor never show unauthenticated, and the entry always keeps it', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
+        await expect(row(page, 'e2e_viewer').locator('td[data-name="_read"]')).toHaveText('luci-mod-status-*');
 
         await row(page, 'e2e_viewer').locator('.cbi-button-edit').click();
         await expect(modal(page)).toBeVisible();
-        // The stored list is luci-mod-status-* and unauthenticated; the editor shows the first only.
         await expect(modal(page).locator('[data-name="read"] .item')).toHaveText(['luci-mod-status-*']);
         await fillList(modal(page), 'read', ['luci-base']);
         await fillList(modal(page), 'write', ['luci-mod-system-config']);
@@ -97,40 +108,26 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         await expect(row(page, 'e2e_viewer').locator('td[data-name="_read"]')).toHaveText('luci-mod-status-*, luci-base');
         await saveAndApply(page);
 
-        expect((await listRoles(page)).e2e_viewer).toEqual({
-            read: ['luci-mod-status-*', 'luci-base', 'unauthenticated'], write: ['luci-mod-system-config'],
-        });
+        expect(await entryOption(page, 'e2e_viewer', 'read')).toEqual(['luci-mod-status-*', 'luci-base', 'unauthenticated']);
+        expect(await entryOption(page, 'e2e_viewer', 'write')).toEqual(['luci-mod-system-config']);
     });
 
-    // One save rule: Save stages UCI changes and keeps permission edits on the
-    // page; only Save & Apply writes the permissions to rpcd.
-    test('Save keeps permission edits on the page without writing them; Save & Apply writes them', async ({ page }) => {
+    test('the editor refuses a read entry that denies unauthenticated, which would leave the role without an entry', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
-        const before = (await listRoles(page)).e2e_viewer;
-
         await row(page, 'e2e_viewer').locator('.cbi-button-edit').click();
         await expect(modal(page)).toBeVisible();
-        await fillList(modal(page), 'email', ['second@example.com']);
-        await fillList(modal(page), 'write', ['luci-mod-network-config']);
-        await modal(page).locator('button.cbi-button-positive').click();
-        await expect(modal(page)).toBeHidden();
-
-        await page.locator('.cbi-page-actions .cbi-button-save').click();
-        await expect(page.locator('.cbi-page-actions .cbi-button-save')).toBeEnabled({ timeout: 10000 });
-        // A write would make rpcd reload a second later; give it time to show.
-        await page.waitForTimeout(3000);
-        expect((await listRoles(page)).e2e_viewer).toEqual(before);
-        await expect(row(page, 'e2e_viewer').locator('td[data-name="_write"]'))
-            .toHaveText('luci-mod-system-config, luci-mod-network-config');
-
-        await saveAndApply(page);
-        expect((await listRoles(page)).e2e_viewer).toEqual({ read: before.read, write: ['luci-mod-system-config', 'luci-mod-network-config'] });
-        const email = await ubus(page, 'uci', 'get', { config: 'luci-sso', section: 'e2e_viewer', option: 'email' });
-        expect(email.data.value).toEqual(['viewer@example.com', 'second@example.com']);
+        const field = modal(page).locator('[data-name="read"]');
+        await field.locator('.cbi-dropdown').click();
+        const custom = field.locator('input.create-item-input:visible');
+        await custom.pressSequentially('!unauth*');
+        await custom.press('Enter');
+        await expect(field.locator('.item', { hasText: '!unauth*' })).toHaveCount(0);
+        await page.keyboard.press('Escape');
+        await modal(page).locator('button', { hasText: 'Dismiss' }).click();
     });
 
-    test('a role with no access groups is saved with unauthenticated only, and the page warns about it', async ({ page }) => {
+    test('a role with no access groups gets an entry that grants unauthenticated only, and the page says it grants nothing', async ({ page }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
@@ -138,8 +135,8 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         await expect(row(page, 'e2e_none').locator('td[data-name="_read"]')).toHaveText('None: this role grants no access');
         await saveAndApply(page);
 
-        expect((await listRoles(page)).e2e_none).toEqual({ read: ['unauthenticated'], write: [] });
-        await gotoSSOSettings(page);
+        expect(await entryOption(page, 'e2e_none', 'read')).toEqual(['unauthenticated']);
+        expect(await entryOption(page, 'e2e_none', 'write')).toBeNull();
         await expect(row(page, 'e2e_none').locator('td[data-name="_read"]')).toHaveText('None: this role grants no access');
     });
 
@@ -150,7 +147,8 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         // A read-only role for the same user as `admin`, added below it.
         await addRole(page, 'e2e_ro', { emails: ['admin@example.com'], read: READONLY_READ });
         await saveAndApply(page);
-        expect((await listRoles(page)).e2e_ro).toEqual({ read: [...READONLY_READ, 'unauthenticated'], write: [] });
+        expect(await entryOption(page, 'e2e_ro', 'read')).toEqual([...READONLY_READ, 'unauthenticated']);
+        await settle(page);
 
         const sso = await browser.newPage();
         await test.step('below admin: the SSO user gets admin and may save', async () => {
@@ -161,11 +159,12 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         await test.step('drag e2e_ro above admin and apply', async () => {
             await gotoSSOSettings(page);
             await row(page, 'e2e_ro').locator('.drag-handle').dragTo(row(page, 'admin'));
-            await saveAndApply(page, { access: false });
+            await saveAndApply(page);
             await expect.poll(async () => {
                 const order = await roleOrder(page);
                 return order.indexOf('e2e_ro') < order.indexOf('admin');
             }, { timeout: 10000 }).toBe(true);
+            await settle(page);
         });
 
         await test.step('above admin: the SSO user gets the read-only role', async () => {
@@ -187,7 +186,7 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
         await sso.close();
     });
 
-    test('deleting roles removes the luci-sso roles and their rpcd entries', async ({ page, browser }) => {
+    test('deleting roles removes them and their rpcd entries, and the user they matched is back on admin', async ({ page, browser }) => {
         await loginAsRoot(page);
         await gotoSSOSettings(page);
 
@@ -196,10 +195,10 @@ test.describe('SSO settings: roles and their rpcd permissions', () => {
             await expect(row(page, name)).toHaveCount(0);
         }
         await saveAndApply(page);
-
-        const roles = await listRoles(page);
-        expect(Object.keys(roles).filter(n => n.startsWith('e2e_'))).toEqual([]);
         await expect.poll(async () => (await roleOrder(page)).filter(n => n.startsWith('e2e_')), { timeout: 10000 }).toEqual([]);
+        for (const name of ['e2e_viewer', 'e2e_none', 'e2e_ro'])
+            expect(await entryOption(page, name, 'username')).toBeNull();
+        await settle(page);
 
         const sso = await browser.newPage();
         await loginViaSSO(sso);

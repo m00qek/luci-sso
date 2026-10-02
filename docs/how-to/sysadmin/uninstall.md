@@ -15,6 +15,7 @@ Removing the `luci-sso` package deletes its files, including its override of LuC
 - removes the SSO button from LuCI's login templates, in every theme (`luci-sso-repatch --remove`),
 - copies each role's permissions from its `rpcd` login entry (`luci_sso_<role>`) back onto the role in `/etc/config/luci-sso`, as `list read` and `list write`, then deletes every `luci_sso_*` section from `/etc/config/rpcd`,
 - deletes the `luci-app-sso` access group and the `luci-sso` ubus object, then reloads `rpcd`, which rebuilds every session's rights,
+- stops and disables `/etc/init.d/luci-sso`, which reloads `rpcd` after an apply,
 - clears LuCI's cache.
 
 Because the permissions are kept in `/etc/config/luci-sso`, installing the package again recreates every role's `rpcd` entry, with the same lists, in the order of the roles. That includes `opkg install --force-reinstall`, which runs the removal script. The script logs a warning, tagged `luci-sso`, for any `luci_sso_*` section without a matching role, which it deletes. An upgrade skips all of this.

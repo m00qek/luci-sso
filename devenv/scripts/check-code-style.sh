@@ -28,7 +28,8 @@ import glob, re, sys
 
 UCODE = sorted(set(glob.glob("src/**/*.uc", recursive=True)
                    + glob.glob("files/**/*.uc", recursive=True)
-                   + ["files/www/cgi-bin/luci-sso", "files/usr/libexec/luci-sso/connection-test"]))
+                   + ["files/www/cgi-bin/luci-sso", "files/usr/libexec/luci-sso/connection-test",
+                      "files/usr/libexec/luci-sso/rpcd-reload"]))
 C_JS = sorted(set(glob.glob("mod/*.c") + glob.glob("mod/*.h") + ["test/fuzz_test.c"]
                   + glob.glob("files/www/**/*.js", recursive=True)))
 

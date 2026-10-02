@@ -116,7 +116,7 @@ describe('system: luci-sso ubus object — test_connection', () => {
 		let first = call(conn, "test_connection", devenv_params());
 		assert.match("string", type(first.job));
 		assert.match({ error: "BUSY", message: "a connection test is already running" }, call(conn, "test_connection", devenv_params()));
-		assert.match("array", type(call(conn, "list_roles").roles), "rpcd answers while the test runs");
+		assert.match("array", type(call(conn, "list_acl_groups").groups), "rpcd answers while the test runs");
 		for (let i = 0; i < 300; i++) {
 			if (call(conn, "test_connection_result", { job: first.job }).done) break;
 			sleep(100);
@@ -266,7 +266,7 @@ describe('system: luci-sso ubus object — the test program', () => {
 		let login = conn.call("session", "login", { username: "root", password: "admin" });
 		assert.match("string", type(login ? login.ubus_rpc_session : null), `password login: ${conn.error()}`);
 		conn.call("session", "destroy", { ubus_rpc_session: login.ubus_rpc_session });
-		assert.match("array", type(call(conn, "list_roles").roles), "the luci-sso object answers");
+		assert.match("array", type(call(conn, "list_acl_groups").groups), "the luci-sso object answers");
 		let res = run_test(conn, devenv_params());
 		assert.match("pass", statuses(res.reply).client_credentials, "a new test runs");
 	});

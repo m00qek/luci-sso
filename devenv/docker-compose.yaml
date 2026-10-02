@@ -79,6 +79,9 @@ services:
   openwrt:
     container_name: ${DOCKER_SUITE}-${SDK_ARCH}-${SDK_VERSION}-openwrt
     image: ${DOCKER_NAMESPACE}/luci-sso-openwrt:${SDK_ARCH}-${SDK_VERSION}
+    # procd's `system board` reports the kernel's host name, which a router
+    # sets from /etc/config/system: the first label of FQDN_LUCI there.
+    hostname: luci
     stop_grace_period: 0s
     build:
       context: ./services/openwrt
@@ -126,8 +129,9 @@ services:
       - ../files/usr/share/ucode/luci/controller/sso.uc:/usr/share/ucode/luci/controller/sso.uc:ro
       - ../files/usr/share/rpcd/acl.d/luci-app-sso.json:/usr/share/rpcd/acl.d/luci-app-sso.json:ro
       - ../files/usr/share/rpcd/ucode/luci-sso.uc:/usr/share/rpcd/ucode/luci-sso.uc:ro
-      - ../files/usr/libexec/luci-sso/connection-test:/usr/libexec/luci-sso/connection-test:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
+      - ../files/etc/init.d/luci-sso:/etc/init.d/luci-sso:ro
+      - ../files/usr/libexec/luci-sso:/usr/libexec/luci-sso:ro
       - ../files/usr/sbin/luci-sso-repatch:/usr/sbin/luci-sso-repatch:ro
       - ../files/usr/sbin/luci-sso-cleanup:/usr/sbin/luci-sso-cleanup:ro
       - ../bin/lib/${SDK_ARCH}/${SDK_VERSION}:/luci_sso/backends:ro

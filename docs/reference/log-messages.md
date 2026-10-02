@@ -359,7 +359,7 @@ These occur after token validation, when mapping the user's identity to a LuCI r
 
 Notes:
 
-- `USER_NOT_AUTHORIZED`: the error page shows the refused user their own `sub`, so they can give it to the administrator for a `sub` rule; the log has only its hash. A `sub` rule counts only while `sub_issuer` equals `issuer_url`; an `Ignoring sub rules` line says when it does not. An email without `email_verified: true` does not count while `require_email_verified` is on; an `Ignoring the unverified email` line says so. A role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
+- `USER_NOT_AUTHORIZED`: the error page shows the refused user their own `sub`, so they can give it to the administrator for a `sub` rule; the log has only its hash. A role's `sub` rules count only while its `sub_issuer` equals `issuer_url`; an `Ignoring sub rules of role` line says when they do not. An email without `email_verified: true` does not count while `require_email_verified` is on; an `Ignoring the unverified email` line says so. A role whose permissions grant nothing does not cause it; its users log in and see nothing. Claim values are never logged. The debug line `ID Token verified. Claims present: …` lists the claim names the IdP sent.
 
 ---
 
@@ -375,7 +375,7 @@ Only `UBUS_LOGIN_FAILED` is logged as the result of the request.
 | `UBUS_CONNECT_FAILED` | The router could not connect to the ubus socket | `ubusd` is not running or the socket is inaccessible. | Not logged by name: `UBUS session creation failed`, then `[500] UBUS_LOGIN_FAILED` |
 | `UBUS_ERROR` | A ubus call reached `rpcd` but was rejected | Usually `rpcd`'s `session` object refused the call. | Not logged by name |
 | `UBUS_SESSION_FAILED` | Creating, granting or labelling the session failed | `rpcd` did not create the session, the ACL files could not be read, the session variables could not be set, or `rpcd` refused a grant, so the session is destroyed rather than left with part of the role's rights. | Not logged by name: one of the lines listed under `UBUS_LOGIN_FAILED` |
-| `MISSING_RPCD_LOGIN` | The matched role has no usable `rpcd` login entry: no section `luci_sso_<role>` of type `login` with `username` `sso:<role>` | The role's permissions are missing, so no session is created. Save the role's permissions on the settings page, or with `ubus call luci-sso set_role`. | `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`, then `[500] UBUS_LOGIN_FAILED` |
+| `MISSING_RPCD_LOGIN` | The matched role has no usable `rpcd` login entry: no section `luci_sso_<role>` of type `login` with `username` `sso:<role>` | The role's permissions are missing, so no session is created. Save the role on the settings page, which gives it an entry, or create the entry with `uci` and apply it; see [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#where-to-change-a-role). | `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`, then `[500] UBUS_LOGIN_FAILED` |
 | `INSECURE_RPCD_LOGIN` | The role's `rpcd` login entry has a `password` option | The entry could be used for a password login, so no session is created. Remove the option. | `INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_<role>' of role '<role>' has a password option; remove it`, then `[500] UBUS_LOGIN_FAILED` |
 
 ---
@@ -391,8 +391,8 @@ Logged by the CGI script under `luci-sso[<pid>]`.
 | Line | Level | When |
 | :--- | :--- | :--- |
 | `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | `require_email_verified` is on and the email arrived without `email_verified: true`, so only the user's groups were matched. Followed by `matched no roles` when no group matched. See [Provider Compatibility](provider-compatibility.md#verified-email). |
-| `Ignoring sub rules: sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>' [session_id: …]` | warn | Some role has a `sub` rule, but `sub_issuer`, the issuer the rules were made for, is not exactly `issuer_url`, usually because `issuer_url` changed. Every `sub` rule is ignored at this login; `email` and `group` rules still match. Followed by `matched no roles` when nothing else matched. Both values are shown with bytes outside printable ASCII as `?`. See [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#after-you-change-the-identity-provider). |
-| `Ignoring sub rules: sub_issuer is not set [session_id: …]` | warn | Some role has a `sub` rule, and `sub_issuer` is not set. Every `sub` rule is ignored, as above. Saving the settings page sets it, or set it with `uci`. |
+| `Ignoring sub rules of role '<role>': its sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>' [session_id: …]` | warn | The role has a `sub` rule, but its `sub_issuer`, the issuer the rules were made for, is not exactly `issuer_url`, usually because `issuer_url` changed. The role's `sub` rules are ignored at this login; its `email` and `group` rules, and other roles, still match. One line per such role. Followed by `matched no roles` when nothing else matched. Both values are shown with bytes outside printable ASCII as `?`. See [How to Configure Role-Based Access Control](../how-to/sysadmin/rbac.md#after-you-change-the-identity-provider). |
+| `Ignoring sub rules of role '<role>': its sub_issuer is not set [session_id: …]` | warn | The role has a `sub` rule, and no `sub_issuer`. Its `sub` rules are ignored, as above. Saving the role in the settings page's editor sets it, or set it with `uci set luci-sso.<role>.sub_issuer=…`. |
 | `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | The user got `<role>`. When other roles matched too, the line reads `mapped to role '<role>', the first match; also matched: <role>, <role>`. |
 | `Successful Passwordless SSO login for [oidc_id: …] mapped to sso:<role>` | info | The session was created with the role's rights. `[oidc_id: …]` is a hash of the user's verified email, or `(no email)` for a user without one: the IdP sent no email, or did not mark it as verified. The user's other lines name them by `[sub_id: …]`. |
 | `Role '<role>' grants unknown access group '<name>'; no ACL file defines it` | warn | A plain name in the entry's `read` or `write` list matches no access group. It grants nothing. Globs and negations are not checked. |
@@ -410,6 +410,15 @@ Logged by the package's scripts with `logger -t luci-sso -p user.warn`, so they 
 | `role '<role>' had no permissions to move: its rpcd login entry grants nothing but 'unauthenticated'; set its permissions on the settings page` | Install or upgrade. The role had no lists and no entry, and is not the untouched shipped `admin` role. | Its users log in and see nothing. Set its permissions. |
 | `rpcd section 'luci_sso_<name>' has no luci-sso role to keep its permissions; deleted` | Removal. An entry has no role in `/etc/config/luci-sso`, or is not a login. | None. Its lists are gone. |
 | `could not write /etc/config/luci-sso: the rpcd login entries are kept`, followed by ucode's trace lines | Removal. The roles' permissions could not be saved back. | The `luci_sso_*` entries stay in `/etc/config/rpcd`. |
+
+### After an apply
+
+Logged by `/usr/libexec/luci-sso/rpcd-reload`, which `/etc/init.d/luci-sso` runs on every apply of `/etc/config/rpcd`, under `luci-sso[<pid>]`. See [Reload after an apply](uci-config.md#reload-after-an-apply).
+
+| Line | Level | When | What to do |
+| :--- | :--- | :--- | :--- |
+| `a LuCI apply is still waiting for its confirmation; reloading rpcd anyway, which cancels its rollback` | warn | A change to `/etc/config/rpcd` waited 15 minutes for a LuCI apply with rollback to be confirmed or rolled back. `rpcd` reloads now, and that apply can no longer roll back. | Confirm or revert the pending apply in LuCI. |
+| `rpcd did not come back from its reload in time; SSO sessions may keep their old rights until it reloads` | warn | `rpcd` did not answer within 30 seconds of the reload signal. | Check that `rpcd` runs (`/etc/init.d/rpcd status`). If sessions must lose rights at once, reload it: `/etc/init.d/luci-sso reload` or `/etc/init.d/rpcd reload`. |
 
 ---
 
@@ -557,8 +566,8 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | Line | Level | Meaning |
 | :--- | :--- | :--- |
 | `Ignoring the unverified email of user [sub_id: …] for role matching: email_verified is not true (require_email_verified) [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
-| `Ignoring sub rules: sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>' [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
-| `Ignoring sub rules: sub_issuer is not set [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Ignoring sub rules of role '<role>': its sub_issuer '<sub_issuer>' does not match issuer_url '<issuer_url>' [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Ignoring sub rules of role '<role>': its sub_issuer is not set [session_id: …]` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
 | `User [sub_id: …] matched no roles [session_id: …]` | warn | Before `[403] USER_NOT_AUTHORIZED`. See [Authorization Errors](#authorization-errors). |
 | `User [sub_id: …] mapped to role '<role>' [session_id: …]` | info | See [Role Lines](#at-login-and-on-configuration-load). |
 | `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'` | err | Before `[500] UBUS_LOGIN_FAILED`. See [Session Errors](#session-errors). |
@@ -608,4 +617,4 @@ The test never logs the client secret, and does not end with a `[<status>] <CODE
 
 ### Package scripts
 
-The lines of the install, upgrade and removal scripts are in [At install, upgrade and removal](#at-install-upgrade-and-removal).
+The lines of the install, upgrade and removal scripts are in [At install, upgrade and removal](#at-install-upgrade-and-removal), and those of the reload after an apply in [After an apply](#after-an-apply).

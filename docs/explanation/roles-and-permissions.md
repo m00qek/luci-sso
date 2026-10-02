@@ -48,6 +48,10 @@ The work is split between the two files along a clear line:
 
 `rpcd` matches user names exactly. A session named `sso:root` gets the rights of the `sso:root` entry, or none if there isn't one; it never gets the rights of `root`. This, too, was checked against `rpcd` on both supported OpenWrt releases.
 
+### Stable configuration
+
+This split is the contract: matching rules in the `role` sections of `/etc/config/luci-sso`, permissions in the `luci_sso_<role>` entries of `/etc/config/rpcd`. 0.10.0 introduced it, and later releases keep it. They may add options, as 0.11 adds `sub_issuer` to roles, but they do not move data from one file to the other, so scripts and backups written against 0.10.0 keep working. An entry is read at every login as it is: one edited by hand is what the role grants, and nothing regenerates or rewrites it.
+
 ---
 
 ## Why every entry reads `unauthenticated`
@@ -56,7 +60,7 @@ LuCI checks the session on every page it loads. It calls two methods, `session.a
 
 Earlier versions of `luci-sso` added that group to every restricted SSO session on their own. `rpcd` knew nothing about the addition, so it disappeared at the next reload, and LuCI then treated the session as expired. Now the group lives where `rpcd` can see it: in the entry's read list.
 
-The `luci-sso` object adds it when it saves an entry, following `rpcd`'s own rules:
+The settings page adds it when it stages an entry, and the package's install script when it creates one, following `rpcd`'s own rules:
 
 - A read list that already grants the group, by name or through a pattern such as `*`, is stored as it is. An entry with `*` in both lists stays exactly what a `root` login has.
 - Any other read list gets `unauthenticated` appended, once.
@@ -98,7 +102,7 @@ Every ID Token carries a `sub` (subject) claim: the IdP's identifier for the acc
 
 A `sub` is unique only within its issuer. Another IdP may give the same value to someone else entirely: many use a database number, a username or a value the user picks. `luci-sso` talks to one issuer at a time, the `issuer_url` it is configured with, and checks every ID Token's `iss` against it, so a role lists subjects only. But `issuer_url` can change, through the settings page, `uci`, a restored backup or a script. If a `sub` rule simply followed it, the account that rule was written for would lose its role, and whoever the new IdP calls by that `sub` would get it. With usernames as subjects, or an IdP where users choose their own, that is a way to become administrator.
 
-So the issuer half of the pair is written down: the option `sub_issuer` records the issuer the `sub` rules were made for, and they count only while it equals `issuer_url`, compared exactly, as `iss` is. When the two differ, or `sub_issuer` is not set, every `sub` rule is ignored and the log says so; `email` and `group` rules still work. The settings page sets `sub_issuer` when you first save subject rules, and after an issuer change it warns and moves the rules to the new IdP only when you ask it to. Moving them is a decision only the administrator can make: it is right when the new IdP is the old one under a new address, and wrong when it is another IdP with its own accounts.
+So the issuer half of the pair is written down, on each role: the role's option `sub_issuer` records the issuer its `sub` rules were made for, and they count only while it equals `issuer_url`, compared exactly, as `iss` is. When the two differ, or the role has no `sub_issuer`, that role's `sub` rules are ignored and the log names the role; its `email` and `group` rules, and other roles, still work. The issuer is kept with the role rather than once for the whole file, so the subjects and the issuer they belong to are saved together, in the same change: the role editor fills it in with the **Issuer URL** when a role gets its first subject. After an issuer change, the page warns about each role whose subjects belong to the old IdP and moves a role's rules to the new one only when you ask it to, role by role. Moving them is a decision only the administrator can make: it is right when the new IdP is the old one under a new address, and wrong when it is another IdP with its own accounts.
 
 A `sub` rule is compared exactly, as a case-sensitive string. `AbC-123` and `abc-123` are two different accounts, as §2 defines the claim. There are no patterns, no prefixes and no trimming, and a `sub` that is missing, empty or not a string matches nothing. The email verification check does not apply, because the `sub` is the account itself, not a claim about it.
 
@@ -122,17 +126,15 @@ An *empty* password is a different thing, and a dangerous one: `rpcd`'s code acc
 
 ---
 
-## Why the settings page goes through a ubus object
+## How the settings page saves permissions
 
-Administrators keep managing roles from **Services > Single Sign-On**, as before. The difference is in how that page saves.
+Administrators keep managing roles from **Services > Single Sign-On**. The page is a plain LuCI form over both files: a role's emails, groups, subjects and position are UCI options of `/etc/config/luci-sso`, its read and write access are UCI options of its entry in `/etc/config/rpcd`, and LuCI stages, applies, rolls back and reverts both together, like any other change. The page stages changes only to `luci_sso_*` entries, adds `unauthenticated` to the read list, never writes a password option, and checks each list entry by the rules the login applies.
 
-The obvious route would be for the page to edit `/etc/config/rpcd` through LuCI's normal UCI calls. But UCI permissions apply to whole configuration files, not to sections within them. Letting the page write `rpcd`'s configuration would let anyone who can change SSO settings also rewrite `root`'s login, with or without the page's cooperation.
+0.10.0 took another route. It kept the page away from UCI access to `rpcd`, and wrote the entries through a small `luci-sso` object on `ubus` that touched only `sso:` entries. The reason given was that UCI permissions apply to whole files: write access to `rpcd`'s configuration would let whoever may change SSO settings rewrite `root`'s login too. That argument does not hold. Whoever may change the roles may already add their own email to a role and give it `*` in both lists: write access to the SSO settings has always been as good as `root`. See [Who may change roles](threat-model.md#who-may-change-roles).
 
-So the page talks to a small `luci-sso` object on `ubus` instead. That object only creates, changes and deletes `sso:` entries, always writes them without a password, and checks the lists it is given. The rule "`luci-sso` only touches its own entries" is enforced on the router, not just in the browser.
+The object had a cost instead. It wrote at once, outside LuCI's staging, so permission edits could not take part in LuCI's **Save & Apply**: the page had to hold them in the browser and send them itself. An earlier build of this release did that only from the page's own **Save & Apply**, so an apply from LuCI's header, the **Unsaved Changes** dialog, applied a role's new members but dropped its permission edits, and the new members got the role's old, broader rights. With the entries as ordinary UCI options, every apply takes both, and a rollback reverts both.
 
-The split has a cost on the page. A role's emails, groups and position live in `/etc/config/luci-sso`, and LuCI stages them like any setting. A role's read and write access live in `/etc/config/rpcd`, which the page may not stage, since it has no UCI access to `rpcd`: only the object can write them, and it writes at once. Earlier versions therefore had two moments at which changes took effect, **Save** for permissions and **Save & Apply** for everything else, and administrators had to remember which was which.
-
-The page now keeps one rule: changes take effect with **Save & Apply**. **Save** stages the UCI changes and keeps permission edits on the page. **Save & Apply** first lets LuCI apply and confirm the UCI changes; only then does the page send the permissions to the object, which makes `rpcd` reload so the new rights are in force about a second later. An apply that LuCI rolls back, because the router stopped answering, writes no permissions, so a failed apply never leaves half of a change in force. The price is that permission edits, unlike staged UCI changes, live only in the open page until they are applied.
+One thing UCI cannot do is make `rpcd` reload, and `rpcd` rebuilds open sessions only when it reloads. The package's init script, `/etc/init.d/luci-sso`, has a `procd` trigger on the `rpcd` configuration that reloads `rpcd` after an apply that changed it. It waits while LuCI's apply can still be rolled back, because `rpcd` keeps the rollback timer in memory and a reload would silently cancel it; new logins already get the new entries meanwhile, and open sessions get them once the apply is confirmed or rolled back.
 
 ---
 
@@ -164,7 +166,7 @@ The design is not free.
 
 `luci-sso` now manages entries in a file that belongs to another package. Some OpenWrt packages already manage settings in other packages' configuration, but managing login entries is unusual, and it deserves the care described above: owned entries only, recognisable by the `sso:` prefix, never a password, and none left behind. Deleting a role on the settings page deletes its entry. Removing the package deletes them all, as the next section describes.
 
-Administrators who read `/etc/config/rpcd` will see `sso:` entries next to `root`. They can edit them over SSH, as long as they leave out the password option; `luci-sso` refuses an entry that has one. An entry edited by hand without `unauthenticated` gets the group back the next time the object saves it, or when the package is removed and installed again.
+Administrators who read `/etc/config/rpcd` will see `sso:` entries next to `root`. They can edit them over SSH, as long as they leave out the password option; `luci-sso` refuses an entry that has one. An entry edited by hand is used as it is. One left without `unauthenticated` gets the group back the next time the role is saved on the settings page with a changed read list, or when the package is removed and installed again.
 
 And the configuration format changes. Upgrading converts each existing role into an `sso:` entry and removes the permission lists from the role, adopting `rpcd`'s meaning of `*` as described above. A user who matched several roles and used to get their combined rights now gets the first matching role's rights only, so role order needs a look after upgrading. Sessions that were open during the upgrade carry the old user name, which no entry matches, so they lose their rights at the reload the upgrade triggers, and their users log in again. On OpenWrt 24.10 the question does not arise: the old release's removal script, which the package manager runs during the upgrade, restarts `rpcd` and logs everyone out.
 
