@@ -67,6 +67,13 @@ export function run(deps, web_deps) {
 			// the option's value, so it is safe to log; the page stays generic.
 			if (res_c.details)
 				deps.log("error", `Configuration rejected: ${res_c.details}`);
+			// Logging out must not depend on the configuration: the router
+			// still destroys the session and expires its cookies, without
+			// RP-initiated logout (router.handle with a null config).
+			if (router.is_logout(req)) {
+				emit(web_deps, router.handle(deps, null, req));
+				return;
+			}
 			web.render_error(web_deps, res_c.error, 500);
 			return;
 		}

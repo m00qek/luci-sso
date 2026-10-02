@@ -34,6 +34,16 @@ describe('netaddr: parse', () => {
 		                  '1:2:3:4:5:6:7::8' ])
 			assert.match(null, netaddr.parse(bad), `${bad}`);
 	});
+
+	it('refuses an IPv4 part with a leading zero, which some tools read as octal', () => {
+		for (let bad in [ '010.0.0.1', '10.0.0.01', '001.2.3.4', '::ffff:10.0.0.01' ])
+			assert.match(null, netaddr.parse(bad), bad);
+	});
+
+	it('refuses an address followed by a NUL byte or a newline, and anything after it', () => {
+		for (let bad in [ '1.2.3.4\u0000', '1.2.3.4\u00000.0.0.0', '::1\u0000', 'fe\u000080::1', '1.2.3.4\n', '1.2.3.4\n0.0.0.0', '::1\n' ])
+			assert.match(null, netaddr.parse(bad), sprintf("%J", bad));
+	});
 });
 
 // ─── parse_cidr / contains ────────────────────────────────────────────────────
@@ -58,6 +68,17 @@ describe('netaddr: parse_cidr', () => {
 		for (let bad in [ null, '', '/8', '10.0.0.0/', '10.0.0.0/33', '::/129', '10.0.0.0/255.0.0.0', '10.0.0.0/8/8',
 		                  '10.0.0.0/-1', 'localhost', '1.2.3.4:80', '[::1]', 'fe80::1%eth0', ' 10.0.0.1', '10.0.0.0/08x' ])
 			assert.match(null, netaddr.parse_cidr(bad), `${bad}`);
+	});
+
+	it('refuses a NUL byte or a newline anywhere, in the address or the prefix', () => {
+		for (let bad in [ '10.0.0.0/8\n', '10.0.0.0/8\n0.0.0.0/0', '10.0.0.0\n/8', '127.0.0.1\n0.0.0.0/0', '10.0.0.0/8\u0000', '10.0.0.0\u0000/8', '::/0\u0000' ])
+			assert.match(null, netaddr.parse_cidr(bad), sprintf("%J", bad));
+	});
+
+	it('reads a prefix of one to three digits, leading zeros included', () => {
+		assert.match(8, netaddr.parse_cidr('10.0.0.0/08').prefix);
+		assert.match(8, netaddr.parse_cidr('10.0.0.0/008').prefix);
+		assert.match(null, netaddr.parse_cidr('10.0.0.0/0008'));
 	});
 });
 

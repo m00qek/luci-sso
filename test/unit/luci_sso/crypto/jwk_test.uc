@@ -47,13 +47,11 @@ function with_strict(fn) {
 // ─── contract ────────────────────────────────────────────────────────────────
 
 describe('crypto.jwk: to_pem — contract', () => {
-	it('dies for null', () => with_strict((native) => {
-		assert.throws(() => jwk.to_pem(native, null));
-	}));
-
-	it('dies for non-object types', () => with_strict((native) => {
-		for (let v in ['string', 42, []]) {
-			assert.throws(() => jwk.to_pem(native, v));
+	// A JWK Set entry is the IdP's data: anything but an object is a key
+	// without a kty, never a crash (it reached a login's 500 before).
+	it('returns MISSING_KTY for null and every other non-object, without calling native', () => with_strict((native) => {
+		for (let v in [null, 'string', 42, true, [], ['RSA']]) {
+			assert.match(contains({ ok: false, error: 'MISSING_KTY' }), jwk.to_pem(native, v), `${v}`);
 		}
 	}));
 
@@ -98,6 +96,13 @@ describe('crypto.jwk: to_pem — RSA', () => {
 		assert.match(contains({ ok: false, error: 'INVALID_RSA_PARAMS_ENCODING' }), jwk.to_pem(native, { kty: 'RSA', n: RSA_JWK.n, e: '!!!' }));
 	}));
 
+	it('returns INVALID_RSA_PARAMS_ENCODING, without a crash, for an n or e that is not a string', () => with_strict((native) => {
+		for (let bad in [12345, true, ['AQAB'], { v: 'AQAB' }]) {
+			assert.match(contains({ ok: false, error: 'INVALID_RSA_PARAMS_ENCODING' }), jwk.to_pem(native, { kty: 'RSA', n: bad, e: RSA_JWK.e }), `n: ${bad}`);
+			assert.match(contains({ ok: false, error: 'INVALID_RSA_PARAMS_ENCODING' }), jwk.to_pem(native, { kty: 'RSA', n: RSA_JWK.n, e: bad }), `e: ${bad}`);
+		}
+	}));
+
 	it('returns PEM_CONVERSION_FAILED when native.jwk_rsa_to_pem returns null', () => with_null((native) => {
 		assert.match(contains({ ok: false, error: 'PEM_CONVERSION_FAILED' }), jwk.to_pem(native, RSA_JWK));
 	}));
@@ -133,6 +138,13 @@ describe('crypto.jwk: to_pem — EC', () => {
 
 	it('returns INVALID_EC_PARAMS_ENCODING for non-base64url coordinates', () => with_strict((native) => {
 		assert.match(contains({ ok: false, error: 'INVALID_EC_PARAMS_ENCODING' }), jwk.to_pem(native, { kty: 'EC', crv: 'P-256', x: '!!!', y: EC_JWK.y }));
+	}));
+
+	it('returns INVALID_EC_PARAMS_ENCODING, without a crash, for an x or y that is not a string', () => with_strict((native) => {
+		for (let bad in [12345, true, ['AA'], { v: 'AA' }]) {
+			assert.match(contains({ ok: false, error: 'INVALID_EC_PARAMS_ENCODING' }), jwk.to_pem(native, { kty: 'EC', crv: 'P-256', x: bad, y: EC_JWK.y }), `x: ${bad}`);
+			assert.match(contains({ ok: false, error: 'INVALID_EC_PARAMS_ENCODING' }), jwk.to_pem(native, { kty: 'EC', crv: 'P-256', x: EC_JWK.x, y: bad }), `y: ${bad}`);
+		}
 	}));
 
 	it('returns PEM_CONVERSION_FAILED when native.jwk_ec_p256_to_pem returns null', () => with_null((native) => {

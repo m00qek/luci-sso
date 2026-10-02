@@ -2,7 +2,8 @@
 # Checks the code style rules that tooling can decide on its own
 # (docs/reference/style-guide.md, "ucode Style" and "C Code Style").
 #
-# Production ucode (src/**/*.uc, files/**/*.uc, files/www/cgi-bin/luci-sso):
+# Production ucode (src/**/*.uc, files/**/*.uc, files/www/cgi-bin/luci-sso,
+# files/usr/libexec/luci-sso/connection-test):
 #   indent    no line is indented with spaces; tabs, then spaces for
 #             alignment, are fine
 #   func-end  an exported function ends with `};`, a private top-level
@@ -27,7 +28,7 @@ import glob, re, sys
 
 UCODE = sorted(set(glob.glob("src/**/*.uc", recursive=True)
                    + glob.glob("files/**/*.uc", recursive=True)
-                   + ["files/www/cgi-bin/luci-sso"]))
+                   + ["files/www/cgi-bin/luci-sso", "files/usr/libexec/luci-sso/connection-test"]))
 C_JS = sorted(set(glob.glob("mod/*.c") + glob.glob("mod/*.h") + ["test/fuzz_test.c"]
                   + glob.glob("files/www/**/*.js", recursive=True)))
 

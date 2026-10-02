@@ -122,7 +122,9 @@ function id_token_sub(id_token) {
 }
 
 /**
- * Handles the logout request.
+ * Handles the logout request. With a null config, the configuration could
+ * not be loaded: the session is still destroyed and its cookies expired, but
+ * there is no IdP to send the browser to, so the logout is local only.
  * @private
  */
 function handle_logout(deps, config, request) {
@@ -158,8 +160,13 @@ function handle_logout(deps, config, request) {
 	let logout_url = "/";
 
 	// OIDC RP-Initiated Logout
-	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
-	if (disc_res.ok && disc_res.data.end_session_endpoint) {
+	let disc_res = null;
+	if (config) {
+		disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
+	} else {
+		deps.log("warn", "Logout is local only: the configuration could not be loaded, so the IdP session is not ended");
+	}
+	if (disc_res && disc_res.ok && disc_res.data.end_session_endpoint) {
 		let end_session = disc_res.data.end_session_endpoint;
 
 		// The browser carries id_token_hint to this URL, so it must be HTTPS.
@@ -196,13 +203,41 @@ function handle_logout(deps, config, request) {
 }
 
 /**
- * Main entry point for the router.
- * @param {object} deps - { fs, http, ubus, uci, log, clock }
+ * The request's path as the router dispatches on it: with a leading "/" and
+ * without a trailing one.
+ * @private
  */
-export function handle(deps, config, request) {
+function route_path(request) {
 	let path = request.path || "/";
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
+	return path;
+}
+
+/**
+ * Whether the request is for the logout endpoint, which handle() serves
+ * even with a null config (see handle).
+ *
+ * @param {object} request - The parsed request
+ * @returns {boolean}
+ */
+export function is_logout(request) {
+	return route_path(request) == "/logout";
+};
+
+/**
+ * Main entry point for the router.
+ *
+ * `config` is null when the configuration could not be loaded (disabled
+ * SSO, or a CONFIG_ERROR). Then only ?action=enabled and /logout are served:
+ * logging out must never depend on the OIDC settings, so a broken
+ * configuration cannot leave an SSO session alive. Every other path fails
+ * with SSO_DISABLED.
+ *
+ * @param {object} deps - { fs, http, ubus, uci, log, clock }
+ */
+export function handle(deps, config, request) {
+	let path = route_path(request);
 
 	// ?action=enabled needs neither a valid config nor rate-limit budget.
 	if (path == "/") {
@@ -227,11 +262,16 @@ export function handle(deps, config, request) {
 		return Result.err(TOO_MANY_REQUESTS, { http_status: 429, retry_after: rl.retry_after });
 	}
 
+	// Logout works without a config (local logout only).
+	if (path == "/logout") {
+		return handle_logout(deps, config, request);
+	}
+
 	// Every remaining path needs a loaded config. Unreachable today: entry.uc
-	// passes a null config only for ?action=enabled, answered above. The guard
-	// stays as defence in depth against a future caller, and returns what
-	// entry.uc renders for disabled SSO (500): 503 is reserved for
-	// HANDSHAKE_CAPACITY_EXCEEDED.
+	// passes a null config only for ?action=enabled and /logout, answered
+	// above. The guard stays as defence in depth against a future caller, and
+	// returns what entry.uc renders for disabled SSO (500): 503 is reserved
+	// for HANDSHAKE_CAPACITY_EXCEEDED.
 	if (!config) {
 		return Result.err(SSO_DISABLED, { http_status: 500 });
 	}
@@ -239,8 +279,6 @@ export function handle(deps, config, request) {
 		return handle_login(deps, config, request);
 	} else if (path == "/callback") {
 		return handle_callback(deps, config, request);
-	} else if (path == "/logout") {
-		return handle_logout(deps, config, request);
 	}
 
 	return Result.err(NOT_FOUND, { http_status: 404 });

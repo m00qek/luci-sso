@@ -40,6 +40,24 @@ describe('discovery: find_jwk', () => {
 			discovery.find_jwk([KEY_RS256, KEY_ES256], 'no-such-key'));
 	});
 
+	it('skips entries that are not objects when it looks for a kid, without a crash', () => {
+		assert.match(contains({ ok: true, data: KEY_ES256 }),
+			discovery.find_jwk([null, 'key-2', 42, ['key-2'], KEY_ES256], 'key-2'));
+		assert.match(contains({ ok: false, error: 'KEY_NOT_FOUND' }),
+			discovery.find_jwk([null, 'key-2'], 'key-2'));
+	});
+
+	it('returns the first entry for a token without a kid, whatever it is', () => {
+		assert.match(contains({ ok: true, data: 'not a key' }),
+			discovery.find_jwk(['not a key', KEY_RS256], null));
+	});
+
+	it('ignores use and alg: the first key with the kid wins', () => {
+		let enc = { ...KEY_RS256, use: 'enc', alg: 'RSA-OAEP' };
+		assert.match(contains({ ok: true, data: enc }),
+			discovery.find_jwk([enc, KEY_RS256], 'key-1'));
+	});
+
 	it('returns KEY_NOT_FOUND when keys is empty and kid is specified', () => {
 		assert.match(contains({ ok: false, error: 'KEY_NOT_FOUND' }),
 			discovery.find_jwk([], 'key-1'));

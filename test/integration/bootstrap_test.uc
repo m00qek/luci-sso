@@ -1,4 +1,5 @@
 import { describe, it, assert, contains } from 'utest';
+import * as fs from 'fs';
 import { ubus_channel, syslog_channel } from 'luci_sso.deps';
 
 // Integration bucket — the composition root. deps.create() wires the real system
@@ -52,16 +53,24 @@ const LOG = {
 	LOG_ERR: 3, LOG_WARNING: 4, LOG_DEBUG: 7, LOG_INFO: 6,
 };
 
-// Builds a fake `log` module that records openlog/syslog calls.
+// Builds a fake `log` module that records openlog/syslog calls. Each line is
+// [priority, the text syslog() would write]: like ucode's own log.syslog, the
+// fake formats a string format with the real sprintf(), so a message passed
+// as the format, not as its argument, shows here as it would in the log.
 function fake_log() {
 	let opens = [];
 	let lines = [];
+	let calls = [];
 	return {
 		...LOG,
 		openlog: (ident, opt, fac) => push(opens, [ident, opt, fac]),
-		syslog:  (priority, msg) => push(lines, [priority, msg]),
+		syslog:  (priority, fmt, ...args) => {
+			push(calls, [priority, fmt, ...args]);
+			push(lines, [priority, sprintf(fmt, ...args)]);
+		},
 		opens:   () => opens,
 		lines:   () => lines,
+		calls:   () => calls,
 	};
 }
 
@@ -90,5 +99,46 @@ describe('deps.syslog_channel', () => {
 		assert.match([LOG.LOG_DEBUG,   'd'], log.lines()[2]);
 		assert.match([LOG.LOG_INFO,    'i'], log.lines()[3]);
 		assert.match([LOG.LOG_INFO,    't'], log.lines()[4]);
+	});
+});
+
+describe('deps.syslog_channel — format string', () => {
+	it('passes the message as the argument of a constant "%s" format', () => {
+		let log = fake_log();
+		let emit = syslog_channel(log);
+		emit('warn', 'IDP_ERROR: the IdP returned error=%n%s');
+		assert.match([[LOG.LOG_WARNING, '%s', 'IDP_ERROR: the IdP returned error=%n%s']], log.calls());
+	});
+
+	it('logs printf conversions in request data literally, at their own length', () => {
+		// The unauthenticated memory DoS: return_to or the callback's error
+		// parameter holding width specifiers. As a format, each %9999999d
+		// would expand to ten million characters.
+		let log = fake_log();
+		let emit = syslog_channel(log);
+		let msg = 'Ignoring return_to "%9999999d%9999999d%s%J%%": not a LuCI page';
+		emit('info', msg);
+		assert.match([LOG.LOG_INFO, msg], log.lines()[0]);
+		assert.match(length(msg), length(log.lines()[0][1]));
+	});
+});
+
+// The real `log` module, in a child ucode process: LOG_PERROR makes syslog()
+// copy each line to standard error, where this test reads it back.
+const LOG_PERROR = 0x20;
+
+describe('deps.syslog_channel — the real log module', () => {
+	it('writes a message holding printf conversions to the log literally', () => {
+		let script = join("\n", [
+			'import * as log from "log";',
+			'import { syslog_channel } from "luci_sso.deps";',
+			`let real = { ...log, openlog: (ident, opt, fac) => log.openlog(ident, opt | ${LOG_PERROR}, fac) };`,
+			'syslog_channel(real)("warn", "IDP_ERROR: error=%9999999d%9999999d%s%%");'
+		]);
+		let p = fs.popen(`ucode -e '${script}' 2>&1`, "r");
+		let out = p.read("all");
+		p.close();
+		assert.match(true, index(out, "IDP_ERROR: error=%9999999d%9999999d%s%%") >= 0, out);
+		assert.match(true, length(out) < 1000, `${length(out)} bytes written`);
 	});
 });

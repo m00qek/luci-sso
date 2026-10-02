@@ -308,7 +308,10 @@ const RETURN_PATH_DECODE_PASSES = 3;
 const RETURN_PATH_PUNCT = [ 47, 95, 46, 126, 37, 63, 38, 61, 43, 44, 45 ];
 
 /**
- * LuCI's own logout page. Returning there would end the session just created.
+ * LuCI's own logout page. Returning there, or to any path under it, would end
+ * the session just created: LuCI's dispatcher runs the deepest node it can
+ * match and ignores the segments after it, so /cgi-bin/luci/admin/logout/x
+ * runs the logout too.
  * @private
  */
 const LUCI_LOGOUT_PATH = "/cgi-bin/luci/admin/logout";
@@ -345,7 +348,7 @@ function _return_path_shape(path, whole) {
 		if (seg == "." || seg == "..")
 			return "contains a dot segment";
 	}
-	if (path == LUCI_LOGOUT_PATH || path == LUCI_LOGOUT_PATH + "/")
+	if (path == LUCI_LOGOUT_PATH || substr(path, 0, length(LUCI_LOGOUT_PATH) + 1) == LUCI_LOGOUT_PATH + "/")
 		return "is LuCI's logout page";
 	return null;
 }
@@ -371,8 +374,8 @@ function _percent_decode(s) {
  * - hold only letters, digits and / _ . ~ % ? & = + , - (no scheme, no
  *   backslash, no "@", no control or non-ASCII bytes, no "#");
  * - have a path part (before the first "?") that is /cgi-bin/luci or starts
- *   with /cgi-bin/luci/, has no "." or ".." segment, and is not LuCI's
- *   logout page; and contain no "//" anywhere.
+ *   with /cgi-bin/luci/, has no "." or ".." segment, and is neither LuCI's
+ *   logout page nor a path under it; and contain no "//" anywhere.
  *
  * Every "%" must start a %XX escape. The value is then decoded, up to three
  * times, until no escape is left; each decoded form must pass the same

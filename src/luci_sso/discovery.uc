@@ -318,7 +318,14 @@ export function fetch_jwks(deps, jwks_uri, options) {
 };
 
 /**
- * Finds the correct JWK by key ID (kid).
+ * Finds the JWK a login verifies an ID token with: the first key whose kid
+ * is the token's kid, or, for a token without a kid, the first key of the
+ * set. A key's "use" and "alg" are not looked at. An entry that is not an
+ * object has no kid; as the first key, it is returned as it is, and
+ * crypto.jwk_to_pem refuses it.
+ *
+ * The settings page's connection test calls this too, to judge exactly the
+ * keys a login can pick.
  */
 export function find_jwk(keys, kid) {
 	if (type(keys) != "array") die("CONTRACT_VIOLATION: keys must be an array");
@@ -327,7 +334,7 @@ export function find_jwk(keys, kid) {
 		return Result.err(NO_KEYS_AVAILABLE);
 	}
 	for (let i, key in keys) {
-		if (key.kid === kid) return Result.ok(key);
+		if (type(key) == "object" && key.kid === kid) return Result.ok(key);
 	}
 	return Result.err(KEY_NOT_FOUND, kid);
 };

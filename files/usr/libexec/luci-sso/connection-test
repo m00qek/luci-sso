@@ -1,0 +1,37 @@
+#!/usr/bin/ucode
+// SPDX-License-Identifier: MIT
+//
+// The settings page's connection test, in a process of its own.
+//
+// The luci-sso rpcd plugin (/usr/share/rpcd/ucode/luci-sso.uc) starts this
+// script with fork and exec, so nothing of rpcd survives in it: not its ubus
+// connection, its event loop or its signal handlers. It reads the provider
+// settings as JSON on standard input, the client secret included, runs
+// luci_sso.connection's checks, and writes the reply as one line of JSON on
+// standard output. The plugin kills it with SIGKILL if it has not finished
+// in time.
+//
+// It can be run by hand:
+//
+//   echo '{"issuer_url":"https://idp.example.com","client_id":"x",
+//          "client_secret":"y","redirect_uri":"https://router/cgi-bin/luci-sso/callback"}' |
+//   /usr/libexec/luci-sso/connection-test
+
+"use strict";
+
+import * as fs from 'fs';
+import * as connection from 'luci_sso.connection';
+import { create_probe } from 'luci_sso.deps';
+
+// More than the plugin ever sends: at most 4096 bytes.
+const MAX_INPUT = 65536;
+
+let out;
+try {
+	out = connection.run(create_probe(connection.HTTP_TIMEOUT_MS), fs.stdin.read(MAX_INPUT));
+} catch (e) {
+	// Logged by rpcd's standard error; the page shows only that the test failed.
+	warn(`luci-sso connection test: ${e}\n`);
+	out = sprintf("%J", { done: true, error: "TEST_FAILED", message: "the test stopped with an internal error" });
+}
+fs.stdout.write(out + "\n");

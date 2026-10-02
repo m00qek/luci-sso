@@ -413,6 +413,11 @@ describe('encoding: return_path — accepted', () => {
 		assert.match(contains({ ok: true, data: p }), encoding.return_path(p));
 	});
 
+	it('accepts a page whose segment only starts like LuCI\'s logout page', () => {
+		for (let p in [ '/cgi-bin/luci/admin/logoutx', '/cgi-bin/luci/admin/logout-help', '/cgi-bin/luci/admin/system/logout' ])
+			assert.match(contains({ ok: true, data: p }), encoding.return_path(p), p);
+	});
+
 	it('accepts a dot inside a segment, which is not a dot segment', () => {
 		assert.match(contains({ ok: true }), encoding.return_path('/cgi-bin/luci/admin/a..b/.c/d.'));
 	});
@@ -450,6 +455,16 @@ describe('encoding: return_path — refused', () => {
 		'/cgi-bin/luci/admin/logout',
 		'/cgi-bin/luci/admin/logout/',
 		'/cgi-bin/luci/admin/logout?x=1',
+		// ...and every path under it: LuCI's dispatcher runs the logout node
+		// for those too
+		'/cgi-bin/luci/admin/logout/x',
+		'/cgi-bin/luci/admin/logout/x/y?z=1',
+		'/cgi-bin/luci/admin/logout/admin/status/overview',
+		'/cgi-bin/luci/admin/logout%2Fx',
+		'/cgi-bin/luci/admin%2Flogout/x',
+		'/cgi-bin/luci/admin/logou%74/x',
+		'/cgi-bin/luci/admin/logout%252Fx',
+		'/cgi-bin/luci/%61dmin/logout/',
 		// Percent-encoded tricks
 		'%2F%2Fevil.example',
 		'/cgi-bin/luci/%2F%2Fevil.example',
@@ -527,6 +542,8 @@ describe('encoding: return_path — refused', () => {
 		assert.match(contains({ details: 'has a malformed percent escape' }),          encoding.return_path('/cgi-bin/luci/%zz'));
 		assert.match(contains({ details: 'percent-encoded too many times' }),          encoding.return_path('/cgi-bin/luci/%2525252e'));
 		assert.match(contains({ details: "is LuCI's logout page" }),                   encoding.return_path('/cgi-bin/luci/admin/logout'));
+		assert.match(contains({ details: "is LuCI's logout page" }),                   encoding.return_path('/cgi-bin/luci/admin/logout/x'));
+		assert.match(contains({ details: "is LuCI's logout page" }),                   encoding.return_path('/cgi-bin/luci/admin/logout%2Fx'));
 	});
 
 	prop('anything accepted is a LuCI path with only allowed characters and no //', gen.string({ max_len: 80 }), (s, ctx) => {
@@ -539,5 +556,10 @@ describe('encoding: return_path — refused', () => {
 			assert.match(regex(/^[A-Za-z0-9\/_.~%?&=+,-]+$/), v);
 			assert.match(-1, index(v, '//'));
 		}
+	});
+
+	prop('nothing under LuCI\'s logout page is accepted, encoded or not', gen.string({ max_len: 40 }), (s) => {
+		for (let v in [ '/cgi-bin/luci/admin/logout/' + s, '/cgi-bin/luci/admin/logout%2F' + s, '/cgi-bin/luci/admin/logout%252F' + s ])
+			assert.match(contains({ ok: false }), encoding.return_path(v), v);
 	});
 });

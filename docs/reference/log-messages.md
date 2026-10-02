@@ -121,13 +121,13 @@ These occur on the first request that needs the configuration.
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `SSO_DISABLED` | A login, callback or logout request arrives while `enabled` is not `1` | SSO is turned off. The `?action=enabled` probe returns `{"enabled": false}` instead and logs nothing. | `[500] SSO_DISABLED` |
-| `CONFIG_ERROR` | SSO is enabled, but a required option is missing or invalid (see notes) | The configuration cannot be used. Every request fails, including the `?action=enabled` probe. | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` |
+| `SSO_DISABLED` | A login or callback request arrives while `enabled` is not `1` | SSO is turned off. The `?action=enabled` probe returns `{"enabled": false}` instead and logs nothing. A logout still ends the session, locally. | `[500] SSO_DISABLED` |
+| `CONFIG_ERROR` | SSO is enabled, but a required option is missing or invalid (see notes) | The configuration cannot be used. Every request fails, including the `?action=enabled` probe, except a logout, which still ends the session, locally. | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` |
 | `UCI_ERROR` | The UCI cursor could not be created | The UCI system itself is unavailable, which points to a deeper OpenWrt problem. | `[500] UCI_ERROR` |
 
 Notes:
 
-- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, when a `trusted_proxy` entry is not an IP address or CIDR range, or when no role has an email or group. The `<reason>` names the option but never its value.
+- `CONFIG_ERROR`: the configuration is rejected when the `default` section is missing, when `issuer_url`, `client_id`, `client_secret`, `redirect_uri`, `clock_tolerance` or `internal_issuer_url` is missing or invalid, or when no role has an email, group or sub rule (`No valid roles found in /etc/config/luci-sso`). The `<reason>` names the option but never its value.
 
 ---
 
@@ -286,13 +286,13 @@ The router could not find or use the key that signed the token.
 | :--- | :--- | :--- |
 | `NO_KEYS_AVAILABLE` | The token has no `kid` header and the JWK Set is empty | The IdP publishes no signing keys at its `jwks_uri`. |
 | `KEY_NOT_FOUND` | No key in the JWK Set has the token's `kid`, even after a forced refresh | The IdP signed with a key it does not publish (see notes). |
-| `MISSING_KTY` | The selected JWK has no `kty` field | The IdP's JWK Set is malformed. |
+| `MISSING_KTY` | The selected JWK has no `kty` field, or is not a JSON object | The IdP's JWK Set is malformed. |
 | `UNSUPPORTED_KTY` | The selected JWK's `kty` is not `RSA` or `EC` | The IdP uses a key type `luci-sso` cannot verify (see notes). |
 | `MISSING_RSA_PARAMS` | An `RSA` JWK lacks `n` or `e` | The IdP's JWK Set is malformed. |
-| `INVALID_RSA_PARAMS_ENCODING` | An `RSA` JWK's `n` or `e` is not valid Base64URL | The IdP's JWK Set is malformed. |
+| `INVALID_RSA_PARAMS_ENCODING` | An `RSA` JWK's `n` or `e` is not valid Base64URL, or not a string | The IdP's JWK Set is malformed. |
 | `UNSUPPORTED_CURVE` | An `EC` JWK uses a curve other than `P-256` | Only ES256 (P-256) is supported. Configure the IdP to sign with P-256 or RS256. |
 | `MISSING_EC_PARAMS` | An `EC` JWK lacks `x` or `y` | The IdP's JWK Set is malformed. |
-| `INVALID_EC_PARAMS_ENCODING` | An `EC` JWK's `x` or `y` is not valid Base64URL | The IdP's JWK Set is malformed. |
+| `INVALID_EC_PARAMS_ENCODING` | An `EC` JWK's `x` or `y` is not valid Base64URL, or not a string | The IdP's JWK Set is malformed. |
 | `PEM_CONVERSION_FAILED` | The native crypto bridge rejected the key | The key has a value the bridge refuses (see notes). |
 
 Notes:
@@ -581,6 +581,7 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | :--- | :--- | :--- |
 | `Ignoring read/write on role '<role>': its permissions are the rpcd login entry 'luci_sso_<role>'` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
 | `Ignoring role '<role>': missing email, group or sub list` | warn | See [Role Lines](#at-login-and-on-configuration-load). |
+| `Ignoring trusted_proxy entries that are not an IP address or CIDR range (position <n>, … of <total>); they exempt no proxy from the per-client rate limits` | warn | An entry of `trusted_proxy` is neither an address nor a CIDR range, such as a host name, a netmask or a trailing space. It is skipped, so requests from the proxy it was meant to name share one per-client budget; the other entries still count. Logged on every request, until the entry is fixed. See [`trusted_proxy`](uci-config.md#oidc-section-notes). |
 
 ### Logout
 
@@ -589,12 +590,13 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | `Logout attempt with invalid or missing CSRF token` | warn | Before `[403] CSRF_CHECK_FAILED`. See [Authorization Errors](#authorization-errors). |
 | `Logout for [sub_id: …] (role=<role>)` | info | An SSO session was ended on the router. `[sub_id: …]` is read from the session's ID Token, so it matches the user's login lines; it reads `[INVALID]` when the session holds no ID Token, when its `sub` cannot be read, or, as in the login lines, when the `sub` is shorter than 8 characters. The browser then goes to the IdP's `end_session_endpoint`, if it has one. |
 | `Logout for [sub_id: …] (not an SSO session)` | info | A session whose username is not `sso:<role>` was sent to `/cgi-bin/luci-sso/logout` directly and ended. LuCI's **Log out** never sends one there. |
+| `Logout is local only: the configuration could not be loaded, so the IdP session is not ended` | warn | SSO is disabled, or the configuration is rejected (`Configuration rejected: <reason>` comes first). The session was still ended on the router and its cookies expired, but the browser goes to `/`, not to the IdP. Fix the configuration; the user's IdP session stays until it ends there. |
 
 A logout that goes through LuCI's own logout, as it does for a password session, is not logged by `luci-sso`.
 
 ### Connection test
 
-The settings page's **Test connection** runs in a child process of `rpcd`, which logs as `luci-sso[<pid>]` too. Every line it writes starts with `Connection test: `.
+The settings page's **Test connection** runs in a program of its own, `/usr/libexec/luci-sso/connection-test`, which `rpcd` starts and which logs as `luci-sso[<pid>]` too. Every line it writes starts with `Connection test: `.
 
 | Line | Level | Meaning |
 | :--- | :--- | :--- |

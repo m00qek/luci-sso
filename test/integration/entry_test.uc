@@ -4,7 +4,7 @@ import * as session from 'luci_sso.session';
 import * as encoding from 'luci_sso.encoding';
 import * as crypto from 'luci_sso.crypto';
 import * as native from 'luci_sso.native';
-import { with_context, rpcd_logins } from 'context';
+import { with_context, rpcd_logins, UBUS_NO_DATA } from 'context';
 import * as f from 'fixtures.oidc';
 import * as h from 'lib.helpers';
 
@@ -140,16 +140,88 @@ describe('entry: run', () => {
 		});
 	});
 
-	it('refuses a trusted_proxy entry that is not an address, with a 500 and the option named', () => {
-		let uci = { ...ENABLED_UCI, default: { ...ENABLED_UCI.default, trusted_proxy: [ "localhost" ] } };
-		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": uci } }, clock: { data: { now: NOW } } }, (deps) => {
+	it('skips a trusted_proxy entry that is not an address: SSO keeps working, and nobody is exempt', () => {
+		// A bad entry once refused the whole configuration (CONFIG_ERROR on
+		// every request), so the SSO button vanished and Log out answered 500.
+		let uci = { ...ENABLED_UCI, default: { ...ENABLED_UCI.default, trusted_proxy: [ "localhost", "127.0.0.1/255.0.0.0" ] } };
+		with_context({ fs: { data: {} }, uci: { data: { "luci-sso": uci } },
+		               http_client: { data: { "https://idp.com/.well-known/openid-configuration": { status: 503, body: "" } } },
+		               clock: { data: { now: NOW } } }, (deps) => {
 			let logs = [];
 			deps.log = (l, m) => push(logs, [ l, m ]);
-			let wd = web_deps({ PATH_INFO: "/", REMOTE_ADDR: "127.0.0.1" });
-			entry.run(deps, wd);
-			assert.match(truthy(), index(wd.out(), "Status: 500") >= 0);
-			assert.match(1, length(filter(logs, (l) => l[1] == "Configuration rejected: trusted_proxy entries must be IP addresses or CIDR ranges")));
+			let from = (addr) => {
+				let wd = web_deps({ PATH_INFO: "/", REMOTE_ADDR: addr });
+				entry.run(deps, wd);
+				return wd.out();
+			};
+			let first = from("127.0.0.1");
+			assert.match(-1, index(first, "Status: 500"), "the configuration loads");
+			assert.match(truthy(), index(first, "Status: 502") >= 0, "the login starts, and fails only at the IdP");
+			assert.match(0, length(filter(logs, (l) => index(l[1], "Configuration rejected") == 0)));
+			assert.match(1, length(filter(logs, (l) => index(l[1], "Ignoring trusted_proxy entries") == 0)), "one warning per load");
+			for (let i = 0; i < 9; i++) from("127.0.0.1");
+			assert.match(truthy(), index(from("127.0.0.1"), "Status: 429") >= 0, "127.0.0.1 is not exempt");
 		});
+	});
+
+	// Logout must not depend on the configuration: a broken or disabled one
+	// once answered 500 before the router ran, so the session stayed valid
+	// until it timed out.
+	const BROKEN = {
+		"config error": { ...ENABLED_UCI, default: { ...ENABLED_UCI.default, clock_tolerance: "99999" } },
+		"no roles":     { default: ENABLED_UCI.default },
+		"SSO disabled": DISABLED_UCI,
+	};
+	for (let name, uci in BROKEN) {
+		it(`logs out locally when the configuration cannot be loaded (${name})`, () => {
+			let destroyed = [];
+			let wd = web_deps({ PATH_INFO: "/logout", QUERY_STRING: "stoken=csrf-1", HTTP_COOKIE: "sysauth_https=sid-1" });
+			with_context({
+				fs: { data: {} }, uci: { data: { "luci-sso": uci } }, clock: { data: { now: NOW } },
+				ubus: { data: {
+					"session:get": (args) => ({ values: { token: "csrf-1", username: "sso:r1", oidc_id_token: "x.y.z" } }),
+					"session:destroy": (args) => { push(destroyed, args.ubus_rpc_session); return UBUS_NO_DATA; }
+				} }
+			}, (deps) => {
+				let logs = [];
+				deps.log = (l, m) => push(logs, [ l, m ]);
+				entry.run(deps, wd);
+				assert.match(1, length(filter(logs, (l) => l[1] == "Logout is local only: the configuration could not be loaded, so the IdP session is not ended")));
+			});
+			assert.match([ "sid-1" ], destroyed, "the session is destroyed");
+			let out = wd.out();
+			assert.match(truthy(), index(out, "Status: 302") >= 0, out);
+			assert.match(truthy(), match(out, /\nLocation: \/\n/) != null, "local logout: back to /");
+			for (let c in [ "sysauth_https=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0", "sysauth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
+			                "sysauth_https=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0", "sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0" ])
+				assert.match(truthy(), index(out, `Set-Cookie: ${c}`) >= 0, c);
+		});
+	}
+
+	it('still checks the CSRF token when logging out without a configuration', () => {
+		let destroyed = [];
+		let wd = web_deps({ PATH_INFO: "/logout", QUERY_STRING: "stoken=forged", HTTP_COOKIE: "sysauth_https=sid-1" });
+		with_context({
+			fs: { data: {} }, uci: { data: { "luci-sso": DISABLED_UCI } }, clock: { data: { now: NOW } },
+			ubus: { data: {
+				"session:get": (args) => ({ values: { token: "csrf-1", username: "sso:r1" } }),
+				"session:destroy": (args) => { push(destroyed, args.ubus_rpc_session); return UBUS_NO_DATA; }
+			} }
+		}, (deps) => {
+			entry.run(deps, wd);
+		});
+		assert.match([], destroyed);
+		assert.match(truthy(), index(wd.out(), "Status: 403") >= 0);
+	});
+
+	it('still answers 500 for the login and the callback when the configuration cannot be loaded', () => {
+		for (let path in [ "/", "/callback" ]) {
+			let wd = web_deps({ PATH_INFO: path });
+			with_context({ fs: { data: {} }, uci: { data: { "luci-sso": BROKEN["config error"] } }, clock: { data: { now: NOW } } }, (deps) => {
+				entry.run(deps, wd);
+			});
+			assert.match(truthy(), index(wd.out(), "Status: 500") >= 0, path);
+		}
 	});
 
 	it('loads config and routes when SSO is enabled', () => {

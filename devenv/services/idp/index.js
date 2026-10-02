@@ -76,6 +76,81 @@ app.get('/hostile/.well-known/openid-configuration', (req, res) => {
     });
 });
 
+// Two more providers for the connection test's system tests, at
+// ${ISSUER}/slow and ${ISSUER}/trickle. Each declares itself as that issuer,
+// with its JWK Set and token endpoint under the same prefix.
+//
+//   /slow     answers every request after SLOW_MS, well inside the test's
+//             5 s per-request timeout, so a whole test takes about 3 x SLOW_MS
+//   /trickle  answers discovery at once, then sends its JWK Set one byte a
+//             second for TRICKLE_S seconds, never idle long enough to time
+//             out, so the test outlives its 25 s deadline
+//
+// Every POST to their token endpoints is counted: GET /test-hooks/hits reads
+// the counts and POST /test-hooks/reset clears them. A test that was stopped
+// at its deadline must never reach the token endpoint afterwards.
+const SLOW_MS = 3000;
+const TRICKLE_S = 40;
+const hits = { slow_token: 0, trickle_token: 0 };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function discoveryAt(prefix) {
+    return {
+        issuer: `${ISSUER}${prefix}`,
+        authorization_endpoint: `${ISSUER}${prefix}/auth`,
+        token_endpoint: `${ISSUER}${prefix}/token`,
+        jwks_uri: `${ISSUER}${prefix}/jwks`,
+        response_types_supported: ['code'],
+        subject_types_supported: ['public'],
+        id_token_signing_alg_values_supported: ['RS256']
+    };
+}
+
+app.get('/slow/.well-known/openid-configuration', async (req, res) => {
+    await sleep(SLOW_MS);
+    res.json(discoveryAt('/slow'));
+});
+
+app.get('/slow/jwks', async (req, res) => {
+    await sleep(SLOW_MS);
+    res.json({ keys: [jwk] });
+});
+
+app.post('/slow/token', async (req, res) => {
+    hits.slow_token++;
+    log(`Slow token request #${hits.slow_token}`);
+    await sleep(SLOW_MS);
+    res.status(400).json({ error: authenticateClient(req) ? 'invalid_grant' : 'invalid_client' });
+});
+
+app.get('/trickle/.well-known/openid-configuration', (req, res) => {
+    res.json(discoveryAt('/trickle'));
+});
+
+app.get('/trickle/jwks', (req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    let sent = 0;
+    const timer = setInterval(() => {
+        if (++sent < TRICKLE_S) return res.write(' ');
+        clearInterval(timer);
+        res.end(JSON.stringify({ keys: [jwk] }));
+    }, 1000);
+    res.on('close', () => clearInterval(timer));
+});
+
+app.post('/trickle/token', (req, res) => {
+    hits.trickle_token++;
+    log(`Trickle token request #${hits.trickle_token}`);
+    res.status(400).json({ error: authenticateClient(req) ? 'invalid_grant' : 'invalid_client' });
+});
+
+app.get('/test-hooks/hits', (req, res) => res.json(hits));
+
+app.post('/test-hooks/reset', (req, res) => {
+    for (const k of Object.keys(hits)) hits[k] = 0;
+    res.json(hits);
+});
+
 // RP-Initiated Logout 1.0: end the (mock) IdP session and, if the RP sent a
 // post_logout_redirect_uri, send the browser back there.
 app.get('/logout', (req, res) => {

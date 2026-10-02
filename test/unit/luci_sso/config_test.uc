@@ -548,12 +548,34 @@ describe('config: load — validation', () => {
 		assert.match(contains({ ok: false, error: 'CONFIG_ERROR' }), load_sections({ default: { ...OIDC, redirect_uri: 'http://insecure.com/callback' }, r1: { ...ROLE } }));
 	});
 
-	it('rejects a trusted_proxy entry that is not an address or CIDR range, without echoing it', () => {
-		for (let bad in [ 'localhost', '10.0.0.0/33', '::/129', '1.2.3.4:80', '[::1]', '10.0.0.0/255.0.0.0', 'fe80::1%eth0', '' ]) {
-			let res = load_sections({ default: { ...OIDC, trusted_proxy: [ '127.0.0.1', bad ] }, r1: { ...ROLE } });
-			assert.match(contains({ ok: false, error: 'CONFIG_ERROR' }), res, bad);
-			assert.match('trusted_proxy entries must be IP addresses or CIDR ranges', res.details, bad);
+	it('skips a trusted_proxy entry that is not an address or CIDR range, and loads the rest', () => {
+		for (let bad in [ 'localhost', '10.0.0.0/33', '::/129', '1.2.3.4:80', '[::1]', '10.0.0.0/255.0.0.0', 'fe80::1%eth0', '', '192.168.1.1 ' ]) {
+			let logs = [];
+			let res = load_sections({ default: { ...OIDC, trusted_proxy: [ '127.0.0.1', bad ] }, r1: { ...ROLE } }, logs);
+			assert.match(contains({ ok: true }), res, bad);
+			assert.match([ { family: 4, parts: [ 127, 0, 0, 1 ], prefix: 32 } ], res.data.trusted_ranges, bad);
+			assert.match([ '127.0.0.1', bad ], res.data.trusted_proxy, 'the option as written');
+			assert.match([ [ 'warn', 'Ignoring trusted_proxy entries that are not an IP address or CIDR range (position 2 of 2); they exempt no proxy from the per-client rate limits' ] ], logs, bad);
 		}
+	});
+
+	it('logs every skipped trusted_proxy entry in one line, by position, never by value', () => {
+		let logs = [];
+		let res = load_sections({ default: { ...OIDC, trusted_proxy: [ 'proxy.lan', '10.0.0.1', 'secret-looking-value' ] }, r1: { ...ROLE } }, logs);
+		assert.match(contains({ ok: true }), res);
+		assert.match([ { family: 4, parts: [ 10, 0, 0, 1 ], prefix: 32 } ], res.data.trusted_ranges);
+		assert.match([ [ 'warn', 'Ignoring trusted_proxy entries that are not an IP address or CIDR range (position 1, 3 of 3); they exempt no proxy from the per-client rate limits' ] ], logs);
+	});
+
+	it('trusts no proxy when every trusted_proxy entry is skipped', () => {
+		let res = load_sections({ default: { ...OIDC, trusted_proxy: [ '0.0.0.0/0 ', 'any' ] }, r1: { ...ROLE } });
+		assert.match(contains({ ok: true, data: { trusted_ranges: [] } }), res);
+	});
+
+	it('logs nothing about trusted_proxy when every entry is valid', () => {
+		let logs = [];
+		load_sections({ default: { ...OIDC, trusted_proxy: [ '127.0.0.1', '::1/128' ] }, r1: { ...ROLE } }, logs);
+		assert.match([], filter(logs, (l) => index(l[1], 'trusted_proxy') >= 0));
 	});
 
 	it('rejects an insecure internal_issuer_url (W3)', () => {

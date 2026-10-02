@@ -126,6 +126,7 @@ services:
       - ../files/usr/share/ucode/luci/controller/sso.uc:/usr/share/ucode/luci/controller/sso.uc:ro
       - ../files/usr/share/rpcd/acl.d/luci-app-sso.json:/usr/share/rpcd/acl.d/luci-app-sso.json:ro
       - ../files/usr/share/rpcd/ucode/luci-sso.uc:/usr/share/rpcd/ucode/luci-sso.uc:ro
+      - ../files/usr/libexec/luci-sso/connection-test:/usr/libexec/luci-sso/connection-test:ro
       - ../files/etc/uci-defaults:/usr/share/luci-sso/uci-defaults:ro
       - ../files/usr/sbin/luci-sso-repatch:/usr/sbin/luci-sso-repatch:ro
       - ../files/usr/sbin/luci-sso-cleanup:/usr/sbin/luci-sso-cleanup:ro

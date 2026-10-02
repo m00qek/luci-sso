@@ -122,17 +122,21 @@ Request dispatch by path.
 
 ### `handle(deps, config, request)` → `Result<{status, headers, body}>`
 
-Dispatches one request. `config` is the result of `config.load()`, or `null` when SSO is disabled. `request` is the result of `web.request()`.
+Dispatches one request. `config` is the result of `config.load()`, or `null` when it could not be loaded (SSO disabled, or `CONFIG_ERROR`). `request` is the result of `web.request()`.
 
 | Path | Behaviour |
 | :--- | :--- |
 | `/` with `action=enabled` | Returns `{"enabled": true}` or `{"enabled": false}` from `config.is_enabled()`. Not rate-limited; works with a `null` config. |
 | `/` | Reaps stale handshakes, calls `handshake.initiate()` with the `return_to` query parameter, and redirects to the IdP with the `__Host-luci_sso_state` cookie. |
 | `/callback` | Calls `handshake.authenticate()` and redirects to its `return_to`, or to `/cgi-bin/luci/` when that is `null`, with the session cookies. |
-| `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. |
+| `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. With a `null` config the logout is local: no discovery, and the redirect is to `/`. |
 | anything else | `NOT_FOUND` (`404`). |
 
-Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`), through `ratelimit.check()`. When `ratelimit.is_trusted_proxy(request.client, config.trusted_proxy)` is true, it calls `ratelimit.exempt()` instead, which spends nothing; the rest of the request is handled as for any client. With a `null` config, every path except the probe fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way.
+Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`), through `ratelimit.check()`. When `ratelimit.is_trusted_proxy(request.client, config.trusted_ranges)` is true, it calls `ratelimit.exempt()` instead, which spends nothing; the rest of the request is handled as for any client. With a `null` config, every path except the probe and `/logout` fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way. `entry.run()` passes a `null` config for `/logout` whenever `config.load()` fails, so a broken or disabled configuration never keeps an SSO session alive.
+
+### `is_logout(request)` → `bool`
+
+Whether `request` is for `/logout`, with or without a trailing slash: the one path besides the probe that `handle()` serves with a `null` config.
 
 ---
 
@@ -178,11 +182,15 @@ The HTTP status of each failure is listed in the [HTTP API Reference](http-api.m
 
 ## `luci_sso.connection`
 
-The settings page's connection test, run by the `luci-sso` rpcd plugin's `test_connection` method. It calls `discovery.discover()` and `discovery.fetch_jwks()` with `no_cache`, and `oidc.exchange_code()` with a made-up code, so it runs a login's own code and writes nothing on the router. Its log lines start with `Connection test: `. `HTTP_TIMEOUT_MS` (`5000`) is the timeout of each request; `CALLBACK_PATH` is `/cgi-bin/luci-sso/callback`.
+The settings page's connection test, which the `luci-sso` rpcd plugin's `test_connection` method runs in a program of its own, `/usr/libexec/luci-sso/connection-test`, started with fork and exec. It calls `discovery.discover()` and `discovery.fetch_jwks()` with `no_cache`, and `oidc.exchange_code()` with a made-up code, so it runs a login's own code and writes nothing on the router. Its log lines start with `Connection test: `. `HTTP_TIMEOUT_MS` (`5000`) is the timeout of each request; `CALLBACK_PATH` is `/cgi-bin/luci-sso/callback`.
 
 ### `check(deps, params)` → `Result<{checks}>`
 
 Runs every check on `params` (`issuer_url`, `internal_issuer_url`, `client_id`, `client_secret`, `redirect_uri`; anything but a string counts as empty) and returns `checks`, one `{ id, status, message }` per check, in a fixed order. Always succeeds. The checks and their statuses are listed in [Connection test](uci-config.md#connection-test). `client_secret` is never part of a message or a log line.
+
+### `run(deps, input)` → `string`
+
+What `/usr/libexec/luci-sso/connection-test` runs: parses `input`, the JSON text of `params` that the plugin writes to the program's standard input, calls `check()`, and returns the reply as JSON text, which the program writes to its standard output and the plugin passes on from `test_connection_result`: `{ "done": true, "checks": […] }`, or `{ "done": true, "error": "TEST_FAILED", "message" }` when `input` is not a JSON object. `MAX_REPLY` (`32768`) caps the reply's length, so it fits the pipe the plugin reads it from once the program has exited; a longer one becomes `TEST_FAILED` too.
 
 ---
 
@@ -250,7 +258,7 @@ Returns the `keys` array of the JWK Set. Options: `force` (skip the fresh cache)
 
 ### `find_jwk(keys, kid)` → `Result<jwk>`
 
-Returns the key whose `kid` equals `kid`, or the first key when `kid` is empty. Fails with `KEY_NOT_FOUND` or `NO_KEYS_AVAILABLE`.
+Returns the first key whose `kid` equals `kid`, or the first key when `kid` is empty: the key a login verifies an ID token with. Neither `use` nor `alg` is looked at. An entry that is not an object never matches a `kid`; as the first key it is returned as it is, and `jwk_to_pem()` refuses it. Fails with `KEY_NOT_FOUND` or `NO_KEYS_AVAILABLE`. The connection test calls it to find the keys a login can pick.
 
 ---
 
@@ -276,8 +284,8 @@ Reads and validates `/etc/config/luci-sso`. Fails with `SSO_DISABLED`, `UCI_ERRO
 | `scope` | string or null | `luci-sso.default.scope` |
 | `clock_tolerance` | int | `luci-sso.default.clock_tolerance` (0–3600) |
 | `require_email_verified` | bool | `luci-sso.default.require_email_verified`; `false` only for `0`, `no`, `off` or `false`, so `true` when unset |
-| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (`uci_list()`). Each entry must pass `netaddr.parse_cidr()`, or the load fails with `CONFIG_ERROR`. |
-| `trusted_ranges` | array | `trusted_proxy`, each entry parsed by `netaddr.parse_cidr()`, in order: what `ratelimit.is_trusted_proxy()` takes. |
+| `trusted_proxy` | array | `luci-sso.default.trusted_proxy`, as a list (`uci_list()`), as written. |
+| `trusted_ranges` | array | The entries of `trusted_proxy` that `netaddr.parse_cidr()` accepts, parsed, in order: what `ratelimit.is_trusted_proxy()` takes. Every other entry is left out, and one `warn` line per load gives their positions, never their values. |
 | `sub_issuer` | string or null | `luci-sso.default.sub_issuer`; `null` when unset or empty. Not checked: see `sub_rules_apply()`. |
 | `roles` | array | Every `config role` section with an email, group or sub, in config order: `{ name, emails, groups, subs }`, each list from `uci_list()`. A role's `read` or `write` options are not read; when present, a warning names the role's `rpcd` login entry. |
 
@@ -493,11 +501,11 @@ IP address and CIDR range parsing. Pure. An address is `{ family: 4, parts: [4 b
 
 ### `parse(s)` → `address` or `null`
 
-A bare IPv4 or IPv6 address. No whitespace, brackets, port, zone or prefix.
+A bare IPv4 or IPv6 address, as ucode's `iptoarr()` (the C library's `inet_pton()`) reads it, after a check that every byte is a hexadecimal digit, `.` or `:`. No whitespace, brackets, port, zone or prefix, no NUL byte, and no IPv4 part with a leading zero (`010.0.0.1`).
 
 ### `parse_cidr(s)` → `{family, parts, prefix}` or `null`
 
-An address (`prefix` 32 or 128) or `address/prefix`, with `prefix` 0–32 or 0–128. No netmask. An IPv4-mapped IPv6 range of `/96` or longer becomes the IPv4 range.
+An address, as for `parse()` (`prefix` 32 or 128), or `address/prefix`, with `prefix` one to three decimal digits, 0–32 or 0–128. No netmask. An IPv4-mapped IPv6 range of `/96` or longer becomes the IPv4 range.
 
 ### `contains(range, addr)` → `bool`
 
@@ -568,7 +576,7 @@ Generates a PKCE verifier from `len` random bytes (default `43`, range 32–96; 
 
 ### `jwk_to_pem(native, jwk)` → `Result<string>`
 
-Converts an `RSA` or `EC` (`P-256`) JWK to a PEM public key. Fails with `MISSING_KTY`, `UNSUPPORTED_KTY`, `MISSING_RSA_PARAMS`, `INVALID_RSA_PARAMS_ENCODING`, `UNSUPPORTED_CURVE`, `MISSING_EC_PARAMS`, `INVALID_EC_PARAMS_ENCODING` or `PEM_CONVERSION_FAILED`.
+Converts an `RSA` or `EC` (`P-256`) JWK to a PEM public key. Fails with `MISSING_KTY`, `UNSUPPORTED_KTY`, `MISSING_RSA_PARAMS`, `INVALID_RSA_PARAMS_ENCODING`, `UNSUPPORTED_CURVE`, `MISSING_EC_PARAMS`, `INVALID_EC_PARAMS_ENCODING` or `PEM_CONVERSION_FAILED`. The JWK is the IdP's data, so it never throws: a `jwk` that is not an object fails with `MISSING_KTY`, and an `n`, `e`, `x` or `y` that is not a string with the `INVALID_*_PARAMS_ENCODING` code of its type.
 
 ### `jwk_rsa_bits(jwk)` → `int` or `null`
 
@@ -633,7 +641,7 @@ Builds the production `deps` object. Called once by the CGI script; never in tes
 
 ### `create_probe(http_timeout_ms)` → `{ fs, native, http, clock, log }`
 
-The `deps` of the connection test: no `ubus` and no `uci`, and an HTTP client whose requests time out after `http_timeout_ms`. Called by the `luci-sso` rpcd plugin, in the child process that runs the test.
+The `deps` of the connection test: no `ubus` and no `uci`, and an HTTP client whose requests time out after `http_timeout_ms`. Called by `/usr/libexec/luci-sso/connection-test`, the program that runs the test.
 
 ### `ubus_channel(conn)` → `{ call(obj, method, args) → Result }`
 
@@ -641,7 +649,7 @@ Wraps a ubus connection. A `null` reply is a success unless `conn.error()` repor
 
 ### `syslog_channel(log_mod)` → `(level, msg) → void`
 
-Opens syslog with the tag `luci-sso` and returns the `deps.log` function.
+Opens syslog with the tag `luci-sso` and returns the `deps.log` function. Each message is passed to `log.syslog()` as the argument of a constant `%s` format, never as the format: `log.syslog()` runs `sprintf()` on a string format, and messages carry request data.
 
 ---
 

@@ -49,7 +49,7 @@ After a login, the router sends the browser to the LuCI page the login started f
 
 The defence is to accept only what a LuCI page looks like, and to refuse everything else rather than try to repair it:
 
-- **Only LuCI's own pages.** The path must be `/cgi-bin/luci` or start with `/cgi-bin/luci/`. That rules out other sites, other endpoints on the router, `luci-sso`'s own endpoints (no loop back into the login or a logout), and LuCI's logout page, which would end the session just created.
+- **Only LuCI's own pages.** The path must be `/cgi-bin/luci` or start with `/cgi-bin/luci/`. That rules out other sites, other endpoints on the router, `luci-sso`'s own endpoints (no loop back into the login or a logout), and LuCI's logout page or any path under it, which would end the session just created.
 - **An allow-list of characters.** Letters, digits and `/ _ . ~ % ? & = + , -` only. Without `:` no value can carry a scheme (`https:`, `javascript:`); without `\` no browser can read a backslash as a slash; without `@`, `#`, spaces or control characters nothing can reshape the URL or split the `Location` header. An allow-list does not depend on knowing every trick in advance, as a deny-list would.
 - **No `//`, no dot segments.** `//evil.example` is a protocol-relative URL, and `/cgi-bin/luci/../../` climbs out of LuCI. Both are refused, never normalised.
 - **Every decoded form is checked too.** Browsers and servers decode `%2F`, `%5C` and `%2E` in paths, sometimes more than once. The value is decoded until no escape is left, and each form passes the same rules, so `%2F%2F`, `%5C`, `%0D%0A` and their double encodings are refused. A value encoded more than three times, or with a malformed escape, is refused outright.
