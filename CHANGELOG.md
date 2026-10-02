@@ -29,6 +29,7 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 
 - The settings page inserted role values into the role table as HTML: the emails, groups and read and write access shown in each row. Someone who can change the luci-sso configuration or a role's permissions, such as a user given only the `luci-app-sso` access group, could store markup that runs in the browser of an administrator who opens the page. Every value the router or the identity provider supplies is now shown as text.
 - The wolfSSL backend checked the 2048-bit minimum for RSA keys in bytes, so it accepted ID tokens signed with a 2041- to 2047-bit key, which the mbedTLS and OpenSSL backends refuse. It now counts bits, as they do.
+- The IdP's `error` parameter on the callback, and other logged request values such as `return_to`, were passed to `syslog` as a format string. An unauthenticated request holding printf conversions such as `%99999999d` could make the CGI build strings of hundreds of megabytes, and so use large amounts of memory. Every log line is now written as the argument of a constant `%s` format. 0.10.0 has the same problem.
 
 ## [0.10.0] - 2026-09-29
 

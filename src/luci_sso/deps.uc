@@ -60,6 +60,11 @@ export function ubus_channel(conn) {
  * Opens a syslog channel and returns the `deps.log` function, mapping the
  * caller's level string to the corresponding syslog priority.
  *
+ * The message is always the argument of a constant "%s" format, never the
+ * format itself: ucode's log.syslog runs sprintf() on a string format, and
+ * messages carry request data (the IdP's error parameter, return_to), so a
+ * "%999999999d" in them would make sprintf build a string of that width.
+ *
  * @param {module:log} log_mod - The `log` module (or a compatible stand-in).
  * @returns {(level: string, msg: string) => void}
  */
@@ -69,7 +74,7 @@ export function syslog_channel(log_mod) {
 		let priority = (level == "error")   ? log_mod.LOG_ERR     :
 		               (level == "warn")    ? log_mod.LOG_WARNING  :
 		               (level == "debug")   ? log_mod.LOG_DEBUG    : log_mod.LOG_INFO;
-		log_mod.syslog(priority, msg);
+		log_mod.syslog(priority, "%s", msg);
 	};
 };
 
