@@ -80,10 +80,10 @@ The package itself does not. The new firmware contains only the packages it was 
     Reload `rpcd` so it reads the restored entries, then verify the configuration loaded correctly:
 
     ```bash
-    ssh root@192.168.1.1 '/etc/init.d/rpcd reload; uci show luci-sso; ubus call luci-sso list_roles'
+    ssh root@192.168.1.1 '/etc/init.d/rpcd reload; uci show luci-sso; uci show rpcd | grep luci_sso_'
     ```
 
-    `list_roles` should list one entry for each role in `/etc/config/luci-sso`. If a role has none, save its permissions on the settings page, or with `ubus call luci-sso set_role`; see [How to Configure Role-Based Access Control](rbac.md).
+    `rpcd` should have one `luci_sso_<role>` entry for each role in `/etc/config/luci-sso`. If a role has none, save it on the settings page, which gives it one, or create it with `uci`; see [How to Configure Role-Based Access Control](rbac.md#where-to-change-a-role).
 
 **Step 3.** Verify the service is working. On the router:
 

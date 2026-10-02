@@ -206,12 +206,13 @@ The valid range is `0`–`3600` seconds.
 
 The log shows `[500] UBUS_LOGIN_FAILED`. The line before it says why:
 
-- `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`: the role has no permissions in `rpcd`, or its entry was edited by hand into something else. The settings page shows `Not set: edit this role and Save & Apply, or its users cannot log in` in the role's row. Edit the role and save the page, or run `ubus call luci-sso set_role` (see [How to Configure Role-Based Access Control](rbac.md#where-to-change-a-role)). After restoring a backup, restore `/etc/config/rpcd` too.
+- `MISSING_RPCD_LOGIN: role '<role>' has no rpcd login entry 'luci_sso_<role>' with username 'sso:<role>'`: the role has no permissions in `rpcd`, or its entry was edited by hand into something else. The settings page shows `Not set: edit this role and Save & Apply, or its users cannot log in` in the role's row. Click **Edit** in that row, then **Save** in the editor, which gives the role an entry, then **Save & Apply**; or create the entry with `uci` (see [How to Configure Role-Based Access Control](rbac.md#where-to-change-a-role)). After restoring a backup, restore `/etc/config/rpcd` too.
 - `INSECURE_RPCD_LOGIN: rpcd login entry 'luci_sso_<role>' of role '<role>' has a password option; remove it`: someone added a `password` option to the entry. Remove it, or save the role again through the settings page, which removes it:
 
     ```bash
     uci delete rpcd.luci_sso_<role>.password
     uci commit rpcd
+    /etc/init.d/luci-sso reload
     ```
 
 - `UBUS session creation failed`, `Failed to load LuCI ACLs for role '<role>'`, `UBUS session set failed` or `UBUS session grant failed [sid: …] [scope: …]`: `rpcd` refused the session, or part of its rights, so the login was refused. Check that `rpcd` is running (`ps | grep rpcd`; if not, `/etc/init.d/rpcd start`) and that `/usr/share/rpcd/acl.d/` holds the LuCI ACL files.
@@ -237,7 +238,7 @@ The login completes, but pages are missing or refuse access.
 - Check the role's permissions as `rpcd` holds them:
 
     ```bash
-    ubus call luci-sso list_roles
+    uci show rpcd | grep luci_sso_
     ```
 
     A role whose lists hold only `unauthenticated` grants nothing: its users can log in but see nothing. The settings page shows `None: this role grants no access`. An upgrade gives such an entry to a role it found without permissions, and logs `role '<role>' had no permissions to move`; see [How to Upgrade luci-sso](upgrade.md).
@@ -249,13 +250,23 @@ The login completes, but pages are missing or refuse access.
 
 ## LuCI says "Session expired" right after an SSO login
 
-LuCI treats a session that may call neither `session.access` nor `luci.getFeatures` as expired. Both come from the `unauthenticated` access group, which every role's `read` list must grant. The settings page and the ubus object always add it, so this happens only after a hand edit of `/etc/config/rpcd` that dropped it. Save the role again through the settings page, or with `ubus call luci-sso set_role`, which adds it back.
+LuCI treats a session that may call neither `session.access` nor `luci.getFeatures` as expired. Both come from the `unauthenticated` access group, which every role's `read` list must grant. The settings page always adds it, so this happens only after a hand edit of `/etc/config/rpcd` that dropped it. Add it back with `uci add_list rpcd.luci_sso_<role>.read='unauthenticated'`, `uci commit rpcd` and `/etc/init.d/luci-sso reload`, or change the role's **Read access** on the settings page and click **Save & Apply**.
+
+---
+
+## Applied permissions do not reach users already logged in
+
+New logins get a role's entry as committed; open sessions get it when `rpcd` reloads. `/etc/init.d/luci-sso` reloads `rpcd` after every apply of `/etc/config/rpcd`, waiting while a LuCI apply can still be rolled back.
+
+- Check that the init script is enabled and registered with `procd`: `ls /etc/rc.d/ | grep luci-sso` lists `S13luci-sso`, and `ubus call service list '{"name": "luci-sso"}'` shows the service. If not, run `/etc/init.d/luci-sso enable` and `/etc/init.d/luci-sso start`.
+- A `uci commit rpcd` alone is not an apply: run `/etc/init.d/luci-sso reload`.
+- Look for `rpcd did not come back from its reload in time` or `a LuCI apply is still waiting for its confirmation` in the log; see [Log Messages](../../reference/log-messages.md#after-an-apply).
 
 ---
 
 ## SSO users suddenly lose access while still logged in
 
-An `rpcd` reload rebuilds every session's rights from `/etc/config/rpcd`. SSO sessions get their role's current entry, so they keep their rights, or get the new ones if the role was changed. They lose all rights when their role's entry is gone: the role was deleted, or `luci-sso` was removed.
+An `rpcd` reload rebuilds every session's rights from `/etc/config/rpcd`. `luci-sso`'s init script makes one after every apply that changes that file. SSO sessions get their role's current entry, so they keep their rights, or get the new ones if the role was changed. They lose all rights when their role's entry is gone: the role was deleted, or `luci-sso` was removed.
 
 Sessions from before the upgrade that moved role permissions into `rpcd` also lose their rights at that upgrade. See [About the Session Lifecycle](../../explanation/session-lifecycle.md#session-storage).
 

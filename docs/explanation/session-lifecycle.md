@@ -74,7 +74,7 @@ A password session never reaches this endpoint: its **Log out** runs LuCI's own 
 
 UBUS sessions live entirely in `rpcd`'s memory. They are not written to disk and do not survive a reboot or a restart of `rpcd`.
 
-A *reload* of `rpcd` keeps them. On a reload, `rpcd` keeps every session and its values, and rebuilds each session's rights from the login entry in `/etc/config/rpcd` whose user name matches the session's. A password session gets its user's rights back. An SSO session, named `sso:<role>`, gets the rights of its role's entry. Reloads happen more often than one might think: some LuCI packages reload `rpcd` when they are installed, and `luci-sso` reloads it itself whenever a role's permissions are saved, so a permission change reaches the role's open sessions within a second or so.
+A *reload* of `rpcd` keeps them. On a reload, `rpcd` keeps every session and its values, and rebuilds each session's rights from the login entry in `/etc/config/rpcd` whose user name matches the session's. A password session gets its user's rights back. An SSO session, named `sso:<role>`, gets the rights of its role's entry. Reloads happen more often than one might think: some LuCI packages reload `rpcd` when they are installed, and `luci-sso`'s init script reloads it after every apply that changes `/etc/config/rpcd`, so a permission change reaches the role's open sessions a few seconds after it is applied. While LuCI's apply can still be rolled back, the reload waits until it is confirmed or rolled back.
 
 The rebuild has two consequences worth knowing. A session keeps the role it was given at login: changing a role's emails, groups or subjects moves nobody until they log in again. And a session whose entry is gone, because its role was deleted or the package removed, comes back with no rights at all.
 
@@ -95,5 +95,5 @@ Multiple simultaneous sessions are allowed. Each login creates a new independent
 | Logout scope | Destroys the router session; for SSO sessions, also ends the IdP session if the IdP supports RP-Initiated Logout |
 | Persistence across reboots | No — UBUS sessions are in-memory |
 | Persistence across a `luci-sso` upgrade | Yes — the upgrade reloads `rpcd`, which keeps sessions (except the upgrade from 0.9.1 or earlier: on OpenWrt 24.10 the old package's removal script restarts `rpcd` and logs everyone out; on 25.12 SSO sessions from before it lose their rights) |
-| Effect of an `rpcd` reload (e.g. installing a LuCI app, saving a role) | Every session stays; its rights are rebuilt from its `rpcd` login entry |
+| Effect of an `rpcd` reload (e.g. installing a LuCI app, applying a role's permissions) | Every session stays; its rights are rebuilt from its `rpcd` login entry |
 | Effect of removing `luci-sso` | SSO sessions stay open with no rights; password sessions lose only the SSO settings ACL |

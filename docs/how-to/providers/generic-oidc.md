@@ -148,7 +148,7 @@ If your IdP returns a `groups` claim (requires the `groups` scope and IdP-side g
     uci commit luci-sso
     ```
 
-The role name (`admin` above) must match a `config role` section in `/etc/config/luci-sso`. The default installation creates an `admin` role whose `rpcd` login entry grants full read and write access; check it with `ubus call luci-sso list_roles`. A user who matches several roles gets the first one. For other roles and their permissions, see [How to Configure Role-Based Access Control](../sysadmin/rbac.md).
+The role name (`admin` above) must match a `config role` section in `/etc/config/luci-sso`. The default installation creates an `admin` role whose `rpcd` login entry grants full read and write access; check it with `uci show rpcd.luci_sso_admin`. A user who matches several roles gets the first one. For other roles and their permissions, see [How to Configure Role-Based Access Control](../sysadmin/rbac.md).
 
 ---
 
@@ -179,7 +179,7 @@ Common errors and their meaning are listed in the [Log Messages Reference](../..
 - **`[401] ID_TOKEN_VERIFICATION_FAILED`** — The `OAuth flow failed` line before it names the failed check. `UNSUPPORTED_ALGORITHM` means the IdP signs tokens with HS256 or another algorithm: configure the client to use RS256 or ES256. `AT_HASH_MISMATCH` means the ID Token's `at_hash` does not match the access token the IdP returned.
 - **`[403] USER_NOT_AUTHORIZED` after `User [sub_id: …] matched no roles`** — Authentication succeeded but no UCI role matched the user's `sub`, email or groups. Email matching ignores case; group and `sub` matching do not. Add the user's email with `uci add_list luci-sso.admin.email='...'`, or the `sub` the error page shows with `uci add_list luci-sso.admin.sub='...'`.
 - **`[403] USER_NOT_AUTHORIZED` after `Ignoring the unverified email of user [sub_id: …] for role matching`** — The IdP sent the email without `email_verified: true`, so it did not count. See [Map by email](#map-by-email).
-- **`[500] UBUS_LOGIN_FAILED` after a `MISSING_RPCD_LOGIN` line** — The matched role has no `rpcd` login entry, so it has no permissions. Save the role's permissions on the settings page, or with `ubus call luci-sso set_role`; see [How to Configure Role-Based Access Control](../sysadmin/rbac.md).
+- **`[500] UBUS_LOGIN_FAILED` after a `MISSING_RPCD_LOGIN` line** — The matched role has no `rpcd` login entry, so it has no permissions. Save the role on the settings page, which gives it one, or create it with `uci`; see [How to Configure Role-Based Access Control](../sysadmin/rbac.md).
 - **`[502] OIDC_DISCOVERY_FAILED` after `Discovery fetch failed for [id: …]: …`** — The router cannot reach the IdP. The end of the line names the cause, such as `HTTP_REQUEST_FAILED (CERT_UNTRUSTED)`. Check DNS resolution and firewall rules from the router (not just from your laptop).
 - **`[502] OIDC_DISCOVERY_FAILED` after a `DISCOVERY_MISSING_ENDPOINT` or `INSECURE_ENDPOINT` line** — The discovery document lacks `authorization_endpoint`, `token_endpoint` or `jwks_uri`, or one of them is not HTTPS. The line names the field.
 - **`[500] CONFIG_ERROR` after `Configuration rejected: <reason>`** — A required option is missing or invalid; the reason names it. `redirect_uri is mandatory and must use HTTPS` means `redirect_uri` was never saved. Set it with `uci set luci-sso.default.redirect_uri='https://<YOUR_ROUTER_IP_OR_DOMAIN>/cgi-bin/luci-sso/callback'` and `uci commit luci-sso`.

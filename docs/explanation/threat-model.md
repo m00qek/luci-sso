@@ -109,7 +109,13 @@ Two risks shaped this.
 
 **Drift from rpcd.** If `luci-sso`'s expansion ever differed from `rpcd`'s, SSO sessions could quietly get more or less than intended. And `rpcd` rebuilds every session from its login entry when it reloads, so any difference would also change a session's rights at the next reload. A system test compares an SSO session with a real `rpcd` password login for several role shapes in CI, on each supported OpenWrt release, and fails on any difference. Another checks that an SSO session keeps exactly its rights across a reload.
 
-**Borrowing another login's rights.** `rpcd` matches a session to a login entry by user name alone. An SSO session is therefore named `sso:<role>`, a name no password login uses, and its entry is written only through the `luci-sso` ubus object, which touches `luci_sso_*` sections only. A role named `root` gets a session named `sso:root`, which never receives `root`'s rights. The entries never carry a password, so they cannot be used to log in; an entry that has one is refused at login with `INSECURE_RPCD_LOGIN`. [About Roles and Permissions](roles-and-permissions.md) describes the design.
+**Borrowing another login's rights.** `rpcd` matches a session to a login entry by user name alone. An SSO session is therefore named `sso:<role>`, a name no password login uses, and its entry is the `luci_sso_<role>` section of `/etc/config/rpcd`; the settings page stages changes to those sections only. A role named `root` gets a session named `sso:root`, which never receives `root`'s rights. The entries never carry a password, so they cannot be used to log in; an entry that has one is refused at login with `INSECURE_RPCD_LOGIN`. [About Roles and Permissions](roles-and-permissions.md) describes the design.
+
+### Who may change roles
+
+The `luci-app-sso` access group opens the settings page. Write access to it is **root-equivalent**, and has been in every release. Whoever may change the roles may add their own email, group or `sub` to a role and give it `*` in both lists, then sign in with SSO as a full administrator. Since 0.11 the group also has UCI read and write on `/etc/config/rpcd`, where the roles' permissions live, so its holder can stage changes to any `rpcd` login, `root`'s included. That adds no power the group did not already give.
+
+So grant write access to `luci-app-sso` only to people you would give the `root` password. Read access is sensitive too: it shows the client secret in `/etc/config/luci-sso`, and every login entry in `/etc/config/rpcd`, with any password hash written there. The stock `root` entry holds only `$p$root`, a reference to `/etc/shadow`.
 
 ---
 

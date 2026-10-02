@@ -69,11 +69,11 @@ A role says who may log in (by email, group or subject) and which LuCI access gr
 To add a role:
 
 1.  Type a name in the box next to **Add**, and click **Add**. A name has letters, digits and underscores only, at most 32 of them, and cannot be `default` or an existing role's; the box says what is wrong while you type, and **Add** stays disabled until the name is valid.
-2.  In the role editor, add entries to **Emails**, **Groups** or **Subjects**. A role with none is ignored.
+2.  In the role editor, add entries to **Emails**, **Groups** or **Subjects**. A role with none is ignored. With subjects, keep **Subject issuer** as it is: it holds the **Issuer URL**, and the subjects count only while the two are the same.
 3.  Add access groups to **Read access** and **Write access**. Each list offers the access groups installed on the router, and takes any name or pattern you type, such as `luci-mod-status-*`. For a full administrator, pick `*` in both. For a role that may save settings, include `luci-base` in **Write access**. Leave `unauthenticated` out: it is always included.
-4.  Click **Save** to close the editor. As the note in the editor says, your changes stay on the page until you click **Save & Apply**.
+4.  Click **Save** to close the editor. This stages the change, in `/etc/config/luci-sso` and the role's entry in `/etc/config/rpcd`; it takes effect with **Save & Apply**.
 
-![The role editor for a role named viewer, titled "Role: viewer". Emails holds bob@example.com, Groups holds network-viewers, and Subjects is empty, each with a short explanation; the Subjects note says the sub claim is compared exactly and links to matching by subject. Below them, the note "Changes here are kept on the page until you Save & Apply it." Read access holds luci-base, luci-mod-status-* and luci-mod-network-*, with a drop-down to choose or type another group; Write access is empty, with the same drop-down. The editor has Dismiss and Save buttons.](../../assets/screenshots/luci-sso-role-editor.png "The role editor, opened with Edit on the viewer row")
+![The role editor for a role named viewer, titled "Role: viewer". Emails holds bob@example.com, Groups holds network-viewers, and Subjects is empty, each with a short explanation; the Subjects note says the sub claim is compared exactly and links to matching by subject. Below them, Subject issuer holds https://auth.example.com, with a note that the subjects count only while it is exactly the Issuer URL. Read access holds luci-base, luci-mod-status-* and luci-mod-network-*, with a drop-down to choose or type another group; Write access is empty, with the same drop-down. The editor has Dismiss and Save buttons.](../../assets/screenshots/luci-sso-role-editor.png "The role editor, opened with Edit on the viewer row")
 
 To change a role, click **Edit** in its row. To remove one, click **Delete**; a user who matched only that role gets `USER_NOT_AUTHORIZED` at their next login.
 
@@ -82,7 +82,9 @@ To change the order, drag a row by its handle. Put the most privileged or most s
 The table shows `*` in **Read access** as **Everything**, `*` in **Write access** as **Full admin**, and an empty list as a dash. Check the **Read access** column for warnings:
 
 - `None: this role grants no access`: the role's users can log in but see nothing.
-- `Not set: edit this role and Save & Apply, or its users cannot log in`: the role has no permissions in `rpcd`. Click **Edit**, then **Save** in the editor, then **Save & Apply**.
+- `Not set: edit this role and Save & Apply, or its users cannot log in`: the role has no permissions in `rpcd`. Click **Edit**, then **Save** in the editor, which gives it an entry, then **Save & Apply**.
+
+If you change **Issuer URL**, roles with subjects made for the old provider stop matching by subject. The page names each one under **Issuer URL** and above the table, and its **Subjects** cell says `(ignored: another provider)`. Click **Use with this provider** next to a role only if the new Issuer URL is the same provider under a new address; see [After you change the identity provider](rbac.md#after-you-change-the-identity-provider).
 
 For which access groups to grant, see [How to Configure Role-Based Access Control](rbac.md).
 
@@ -90,16 +92,11 @@ For which access groups to grant, see [How to Configure Role-Based Access Contro
 
 ## 6. Save and apply
 
-Click **Save & Apply**.
-
-1.  LuCI applies the settings, the matching rules and the order of the roles, as for any page, and confirms that the router is still reachable.
-2.  Only once LuCI has confirmed the apply, the page writes **Read access** and **Write access** to `rpcd`. It shows "Saving role permissions; rpcd is reloading to apply them…", then "Role permissions saved and in force.", and reloads. Users already logged in with that role get the new rights at once.
-
-If the apply is rolled back, no permissions are written: your permission changes stay on the page, to apply again. If `rpcd` refuses a role's permissions, the page shows the error, with the settings already applied; fix the role and click **Save & Apply** again.
+Click **Save & Apply**, at the bottom of the page or in the dialog that LuCI's header opens from **Unsaved Changes**. LuCI applies every staged change, the settings, the roles and their permissions, as for any page, and confirms that the router is still reachable; if it is not, LuCI rolls the whole change back. Once the apply is confirmed, `rpcd` reloads, and users already logged in with a changed role get its new rights.
 
 Everything but permissions applies from the next login. There is no service to restart: `luci-sso` reads the configuration on every request.
 
-**Save** alone applies nothing. It keeps the settings and roles in LuCI's unsaved changes and the permission changes on the page, until **Save & Apply**. Permission changes live only in the open page: reload or leave it, and they are gone, while the other unsaved changes stay. To discard unsaved changes, click **Reset**.
+**Save** alone applies nothing: it stages the changes, which LuCI's header counts under **Unsaved Changes**. To discard staged changes, click **Revert** in that dialog. **Reset** at the bottom of the page discards only edits not saved yet.
 
 ---
 
