@@ -261,6 +261,70 @@ describe('handshake: authenticate — OAuth flow failures', () => {
 	});
 });
 
+// ─── authenticate: a malformed key in the JWK Set ───────────────────────────────
+
+// A key the IdP publishes is its data: when the one a login picks is
+// malformed, the login fails cleanly. It used to throw a CONTRACT_VIOLATION
+// from b64url_decode or jwk_to_pem, answered with a 500 after the handshake
+// was consumed.
+describe('handshake: authenticate — a malformed key in the JWK Set', () => {
+	// Signs a real ID token for a fresh handshake (with `kid` in its header,
+	// or none) and runs the callback against a JWK Set of `keys`.
+	function login_with(keys, kid, config) {
+		let out = null;
+		let tokens = { access_token: "at-malformed-key", id_token: null };
+		with_context({
+			fs: { data: {} },
+			http_client: {
+				behavior: {
+					get: (url, opts) => {
+						if (url == DISCOVERY_URL)
+							return { ok: true, data: { status: 200, body: sprintf("%J", f.MOCK_DISCOVERY) } };
+						if (url == f.MOCK_DISCOVERY.jwks_uri)
+							return { ok: true, data: { status: 200, body: sprintf("%J", { keys }) } };
+						return { ok: false, error: "HTTP_REQUEST_FAILED", details: "NOT_FOUND" };
+					},
+					post: (url, opts) => ({ ok: true, data: { status: 200, body: sprintf("%J", tokens) } })
+				}
+			},
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			let hs = session.create_state(deps, 0).data;
+			tokens.id_token = h.generate_id_token({ ...f.MOCK_CLAIMS, nonce: hs.nonce }, f.MOCK_PRIVKEY, "RS256", kid);
+			let request = { query: { code: "c1", state: hs.state }, cookies: { "__Host-luci_sso_state": hs.token } };
+			out = handshake.authenticate(deps, config || base_config(), request);
+		});
+		return out;
+	}
+
+	it('refuses the login with ID_TOKEN_VERIFICATION_FAILED (401) when the picked key\'s n or e is not a string', () => {
+		for (let bad in [ { n: 12345 }, { e: 65537 }, { n: [ "x" ] }, { e: { v: "AQAB" } } ]) {
+			let key = { ...f.MOCK_JWK, kid: "bad", ...bad };
+			let res = login_with([ f.MOCK_JWK, key ], "bad");
+			assert.match(contains({ ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", details: { details: "INVALID_RSA_PARAMS_ENCODING", http_status: 401 } }), res, sprintf("%J", bad));
+		}
+	});
+
+	it('refuses the login when the picked EC key\'s x or y is not a string', () => {
+		let key = { kty: "EC", crv: "P-256", kid: "ec-bad", x: 5, y: "AA" };
+		let res = login_with([ f.MOCK_JWK, key ], "ec-bad");
+		assert.match(contains({ ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", details: { details: "INVALID_EC_PARAMS_ENCODING", http_status: 401 } }), res);
+	});
+
+	it('refuses a token without a kid when the first entry of the set is not a key', () => {
+		for (let first in [ "not a key", 42, null, [ f.MOCK_JWK ] ]) {
+			let res = login_with([ first, f.MOCK_JWK ], null);
+			assert.match(contains({ ok: false, error: "ID_TOKEN_VERIFICATION_FAILED", details: { details: "MISSING_KTY", http_status: 401 } }), res, sprintf("%J", first));
+		}
+	});
+
+	it('verifies with the key the token names, whatever malformed keys sit next to it', () => {
+		// No role matches, so the login stops right after the ID token verified.
+		let res = login_with([ { kty: "RSA", kid: "odd", n: 12345, e: "AQAB" }, "junk", f.MOCK_JWK ], f.MOCK_JWK.kid, base_config({ roles: [] }));
+		assert.match(contains({ ok: false, error: "USER_NOT_AUTHORIZED" }), res);
+	});
+});
+
 // ─── authenticate: recovery (JWKS rotation) ────────────────────────────────────
 
 describe('handshake: recovery', () => {

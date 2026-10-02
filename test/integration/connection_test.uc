@@ -1,4 +1,4 @@
-import { describe, it, assert, contains, spy } from 'utest';
+import { describe, it, assert, contains, spy, regex } from 'utest';
 import * as connection from 'luci_sso.connection';
 import * as crypto from 'luci_sso.crypto';
 import * as encoding from 'luci_sso.encoding';
@@ -112,7 +112,7 @@ describe('connection: check — a working provider', () => {
 		assert.match([ "issuer_https", "discovery", "issuer_match", "endpoints", "jwks", "redirect_uri", "client_credentials" ], r.order);
 		assert.match(ALL_PASS, status_of(r));
 		assert.match(contains({ message: `Fetched the discovery document from ${DISC}.` }), r.checks.discovery);
-		assert.match(contains({ message: "The JWK Set has 1 key(s); 1 can verify ID tokens (RS256, or ES256 on P-256)." }), r.checks.jwks);
+		assert.match(contains({ message: "The JWK Set has 1 key(s); every key a login would pick can verify ID tokens (RS256, or ES256 on P-256). Keys: 'test-key-1': can verify ID tokens." }), r.checks.jwks);
 	});
 
 	it('probes the token endpoint as a login does: client_secret_post, a made-up code and a fresh PKCE verifier', () => {
@@ -297,26 +297,94 @@ describe('connection: check — signing keys', () => {
 		assert.match(contains({ status: "fail" }), run(null, idp({ [JWKS]: { status: 200, body: { nokeys: true } } })).checks.jwks);
 	});
 
-	it('fails a JWK Set with no key luci-sso can verify ID tokens with', () => {
-		let unusable = [
+	const GENERAL = "No key a login would pick can verify ID tokens: luci-sso needs an RSA key of at least 2048 bits with the exponent 65537, or an EC key on P-256.";
+	const jwks = (keys) => run(null, idp({ [JWKS]: { status: 200, body: { keys } } })).checks.jwks;
+
+	it('fails a JWK Set with no key a login would pick that can verify ID tokens, and describes each key', () => {
+		let r = jwks([
 			{ kty: "oct", k: "c2VjcmV0" },
-			{ ...f.MOCK_JWK, use: "enc" },
 			{ ...f.MOCK_JWK, alg: "RS512" },
-			{ ...f.MOCK_JWK, alg: "ES256" },
-			{ kty: "EC", crv: "P-384", x: "AA", y: "AA" },
+			{ ...f.MOCK_JWK, kid: "k3", alg: "ES256" },
+			P384_JWK,
 			{ kty: "RSA", n: "!!", e: "AQAB" },
 			"not a key",
-		];
-		let r = run(null, idp({ [JWKS]: { status: 200, body: { keys: unusable } } }));
-		assert.match({ status: "fail", message: "The JWK Set has 7 key(s), but none luci-sso can verify ID tokens with: it needs an RS256 (RSA) or ES256 (EC P-256) signing key." }, r.checks.jwks);
-
-		let empty = run(null, idp({ [JWKS]: { status: 200, body: { keys: [] } } }));
-		assert.match("fail", empty.checks.jwks.status);
+		]);
+		assert.match({ status: "fail", message: GENERAL + " Keys: " +
+			"#1: neither an RSA key nor an EC key on P-256; " +
+			"'test-key-1': a key for \"RS512\", an algorithm luci-sso does not accept for it; " +
+			"'k3': a key for \"ES256\", an algorithm luci-sso does not accept for it; " +
+			"'p384': neither an RSA key nor an EC key on P-256; " +
+			"#5: malformed: it cannot be read as an RSA or EC public key; a login never picks it; " +
+			"#6: not a JSON object; a login never picks it." }, r);
 	});
 
-	it('passes when at least one key is usable, and counts them', () => {
-		let r = run(null, idp({ [JWKS]: { status: 200, body: { keys: [ { kty: "oct", k: "c2VjcmV0" }, { ...f.MOCK_JWK, alg: "RS256", use: "sig" } ] } } }));
-		assert.match({ status: "pass", message: "The JWK Set has 2 key(s); 1 can verify ID tokens (RS256, or ES256 on P-256)." }, r.checks.jwks);
+	it('fails an empty JWK Set', () => {
+		assert.match({ status: "fail", message: "The JWK Set has no keys." }, jwks([]));
+	});
+
+	it('passes when every key a login would pick can verify ID tokens', () => {
+		assert.match({ status: "pass", message: "The JWK Set has 1 key(s); every key a login would pick can verify ID tokens (RS256, or ES256 on P-256). Keys: 'test-key-1': can verify ID tokens." },
+			jwks([ f.MOCK_JWK ]));
+		assert.match({ status: "pass", message: "The JWK Set has 2 key(s); every key a login would pick can verify ID tokens (RS256, or ES256 on P-256). Keys: 'test-key-1': can verify ID tokens; 'rot': can verify ID tokens." },
+			jwks([ { ...f.MOCK_JWK, alg: "RS256", use: "sig" }, { ...f.MOCK_JWK, kid: "rot" } ]));
+	});
+
+	it('warns when the first key cannot verify: an ID token without a kid would fail', () => {
+		assert.match({ status: "warn", message: "An ID token without a kid would fail: a login checks it with the first key, 'weak-1024', which is an RSA key of 1024 bits, under 2048. " +
+			"Tokens a login checks with 'test-key-1' verify. Keys: 'weak-1024': an RSA key of 1024 bits, under 2048; 'test-key-1': can verify ID tokens." },
+			jwks([ WEAK_1024_JWK, f.MOCK_JWK ]));
+		assert.match(contains({ status: "warn" }), jwks([ { kty: "oct", k: "c2VjcmV0" }, f.MOCK_JWK ]), "a symmetric key first");
+		assert.match(contains({ status: "warn" }), jwks([ "not a key", f.MOCK_JWK ]), "an entry that is not a key first");
+	});
+
+	it('warns when a signing key a login picks by its kid cannot verify', () => {
+		assert.match({ status: "warn", message: "An ID token naming 'e3' would fail. Tokens a login checks with 'test-key-1' verify. " +
+			"Keys: 'test-key-1': can verify ID tokens; 'e3': an RSA key whose public exponent is not 65537 (AQAB)." },
+			jwks([ f.MOCK_JWK, E3_JWK ]));
+	});
+
+	it('judges a key whatever its use, as a login does: a single encryption-marked key a login verifies with passes', () => {
+		assert.match(contains({ status: "pass", message: regex(/'test-key-1': can verify ID tokens; not for signing \(use "enc"\)\.$/) }),
+			jwks([ { ...f.MOCK_JWK, use: "enc" } ]));
+	});
+
+	it('never fails or warns over an encryption key a login picks only by its kid', () => {
+		let r = jwks([ f.MOCK_JWK, { ...P384_JWK, use: "enc" } ]);
+		assert.match(contains({ status: "pass", message: regex(/'p384': neither an RSA key nor an EC key on P-256; not for signing \(use "enc"\)\.$/) }), r);
+	});
+
+	it('warns when the first key is an encryption key it cannot verify with: a token without a kid is checked with it', () => {
+		assert.match(contains({ status: "warn", message: regex(/^An ID token without a kid would fail: a login checks it with the first key, 'p384'/) }),
+			jwks([ { ...P384_JWK, use: "enc" }, f.MOCK_JWK ]));
+	});
+
+	it('says which keys a login never picks, and does not judge the set by them', () => {
+		assert.match(contains({ status: "pass", message: regex(/#2: an RSA key of 1024 bits, under 2048; a login never picks it\.$/) }),
+			jwks([ f.MOCK_JWK, { kty: "RSA", n: WEAK_1024_JWK.n, e: "AQAB" } ]), "no kid, and not the first");
+		assert.match(contains({ status: "pass", message: regex(/'test-key-1': an RSA key of 1024 bits, under 2048; a login never picks it\.$/) }),
+			jwks([ f.MOCK_JWK, { ...WEAK_1024_JWK, kid: f.MOCK_JWK.kid } ]), "the same kid as an earlier key");
+	});
+
+	it('describes a malformed key, without a crash: n, e, x or y that is not a string', () => {
+		for (let bad in [ { kty: "RSA", kid: "odd", n: 12345, e: "AQAB" }, { kty: "RSA", kid: "odd", n: f.MOCK_JWK.n, e: 65537 },
+		                  { kty: "EC", crv: "P-256", kid: "odd", x: 5, y: "AA" }, { kty: "EC", crv: "P-256", kid: "odd", x: "AA", y: [ 1 ] } ]) {
+			assert.match({ status: "warn", message: "An ID token naming 'odd' would fail. Tokens a login checks with 'test-key-1' verify. " +
+				"Keys: 'test-key-1': can verify ID tokens; 'odd': malformed: it cannot be read as an RSA or EC public key." }, jwks([ f.MOCK_JWK, bad ]), sprintf("%J", bad));
+			assert.match(contains({ status: "fail", message: regex(/^No key a login would pick/) }), jwks([ bad ]), sprintf("%J", bad));
+		}
+	});
+
+	it('describes at most ten keys one by one', () => {
+		let keys = [ f.MOCK_JWK ];
+		for (let i = 0; i < 14; i++) push(keys, { ...f.MOCK_JWK, kid: `k${i}` });
+		let m = jwks(keys).message;
+		assert.match(true, index(m, "'k8': can verify ID tokens; and 5 more.") > 0, m);
+		assert.match(-1, index(m, "'k9'"));
+	});
+
+	it('shows a kid made safe for the page and the log', () => {
+		let m = jwks([ { ...f.MOCK_JWK, kid: "<img src=x>\n" } ]).message;
+		assert.match(true, index(m, "'?img src=x??': can verify ID tokens") > 0, m);
 	});
 });
 
@@ -329,27 +397,25 @@ describe('connection: check — signing keys, judged as a login judges them', ()
 	const jwks = (keys) => run(null, idp({ [JWKS]: { status: 200, body: { keys } } })).checks.jwks;
 
 	it('fails an RSA key under 2048 bits, and says how long it is', () => {
-		assert.match({ status: "fail", message: "The provider's RSA key is 1024 bits; luci-sso requires at least 2048." }, jwks([ WEAK_1024_JWK ]));
-		assert.match({ status: "fail", message: "The provider's RSA key is 2047 bits; luci-sso requires at least 2048." }, jwks([ { kty: "RSA", n: N_2047, e: "AQAB" } ]));
-		assert.match({ status: "fail", message: "The provider's RSA keys are 1024, 2047 bits; luci-sso requires at least 2048." },
-			jwks([ WEAK_1024_JWK, { kty: "RSA", n: N_2047, e: "AQAB" }, { ...WEAK_1024_JWK, kid: "again" } ]));
+		assert.match({ status: "fail", message: "The provider's RSA key is 1024 bits; luci-sso requires at least 2048. Keys: 'weak-1024': an RSA key of 1024 bits, under 2048." }, jwks([ WEAK_1024_JWK ]));
+		assert.match({ status: "fail", message: "The provider's RSA key is 2047 bits; luci-sso requires at least 2048. Keys: #1: an RSA key of 2047 bits, under 2048." }, jwks([ { kty: "RSA", n: N_2047, e: "AQAB" } ]));
+		assert.match(contains({ status: "fail", message: regex(/^The provider's RSA keys are 1024, 2047 bits; luci-sso requires at least 2048\. Keys: /) }),
+			jwks([ WEAK_1024_JWK, { kty: "RSA", kid: "k2047", n: N_2047, e: "AQAB" }, { ...WEAK_1024_JWK, kid: "again" } ]));
 	});
 
-	it('passes a 2048-bit RSA key, and says when it sits next to a shorter one', () => {
-		assert.match({ status: "pass", message: "The JWK Set has 1 key(s); 1 can verify ID tokens (RS256, or ES256 on P-256)." }, jwks([ f.MOCK_JWK ]));
-		assert.match({ status: "pass", message: "The JWK Set has 2 key(s); 1 can verify ID tokens (RS256, or ES256 on P-256); 1 cannot, being RSA keys under 2048 bits." },
-			jwks([ WEAK_1024_JWK, f.MOCK_JWK ]));
+	it('passes a 2048-bit RSA key, and warns when a shorter one comes first', () => {
+		assert.match(contains({ status: "pass" }), jwks([ f.MOCK_JWK ]));
+		assert.match(contains({ status: "warn" }), jwks([ WEAK_1024_JWK, f.MOCK_JWK ]));
 	});
 
 	it('fails an RSA key whose public exponent is not 65537, even 65537 with a leading zero byte', () => {
 		for (let k in [ E3_JWK, { ...f.MOCK_JWK, e: "AAEAAQ" }, { ...f.MOCK_JWK, e: "Aw" } ])
-			assert.match({ status: "fail", message: "The provider's RSA key has a public exponent other than 65537 (AQAB), the only one luci-sso accepts." }, jwks([ k ]), k.e);
+			assert.match(contains({ status: "fail", message: regex(/^The provider's RSA key has a public exponent other than 65537 \(AQAB\), the only one luci-sso accepts\. Keys: /) }), jwks([ k ]), k.e);
 	});
 
 	it('fails an EC key on another curve, labelled as it is or as P-256', () => {
-		let general = "The JWK Set has 1 key(s), but none luci-sso can verify ID tokens with: it needs an RS256 (RSA) or ES256 (EC P-256) signing key.";
-		assert.match({ status: "fail", message: general }, jwks([ P384_JWK ]));
-		assert.match({ status: "fail", message: general }, jwks([ { ...P384_JWK, crv: "P-256" } ]));
+		assert.match(contains({ status: "fail", message: regex(/^No key a login would pick can verify ID tokens/) }), jwks([ P384_JWK ]));
+		assert.match(contains({ status: "fail", message: regex(/^No key a login would pick can verify ID tokens/) }), jwks([ { ...P384_JWK, crv: "P-256" } ]));
 	});
 
 	it('agrees with the real native module, key by key: the test passes exactly the keys a login verifies with', () => {

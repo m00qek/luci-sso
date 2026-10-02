@@ -4,9 +4,14 @@ import { b64url_decode } from 'luci_sso.encoding';
 import * as Result from 'luci_sso.result';
 import { INVALID_EC_PARAMS_ENCODING, INVALID_RSA_PARAMS_ENCODING, MISSING_EC_PARAMS, MISSING_KTY, MISSING_RSA_PARAMS, PEM_CONVERSION_FAILED, UNSUPPORTED_CURVE, UNSUPPORTED_KTY } from 'luci_sso.errors';
 
+// A key's members come from the IdP's JWK Set, so a member that is present
+// but not a string is a malformed key, never a contract violation.
 function rsa_to_pem(native, jwk) {
 	if (!jwk.n || !jwk.e)
 		return Result.err(MISSING_RSA_PARAMS);
+
+	if (type(jwk.n) != "string" || type(jwk.e) != "string")
+		return Result.err(INVALID_RSA_PARAMS_ENCODING);
 
 	let n_res = b64url_decode(jwk.n);
 	let e_res = b64url_decode(jwk.e);
@@ -28,6 +33,9 @@ function ec_to_pem(native, jwk) {
 
 	if (!jwk.x || !jwk.y)
 		return Result.err(MISSING_EC_PARAMS);
+
+	if (type(jwk.x) != "string" || type(jwk.y) != "string")
+		return Result.err(INVALID_EC_PARAMS_ENCODING);
 
 	let x_res = b64url_decode(jwk.x);
 	let y_res = b64url_decode(jwk.y);
@@ -104,16 +112,18 @@ export function rsa_exponent_supported(jwk) {
  * Converts a JWK object to a PEM string.
  * Supports RSA and EC (P-256) keys. Symmetric (`oct`) keys are refused with
  * UNSUPPORTED_KTY: ID tokens are verified with RS256 or ES256 only.
- * 
+ *
+ * The key is the IdP's data, so every way it can be malformed is a failed
+ * Result, never an exception: an entry of the JWK Set that is not an object
+ * has no kty (MISSING_KTY), and a key member that is not a string is not
+ * base64url (INVALID_RSA_PARAMS_ENCODING, INVALID_EC_PARAMS_ENCODING).
+ *
  * @param {module:luci_sso.native} native Compiled crypto extension; `native.jwk_rsa_to_pem()` or `native.jwk_ec_p256_to_pem()` performs the conversion.
  * @param {*} jwk JWK object; must have `kty` (`"RSA"` or `"EC"`) plus the corresponding key fields.
  * @returns {Result}
  */
 export function to_pem(native, jwk) {
-	if (!jwk || type(jwk) != "object")
-		die("CONTRACT_VIOLATION: jwk_to_pem expects object jwk");
-
-	if (!jwk.kty)
+	if (type(jwk) != "object" || !jwk.kty)
 		return Result.err(MISSING_KTY);
 
 	let conversion_table = {

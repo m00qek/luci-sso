@@ -5,7 +5,7 @@ import * as encoding from 'luci_sso.encoding';
 import * as discovery from 'luci_sso.discovery';
 import * as oidc from 'luci_sso.oidc';
 import * as Result from 'luci_sso.result';
-import { DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCOVERY_MISSING_ISSUER, DISCOVERY_ISSUER_MISMATCH, DISCOVERY_MISSING_ENDPOINT, INSECURE_ENDPOINT, JWKS_NETWORK_ERROR, JWKS_FETCH_FAILED, INVALID_JWKS_FORMAT, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_ENDPOINT_NETWORK_ERROR } from 'luci_sso.errors';
+import { DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCOVERY_MISSING_ISSUER, DISCOVERY_ISSUER_MISMATCH, DISCOVERY_MISSING_ENDPOINT, INSECURE_ENDPOINT, JWKS_NETWORK_ERROR, JWKS_FETCH_FAILED, INVALID_JWKS_FORMAT, OIDC_INVALID_GRANT, TOKEN_EXCHANGE_FAILED, TOKEN_ENDPOINT_NETWORK_ERROR, UNSUPPORTED_KTY, UNSUPPORTED_CURVE } from 'luci_sso.errors';
 
 /**
  * The settings page's connection test: checks the provider settings the
@@ -22,10 +22,12 @@ import { DISCOVERY_NETWORK_ERROR, DISCOVERY_FAILED, INVALID_DISCOVERY_DOC, DISCO
  *   issuer_match        the document's issuer is exactly issuer_url
  *   endpoints           authorization_endpoint, token_endpoint and jwks_uri
  *                       are present and use HTTPS
- *   jwks                the JWK Set loads and has a key luci-sso can verify
- *                       ID tokens with, by the rules a login applies (an
- *                       RSA key of crypto.RSA_MIN_BITS or more, exponent
- *                       65537; an EC key on P-256)
+ *   jwks                the JWK Set loads, and the keys a login can pick
+ *                       (discovery.find_jwk: the first key with the ID
+ *                       token's kid, or the first key for a token without
+ *                       one) can verify ID tokens, by the rules a login
+ *                       applies (an RSA key of crypto.RSA_MIN_BITS or more,
+ *                       exponent 65537; an EC key on P-256); see _jwks_check
  *   redirect_uri        redirect_uri is set, uses HTTPS and ends in
  *                       CALLBACK_PATH
  *   client_credentials  the token endpoint accepts client_id and client_secret
@@ -86,29 +88,44 @@ function _network_reason(cause, url) {
 }
 
 /**
- * Whether luci-sso can verify ID tokens with a JWK, judged as a login judges
- * it: a signing key (no "use", or "sig"), whose "alg", if any, is one
- * luci-sso accepts and fits its type, and which converts to a public key
- * (RSA, or EC on P-256), and an RSA key also by the native backends' rules
- * for verifying (crypto.RSA_MIN_BITS and the 65537 exponent). Returns
- * { verdict }: "usable", "short" (an RSA key under crypto.RSA_MIN_BITS, with
- * its size in `bits`), "exponent" (an RSA public exponent other than 65537)
- * or "unusable".
+ * Whether a login can verify ID tokens with a JWK, judged as a login judges
+ * it once discovery.find_jwk has picked it: it must convert to a public key
+ * (crypto.jwk_to_pem: RSA, or EC on P-256), an RSA key must also pass the
+ * native backends' rules for verifying (crypto.RSA_MIN_BITS and the 65537
+ * exponent), and an "alg" it declares must be one luci-sso accepts for its
+ * type, since the provider signs with that algorithm. Its "use" is not
+ * looked at: a login does not look at it either. Never throws, whatever the
+ * provider sent.
+ *
+ * Returns { verdict, why }: verdict is "usable", "short" (an RSA key under
+ * crypto.RSA_MIN_BITS, with its size in `bits`), "exponent" (an RSA public
+ * exponent other than 65537), "malformed" (it cannot be read as a key),
+ * "unsupported" (another type or curve) or "alg"; `why` says it in words.
  * @private
  */
 function _judge_key(native, jwk) {
-	if (type(jwk) != "object") return { verdict: "unusable" };
-	if (jwk.use != null && jwk.use !== "sig") return { verdict: "unusable" };
-	if (jwk.alg != null) {
-		if (index(oidc.ALLOWED_ALGS, jwk.alg) < 0) return { verdict: "unusable" };
-		if ((jwk.alg === "RS256" && jwk.kty !== "RSA") || (jwk.alg === "ES256" && jwk.kty !== "EC")) return { verdict: "unusable" };
-	}
+	if (jwk === null || type(jwk) != "object")
+		return { verdict: "malformed", why: "not a JSON object" };
 	if (jwk.kty === "RSA" && type(jwk.n) == "string" && type(jwk.e) == "string") {
-		if (!crypto.jwk_rsa_exponent_supported(jwk)) return { verdict: "exponent" };
+		if (!crypto.jwk_rsa_exponent_supported(jwk))
+			return { verdict: "exponent", why: "an RSA key whose public exponent is not 65537 (AQAB)" };
 		let bits = crypto.jwk_rsa_bits(jwk);
-		if (bits != null && bits < crypto.RSA_MIN_BITS) return { verdict: "short", bits };
+		if (bits != null && bits < crypto.RSA_MIN_BITS)
+			return { verdict: "short", bits, why: `an RSA key of ${bits} bits, under ${crypto.RSA_MIN_BITS}` };
 	}
-	return { verdict: crypto.jwk_to_pem(native, jwk).ok ? "usable" : "unusable" };
+	let pem = crypto.jwk_to_pem(native, jwk);
+	if (!pem.ok) {
+		if (pem.error == UNSUPPORTED_KTY || pem.error == UNSUPPORTED_CURVE)
+			return { verdict: "unsupported", why: "neither an RSA key nor an EC key on P-256" };
+		return { verdict: "malformed", why: "malformed: it cannot be read as an RSA or EC public key" };
+	}
+	if (jwk.alg != null) {
+		let alg = (type(jwk.alg) == "string") ? jwk.alg : "";
+		let fits = (alg === "RS256" && jwk.kty === "RSA") || (alg === "ES256" && jwk.kty === "EC");
+		if (index(oidc.ALLOWED_ALGS, alg) < 0 || !fits)
+			return { verdict: "alg", why: `a key for "${_shown(sprintf("%s", jwk.alg))}", an algorithm luci-sso does not accept for it` };
+	}
+	return { verdict: "usable", why: "can verify ID tokens" };
 }
 
 /**
@@ -117,12 +134,95 @@ function _judge_key(native, jwk) {
  * @private
  */
 function _short_keys(sizes) {
-	let uniq = [];
+	let uniq_sizes = [];
 	for (let b in sizes) {
-		if (index(uniq, b) < 0) push(uniq, b);
+		if (index(uniq_sizes, b) < 0) push(uniq_sizes, b);
 	}
 	let what = (length(sizes) == 1) ? "RSA key is" : "RSA keys are";
-	return `The provider's ${what} ${join(", ", uniq)} bits; luci-sso requires at least ${crypto.RSA_MIN_BITS}.`;
+	return `The provider's ${what} ${join(", ", uniq_sizes)} bits; luci-sso requires at least ${crypto.RSA_MIN_BITS}.`;
+}
+
+/** How many keys a jwks message describes one by one. */
+const KEYS_SHOWN_MAX = 10;
+
+/**
+ * The jwks check's result for the keys of a JWK Set.
+ *
+ * A login picks one key per ID token, with discovery.find_jwk, which this
+ * calls rather than copies: the first key whose kid is the token's, or the
+ * first key of the set for a token without a kid. Every key is judged with
+ * _judge_key, and described in the message, with whether a login ever picks
+ * it. The status:
+ *
+ *   fail  no key a login can pick can verify ID tokens
+ *   warn  some can, but the first key cannot (so a token without a kid
+ *         fails), or a signing key a login picks by its kid cannot
+ *   pass  every key a login can pick can verify ID tokens
+ *
+ * A key marked for encryption (a "use" other than "sig") that a login picks
+ * only by its kid is described but never fails or warns: the provider does
+ * not sign ID tokens with it. As the first key, it counts like any other,
+ * since a token without a kid is checked with it.
+ * @private
+ */
+function _jwks_check(native, keys) {
+	let total = length(keys);
+	if (!total)
+		return { status: "fail", message: "The JWK Set has no keys." };
+
+	let first = discovery.find_jwk(keys, null).data;
+	let judged = [];
+	for (let i, k in keys) {
+		let is_object = (k !== null && type(k) == "object");
+		let has_kid = is_object && !!k.kid;
+		let by_kid = has_kid && discovery.find_jwk(keys, k.kid).data === k;
+		let label = (has_kid && type(k.kid) == "string") ? `'${_shown(k.kid)}'` : `#${i + 1}`;
+		let signing = !is_object || k.use == null || k.use === "sig";
+		let use = (signing || type(k.use) != "string") ? null : k.use;
+		push(judged, { ...(_judge_key(native, k)), label, first: (i == 0 && k === first), by_kid, signing, use });
+	}
+
+	let picked = filter(judged, (j) => j.first || j.by_kid);
+	let usable = filter(picked, (j) => j.verdict == "usable");
+	let failing = filter(picked, (j) => j.verdict != "usable" && (j.first || j.signing));
+
+	let describe = (j) => {
+		let note = j.why;
+		if (!j.signing) note += (j.use != null) ? `; not for signing (use "${_shown(j.use)}")` : "; not for signing";
+		if (!j.first && !j.by_kid) note += "; a login never picks it";
+		return `${j.label}: ${note}`;
+	};
+	let shown = map(slice(judged, 0, KEYS_SHOWN_MAX), describe);
+	let rest = total - length(shown);
+	let listing = ` Keys: ${join("; ", shown)}${rest > 0 ? `; and ${rest} more` : ""}.`;
+
+	if (!length(usable)) {
+		let reasons = [];
+		for (let j in failing)
+			if (index(reasons, j.verdict) < 0) push(reasons, j.verdict);
+		let summary;
+		if (length(reasons) == 1 && reasons[0] == "short")
+			summary = _short_keys(map(failing, (j) => j.bits));
+		else if (length(reasons) == 1 && reasons[0] == "exponent")
+			summary = "The provider's RSA key has a public exponent other than 65537 (AQAB), the only one luci-sso accepts.";
+		else
+			summary = `No key a login would pick can verify ID tokens: luci-sso needs an RSA key of at least ${crypto.RSA_MIN_BITS} bits with the exponent 65537, or an EC key on P-256.`;
+		return { status: "fail", message: summary + listing };
+	}
+
+	if (length(failing)) {
+		let parts = [];
+		let first_failing = filter(failing, (j) => j.first);
+		if (length(first_failing))
+			push(parts, `An ID token without a kid would fail: a login checks it with the first key, ${first_failing[0].label}, which is ${first_failing[0].why}.`);
+		let by_kid = filter(failing, (j) => !j.first);
+		if (length(by_kid))
+			push(parts, `An ID token naming ${join(", ", map(by_kid, (j) => j.label))} would fail.`);
+		push(parts, `Tokens a login checks with ${join(", ", map(usable, (j) => j.label))} verify.`);
+		return { status: "warn", message: join(" ", parts) + listing };
+	}
+
+	return { status: "pass", message: `The JWK Set has ${total} key(s); every key a login would pick can verify ID tokens (RS256, or ES256 on P-256).` + listing };
 }
 
 /**
@@ -225,19 +325,8 @@ export function check(deps, params) {
 		let res = discovery.fetch_jwks(tdeps, uri, { no_cache: true });
 		let d = res.details;
 		if (res.ok) {
-			let judged = map(res.data, (k) => _judge_key(deps.native, k));
-			let usable = length(filter(judged, (j) => j.verdict == "usable"));
-			let short = map(filter(judged, (j) => j.verdict == "short"), (j) => j.bits);
-			let total = length(res.data);
-			if (usable > 0)
-				set("jwks", "pass", `The JWK Set has ${total} key(s); ${usable} can verify ID tokens (RS256, or ES256 on P-256)` +
-					(length(short) ? `; ${length(short)} cannot, being RSA keys under ${crypto.RSA_MIN_BITS} bits.` : "."));
-			else if (length(short))
-				set("jwks", "fail", _short_keys(short));
-			else if (length(filter(judged, (j) => j.verdict == "exponent")))
-				set("jwks", "fail", `The provider's RSA key has a public exponent other than 65537 (AQAB), the only one luci-sso accepts.`);
-			else
-				set("jwks", "fail", `The JWK Set has ${total} key(s), but none luci-sso can verify ID tokens with: it needs an RS256 (RSA) or ES256 (EC P-256) signing key.`);
+			let verdict = _jwks_check(deps.native, res.data);
+			set("jwks", verdict.status, verdict.message);
 		} else if (res.error == JWKS_NETWORK_ERROR) {
 			set("jwks", "fail", _network_reason(d, uri));
 		} else if (res.error == JWKS_FETCH_FAILED) {

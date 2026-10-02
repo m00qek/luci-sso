@@ -258,7 +258,7 @@ Returns the `keys` array of the JWK Set. Options: `force` (skip the fresh cache)
 
 ### `find_jwk(keys, kid)` → `Result<jwk>`
 
-Returns the key whose `kid` equals `kid`, or the first key when `kid` is empty. Fails with `KEY_NOT_FOUND` or `NO_KEYS_AVAILABLE`.
+Returns the first key whose `kid` equals `kid`, or the first key when `kid` is empty: the key a login verifies an ID token with. Neither `use` nor `alg` is looked at. An entry that is not an object never matches a `kid`; as the first key it is returned as it is, and `jwk_to_pem()` refuses it. Fails with `KEY_NOT_FOUND` or `NO_KEYS_AVAILABLE`. The connection test calls it to find the keys a login can pick.
 
 ---
 
@@ -576,7 +576,7 @@ Generates a PKCE verifier from `len` random bytes (default `43`, range 32–96; 
 
 ### `jwk_to_pem(native, jwk)` → `Result<string>`
 
-Converts an `RSA` or `EC` (`P-256`) JWK to a PEM public key. Fails with `MISSING_KTY`, `UNSUPPORTED_KTY`, `MISSING_RSA_PARAMS`, `INVALID_RSA_PARAMS_ENCODING`, `UNSUPPORTED_CURVE`, `MISSING_EC_PARAMS`, `INVALID_EC_PARAMS_ENCODING` or `PEM_CONVERSION_FAILED`.
+Converts an `RSA` or `EC` (`P-256`) JWK to a PEM public key. Fails with `MISSING_KTY`, `UNSUPPORTED_KTY`, `MISSING_RSA_PARAMS`, `INVALID_RSA_PARAMS_ENCODING`, `UNSUPPORTED_CURVE`, `MISSING_EC_PARAMS`, `INVALID_EC_PARAMS_ENCODING` or `PEM_CONVERSION_FAILED`. The JWK is the IdP's data, so it never throws: a `jwk` that is not an object fails with `MISSING_KTY`, and an `n`, `e`, `x` or `y` that is not a string with the `INVALID_*_PARAMS_ENCODING` code of its type.
 
 ### `jwk_rsa_bits(jwk)` → `int` or `null`
 

@@ -286,13 +286,13 @@ The router could not find or use the key that signed the token.
 | :--- | :--- | :--- |
 | `NO_KEYS_AVAILABLE` | The token has no `kid` header and the JWK Set is empty | The IdP publishes no signing keys at its `jwks_uri`. |
 | `KEY_NOT_FOUND` | No key in the JWK Set has the token's `kid`, even after a forced refresh | The IdP signed with a key it does not publish (see notes). |
-| `MISSING_KTY` | The selected JWK has no `kty` field | The IdP's JWK Set is malformed. |
+| `MISSING_KTY` | The selected JWK has no `kty` field, or is not a JSON object | The IdP's JWK Set is malformed. |
 | `UNSUPPORTED_KTY` | The selected JWK's `kty` is not `RSA` or `EC` | The IdP uses a key type `luci-sso` cannot verify (see notes). |
 | `MISSING_RSA_PARAMS` | An `RSA` JWK lacks `n` or `e` | The IdP's JWK Set is malformed. |
-| `INVALID_RSA_PARAMS_ENCODING` | An `RSA` JWK's `n` or `e` is not valid Base64URL | The IdP's JWK Set is malformed. |
+| `INVALID_RSA_PARAMS_ENCODING` | An `RSA` JWK's `n` or `e` is not valid Base64URL, or not a string | The IdP's JWK Set is malformed. |
 | `UNSUPPORTED_CURVE` | An `EC` JWK uses a curve other than `P-256` | Only ES256 (P-256) is supported. Configure the IdP to sign with P-256 or RS256. |
 | `MISSING_EC_PARAMS` | An `EC` JWK lacks `x` or `y` | The IdP's JWK Set is malformed. |
-| `INVALID_EC_PARAMS_ENCODING` | An `EC` JWK's `x` or `y` is not valid Base64URL | The IdP's JWK Set is malformed. |
+| `INVALID_EC_PARAMS_ENCODING` | An `EC` JWK's `x` or `y` is not valid Base64URL, or not a string | The IdP's JWK Set is malformed. |
 | `PEM_CONVERSION_FAILED` | The native crypto bridge rejected the key | The key has a value the bridge refuses (see notes). |
 
 Notes:
