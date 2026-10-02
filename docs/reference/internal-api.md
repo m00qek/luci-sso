@@ -501,11 +501,11 @@ IP address and CIDR range parsing. Pure. An address is `{ family: 4, parts: [4 b
 
 ### `parse(s)` → `address` or `null`
 
-A bare IPv4 or IPv6 address. No whitespace, brackets, port, zone or prefix.
+A bare IPv4 or IPv6 address, as ucode's `iptoarr()` (the C library's `inet_pton()`) reads it, after a check that every byte is a hexadecimal digit, `.` or `:`. No whitespace, brackets, port, zone or prefix, no NUL byte, and no IPv4 part with a leading zero (`010.0.0.1`).
 
 ### `parse_cidr(s)` → `{family, parts, prefix}` or `null`
 
-An address (`prefix` 32 or 128) or `address/prefix`, with `prefix` 0–32 or 0–128. No netmask. An IPv4-mapped IPv6 range of `/96` or longer becomes the IPv4 range.
+An address, as for `parse()` (`prefix` 32 or 128), or `address/prefix`, with `prefix` one to three decimal digits, 0–32 or 0–128. No netmask. An IPv4-mapped IPv6 range of `/96` or longer becomes the IPv4 range.
 
 ### `contains(range, addr)` → `bool`
 

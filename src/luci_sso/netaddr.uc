@@ -18,63 +18,26 @@
  */
 export const MAX_ADDR_LEN = 64;
 
-function _ipv4(s) {
-	let m = match(s, /^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$/);
-	if (!m) return null;
-	let out = [];
-	for (let i = 1; i <= 4; i++) {
-		let n = int(m[i]);
-		if (n > 255) return null;
-		push(out, n);
+// The address in `s` as its eight 16-bit groups (IPv6) or four bytes (IPv4),
+// or null. ucode's iptoarr() parses with the C library's inet_pton(), which
+// takes dotted IPv4 with exactly four decimal parts, no leading zeros, and
+// IPv6 in any standard form, with :: and an IPv4 tail, and nothing else: no
+// whitespace, brackets, port, zone or prefix. inet_pton() reads a C string,
+// so it would stop at a NUL byte: every byte is checked to be a hexadecimal
+// digit, "." or ":" first.
+function _parts(s) {
+	for (let i = 0; i < length(s); i++) {
+		let c = ord(s, i);
+		if (!((c >= 48 && c <= 58) || c == 46 || (c >= 65 && c <= 70) || (c >= 97 && c <= 102)))
+			return null;
 	}
-	return out;
-}
-
-// Expands an IPv6 address to 8 integers, or null. Accepts :: compression and
-// an embedded IPv4 tail (::ffff:192.0.2.1).
-function _ipv6(s) {
-	let tail4 = null;
-	let m = match(s, /^(.*:)([0-9]{1,3}(\.[0-9]{1,3}){3})$/);
-	if (m) {
-		tail4 = _ipv4(m[2]);
-		if (!tail4) return null;
-		s = m[1] + "0:0";                  // placeholder for the two IPv4 groups
-	}
-
-	let halves = split(s, "::");
-	if (length(halves) > 2) return null;
-
-	let parse = (part) => {
-		if (part == "") return [];
-		let groups = [];
-		for (let g in split(part, ":")) {
-			if (!match(g, /^[0-9A-Fa-f]{1,4}$/)) return null;
-			push(groups, hex(g));
-		}
-		return groups;
-	};
-
-	let head = parse(halves[0]);
-	let rest = (length(halves) == 2) ? parse(halves[1]) : [];
-	if (head == null || rest == null) return null;
-
-	let groups;
-	if (length(halves) == 2) {
-		let fill = 8 - length(head) - length(rest);
-		if (fill < 1) return null;
-		groups = [ ...head ];
-		for (let i = 0; i < fill; i++) push(groups, 0);
-		for (let g in rest) push(groups, g);
-	} else {
-		groups = head;
-	}
-	if (length(groups) != 8) return null;
-
-	if (tail4) {
-		groups[6] = tail4[0] * 256 + tail4[1];
-		groups[7] = tail4[2] * 256 + tail4[3];
-	}
-	return groups;
+	let b = iptoarr(s);
+	if (type(b) != "array") return null;
+	if (length(b) == 4) return { family: 4, parts: b };
+	if (length(b) != 16) return null;
+	let g = [];
+	for (let i = 0; i < 16; i += 2) push(g, b[i] * 256 + b[i + 1]);
+	return { family: 6, parts: g };
 }
 
 function _is_mapped(g) {
@@ -88,7 +51,8 @@ function _mapped_ipv4(g) {
 /**
  * Parses one bare IP address: dotted IPv4, or IPv6 in any standard form.
  * Nothing else is accepted: no surrounding whitespace, brackets, port, zone
- * or prefix.
+ * or prefix, and no IPv4 part with a leading zero, which some tools read as
+ * octal.
  *
  * @param {*} s The text to parse.
  * @returns {?object} { family, parts }, or null when `s` is not an address.
@@ -97,14 +61,9 @@ export function parse(s) {
 	if (type(s) != "string" || length(s) == 0 || length(s) > MAX_ADDR_LEN)
 		return null;
 
-	let v4 = _ipv4(s);
-	if (v4) return { family: 4, parts: v4 };
-	if (index(s, ":") < 0) return null;
-
-	let g = _ipv6(s);
-	if (!g) return null;
-	if (_is_mapped(g)) return { family: 4, parts: _mapped_ipv4(g) };
-	return { family: 6, parts: g };
+	let a = _parts(s);
+	if (a && a.family == 6 && _is_mapped(a.parts)) return { family: 4, parts: _mapped_ipv4(a.parts) };
+	return a;
 };
 
 /**
@@ -120,31 +79,31 @@ export function parse(s) {
 export function parse_cidr(s) {
 	if (type(s) != "string") return null;
 
+	// The prefix length: one to three decimal digits after the only "/".
+	// Checked digit by digit, not with an anchored regex, whose "$" some C
+	// libraries let match before a trailing newline.
 	let prefix = null;
-	let m = match(s, /^([^\/]+)\/([0-9]{1,3})$/);
-	if (m) {
-		s = m[1];
-		prefix = int(m[2]);
-	} else if (index(s, "/") >= 0) {
-		return null;
+	let halves = split(s, "/");
+	if (length(halves) > 2) return null;
+	if (length(halves) == 2) {
+		let p = halves[1];
+		if (length(p) < 1 || length(p) > 3) return null;
+		for (let i = 0; i < length(p); i++)
+			if (ord(p, i) < 48 || ord(p, i) > 57) return null;
+		s = halves[0];
+		prefix = int(p);
 	}
 
 	if (length(s) == 0 || length(s) > MAX_ADDR_LEN) return null;
 
-	let v4 = _ipv4(s);
-	if (v4) {
-		if (prefix == null) prefix = 32;
-		return (prefix <= 32) ? { family: 4, parts: v4, prefix } : null;
-	}
-	if (index(s, ":") < 0) return null;
-
-	let g = _ipv6(s);
-	if (!g) return null;
-	if (prefix == null) prefix = 128;
-	if (prefix > 128) return null;
-	if (_is_mapped(g) && prefix >= 96)
-		return { family: 4, parts: _mapped_ipv4(g), prefix: prefix - 96 };
-	return { family: 6, parts: g, prefix };
+	let a = _parts(s);
+	if (!a) return null;
+	let width = (a.family == 4) ? 32 : 128;
+	if (prefix == null) prefix = width;
+	if (prefix > width) return null;
+	if (a.family == 6 && _is_mapped(a.parts) && prefix >= 96)
+		return { family: 4, parts: _mapped_ipv4(a.parts), prefix: prefix - 96 };
+	return { ...a, prefix };
 };
 
 /**
