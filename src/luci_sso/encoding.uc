@@ -10,6 +10,40 @@ import { INVALID_ARGUMENT, TOKEN_TOO_LARGE } from 'luci_sso.errors';
 const MAX_UTILS_SIZE = 32768; // 32 KB
 
 /**
+ * True when `re` matches all of `str`, not only a part of it.
+ *
+ * Every anchored check (/^...$/) goes through here instead of trusting ^ and
+ * $. libucode 2026.07.09 (upstream ucode 8a8b4d12) made ^ and $ match at
+ * every line and stopped `.` and `[^...]` from matching a line feed, so on
+ * that engine /^[a-z]+$/ accepts "ok\nanything". Comparing the match with
+ * the whole string gives the same answer on the old engine and the new one.
+ * No regex flag does: /s means the opposite on each.
+ *
+ * @param {*} str - Value to check; anything but a string fails
+ * @param {regexp} re - The pattern the whole value must match
+ * @returns {boolean}
+ */
+export function whole_match(str, re) {
+	if (type(str) != "string") return false;
+	let m = match(str, re);
+	return m != null && m[0] === str;
+};
+
+/**
+ * True when `str` ends with `suffix`. A plain comparison, where a regex
+ * anchored with $ would also accept a name that only has a line ending in
+ * `suffix` (see whole_match).
+ *
+ * @param {*} str
+ * @param {string} suffix
+ * @returns {boolean}
+ */
+export function ends_with(str, suffix) {
+	return type(str) == "string" && length(str) >= length(suffix) &&
+		substr(str, length(str) - length(suffix)) === suffix;
+};
+
+/**
  * Maps standard Base64 characters to URL-safe ones.
  * @private
  */
@@ -57,7 +91,7 @@ function b64url_to_b64(str) {
 		return "";
 	
 	// Validate Base64URL charset: [A-Za-z0-9_-]
-	if (!match(str, /^[A-Za-z0-9_-]+$/))
+	if (!whole_match(str, /^[A-Za-z0-9_-]+$/))
 		return null;
 	
 	return _add_padding(_map_from_url_safe(str));
@@ -172,6 +206,10 @@ export function safe_json(data) {
 export function normalize_url(url) {
 	if (type(url) != "string")
 		return Result.err(INVALID_ARGUMENT, "normalize_url expects string");
+	// A line feed is never part of a URL, and the regexes below would read it
+	// differently on each regex engine (see whole_match).
+	if (index(url, "\n") >= 0)
+		return Result.err("MALFORMED_URL", url);
 	
 	let res = url;
 	let m = match(url, /^([A-Za-z]+:\/\/)([^/]+)(.*)$/);
@@ -210,6 +248,9 @@ export function normalize_url(url) {
 export function split_origin(url) {
 	if (type(url) != "string")
 		return Result.err("INVALID_ARGUMENT", "split_origin expects string");
+	// A line feed is never part of a URL (see normalize_url).
+	if (index(url, "\n") >= 0)
+		return Result.err("MALFORMED_URL", "not an absolute URL with a host");
 
 	let m = match(url, /^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^\/?#]+)(.*)$/);
 	if (!m || index(m[2], "@") >= 0)
@@ -283,7 +324,9 @@ const LOG_VALUE_MAX = 200;
 export function log_safe(value, max) {
 	if (type(value) != "string") return "";
 	let limit = (type(max) == "int" && max > 0) ? max : LOG_VALUE_MAX;
-	let clean = replace(value, /[^ -~]/g, "?");
+	// The line feed is named on its own: [^ -~] no longer matches it on the
+	// newer regex engine (see whole_match).
+	let clean = replace(value, /[^ -~]|\n/g, "?");
 	if (length(clean) > limit) clean = substr(clean, 0, limit) + "...";
 	return clean;
 };
