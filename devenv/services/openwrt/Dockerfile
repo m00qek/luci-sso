@@ -11,12 +11,26 @@ RUN mkdir -p /var/lock && \
   if command -v apk >/dev/null; then \
     apk update && \
     apk add --no-cache $(echo $PKG_DEPENDS) libmbedtls libwolfssl libopenssl \
-    rpcd uhttpd luci-ssl luci-mod-admin-full luci-light inotifywait openssl-util; \
+    rpcd uhttpd luci-ssl luci-mod-admin-full luci-light inotifywait openssl-util && \
+    apk upgrade --no-cache libucode20230711; \
   else \
     opkg update && \
     opkg install --force-reinstall $(echo $PKG_DEPENDS) libmbedtls libwolfssl libopenssl \
     rpcd uhttpd luci-ssl luci-mod-admin-full luci-light inotifywait openssl-util; \
   fi
+
+# The ucode regex engine each series is tested on. libucode 2026.07.09
+# (upstream ucode 8a8b4d12) made ^ and $ match at every line and stopped `.`
+# and [^...] from matching a line feed. The stock 25.12 rootfs still ships the
+# older engine, but every 25.12 package index has the new one, so a device that
+# installs or upgrades anything runs it: the apk branch above upgrades
+# libucode, and the 25.12 suite runs on the new engine. 24.10 never got it, so
+# the 24.10 suite keeps covering the old one. The check fails the build when an
+# image is not on the engine its series is meant to test.
+RUN if command -v apk >/dev/null; then want=new; else want=old; fi && \
+  got="$(ucode -e 'print(match("a\nb", /^b$/) ? "new" : "old")')" && \
+  case "$got" in "$want") echo "ucode regex engine OK: $got" ;; \
+    *) echo "ERROR: expected the $want ucode regex engine, image has the $got one" >&2; exit 1 ;; esac
 
 # Test runner: ucode-utest from the packages.ucode.dev feed.
 #
