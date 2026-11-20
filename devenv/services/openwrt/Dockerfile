@@ -30,7 +30,7 @@ ARG UTEST_FEED=https://m00qek.github.io/packages.ucode.dev
 # text, so without a version here a rebuild silently keeps the utest that was
 # current when the layer was first built. Bumping UTEST_VERSION invalidates the
 # layer, and the assertion below fails the build if the feed served something else.
-ARG UTEST_VERSION=1.5.1
+ARG UTEST_VERSION=1.5.2
 RUN FEED_DIR="$(echo "$SDK_VERSION" | cut -d. -f1,2)" && \
   if command -v apk >/dev/null; then \
     mkdir -p /etc/apk/keys /etc/apk/repositories.d && \
