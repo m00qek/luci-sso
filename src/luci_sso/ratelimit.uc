@@ -119,6 +119,10 @@ function _ipv6(s) {
 export function client_key(addr) {
 	if (type(addr) != "string" || length(addr) == 0 || length(addr) > 64)
 		return UNKNOWN_CLIENT;
+	// The parsers below anchor with ^ and $, which match at every line on the
+	// newer regex engine (see encoding.whole_match): no address has a line feed.
+	if (index(addr, "\n") >= 0)
+		return UNKNOWN_CLIENT;
 
 	let v4 = _ipv4(addr);
 	if (v4) return "v4:" + join(".", v4);

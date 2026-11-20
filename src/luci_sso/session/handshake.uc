@@ -20,7 +20,7 @@ function _reap_older_than(deps, files, max_age) {
 	let now = deps.clock.time();
 	let reaped = 0;
 	for (let f in files) {
-		if (!match(f, /^handshake_[A-Za-z0-9_-]+\.json$/)) continue;
+		if (!encoding.whole_match(f, /^handshake_[A-Za-z0-9_-]+\.json$/)) continue;
 		let path = `${common.HANDSHAKE_DIR}/${f}`;
 		let st = deps.fs.stat(path);
 		if (st && st.mtime && (now - st.mtime) > max_age) {
@@ -70,7 +70,7 @@ export function create(deps, clock_tolerance) {
 	let files = deps.fs.lsdir(common.HANDSHAKE_DIR) || [];
 	let count = 0;
 	for (let f in files) {
-		if (match(f, /^handshake_.*\.json$/)) count++;
+		if (index(f, "handshake_") == 0 && encoding.ends_with(f, ".json")) count++;
 	}
 
 	if (count >= common.LIMIT_PENDING_HANDSHAKES) {
@@ -159,7 +159,7 @@ export function create(deps, clock_tolerance) {
  */
 export function consume(deps, handle) {
 	if (!handle || type(handle) !== "string") return;
-	if (!match(handle, /^[A-Za-z0-9_-]+$/)) return;
+	if (!encoding.whole_match(handle, /^[A-Za-z0-9_-]+$/)) return;
 
 	let path = `${common.HANDSHAKE_DIR}/handshake_${handle}.json`;
 	try {
@@ -196,7 +196,7 @@ export function verify(deps, handle, expected_state, clock_tolerance) {
 	if (type(clock_tolerance) !== "int") die("CONTRACT_VIOLATION: verify expects mandatory integer clock_tolerance");
 
 	// Ensure the handle is a safe filename (Base64URL only)
-	if (!match(handle, /^[A-Za-z0-9_-]+$/)) {
+	if (!encoding.whole_match(handle, /^[A-Za-z0-9_-]+$/)) {
 		return Result.err(MALFORMED_STATE_COOKIE);
 	}
 

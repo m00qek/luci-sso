@@ -43,6 +43,15 @@ describe('rpcd_login: permits — rpcd rules', () => {
 		assert.match(false, can({ read: [ "luci-*" ] }, "read", "unauthenticated"));
 	});
 
+	it('patterns treat a line feed in a group name as fnmatch does', () => {
+		assert.match(false, can({ read: [ "luci-base" ] }, "read", "luci-base\nx"));
+		assert.match(false, can({ read: [ "luci-base" ] }, "read", "x\nluci-base"));
+		assert.match(true, can({ read: [ "luci-*" ] }, "read", "luci-a\nb"));
+		assert.match(true, can({ read: [ "a?b" ] }, "read", "a\nb"));
+		assert.match(true, can({ read: [ "a[!x]b" ] }, "read", "a\nb"));
+		assert.match(false, can({ read: [ "a[x]b" ] }, "read", "a\nb"));
+	});
+
 	it('write implies read', () => {
 		assert.match(true, can({ read: [], write: [ "luci-base" ] }, "read", "luci-base"));
 		assert.match(false, can({ read: [ "luci-base" ], write: [] }, "write", "luci-base"));
@@ -75,7 +84,7 @@ describe('rpcd_login: check_name', () => {
 	});
 
 	it('refuses a missing, empty, too long or badly formed name with INVALID_NAME', () => {
-		for (let bad in [ null, 42, "", sprintf("%033d", 0), "a-b", "a b", "../root", "sso:x", "x\n" ])
+		for (let bad in [ null, 42, "", sprintf("%033d", 0), "a-b", "a b", "../root", "sso:x", "x\n", "admin\nroot", "a-b\nok" ])
 			assert.match(contains({ ok: false, error: "INVALID_NAME" }), rpcd_login.check_name(bad), `${bad}`);
 	});
 });

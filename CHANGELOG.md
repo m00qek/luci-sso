@@ -2,6 +2,12 @@
 
 All notable changes to `luci-sso` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Until 1.0, a minor version may change the configuration or behaviour; each such change is listed under **Upgrade actions**.
 
+## [0.10.1] - 2026-11-19
+
+### Security
+
+- On OpenWrt devices with libucode `2026.07.09~b885dd0f` or later, the regex engine of every 25.12 package index, a line feed in an untrusted value reached the log, and several checks accepted a value when only one of its lines passed. That ucode release (upstream commit 8a8b4d12) made `^` and `$` match at every line, and `.` and `[^...]` stop matching a line feed. An unauthenticated request could add forged lines to the system log through the callback's `error` and `error_description` parameters or `return_to`, because the log sanitiser no longer replaced the line feed. The handshake handle, Base64URL and role name checks, the URL parsing used for the issuer and discovery endpoints, and the role list patterns now give the same answer on both engines: a value with a line feed is refused, or its line feed shown as `?`, as before. Devices on the older libucode, such as stock 24.10 and 25.12 images that were never upgraded, were not affected.
+
 ## [0.10.0] - 2026-09-29
 
 ### Upgrade actions
@@ -75,6 +81,7 @@ Upgrading from 0.9.1 needs some steps **before** you install, and one right afte
 
 First public release.
 
+[0.10.1]: https://github.com/m00qek/luci-sso/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/m00qek/luci-sso/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/m00qek/luci-sso/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/m00qek/luci-sso/releases/tag/v0.9.0

@@ -51,7 +51,8 @@ describe('ratelimit: client_key', () => {
 
 	it('puts empty or unparseable addresses in one shared bucket', () => {
 		for (let bad in [ null, '', 'localhost', '256.1.1.1', '1.2.3', '1:2:3:4:5:6:7:8:9',
-		                  '1::2::3', '12345::1', 'gggg::1', '::ffff:999.1.1.1', 42, '1.2.3.4 ' ])
+		                  '1::2::3', '12345::1', 'gggg::1', '::ffff:999.1.1.1', 42, '1.2.3.4 ',
+		                  '1.2.3.4\nx', 'x\n1.2.3.4', '::1\nx', '::ffff:1.2.3.4\nx' ])
 			assert.match(rl.UNKNOWN_CLIENT, rl.client_key(bad), `${bad}`);
 	});
 });
