@@ -4487,6 +4487,16 @@
 </thead>
 <tbody>
 <tr>
+<td style="text-align: left;"><code>whole_match(str, re)</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;"><code>true</code> when <code>re</code> matches all of <code>str</code>, not only one of its lines. Every anchored check (<code>/^...$/</code>) uses it, because ucode's regex engine changed what <code>^</code>, <code>$</code>, <code>.</code> and <code>[^...]</code> mean around a line feed (libucode 2026.07.09), and no flag gives the same answer on both engines. A non-string gives <code>false</code>.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>ends_with(str, suffix)</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;"><code>true</code> when <code>str</code> ends with <code>suffix</code>, compared byte by byte. For file names, instead of a regex anchored with <code>$</code>.</td>
+</tr>
+<tr>
 <td style="text-align: left;"><code>b64url_decode(str)</code></td>
 <td style="text-align: left;"><code>Result&lt;string&gt;</code></td>
 <td style="text-align: left;">Base64URL to raw bytes. Fails with <code>TOKEN_TOO_LARGE</code> over 32 KB, <code>INVALID_ENCODING</code> on bad input.</td>
@@ -4509,12 +4519,12 @@
 <tr>
 <td style="text-align: left;"><code>normalize_url(url)</code></td>
 <td style="text-align: left;"><code>Result&lt;string&gt;</code></td>
-<td style="text-align: left;">Lower-case scheme and host, default port removed, trailing slashes removed. Only for the JWKS cache key and the near-miss hint of <code>DISCOVERY_ISSUER_MISMATCH</code>; issuers are compared exactly.</td>
+<td style="text-align: left;">Lower-case scheme and host, default port removed, trailing slashes removed. Fails with <code>MALFORMED_URL</code> for a URL holding a line feed. Only for the JWKS cache key and the near-miss hint of <code>DISCOVERY_ISSUER_MISMATCH</code>; issuers are compared exactly.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>split_origin(url)</code></td>
 <td style="text-align: left;"><code>Result&lt;{origin, rest}&gt;</code></td>
-<td style="text-align: left;">The normalized origin and the untouched path, query and fragment. Refuses URLs with userinfo.</td>
+<td style="text-align: left;">The normalized origin and the untouched path, query and fragment. Refuses URLs with userinfo or a line feed.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>is_origin(url)</code></td>
