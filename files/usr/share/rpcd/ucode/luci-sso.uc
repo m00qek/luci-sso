@@ -103,6 +103,7 @@ import { mkdir, readlink, readfile, lsdir, pipe, open } from 'fs';
 import * as uloop from 'uloop';
 import * as rpcd_login from 'luci_sso.rpcd_login';
 import { uci_list } from 'luci_sso.config';
+import { ends_with } from 'luci_sso.encoding';
 
 const CONFIG = rpcd_login.CONFIG;
 const SECTION_PREFIX = rpcd_login.SECTION_PREFIX;
@@ -332,7 +333,7 @@ const methods = {
 		call: function() {
 			let seen = {};
 			for (let f in (lsdir(ACL_DIR) || [])) {
-				if (!match(f, /\.json$/))
+				if (!ends_with(f, ".json"))
 					continue;
 				let data = null;
 				try { data = json(readfile(`${ACL_DIR}/${f}`) || "null"); } catch (e) { continue; }

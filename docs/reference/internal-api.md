@@ -598,12 +598,14 @@ Pure helpers.
 
 | Function | Returns | Description |
 | :--- | :--- | :--- |
+| `whole_match(str, re)` | `bool` | `true` when `re` matches all of `str`, not only one of its lines. Every anchored check (`/^...$/`) uses it, because ucode's regex engine changed what `^`, `$`, `.` and `[^...]` mean around a line feed (libucode 2026.07.09), and no flag gives the same answer on both engines. A non-string gives `false`. |
+| `ends_with(str, suffix)` | `bool` | `true` when `str` ends with `suffix`, compared byte by byte. For file names, instead of a regex anchored with `$`. |
 | `b64url_decode(str)` | `Result<string>` | Base64URL to raw bytes. Fails with `TOKEN_TOO_LARGE` over 32 KB, `INVALID_ENCODING` on bad input. |
 | `b64url_encode(str)` | `Result<string>` | Raw bytes to unpadded Base64URL. |
 | `binary_truncate(data, len)` | `Result<string>` | The first `len` bytes. |
 | `safe_json(data)` | `Result<any>` | Parses JSON from a string, a Result holding one, or an object with `read()`. |
-| `normalize_url(url)` | `Result<string>` | Lower-case scheme and host, default port removed, trailing slashes removed. Only for the JWKS cache key and the near-miss hint of `DISCOVERY_ISSUER_MISMATCH`; issuers are compared exactly. |
-| `split_origin(url)` | `Result<{origin, rest}>` | The normalized origin and the untouched path, query and fragment. Refuses URLs with userinfo. |
+| `normalize_url(url)` | `Result<string>` | Lower-case scheme and host, default port removed, trailing slashes removed. Fails with `MALFORMED_URL` for a URL holding a line feed. Only for the JWKS cache key and the near-miss hint of `DISCOVERY_ISSUER_MISMATCH`; issuers are compared exactly. |
+| `split_origin(url)` | `Result<{origin, rest}>` | The normalized origin and the untouched path, query and fragment. Refuses URLs with userinfo or a line feed. |
 | `is_origin(url)` | `bool` | `true` for `scheme://host[:port]` with at most a trailing `/`. |
 | `rebase_origin(url, from, to)` | `string` | Moves `url` from `from`'s origin to `to`'s, keeping its path; otherwise returns it unchanged. |
 | `is_https(url)` | `bool` | `true` if `url` starts with `https://`, in any case. |

@@ -128,7 +128,7 @@ export function exchange_code(deps, config, discovery, code, verifier, session_i
 		// made of the characters the registered codes use is kept.
 		let res_err = encoding.safe_json(response.body);
 		let oauth_error = (res_err.ok && type(res_err.data) == "object" && type(res_err.data.error) == "string" &&
-			match(res_err.data.error, /^[A-Za-z0-9_.:-]{1,64}$/)) ? res_err.data.error : null;
+			encoding.whole_match(res_err.data.error, /^[A-Za-z0-9_.:-]{1,64}$/)) ? res_err.data.error : null;
 		if (oauth_error == "invalid_grant") {
 			deps.log("error", `Token exchange failed (invalid_grant, HTTP ${response.status})${sid_ctx}`);
 			return Result.err(OIDC_INVALID_GRANT, { http_status: BAD_GATEWAY, upstream_status: response.status, oauth_error });

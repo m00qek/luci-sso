@@ -311,6 +311,7 @@ describe('session.handshake: verify', () => {
 			let deps = make_deps(injected);
 			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(deps, 'bad handle!', 'state_value', 0));
 			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(deps, '../etc/passwd', 'state_value', 0));
+			assert.match(contains({ ok: false, error: 'MALFORMED_STATE_COOKIE' }), handshake.verify(deps, `${HANDLE}\n/../../x`, 'state_value', 0));
 		});
 	});
 
