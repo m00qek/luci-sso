@@ -180,7 +180,9 @@ function handle_logout(deps, config, request) {
 			}
 
 			let redirect_uri = config.redirect_uri || "";
-			let m = match(redirect_uri, /^(https:\/\/[^\/]+).*/);
+			// A line feed would cut the origin short on the newer regex engine
+			// (see encoding.whole_match); no such redirect_uri is a URL anyway.
+			let m = (index(redirect_uri, "\n") < 0) ? match(redirect_uri, /^(https:\/\/[^\/]+).*/) : null;
 			if (m) {
 				let post_logout = m[1] + "/";
 				logout_url += `${sep}post_logout_redirect_uri=${lucihttp.urlencode(post_logout, 1)}`;

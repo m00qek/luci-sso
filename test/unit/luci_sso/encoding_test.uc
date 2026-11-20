@@ -82,6 +82,41 @@ describe('encoding: b64url_decode', () => {
 	it('returns INVALID_ENCODING for arbitrary non-alphabet characters', () => {
 		assert.match(contains({ ok: false, error: 'INVALID_ENCODING' }), encoding.b64url_decode('!!!!'));
 	});
+
+	it('returns INVALID_ENCODING when only one line is base64url', () => {
+		for (let bad in [ 'Zm9v\n!!!!', '!!!!\nZm9v', 'Zm9v\n' ])
+			assert.match(contains({ ok: false, error: 'INVALID_ENCODING' }), encoding.b64url_decode(bad), sprintf('%J', bad));
+	});
+});
+
+// ─── whole_match / ends_with ─────────────────────────────────────────────────
+
+describe('encoding: whole_match', () => {
+	it('is true only when the pattern covers the whole string', () => {
+		assert.match(true, encoding.whole_match('abc_9', /^[A-Za-z0-9_]+$/));
+		assert.match(false, encoding.whole_match('abc!', /^[A-Za-z0-9_]+$/));
+		assert.match(false, encoding.whole_match('', /^[A-Za-z0-9_]+$/));
+	});
+
+	it('is false when only one line of the string matches', () => {
+		for (let s in [ 'ok\nbad!', 'bad!\nok', 'ok\n', '\nok' ])
+			assert.match(false, encoding.whole_match(s, /^[a-z]+$/), sprintf('%J', s));
+	});
+
+	it('is false for non-strings', () => {
+		for (let v in [ null, 42, {}, [] ]) assert.match(false, encoding.whole_match(v, /^.*$/));
+	});
+});
+
+describe('encoding: ends_with', () => {
+	it('compares the last bytes of the string', () => {
+		assert.match(true, encoding.ends_with('a.json', '.json'));
+		assert.match(true, encoding.ends_with('.json', '.json'));
+		assert.match(false, encoding.ends_with('json', '.json'));
+		assert.match(false, encoding.ends_with('a.json\nb', '.json'));
+		assert.match(false, encoding.ends_with('a.json.bak', '.json'));
+		assert.match(false, encoding.ends_with(null, '.json'));
+	});
 });
 
 // ─── encode / decode roundtrip ───────────────────────────────────────────────
@@ -242,6 +277,11 @@ describe('encoding: normalize_url', () => {
 		assert.match(contains({ ok: true, data: 'https://example.com:80' }), encoding.normalize_url('https://example.com:80'));
 	});
 
+	it('returns MALFORMED_URL for a URL holding a line feed', () => {
+		for (let bad in [ 'https://h/p\nq', 'https://h\n', 'https://h:443\n/x' ])
+			assert.match(contains({ ok: false, error: 'MALFORMED_URL' }), encoding.normalize_url(bad), sprintf('%J', bad));
+	});
+
 	it('is idempotent', () => {
 		for (let url in [
 			'https://example.com/',
@@ -313,6 +353,13 @@ describe('encoding: split_origin', () => {
 		for (let bad in [ null, '', 'kc.example.com/realms', 'https://', 'https:///path', 'https://user@host/' ])
 			assert.match(false, encoding.split_origin(bad).ok, `${bad}`);
 	});
+
+	it('refuses a URL holding a line feed instead of cutting it there', () => {
+		for (let bad in [ 'https://ok.example\n@evil.example/p', 'https://h/p\nq', 'https://h\n' ]) {
+			assert.match(false, encoding.split_origin(bad).ok, sprintf('%J', bad));
+			assert.match(false, encoding.is_origin(bad), sprintf('%J', bad));
+		}
+	});
 });
 
 describe('encoding: is_origin', () => {
@@ -364,6 +411,11 @@ describe('encoding: log_safe', () => {
 		assert.match('a??b?c?d??|ok', encoding.log_safe("a\r\nb\tc\x1bd\u00e9|ok"));
 	});
 
+	it('replaces a lone line feed', () => {
+		assert.match('a?b', encoding.log_safe("a\nb"));
+		assert.match('x??forged', encoding.log_safe("x\n\nforged"));
+	});
+
 	it('keeps printable ASCII unchanged', () => {
 		assert.match('https://idp.example.com/realms/home?x=1', encoding.log_safe('https://idp.example.com/realms/home?x=1'));
 	});
@@ -384,8 +436,14 @@ describe('encoding: log_safe', () => {
 		for (let v in [ null, 42, {}, [] ]) assert.match('', encoding.log_safe(v));
 	});
 
+	// Checked byte by byte: a regex oracle would share log_safe's blind spots.
 	prop('never emits a byte outside printable ASCII', gen.string({ max_len: 300 }), (s) => {
-		return match(encoding.log_safe(s), /[^ -~]/) == null;
+		let out = encoding.log_safe(s);
+		for (let i = 0; i < length(out); i++) {
+			let c = ord(out, i);
+			if (c < 32 || c > 126) return false;
+		}
+		return true;
 	});
 });
 

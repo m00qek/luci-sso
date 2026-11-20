@@ -28,6 +28,7 @@
 
 import * as Result from 'luci_sso.result';
 import { uci_list } from 'luci_sso.config';
+import { whole_match } from 'luci_sso.encoding';
 
 export const CONFIG = "rpcd";
 export const SECTION_PREFIX = "luci_sso_";
@@ -65,7 +66,7 @@ export function check_name(name) {
 		return Result.err("INVALID_NAME", "name is required");
 	if (length(name) > NAME_MAX)
 		return Result.err("INVALID_NAME", `name is longer than ${NAME_MAX} characters`);
-	if (!match(name, NAME_RE))
+	if (!whole_match(name, NAME_RE))
 		return Result.err("INVALID_NAME", "name may contain only letters, digits and underscores");
 	return Result.ok(name);
 };
@@ -110,18 +111,23 @@ export function check_list(label, list) {
 
 // fnmatch(3) without flags, as rpcd matches role lists against group names:
 // `*` and `?` are wildcards and `[...]` is a character class ([!...] negates).
+// fnmatch lets all three match a line feed, which `.` and `[^...]` do not on
+// the newer regex engine, so each also accepts "\n" explicitly, and the match
+// must cover the whole name (see encoding.whole_match).
 function glob_regexp(pattern) {
 	let out = "^";
 	for (let i = 0; i < length(pattern); i++) {
 		let ch = substr(pattern, i, 1);
-		if (ch == "*") out += ".*";
-		else if (ch == "?") out += ".";
+		if (ch == "*") out += "(.|\n)*";
+		else if (ch == "?") out += "(.|\n)";
 		else if (ch == "[") {
 			let j = index(substr(pattern, i + 1), "]");
 			if (j < 1) { out += "\\["; continue; }
 			let body = substr(pattern, i + 1, j);
-			if (substr(body, 0, 1) == "!") body = "^" + substr(body, 1);
-			out += "[" + replace(body, /\\/g, "\\\\") + "]";
+			let negated = (substr(body, 0, 1) == "!");
+			if (negated) body = substr(body, 1);
+			body = replace(body, /\\/g, "\\\\");
+			out += negated ? "([^" + body + "]|\n)" : "[" + body + "]";
 			i += j + 1;
 		}
 		else out += (index("\\.^$|+(){}]", ch) >= 0) ? "\\" + ch : ch;
@@ -130,7 +136,7 @@ function glob_regexp(pattern) {
 }
 
 function glob_matches(pattern, group) {
-	return match(group, glob_regexp(pattern)) != null;
+	return whole_match(group, glob_regexp(pattern));
 }
 
 // The pattern of a negation ("!pattern"), or null for a positive entry.

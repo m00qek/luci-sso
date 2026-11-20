@@ -26,7 +26,7 @@ function get_system_ca_files(fs) {
 	let files = fs.lsdir("/etc/ssl/certs");
 	if (files) {
 		for (let f in files) {
-			if (match(f, /\.(crt|pem)$/))
+			if (encoding.ends_with(f, ".crt") || encoding.ends_with(f, ".pem"))
 				cas_map["/etc/ssl/certs/" + f] = true;
 		}
 	}
