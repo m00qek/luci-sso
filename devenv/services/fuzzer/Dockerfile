@@ -20,10 +20,10 @@ ENV CXX=clang++-19
 # module can be loaded into a fully instrumented interpreter. Alpine's own
 # ucode package is from 2022; OpenWrt's is glibc-free but built with gcc,
 # whose ASan runtime does not support musl. Both pins match the devenv:
-# ucode as shipped by OpenWrt (2025.07.18~3f64c808) and utest 1.5.1.
+# ucode as shipped by OpenWrt (2025.07.18~3f64c808) and utest 1.5.2.
 # Only the modules the native and crypto buckets load are enabled.
 ARG UCODE_COMMIT=3f64c8089bf3ea4847c96b91df09fbfcaec19e1d
-ARG UTEST_COMMIT=23e05f93d8bbc486a35285b7abe1c63ac3a9f7ee
+ARG UTEST_COMMIT=75d2724e902bbec815d19a12bce79ec90f7dd8cf
 ENV SANITIZE_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -g -O1"
 RUN apk add --no-cache git json-c-dev libubox-dev && \
     git clone -q https://github.com/jow-/ucode.git /tmp/ucode && \

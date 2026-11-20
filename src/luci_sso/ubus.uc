@@ -34,7 +34,7 @@ function _load_acl_entries(deps) {
 
 	let entries = [], groups = {};
 	for (let f in sort(files)) {
-		if (!match(f, /\.json$/)) continue;
+		if (!encoding.ends_with(f, ".json")) continue;
 
 		let content = deps.fs.readfile(`${ACL_DIR}/${f}`);
 		if (!content) continue;
@@ -226,7 +226,7 @@ export function create_passwordless_session(deps, role, oidc_email, access_token
 	for (let g in acl_res.data.groups) known[g] = true;
 	for (let list in [ perms.read, perms.write ]) {
 		for (let n in list) {
-			if (type(n) == "string" && !match(n, /^!|[*?\[]/) && !known[n])
+			if (type(n) == "string" && substr(n, 0, 1) != "!" && !match(n, /[*?\[]/) && !known[n])
 				deps.log("warn", `Role '${role}' grants unknown access group '${n}'; no ACL file defines it`);
 		}
 	}
