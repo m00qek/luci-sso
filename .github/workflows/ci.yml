@@ -101,8 +101,15 @@ jobs:
               - 'devenv/services/openwrt/**'
               - 'Makefile'
             fuzzer: 'devenv/services/fuzzer/**'
-            openwrt: 'devenv/services/openwrt/**'
-            sdk: 'devenv/services/sdk/**'
+            # The SDK links native.so against the libraries the openwrt image
+            # installs (libwolfssl.so.<version> changes with every release), so
+            # the two are always rebuilt together, from the same feed state.
+            openwrt:
+              - 'devenv/services/openwrt/**'
+              - 'devenv/services/sdk/**'
+            sdk:
+              - 'devenv/services/openwrt/**'
+              - 'devenv/services/sdk/**'
             idp: 'devenv/services/idp/**'
             browser: 'devenv/services/browser/**'
             pki: 'devenv/services/pki/**'
@@ -146,6 +153,7 @@ jobs:
             SDK_ARCH=${{ needs.metadata.outputs.sdk_arch }}
             SDK_VERSION=${{ matrix.openwrt_version }}
             PKG_DEPENDS=${{ needs.metadata.outputs.pkg_depends }}
+            FEEDS_STAMP=${{ github.run_id }}
           cache-from: type=gha,scope=${{ matrix.service }}-${{ matrix.openwrt_version }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}-${{ matrix.openwrt_version }}
 

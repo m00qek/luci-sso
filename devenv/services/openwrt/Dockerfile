@@ -5,9 +5,13 @@ ARG SDK_VERSION
 FROM ghcr.io/openwrt/rootfs:${SDK_ARCH}-${SDK_VERSION}
 
 ARG PKG_DEPENDS
+# FEEDS_STAMP re-runs the install instead of reusing a cached one, so the
+# packages match the libraries the SDK image builds against in the same CI run
+# (see devenv/services/sdk/Dockerfile).
+ARG FEEDS_STAMP
 
 # Universal Package Manager Wrapper
-RUN mkdir -p /var/lock && \
+RUN echo "feeds: ${FEEDS_STAMP:-cached}" && mkdir -p /var/lock && \
   if command -v apk >/dev/null; then \
     apk update && \
     apk add --no-cache $(echo $PKG_DEPENDS) libmbedtls libwolfssl libopenssl \

@@ -15,7 +15,12 @@ USER buildbot
 WORKDIR /sdk
 
 # Layer 1: Setup Feeds (Slowest, Network dependent)
-RUN MAJOR_MINOR=$(echo ${SDK_VERSION} | cut -d. -f1,2) && \
+# FEEDS_STAMP re-runs this layer instead of reusing a cached checkout, so the
+# libraries compiled below match the ones the openwrt image installs from the
+# feed in the same CI run (see the image filters in .github/workflows/ci.yml).
+ARG FEEDS_STAMP
+RUN echo "feeds: ${FEEDS_STAMP:-cached}" && \
+    MAJOR_MINOR=$(echo ${SDK_VERSION} | cut -d. -f1,2) && \
     echo "src-git base https://github.com/openwrt/openwrt.git;openwrt-$MAJOR_MINOR" > feeds.conf && \
     echo "src-git packages https://github.com/openwrt/packages.git;openwrt-$MAJOR_MINOR" >> feeds.conf && \
     ./scripts/feeds update base packages
