@@ -59,7 +59,7 @@ LuCI's own **Log out** menu entry is the way users log out. For a session create
 When a browser is sent to `/cgi-bin/luci-sso/logout` with a live session (without one, it is simply sent to `/`):
 
 1. The CSRF token is verified — the request must include the `stoken` parameter matching the session's CSRF token.
-2. The UBUS session is destroyed. The `sysauth_https` and `sysauth` cookies are cleared with `Max-Age=0`, both at `Path=/` and at LuCI's own `Path=/cgi-bin/luci`.
+2. The UBUS session is destroyed. The `sysauth_https` and `sysauth` cookies are cleared with `Max-Age=0` at `Path=/`, and every session cookie LuCI may have set (`sysauth_https`, `sysauth_http`, `sysauth`) is cleared at LuCI's own path, both `Path=/cgi-bin/luci/` and `Path=/cgi-bin/luci`.
 3. If the IdP's discovery document advertises an HTTPS `end_session_endpoint`, the browser is redirected there with the stored ID token as `id_token_hint` and the router's own origin as `post_logout_redirect_uri`, as defined by [OpenID Connect RP-Initiated Logout 1.0](https://openid.net/specs/openid-connect-rpinitiated-1_0.html). Otherwise the browser is sent to `/`.
 
 Destroying the UBUS session is immediate and complete — the session ID in the cookie becomes invalid the moment `rpcd` processes the destroy call. A browser holding a stale cookie after logout will be rejected on the next LuCI request.

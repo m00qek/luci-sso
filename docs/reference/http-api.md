@@ -59,7 +59,7 @@ Called automatically by the browser after the user authenticates at the IdP. The
 | Requires configuration | Yes |
 | **Success response** | `302` with `Location: /cgi-bin/luci/` |
 | **Sets cookies** | `sysauth_https`, `sysauth` (see [Cookies](#cookies)) |
-| **Clears cookies** | `__Host-luci_sso_state`, and any `sysauth_https` and `sysauth` at `Path=/cgi-bin/luci` (Max-Age=0) |
+| **Clears cookies** | `__Host-luci_sso_state`, and any `sysauth_https`, `sysauth_http` and `sysauth` at LuCI's own path, both `Path=/cgi-bin/luci/` and `Path=/cgi-bin/luci` (Max-Age=0) |
 
 On failure, returns an error page (see [Error responses](#error-responses)).
 
@@ -78,7 +78,7 @@ Destroys the active LuCI session and redirects the browser. If the IdP advertise
 | Rate-limited | Yes |
 | Requires configuration | No. With a configuration, discovery runs to find `end_session_endpoint`. Without one (SSO disabled, or `CONFIG_ERROR`), the session is still destroyed and its cookies expired, and the browser is sent to `/`; the IdP session is not ended |
 | **Success response** | `302` with `Location: <end_session_endpoint or />` |
-| **Clears cookies** | `sysauth_https`, `sysauth`, at both `Path=/` and `Path=/cgi-bin/luci` (Max-Age=0) |
+| **Clears cookies** | `sysauth_https` and `sysauth` at `Path=/`, and `sysauth_https`, `sysauth_http` and `sysauth` at both `Path=/cgi-bin/luci/` and `Path=/cgi-bin/luci` (Max-Age=0) |
 | **Error on missing/invalid `stoken`** | `403` — CSRF check failure |
 
 If no active session is found (cookie absent or session already expired), the endpoint returns `302 /` without error. An ended session is logged as `Logout for [sub_id: …] (role=<role>)`; see [Log Messages](log-messages.md#logout).
@@ -109,7 +109,7 @@ Carries an opaque handle to the handshake during the OIDC flow. The handshake it
 
 The LuCI session cookie for HTTPS connections. Its value is the `rpcd` session ID. `sysauth_http`, which LuCI's password login sets over plain HTTP, is never set.
 
-LuCI's own password login sets its cookies at `Path=/cgi-bin/luci`. Because a cookie with a longer path is sent first and would shadow this one, the callback and `/logout` also expire any `sysauth_https` and `sysauth` at that path.
+LuCI's own password login sets its cookie, `sysauth_https` or `sysauth_http`, at `Path=/cgi-bin/luci/`, with a trailing slash. Because a cookie with a longer path is sent first and would shadow this one, the callback and `/logout` also expire any `sysauth_https`, `sysauth_http` and `sysauth` at that path. Browsers tell cookies apart by their exact path, so they expire the same names at `Path=/cgi-bin/luci` too, where `luci-sso` before 0.10.2 expired them.
 
 | Attribute | Value |
 | :--- | :--- |

@@ -19,6 +19,36 @@ import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'l
  */
 
 /**
+ * Issue #11. LuCI reads only the first value of its session cookie, and a
+ * cookie with a longer path is sent first, so a session cookie at LuCI's own
+ * path shadows the one set here at Path=/. LuCI's password login sets
+ * `sysauth_https` or `sysauth_http` at path=build_url(), which is
+ * `/cgi-bin/luci/`, with the trailing slash. Cookies are told apart by name
+ * and exact path, so that path has to be expired as it is. The slashless
+ * `/cgi-bin/luci` is expired too: luci-sso before 0.10.2 expired only that
+ * one, and older LuCI or other setups may have left cookies there.
+ *
+ * Path=/ cannot be replaced by LuCI's path: /cgi-bin/luci-sso/logout has to
+ * read the cookie, and /cgi-bin/luci/ does not path-match it.
+ * @private
+ */
+const LUCI_COOKIE_PATHS = [ "/cgi-bin/luci/", "/cgi-bin/luci" ];
+const LUCI_COOKIE_NAMES = [ "sysauth_https", "sysauth_http", "sysauth" ];
+
+/**
+ * Set-Cookie values that expire every session cookie LuCI may have set at
+ * its own path (see LUCI_COOKIE_PATHS).
+ * @private
+ */
+function expire_luci_cookies() {
+	let out = [];
+	for (let path in LUCI_COOKIE_PATHS)
+		for (let name in LUCI_COOKIE_NAMES)
+			push(out, `${name}=; HttpOnly; Secure; Path=${path}; Max-Age=0`);
+	return out;
+}
+
+/**
  * Creates a response object.
  * @private
  */
@@ -80,18 +110,10 @@ function handle_callback(deps, config, request) {
 		"Set-Cookie": [
 			`sysauth_https=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
 			`sysauth=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
-			// Issue #11. LuCI's own login sets these at path=build_url()
-			// (/cgi-bin/luci), we set them at Path=/. Same name, different path
-			// means both coexist, and RFC 6265 sends the LONGER path first —
-			// LuCI reads only the first value, so a leftover cookie from an
-			// earlier password login silently shadows the session we just
-			// created and the user is bounced back to the login page.
-			// We cannot simply adopt /cgi-bin/luci: this module's own
-			// /cgi-bin/luci-sso/logout endpoint has to read the cookie, and
-			// /cgi-bin/luci does not path-match /cgi-bin/luci-sso. So keep
-			// Path=/ and expire the shadowing copy instead.
-			"sysauth_https=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
-			"sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
+			// Issue #11: a cookie left at LuCI's own path by an earlier
+			// password login would shadow the session just created, and the
+			// page after the login would run under the old session.
+			...expire_luci_cookies(),
 			"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 		]
 	}));
@@ -184,11 +206,11 @@ function handle_logout(deps, config, request) {
 			// Mirrors the attributes used when setting them (see handle_callback).
 			"sysauth_https=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
 			"sysauth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
-			// And the /cgi-bin/luci copies, for the same reason handle_callback
-			// expires them: clearing only Path=/ would leave a LuCI-path cookie
-			// behind, so an SSO logout would not actually end the LuCI session.
-			"sysauth_https=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
-			"sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0"
+			// And the copies at LuCI's own path, for the same reason
+			// handle_callback expires them: clearing only Path=/ would leave a
+			// LuCI-path cookie behind, so an SSO logout would not actually end
+			// the LuCI session in this browser.
+			...expire_luci_cookies()
 		]
 	}));
 }
