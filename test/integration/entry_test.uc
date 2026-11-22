@@ -192,9 +192,15 @@ describe('entry: run', () => {
 			let out = wd.out();
 			assert.match(truthy(), index(out, "Status: 302") >= 0, out);
 			assert.match(truthy(), match(out, /\nLocation: \/\n/) != null, "local logout: back to /");
-			for (let c in [ "sysauth_https=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0", "sysauth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
-			                "sysauth_https=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0", "sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0" ])
-				assert.match(truthy(), index(out, `Set-Cookie: ${c}`) >= 0, c);
+			let expected = [ "sysauth_https=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0", "sysauth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0" ];
+			// LuCI's own path, with and without the trailing slash, for every
+			// name LuCI's password login may have used (issue #11).
+			for (let path in [ "/cgi-bin/luci/", "/cgi-bin/luci" ])
+				for (let name in [ "sysauth_https", "sysauth_http", "sysauth" ])
+					push(expected, `${name}=; HttpOnly; Secure; Path=${path}; Max-Age=0`);
+			for (let c in expected)
+				assert.match(truthy(), index(out, `Set-Cookie: ${c}\n`) >= 0, c);
+			assert.match(length(expected), length(match(out, /Set-Cookie: /g) ?? []), "no other cookie is set");
 		});
 	}
 
