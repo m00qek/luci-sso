@@ -188,6 +188,56 @@ describe('logout: the log line', () => {
 	});
 });
 
+// ─── Without a configuration ──────────────────────────────────────────────────
+
+describe('logout: without a configuration', () => {
+	it('destroys the session and expires the cookies, with no request to the IdP', () => {
+		let destroyed = [];
+		let logs = [];
+		with_context({
+			fs: { data: {} },
+			ubus: { data: {
+				"session:get": (args) => ({ values: { token: "csrf-1", username: "sso:viewer", oidc_id_token: "a.b.c" } }),
+				"session:destroy": (args) => { push(destroyed, args.ubus_rpc_session); return UBUS_NO_DATA; }
+			} },
+			// strict, with no data: any request to the IdP dies
+			http_client: { data: {} },
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			deps.log = (l, m) => push(logs, [ l, m ]);
+			let res = router.handle(deps, null, mock_request("/logout/", { stoken: "csrf-1" }, { sysauth_https: "sid-1" }));
+			assert.match(truthy(), res.ok);
+			assert.match(302, res.data.status);
+			assert.match("/", res.data.headers["Location"]);
+			assert.match(4, length(res.data.headers["Set-Cookie"]));
+			for (let c in res.data.headers["Set-Cookie"])
+				assert.match(truthy(), index(c, "Max-Age=0") >= 0, c);
+		});
+		assert.match([ "sid-1" ], destroyed);
+		assert.match([ [ "warn", "Logout is local only: the configuration could not be loaded, so the IdP session is not ended" ] ],
+			filter(logs, (l) => l[0] == "warn"));
+	});
+
+	it('refuses a missing or wrong CSRF token, as with a configuration', () => {
+		let destroyed = [];
+		with_context({
+			fs: { data: {} },
+			ubus: { data: {
+				"session:get": (args) => ({ values: { token: "csrf-1", username: "sso:viewer" } }),
+				"session:destroy": (args) => { push(destroyed, args.ubus_rpc_session); return UBUS_NO_DATA; }
+			} },
+			clock: { data: { now: 1516239022 } }
+		}, (deps) => {
+			for (let q in [ {}, { stoken: "csrf-2" } ]) {
+				let res = router.handle(deps, null, mock_request("/logout", q, { sysauth_https: "sid-1" }));
+				assert.match(falsy(), res.ok);
+				assert.match("CSRF_CHECK_FAILED", res.error);
+			}
+		});
+		assert.match([], destroyed);
+	});
+});
+
 // ─── CSRF (stoken) enforcement ────────────────────────────────────────────────
 
 const DISCOVERY_DATA = {
