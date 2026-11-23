@@ -149,6 +149,19 @@ describe('router: callback', () => {
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
 			assert.match("/cgi-bin/luci/", res.data.headers["Location"]);
+
+			// The new session at Path=/, every session cookie LuCI's own
+			// login may have left at its path expired (issue #11), and the
+			// state cookie expired.
+			let expected = [
+				"sysauth_https=session-for-root; HttpOnly; Secure; SameSite=Lax; Path=/",
+				"sysauth=session-for-root; HttpOnly; Secure; SameSite=Lax; Path=/"
+			];
+			for (let path in [ "/cgi-bin/luci/", "/cgi-bin/luci" ])
+				for (let name in [ "sysauth_https", "sysauth_http", "sysauth" ])
+					push(expected, `${name}=; HttpOnly; Secure; Path=${path}; Max-Age=0`);
+			push(expected, "__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0");
+			assert.match(expected, res.data.headers["Set-Cookie"]);
 		});
 
 		assert.match(truthy(), ubus_create_called, "Should have called ubus create");

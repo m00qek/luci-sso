@@ -209,7 +209,7 @@ describe('logout: without a configuration', () => {
 			assert.match(truthy(), res.ok);
 			assert.match(302, res.data.status);
 			assert.match("/", res.data.headers["Location"]);
-			assert.match(4, length(res.data.headers["Set-Cookie"]));
+			assert.match(8, length(res.data.headers["Set-Cookie"]));
 			for (let c in res.data.headers["Set-Cookie"])
 				assert.match(truthy(), index(c, "Max-Age=0") >= 0, c);
 		});

@@ -24,15 +24,29 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 - After an SSO login, LuCI opens the page that was requested, as with the password login (#27). The **Login with SSO** button sends the page it is on as `return_to`; the router keeps it in the handshake, never in a cookie or the request to the IdP, checks it again at the callback, and redirects there instead of always to `/cgi-bin/luci/`. Only a path under `/cgi-bin/luci/` is accepted: no other site, no `//`, no dot segments, not LuCI's logout page nor any path under it, only letters, digits and `/ _ . ~ % ? & = + , -`, at most 512 bytes, with every percent-decoded form checked too. Anything else is dropped, logged, and the login lands on `/cgi-bin/luci/` as before. See [`return_to` rules](https://m00qek.github.io/luci-sso/latest/reference/http-api/#return_to-rules).
 - The setup script adds the daily cleanup cron job even when a comment in `/etc/crontabs/root` mentions `/usr/sbin/luci-sso-cleanup`. Before, any line naming the script, a comment too, counted as the job, so the job was never added and expired token locks and handshakes were never removed. Removing the package now deletes only the job line, and keeps such comments. Both go through the new `luci-sso-cleanup --install-cron` and `--remove-cron`.
 - The login line `Successful Passwordless SSO login for [oidc_id: …]` says `(no email)` for a user without a verified email, instead of `[INVALID]`, which read like an error.
-- A login whose ID token named a malformed key in the IdP's JWK Set, one whose `n`, `e`, `x` or `y` is not a string, or that had no `kid` while the set's first entry is not an object, crashed the callback with a 500 page after the handshake was used up. It now fails with `ID_TOKEN_VERIFICATION_FAILED` (`401`) and the reason in the log: `INVALID_RSA_PARAMS_ENCODING`, `INVALID_EC_PARAMS_ENCODING` or `MISSING_KTY`. 0.10.0 has the same problem.
+- A login whose ID token named a malformed key in the IdP's JWK Set, one whose `n`, `e`, `x` or `y` is not a string, or that had no `kid` while the set's first entry is not an object, crashed the callback with a 500 page after the handshake was used up. It now fails with `ID_TOKEN_VERIFICATION_FAILED` (`401`) and the reason in the log: `INVALID_RSA_PARAMS_ENCODING`, `INVALID_EC_PARAMS_ENCODING` or `MISSING_KTY`. 0.10.0 and 0.10.1 have the same problem.
 
 ### Security
 
-- The settings page inserted role values into the role table as HTML: the emails, groups and read and write access shown in each row. Someone who can change the luci-sso configuration or a role's permissions, such as a user given only the `luci-app-sso` access group, could store markup that runs in the browser of an administrator who opens the page. Every value the router or the identity provider supplies is now shown as text.
-- The wolfSSL backend checked the 2048-bit minimum for RSA keys in bytes, so it accepted ID tokens signed with a 2041- to 2047-bit key, which the mbedTLS and OpenSSL backends refuse. It now counts bits, as they do.
-- The IdP's `error` parameter on the callback, and other logged request values such as `return_to`, were passed to `syslog` as a format string. An unauthenticated request holding printf conversions such as `%99999999d` could make the CGI build strings of hundreds of megabytes, and so use large amounts of memory. Every log line is now written as the argument of a constant `%s` format. 0.10.0 has the same problem.
-- On OpenWrt devices with libucode `2026.07.09~b885dd0f` or later, the regex engine of every 25.12 package index, a line feed in an untrusted value reached the log, and several checks accepted a value when only one of its lines passed. That ucode release (upstream commit 8a8b4d12) made `^` and `$` match at every line, and `.` and `[^...]` stop matching a line feed. An unauthenticated request could add forged lines to the system log through the callback's `error` and `error_description` parameters or `return_to`, because the log sanitiser no longer replaced the line feed. The handshake handle, Base64URL, OAuth error code and role name checks, the URL parsing used for the issuer and discovery endpoints, and the role list patterns now give the same answer on both engines: a value with a line feed is refused, or its line feed shown as `?`, as before. Devices on the older libucode, such as stock 24.10 and 25.12 images that were never upgraded, were not affected.
-- **Log out** ended nothing while the configuration could not be loaded: with SSO disabled, or any `CONFIG_ERROR`, `/cgi-bin/luci-sso/logout` answered 500 before it looked at the session, so an SSO session stayed valid until its timeout. Logout now always destroys the session and expires its cookies, after the same CSRF check; without a usable configuration it is local only, sends the browser to `/` instead of the IdP, and logs `Logout is local only: …`. 0.10.0 has the same problem.
+- The settings page inserted role values into the role table as HTML: the emails, groups and read and write access shown in each row. Someone who can change the luci-sso configuration or a role's permissions, such as a user given only the `luci-app-sso` access group, could store markup that runs in the browser of an administrator who opens the page. Every value the router or the identity provider supplies is now shown as text. 0.10.0 and 0.10.1 have the same problem.
+- The wolfSSL backend checked the 2048-bit minimum for RSA keys in bytes, so it accepted ID tokens signed with a 2041- to 2047-bit key, which the mbedTLS and OpenSSL backends refuse. It now counts bits, as they do. 0.10.0 and 0.10.1 have the same problem.
+- The OAuth error code check of the token endpoint's answer gives the same answer on both ucode regex engines, as the checks [0.10.1](#0101---2026-11-19) fixed do: a value with a line feed is refused. On 0.10.x the code is compared for equality, with no regex.
+
+## [0.10.2] - 2026-11-22
+
+### Security
+
+Upgrade to 0.10.2. No configuration change is needed, and existing sessions keep working.
+
+- The IdP's `error` parameter on the callback, and other logged request values, were passed to `syslog` as a format string. An unauthenticated request holding printf conversions such as `%99999999d` could make the CGI build strings of hundreds of megabytes, and so use large amounts of memory. Every log line is now written as the argument of a constant `%s` format. 0.10.0 and 0.10.1 are affected.
+- An SSO login in a browser that was already logged in to LuCI with a password kept running the password session. LuCI's own login sets its session cookie at `Path=/cgi-bin/luci/`, with a trailing slash, but the SSO callback and logout expired it only at `Path=/cgi-bin/luci`. Browsers tell cookies apart by their exact path, so the old cookie stayed, was sent first, and LuCI used it: the pages after the SSO login ran with the rights of the earlier login, `root` for instance, instead of the role's, and an SSO logout left that earlier session in the browser. The callback and `/cgi-bin/luci-sso/logout` now expire `sysauth_https`, `sysauth_http` and `sysauth` at both paths. 0.10.0 and 0.10.1 are affected.
+- **Log out** ended nothing while the configuration could not be loaded: with SSO disabled, or any `CONFIG_ERROR`, `/cgi-bin/luci-sso/logout` answered 500 before it looked at the session, so an SSO session stayed valid until its timeout. Logout now always destroys the session and expires its cookies, after the same CSRF check; without a usable configuration it is local only, sends the browser to `/` instead of the IdP, and logs `Logout is local only: …`. 0.10.0 and 0.10.1 are affected.
+
+## [0.10.1] - 2026-11-19
+
+### Security
+
+- On OpenWrt devices with libucode `2026.07.09~b885dd0f` or later, the regex engine of every 25.12 package index, a line feed in an untrusted value reached the log, and several checks accepted a value when only one of its lines passed. That ucode release (upstream commit 8a8b4d12) made `^` and `$` match at every line, and `.` and `[^...]` stop matching a line feed. An unauthenticated request could add forged lines to the system log through the callback's `error` and `error_description` parameters, because the log sanitiser no longer replaced the line feed. The handshake handle, Base64URL and role name checks, the URL parsing used for the issuer and discovery endpoints, the role list patterns, and the client address parsing of the rate limits now give the same answer on both engines: a value with a line feed is refused, or its line feed shown as `?`, as before. Devices on the older libucode, such as stock 24.10 and 25.12 images that were never upgraded, were not affected.
 
 ## [0.10.0] - 2026-09-29
 
@@ -107,7 +121,9 @@ Upgrading from 0.9.1 needs some steps **before** you install, and one right afte
 
 First public release.
 
-[Unreleased]: https://github.com/m00qek/luci-sso/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/m00qek/luci-sso/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/m00qek/luci-sso/compare/v0.10.1...v0.10.2
+[0.10.1]: https://github.com/m00qek/luci-sso/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/m00qek/luci-sso/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/m00qek/luci-sso/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/m00qek/luci-sso/releases/tag/v0.9.0
