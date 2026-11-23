@@ -80,6 +80,12 @@ jobs:
         uses: dorny/paths-filter@v4
         id: filter
         with:
+          # On a push, compare with the branch's previous commit. The default,
+          # the merge-base with main, made every push to a release branch
+          # count its whole divergence from main as changed, and so rebuild
+          # and push the shared devenv images from the release branch's
+          # Dockerfiles. Pull requests always compare with their base branch.
+          base: ${{ github.event_name == 'push' && github.ref || '' }}
           filters: |
             native:
               - 'mod/**'
