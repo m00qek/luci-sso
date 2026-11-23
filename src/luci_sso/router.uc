@@ -19,6 +19,36 @@ import { TOO_MANY_REQUESTS, SSO_DISABLED, NOT_FOUND, CSRF_CHECK_FAILED } from 'l
  */
 
 /**
+ * Issue #11. LuCI reads only the first value of its session cookie, and a
+ * cookie with a longer path is sent first, so a session cookie at LuCI's own
+ * path shadows the one set here at Path=/. LuCI's password login sets
+ * `sysauth_https` or `sysauth_http` at path=build_url(), which is
+ * `/cgi-bin/luci/`, with the trailing slash. Cookies are told apart by name
+ * and exact path, so that path has to be expired as it is. The slashless
+ * `/cgi-bin/luci` is expired too: luci-sso before 0.10.2 expired only that
+ * one, and older LuCI or other setups may have left cookies there.
+ *
+ * Path=/ cannot be replaced by LuCI's path: /cgi-bin/luci-sso/logout has to
+ * read the cookie, and /cgi-bin/luci/ does not path-match it.
+ * @private
+ */
+const LUCI_COOKIE_PATHS = [ "/cgi-bin/luci/", "/cgi-bin/luci" ];
+const LUCI_COOKIE_NAMES = [ "sysauth_https", "sysauth_http", "sysauth" ];
+
+/**
+ * Set-Cookie values that expire every session cookie LuCI may have set at
+ * its own path (see LUCI_COOKIE_PATHS).
+ * @private
+ */
+function expire_luci_cookies() {
+	let out = [];
+	for (let path in LUCI_COOKIE_PATHS)
+		for (let name in LUCI_COOKIE_NAMES)
+			push(out, `${name}=; HttpOnly; Secure; Path=${path}; Max-Age=0`);
+	return out;
+}
+
+/**
  * Creates a response object.
  * @private
  */
@@ -80,18 +110,10 @@ function handle_callback(deps, config, request) {
 		"Set-Cookie": [
 			`sysauth_https=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
 			`sysauth=${res.data.sid}; HttpOnly; Secure; SameSite=Lax; Path=/`,
-			// Issue #11. LuCI's own login sets these at path=build_url()
-			// (/cgi-bin/luci), we set them at Path=/. Same name, different path
-			// means both coexist, and RFC 6265 sends the LONGER path first —
-			// LuCI reads only the first value, so a leftover cookie from an
-			// earlier password login silently shadows the session we just
-			// created and the user is bounced back to the login page.
-			// We cannot simply adopt /cgi-bin/luci: this module's own
-			// /cgi-bin/luci-sso/logout endpoint has to read the cookie, and
-			// /cgi-bin/luci does not path-match /cgi-bin/luci-sso. So keep
-			// Path=/ and expire the shadowing copy instead.
-			"sysauth_https=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
-			"sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
+			// Issue #11: a cookie left at LuCI's own path by an earlier
+			// password login would shadow the session just created, and the
+			// page after the login would run under the old session.
+			...expire_luci_cookies(),
 			"__Host-luci_sso_state=; HttpOnly; Secure; Path=/; Max-Age=0"
 		]
 	}));
@@ -111,7 +133,9 @@ function id_token_sub(id_token) {
 }
 
 /**
- * Handles the logout request.
+ * Handles the logout request. With a null config, the configuration could
+ * not be loaded: the session is still destroyed and its cookies expired, but
+ * there is no IdP to send the browser to, so the logout is local only.
  * @private
  */
 function handle_logout(deps, config, request) {
@@ -147,8 +171,13 @@ function handle_logout(deps, config, request) {
 	let logout_url = "/";
 
 	// OIDC RP-Initiated Logout
-	let disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
-	if (disc_res.ok && disc_res.data.end_session_endpoint) {
+	let disc_res = null;
+	if (config) {
+		disc_res = discovery.discover(deps, config.issuer_url, { internal_issuer_url: config.internal_issuer_url });
+	} else {
+		deps.log("warn", "Logout is local only: the configuration could not be loaded, so the IdP session is not ended");
+	}
+	if (disc_res && disc_res.ok && disc_res.data.end_session_endpoint) {
 		let end_session = disc_res.data.end_session_endpoint;
 
 		// The browser carries id_token_hint to this URL, so it must be HTTPS.
@@ -177,23 +206,51 @@ function handle_logout(deps, config, request) {
 			// Mirrors the attributes used when setting them (see handle_callback).
 			"sysauth_https=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
 			"sysauth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0",
-			// And the /cgi-bin/luci copies, for the same reason handle_callback
-			// expires them: clearing only Path=/ would leave a LuCI-path cookie
-			// behind, so an SSO logout would not actually end the LuCI session.
-			"sysauth_https=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0",
-			"sysauth=; HttpOnly; Secure; Path=/cgi-bin/luci; Max-Age=0"
+			// And the copies at LuCI's own path, for the same reason
+			// handle_callback expires them: clearing only Path=/ would leave a
+			// LuCI-path cookie behind, so an SSO logout would not actually end
+			// the LuCI session in this browser.
+			...expire_luci_cookies()
 		]
 	}));
 }
 
 /**
- * Main entry point for the router.
- * @param {object} deps - { fs, http, ubus, uci, log, clock }
+ * The request's path as the router dispatches on it: with a leading "/" and
+ * without a trailing one.
+ * @private
  */
-export function handle(deps, config, request) {
+function route_path(request) {
 	let path = request.path || "/";
 	if (substr(path, 0, 1) != "/") path = "/" + path;
 	if (length(path) > 1 && substr(path, -1) == "/") path = substr(path, 0, length(path) - 1);
+	return path;
+}
+
+/**
+ * Whether the request is for the logout endpoint, which handle() serves
+ * even with a null config (see handle).
+ *
+ * @param {object} request - The parsed request
+ * @returns {boolean}
+ */
+export function is_logout(request) {
+	return route_path(request) == "/logout";
+};
+
+/**
+ * Main entry point for the router.
+ *
+ * `config` is null when the configuration could not be loaded (disabled
+ * SSO, or a CONFIG_ERROR). Then only ?action=enabled and /logout are served:
+ * logging out must never depend on the OIDC settings, so a broken
+ * configuration cannot leave an SSO session alive. Every other path fails
+ * with SSO_DISABLED.
+ *
+ * @param {object} deps - { fs, http, ubus, uci, log, clock }
+ */
+export function handle(deps, config, request) {
+	let path = route_path(request);
 
 	// ?action=enabled needs neither a valid config nor rate-limit budget.
 	if (path == "/") {
@@ -213,11 +270,16 @@ export function handle(deps, config, request) {
 		return Result.err(TOO_MANY_REQUESTS, { http_status: 429, retry_after: rl.retry_after });
 	}
 
+	// Logout works without a config (local logout only).
+	if (path == "/logout") {
+		return handle_logout(deps, config, request);
+	}
+
 	// Every remaining path needs a loaded config. Unreachable today: entry.uc
-	// passes a null config only for ?action=enabled, answered above. The guard
-	// stays as defence in depth against a future caller, and returns what
-	// entry.uc renders for disabled SSO (500): 503 is reserved for
-	// HANDSHAKE_CAPACITY_EXCEEDED.
+	// passes a null config only for ?action=enabled and /logout, answered
+	// above. The guard stays as defence in depth against a future caller, and
+	// returns what entry.uc renders for disabled SSO (500): 503 is reserved
+	// for HANDSHAKE_CAPACITY_EXCEEDED.
 	if (!config) {
 		return Result.err(SSO_DISABLED, { http_status: 500 });
 	}
@@ -225,8 +287,6 @@ export function handle(deps, config, request) {
 		return handle_login(deps, config);
 	} else if (path == "/callback") {
 		return handle_callback(deps, config, request);
-	} else if (path == "/logout") {
-		return handle_logout(deps, config, request);
 	}
 
 	return Result.err(NOT_FOUND, { http_status: 404 });

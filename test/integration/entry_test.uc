@@ -1,7 +1,7 @@
 import { describe, it, assert, truthy } from 'utest';
 import * as entry from 'luci_sso.entry';
 import * as session from 'luci_sso.session';
-import { with_context } from 'context';
+import { with_context, UBUS_NO_DATA } from 'context';
 
 // Integration bucket — enter at entry.run(deps, web_deps), the CGI composition
 // root. Real web + config + router run against a deps graph built by
@@ -114,6 +114,72 @@ describe('entry: run', () => {
 			assert.match(truthy(), index(wd.out(), "Status: 429 Too Many Requests") >= 0);
 			assert.match(truthy(), match(wd.out(), /\nRetry-After: [0-9]+\n/) != null, "Retry-After header present");
 		});
+	});
+
+	// Logout must not depend on the configuration: a broken or disabled one
+	// once answered 500 before the router ran, so the session stayed valid
+	// until it timed out.
+	const BROKEN = {
+		"config error": { ...ENABLED_UCI, default: { ...ENABLED_UCI.default, clock_tolerance: "99999" } },
+		"no roles":     { default: ENABLED_UCI.default },
+		"SSO disabled": DISABLED_UCI,
+	};
+	for (let name, uci in BROKEN) {
+		it(`logs out locally when the configuration cannot be loaded (${name})`, () => {
+			let destroyed = [];
+			let wd = web_deps({ PATH_INFO: "/logout", QUERY_STRING: "stoken=csrf-1", HTTP_COOKIE: "sysauth_https=sid-1" });
+			with_context({
+				fs: { data: {} }, uci: { data: { "luci-sso": uci } }, clock: { data: { now: NOW } },
+				ubus: { data: {
+					"session:get": (args) => ({ values: { token: "csrf-1", username: "sso:r1", oidc_id_token: "x.y.z" } }),
+					"session:destroy": (args) => { push(destroyed, args.ubus_rpc_session); return UBUS_NO_DATA; }
+				} }
+			}, (deps) => {
+				let logs = [];
+				deps.log = (l, m) => push(logs, [ l, m ]);
+				entry.run(deps, wd);
+				assert.match(1, length(filter(logs, (l) => l[1] == "Logout is local only: the configuration could not be loaded, so the IdP session is not ended")));
+			});
+			assert.match([ "sid-1" ], destroyed, "the session is destroyed");
+			let out = wd.out();
+			assert.match(truthy(), index(out, "Status: 302") >= 0, out);
+			assert.match(truthy(), match(out, /\nLocation: \/\n/) != null, "local logout: back to /");
+			let expected = [ "sysauth_https=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0", "sysauth=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0" ];
+			// LuCI's own path, with and without the trailing slash, for every
+			// name LuCI's password login may have used (issue #11).
+			for (let path in [ "/cgi-bin/luci/", "/cgi-bin/luci" ])
+				for (let name in [ "sysauth_https", "sysauth_http", "sysauth" ])
+					push(expected, `${name}=; HttpOnly; Secure; Path=${path}; Max-Age=0`);
+			for (let c in expected)
+				assert.match(truthy(), index(out, `Set-Cookie: ${c}\n`) >= 0, c);
+			assert.match(length(expected), length(match(out, /Set-Cookie: /g) ?? []), "no other cookie is set");
+		});
+	}
+
+	it('still checks the CSRF token when logging out without a configuration', () => {
+		let destroyed = [];
+		let wd = web_deps({ PATH_INFO: "/logout", QUERY_STRING: "stoken=forged", HTTP_COOKIE: "sysauth_https=sid-1" });
+		with_context({
+			fs: { data: {} }, uci: { data: { "luci-sso": DISABLED_UCI } }, clock: { data: { now: NOW } },
+			ubus: { data: {
+				"session:get": (args) => ({ values: { token: "csrf-1", username: "sso:r1" } }),
+				"session:destroy": (args) => { push(destroyed, args.ubus_rpc_session); return UBUS_NO_DATA; }
+			} }
+		}, (deps) => {
+			entry.run(deps, wd);
+		});
+		assert.match([], destroyed);
+		assert.match(truthy(), index(wd.out(), "Status: 403") >= 0);
+	});
+
+	it('still answers 500 for the login and the callback when the configuration cannot be loaded', () => {
+		for (let path in [ "/", "/callback" ]) {
+			let wd = web_deps({ PATH_INFO: path });
+			with_context({ fs: { data: {} }, uci: { data: { "luci-sso": BROKEN["config error"] } }, clock: { data: { now: NOW } } }, (deps) => {
+				entry.run(deps, wd);
+			});
+			assert.match(truthy(), index(wd.out(), "Status: 500") >= 0, path);
+		}
 	});
 
 	it('loads config and routes when SSO is enabled', () => {

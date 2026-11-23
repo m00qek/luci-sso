@@ -2,7 +2,7 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [main, master, ci]
+    branches: [main, master, ci, 'release/**']
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
@@ -10,7 +10,7 @@ on:
       - 'LICENSE'
       - '.github/workflows/docs.yml'
   pull_request:
-    branches: [main, master, ci]
+    branches: [main, master, ci, 'release/**']
     paths-ignore:
       - 'docs/**'
       - '**/*.md'
