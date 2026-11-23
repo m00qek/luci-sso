@@ -32,7 +32,7 @@ All notable changes to `luci-sso` are listed here. The format follows [Keep a Ch
 - The wolfSSL backend checked the 2048-bit minimum for RSA keys in bytes, so it accepted ID tokens signed with a 2041- to 2047-bit key, which the mbedTLS and OpenSSL backends refuse. It now counts bits, as they do. 0.10.0 and 0.10.1 have the same problem.
 - The OAuth error code check of the token endpoint's answer gives the same answer on both ucode regex engines, as the checks [0.10.1](#0101---2026-11-19) fixed do: a value with a line feed is refused. On 0.10.x the code is compared for equality, with no regex.
 
-## [0.10.2] - 2026-11-22
+## [0.10.2] - 2026-11-23
 
 ### Security
 
