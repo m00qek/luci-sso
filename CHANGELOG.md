@@ -2,7 +2,7 @@
 
 All notable changes to `luci-sso` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Until 1.0, a minor version may change the configuration or behaviour; each such change is listed under **Upgrade actions**.
 
-## [0.10.2] - 2026-11-22
+## [0.10.2] - 2026-11-24
 
 ### Security
 
