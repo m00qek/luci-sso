@@ -2779,14 +2779,14 @@ luci-sso[1289]: [502] OIDC_DISCOVERY_FAILED
 <tbody>
 <tr>
 <td style="text-align: left;"><code>SSO_DISABLED</code></td>
-<td style="text-align: left;">A login, callback or logout request arrives while <code>enabled</code> is not <code>1</code></td>
-<td style="text-align: left;">SSO is turned off. The <code>?action=enabled</code> probe returns <code>{"enabled": false}</code> instead and logs nothing.</td>
+<td style="text-align: left;">A login or callback request arrives while <code>enabled</code> is not <code>1</code></td>
+<td style="text-align: left;">SSO is turned off. The <code>?action=enabled</code> probe returns <code>{"enabled": false}</code> instead and logs nothing. A logout still ends the session, locally.</td>
 <td style="text-align: left;"><code>[500] SSO_DISABLED</code></td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>CONFIG_ERROR</code></td>
 <td style="text-align: left;">SSO is enabled, but a required option is missing or invalid (see notes)</td>
-<td style="text-align: left;">The configuration cannot be used. Every request fails, including the <code>?action=enabled</code> probe.</td>
+<td style="text-align: left;">The configuration cannot be used. Every request fails, including the <code>?action=enabled</code> probe, except a logout, which still ends the session, locally.</td>
 <td style="text-align: left;"><code>[500] CONFIG_ERROR</code>, preceded by <code>Configuration rejected: &lt;reason&gt;</code></td>
 </tr>
 <tr>
@@ -4267,6 +4267,11 @@ luci-sso[1234]: [401] ID_TOKEN_VERIFICATION_FAILED
 <td style="text-align: left;"><code>Logout for [sub_id: …] (role=&lt;role&gt;)</code></td>
 <td style="text-align: left;">info</td>
 <td style="text-align: left;">An SSO session was ended on the router. <code>[sub_id: …]</code> is read from the session's ID Token, so it matches the user's login lines; it reads <code>[INVALID]</code> when the session holds no ID Token, when its <code>sub</code> cannot be read, or, as in the login lines, when the <code>sub</code> is shorter than 8 characters. The browser then goes to the IdP's <code>end_session_endpoint</code>, if it has one.</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Logout is local only: the configuration could not be loaded, so the IdP session is not ended</code></td>
+<td style="text-align: left;">warn</td>
+<td style="text-align: left;">SSO is disabled, or the configuration is rejected (<code>Configuration rejected: &lt;reason&gt;</code> comes first). The session was still ended on the router and its cookies expired, but the browser goes to <code>/</code>, not to the IdP. Fix the configuration; the user's IdP session stays until it ends there.</td>
 </tr>
 <tr>
 <td style="text-align: left;"><code>Logout for [sub_id: …] (not an SSO session)</code></td>

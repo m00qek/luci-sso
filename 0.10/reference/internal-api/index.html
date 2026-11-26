@@ -1571,6 +1571,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#is_logoutrequest-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      is_logout(request) → bool
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2914,6 +2923,15 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#is_logoutrequest-bool" class="md-nav__link">
+    <span class="md-ellipsis">
+      is_logout(request) → bool
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -3928,7 +3946,7 @@
 <h2 id="luci_ssorouter"><code>luci_sso.router</code><a class="headerlink" href="#luci_ssorouter" title="Permanent link">&para;</a></h2>
 <p>Request dispatch by path.</p>
 <h3 id="handledeps-config-request-resultstatus-headers-body"><code>handle(deps, config, request)</code> → <code>Result&lt;{status, headers, body}&gt;</code><a class="headerlink" href="#handledeps-config-request-resultstatus-headers-body" title="Permanent link">&para;</a></h3>
-<p>Dispatches one request. <code>config</code> is the result of <code>config.load()</code>, or <code>null</code> when SSO is disabled. <code>request</code> is the result of <code>web.request()</code>.</p>
+<p>Dispatches one request. <code>config</code> is the result of <code>config.load()</code>, or <code>null</code> when it could not be loaded (SSO disabled, or <code>CONFIG_ERROR</code>). <code>request</code> is the result of <code>web.request()</code>.</p>
 <table>
 <thead>
 <tr>
@@ -3951,7 +3969,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><code>/logout</code></td>
-<td style="text-align: left;">Without a valid session, redirects to <code>/</code>. Otherwise checks <code>stoken</code> against the session's CSRF token, destroys the session, and redirects to the IdP's <code>end_session_endpoint</code> or <code>/</code>.</td>
+<td style="text-align: left;">Without a valid session, redirects to <code>/</code>. Otherwise checks <code>stoken</code> against the session's CSRF token, destroys the session, and redirects to the IdP's <code>end_session_endpoint</code> or <code>/</code>. With a <code>null</code> config the logout is local: no discovery, and the redirect is to <code>/</code>.</td>
 </tr>
 <tr>
 <td style="text-align: left;">anything else</td>
@@ -3959,7 +3977,9 @@
 </tr>
 </tbody>
 </table>
-<p>Every path except the probe first spends the client's rate-limit budget (<code>TOO_MANY_REQUESTS</code>, <code>429</code>). With a <code>null</code> config, every path except the probe fails with <code>SSO_DISABLED</code> (<code>500</code>, the status <code>entry.run()</code> renders for disabled SSO); <code>entry.run()</code> never calls it that way.</p>
+<p>Every path except the probe first spends the client's rate-limit budget (<code>TOO_MANY_REQUESTS</code>, <code>429</code>). With a <code>null</code> config, every path except the probe and <code>/logout</code> fails with <code>SSO_DISABLED</code> (<code>500</code>, the status <code>entry.run()</code> renders for disabled SSO); <code>entry.run()</code> never calls it that way. <code>entry.run()</code> passes a <code>null</code> config for <code>/logout</code> whenever <code>config.load()</code> fails, so a broken or disabled configuration never keeps an SSO session alive.</p>
+<h3 id="is_logoutrequest-bool"><code>is_logout(request)</code> → <code>bool</code><a class="headerlink" href="#is_logoutrequest-bool" title="Permanent link">&para;</a></h3>
+<p>Whether <code>request</code> is for <code>/logout</code>, with or without a trailing slash: the one path besides the probe that <code>handle()</code> serves with a <code>null</code> config.</p>
 <hr />
 <h2 id="luci_ssohandshake"><code>luci_sso.handshake</code><a class="headerlink" href="#luci_ssohandshake" title="Permanent link">&para;</a></h2>
 <p>The OIDC orchestrator for both legs of the authorization code flow.</p>

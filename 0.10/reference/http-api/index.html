@@ -2224,7 +2224,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Clears cookies</strong></td>
-<td style="text-align: left;"><code>__Host-luci_sso_state</code>, and any <code>sysauth_https</code> and <code>sysauth</code> at <code>Path=/cgi-bin/luci</code> (Max-Age=0)</td>
+<td style="text-align: left;"><code>__Host-luci_sso_state</code>, and any <code>sysauth_https</code>, <code>sysauth_http</code> and <code>sysauth</code> at LuCI's own path, both <code>Path=/cgi-bin/luci/</code> and <code>Path=/cgi-bin/luci</code> (Max-Age=0)</td>
 </tr>
 </tbody>
 </table>
@@ -2260,7 +2260,7 @@
 </tr>
 <tr>
 <td style="text-align: left;">Requires configuration</td>
-<td style="text-align: left;">Yes — discovery runs to find <code>end_session_endpoint</code></td>
+<td style="text-align: left;">No. With a configuration, discovery runs to find <code>end_session_endpoint</code>. Without one (SSO disabled, or <code>CONFIG_ERROR</code>), the session is still destroyed and its cookies expired, and the browser is sent to <code>/</code>; the IdP session is not ended</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Success response</strong></td>
@@ -2268,7 +2268,7 @@
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Clears cookies</strong></td>
-<td style="text-align: left;"><code>sysauth_https</code>, <code>sysauth</code>, at both <code>Path=/</code> and <code>Path=/cgi-bin/luci</code> (Max-Age=0)</td>
+<td style="text-align: left;"><code>sysauth_https</code> and <code>sysauth</code> at <code>Path=/</code>, and <code>sysauth_https</code>, <code>sysauth_http</code> and <code>sysauth</code> at both <code>Path=/cgi-bin/luci/</code> and <code>Path=/cgi-bin/luci</code> (Max-Age=0)</td>
 </tr>
 <tr>
 <td style="text-align: left;"><strong>Error on missing/invalid <code>stoken</code></strong></td>
@@ -2322,7 +2322,7 @@
 </table>
 <h3 id="sysauth_https"><code>sysauth_https</code><a class="headerlink" href="#sysauth_https" title="Permanent link">&para;</a></h3>
 <p>The LuCI session cookie for HTTPS connections. Its value is the <code>rpcd</code> session ID. <code>sysauth_http</code>, which LuCI's password login sets over plain HTTP, is never set.</p>
-<p>LuCI's own password login sets its cookies at <code>Path=/cgi-bin/luci</code>. Because a cookie with a longer path is sent first and would shadow this one, the callback and <code>/logout</code> also expire any <code>sysauth_https</code> and <code>sysauth</code> at that path.</p>
+<p>LuCI's own password login sets its cookie, <code>sysauth_https</code> or <code>sysauth_http</code>, at <code>Path=/cgi-bin/luci/</code>, with a trailing slash. Because a cookie with a longer path is sent first and would shadow this one, the callback and <code>/logout</code> also expire any <code>sysauth_https</code>, <code>sysauth_http</code> and <code>sysauth</code> at that path. Browsers tell cookies apart by their exact path, so they expire the same names at <code>Path=/cgi-bin/luci</code> too, where <code>luci-sso</code> before 0.10.2 expired them.</p>
 <table>
 <thead>
 <tr>

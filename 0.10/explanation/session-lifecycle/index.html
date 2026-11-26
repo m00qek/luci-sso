@@ -1987,7 +1987,7 @@ uci<span class="w"> </span>commit<span class="w"> </span>luci
 <p>When a browser is sent to <code>/cgi-bin/luci-sso/logout</code> with a live session (without one, it is simply sent to <code>/</code>):</p>
 <ol>
 <li>The CSRF token is verified — the request must include the <code>stoken</code> parameter matching the session's CSRF token.</li>
-<li>The UBUS session is destroyed. The <code>sysauth_https</code> and <code>sysauth</code> cookies are cleared with <code>Max-Age=0</code>, both at <code>Path=/</code> and at LuCI's own <code>Path=/cgi-bin/luci</code>.</li>
+<li>The UBUS session is destroyed. The <code>sysauth_https</code> and <code>sysauth</code> cookies are cleared with <code>Max-Age=0</code> at <code>Path=/</code>, and every session cookie LuCI may have set (<code>sysauth_https</code>, <code>sysauth_http</code>, <code>sysauth</code>) is cleared at LuCI's own path, both <code>Path=/cgi-bin/luci/</code> and <code>Path=/cgi-bin/luci</code>.</li>
 <li>If the IdP's discovery document advertises an HTTPS <code>end_session_endpoint</code>, the browser is redirected there with the stored ID token as <code>id_token_hint</code> and the router's own origin as <code>post_logout_redirect_uri</code>, as defined by <a href="https://openid.net/specs/openid-connect-rpinitiated-1_0.html">OpenID Connect RP-Initiated Logout 1.0</a>. Otherwise the browser is sent to <code>/</code>.</li>
 </ol>
 <p>Destroying the UBUS session is immediate and complete — the session ID in the cookie becomes invalid the moment <code>rpcd</code> processes the destroy call. A browser holding a stale cookie after logout will be rejected on the next LuCI request.</p>
