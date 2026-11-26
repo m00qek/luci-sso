@@ -121,8 +121,8 @@ These occur on the first request that needs the configuration.
 
 | Code | Trigger | What it means | In the log |
 | :--- | :--- | :--- | :--- |
-| `SSO_DISABLED` | A login, callback or logout request arrives while `enabled` is not `1` | SSO is turned off. The `?action=enabled` probe returns `{"enabled": false}` instead and logs nothing. | `[500] SSO_DISABLED` |
-| `CONFIG_ERROR` | SSO is enabled, but a required option is missing or invalid (see notes) | The configuration cannot be used. Every request fails, including the `?action=enabled` probe. | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` |
+| `SSO_DISABLED` | A login or callback request arrives while `enabled` is not `1` | SSO is turned off. The `?action=enabled` probe returns `{"enabled": false}` instead and logs nothing. A logout still ends the session, locally. | `[500] SSO_DISABLED` |
+| `CONFIG_ERROR` | SSO is enabled, but a required option is missing or invalid (see notes) | The configuration cannot be used. Every request fails, including the `?action=enabled` probe, except a logout, which still ends the session, locally. | `[500] CONFIG_ERROR`, preceded by `Configuration rejected: <reason>` |
 | `UCI_ERROR` | The UCI cursor could not be created | The UCI system itself is unavailable, which points to a deeper OpenWrt problem. | `[500] UCI_ERROR` |
 
 Notes:
@@ -581,6 +581,7 @@ These lines appear at login start, at the callback and at logout, whenever the d
 | :--- | :--- | :--- |
 | `Logout attempt with invalid or missing CSRF token` | warn | Before `[403] CSRF_CHECK_FAILED`. See [Authorization Errors](#authorization-errors). |
 | `Logout for [sub_id: …] (role=<role>)` | info | An SSO session was ended on the router. `[sub_id: …]` is read from the session's ID Token, so it matches the user's login lines; it reads `[INVALID]` when the session holds no ID Token, when its `sub` cannot be read, or, as in the login lines, when the `sub` is shorter than 8 characters. The browser then goes to the IdP's `end_session_endpoint`, if it has one. |
+| `Logout is local only: the configuration could not be loaded, so the IdP session is not ended` | warn | SSO is disabled, or the configuration is rejected (`Configuration rejected: <reason>` comes first). The session was still ended on the router and its cookies expired, but the browser goes to `/`, not to the IdP. Fix the configuration; the user's IdP session stays until it ends there. |
 | `Logout for [sub_id: …] (not an SSO session)` | info | A session whose username is not `sso:<role>` was sent to `/cgi-bin/luci-sso/logout` directly and ended. LuCI's **Log out** never sends one there. |
 
 A logout that goes through LuCI's own logout, as it does for a password session, is not logged by `luci-sso`.

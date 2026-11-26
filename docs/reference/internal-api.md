@@ -120,17 +120,21 @@ Request dispatch by path.
 
 ### `handle(deps, config, request)` → `Result<{status, headers, body}>`
 
-Dispatches one request. `config` is the result of `config.load()`, or `null` when SSO is disabled. `request` is the result of `web.request()`.
+Dispatches one request. `config` is the result of `config.load()`, or `null` when it could not be loaded (SSO disabled, or `CONFIG_ERROR`). `request` is the result of `web.request()`.
 
 | Path | Behaviour |
 | :--- | :--- |
 | `/` with `action=enabled` | Returns `{"enabled": true}` or `{"enabled": false}` from `config.is_enabled()`. Not rate-limited; works with a `null` config. |
 | `/` | Reaps stale handshakes, calls `handshake.initiate()`, and redirects to the IdP with the `__Host-luci_sso_state` cookie. |
 | `/callback` | Calls `handshake.authenticate()` and redirects to `/cgi-bin/luci/` with the session cookies. |
-| `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. |
+| `/logout` | Without a valid session, redirects to `/`. Otherwise checks `stoken` against the session's CSRF token, destroys the session, and redirects to the IdP's `end_session_endpoint` or `/`. With a `null` config the logout is local: no discovery, and the redirect is to `/`. |
 | anything else | `NOT_FOUND` (`404`). |
 
-Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`). With a `null` config, every path except the probe fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way.
+Every path except the probe first spends the client's rate-limit budget (`TOO_MANY_REQUESTS`, `429`). With a `null` config, every path except the probe and `/logout` fails with `SSO_DISABLED` (`500`, the status `entry.run()` renders for disabled SSO); `entry.run()` never calls it that way. `entry.run()` passes a `null` config for `/logout` whenever `config.load()` fails, so a broken or disabled configuration never keeps an SSO session alive.
+
+### `is_logout(request)` → `bool`
+
+Whether `request` is for `/logout`, with or without a trailing slash: the one path besides the probe that `handle()` serves with a `null` config.
 
 ---
 

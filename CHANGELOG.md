@@ -2,11 +2,21 @@
 
 All notable changes to `luci-sso` are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Until 1.0, a minor version may change the configuration or behaviour; each such change is listed under **Upgrade actions**.
 
+## [0.10.2] - 2026-11-24
+
+### Security
+
+Upgrade to 0.10.2. No configuration change is needed, and existing sessions keep working.
+
+- The IdP's `error` parameter on the callback, and other logged request values, were passed to `syslog` as a format string. An unauthenticated request holding printf conversions such as `%99999999d` could make the CGI build strings of hundreds of megabytes, and so use large amounts of memory. Every log line is now written as the argument of a constant `%s` format. 0.10.0 and 0.10.1 are affected.
+- An SSO login in a browser that was already logged in to LuCI with a password kept running the password session. LuCI's own login sets its session cookie at `Path=/cgi-bin/luci/`, with a trailing slash, but the SSO callback and logout expired it only at `Path=/cgi-bin/luci`. Browsers tell cookies apart by their exact path, so the old cookie stayed, was sent first, and LuCI used it: the pages after the SSO login ran with the rights of the earlier login, `root` for instance, instead of the role's, and an SSO logout left that earlier session in the browser. The callback and `/cgi-bin/luci-sso/logout` now expire `sysauth_https`, `sysauth_http` and `sysauth` at both paths. 0.10.0 and 0.10.1 are affected.
+- **Log out** ended nothing while the configuration could not be loaded: with SSO disabled, or any `CONFIG_ERROR`, `/cgi-bin/luci-sso/logout` answered 500 before it looked at the session, so an SSO session stayed valid until its timeout. Logout now always destroys the session and expires its cookies, after the same CSRF check; without a usable configuration it is local only, sends the browser to `/` instead of the IdP, and logs `Logout is local only: …`. 0.10.0 and 0.10.1 are affected.
+
 ## [0.10.1] - 2026-11-19
 
 ### Security
 
-- On OpenWrt devices with libucode `2026.07.09~b885dd0f` or later, the regex engine of every 25.12 package index, a line feed in an untrusted value reached the log, and several checks accepted a value when only one of its lines passed. That ucode release (upstream commit 8a8b4d12) made `^` and `$` match at every line, and `.` and `[^...]` stop matching a line feed. An unauthenticated request could add forged lines to the system log through the callback's `error` and `error_description` parameters or `return_to`, because the log sanitiser no longer replaced the line feed. The handshake handle, Base64URL and role name checks, the URL parsing used for the issuer and discovery endpoints, the role list patterns, and the client address parsing of the rate limits now give the same answer on both engines: a value with a line feed is refused, or its line feed shown as `?`, as before. Devices on the older libucode, such as stock 24.10 and 25.12 images that were never upgraded, were not affected.
+- On OpenWrt devices with libucode `2026.07.09~b885dd0f` or later, the regex engine of every 25.12 package index, a line feed in an untrusted value reached the log, and several checks accepted a value when only one of its lines passed. That ucode release (upstream commit 8a8b4d12) made `^` and `$` match at every line, and `.` and `[^...]` stop matching a line feed. An unauthenticated request could add forged lines to the system log through the callback's `error` and `error_description` parameters, because the log sanitiser no longer replaced the line feed. The handshake handle, Base64URL and role name checks, the URL parsing used for the issuer and discovery endpoints, the role list patterns, and the client address parsing of the rate limits now give the same answer on both engines: a value with a line feed is refused, or its line feed shown as `?`, as before. Devices on the older libucode, such as stock 24.10 and 25.12 images that were never upgraded, were not affected.
 
 ## [0.10.0] - 2026-09-29
 
@@ -81,6 +91,7 @@ Upgrading from 0.9.1 needs some steps **before** you install, and one right afte
 
 First public release.
 
+[0.10.2]: https://github.com/m00qek/luci-sso/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/m00qek/luci-sso/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/m00qek/luci-sso/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/m00qek/luci-sso/compare/v0.9.0...v0.9.1
